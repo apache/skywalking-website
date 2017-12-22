@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "[Quick Start] Install agent, deploy collector and UI."
-date:   2017-12-01
+date:   2017-12-20
 desc: "How to deploy SkyWalking?"
 keywords: "quickstart,install,deploy"
 categories: [HTML]
