@@ -15,17 +15,17 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 
 ## 5.0.0-alpha
 Released at April 3rd, 2018
-  - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz) [[asc]](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz.asc)
-  [[sha512]](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz.sha512)
+  - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz.sha512)
   - [Documents](https://github.com/apache/incubator-skywalking/blob/v5.0.0-alpha/docs/README.md) for this release.
   - Windows: [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip)
-  [[asc]](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz.asc)
-  [[sha512]](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz.sha512)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz.sha512)
   - Linux: [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz)
-  [[asc]](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.asc)
-  [[sha512]](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.sha512)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.sha512)
 
-[PGP signatures KEYS](https://dist.apache.org/repos/dist/release/incubator/skywalking/5.0.0-alpha/KEYS)
+[PGP signatures KEYS](https://www.apache.org/dist/incubator/skywalking/KEYS)
 
 <br/>
 # Changes in lastest Version
