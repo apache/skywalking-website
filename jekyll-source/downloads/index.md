@@ -63,6 +63,37 @@ Released at April 3rd, 2018
  - New 5.0.0 UI!!!
 
  [Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/17)
+
+<br/>
+# Verify the releases
+It is essential that you verify the integrity of the downloaded files using the PGP or SHA signatures. The PGP signatures can be verified using GPG or PGP. Please download the KEYS as well as the asc signature files for relevant distribution. It is recommended to get these files from the main distribution directory and not from the mirrors.
+
+```
+gpg -i KEYS
+
+or
+
+pgpk -a KEYS
+
+or
+
+pgp -ka KEYS
+```
+
+To verify the binaries/sources you can download the relevant asc files for it from main distribution directory and follow the below guide.
+
+```
+gpg --verify apache-skywalking-apm-incubating********.asc apache-skywalking-apm-incubating*********
+
+or
+
+pgpv apache-skywalking-apm-incubating********.asc
+
+or
+
+pgp apache-skywalking-apm-incubating********.asc
+```
+
 <br/>
 # Old releases
 <br/>
