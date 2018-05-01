@@ -11,7 +11,6 @@ Note, branch `asf-site` don't accept pull request, all `asf-site` branch HTMLs s
 
 Usage:
 1. Git pull branch `master`
-1. Entry `/jekyll-source`
 1. Run `jekyll build --source jekyll-source/ --destination _site`
 1. Move all files in `_site` to `/` folder, and remove `_site`.
 1. Push all files to `asf-site`.
