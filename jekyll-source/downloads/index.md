@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Dowload the SkyWalking releases"
-date:   2018-04-03
+date:   2018-07-11
 desc: ""
 keywords: "release, source codes"
 categories: [HTML]
@@ -13,8 +13,8 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 
 # Stable Release - Latest Version
 
-## 5.0.0-beta
-Released at May 23th, 2018
+## 5.0.0-beta2
+Released at July 11th, 2018
   - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz.asc)
   [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz.sha512)
   - [Documents](https://github.com/apache/incubator-skywalking/blob/v5.0.0-beta2/docs/README.md) for this release.
