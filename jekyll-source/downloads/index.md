@@ -15,15 +15,17 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 
 ## 5.0.0-beta
 Released at May 23th, 2018
-  - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz.asc)
-  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz.sha512)
-  - [Documents](https://github.com/apache/incubator-skywalking/blob/v5.0.0-beta/docs/README.md) for this release.
-  - Windows: [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip)
-  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz.asc)
-  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz.sha512)
-  - Linux: [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz)
-  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.asc)
-  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.sha512)
+  - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz.sha512)
+  - [Documents](https://github.com/apache/incubator-skywalking/blob/v5.0.0-beta2/docs/README.md) for this release.
+  - Windows: [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.tar.gz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.tar.gz.sha512)
+  - Linux: [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.tar.gz)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip.sha512)
+
+
 
 [PGP signatures KEYS](https://www.apache.org/dist/incubator/skywalking/KEYS)
 
@@ -31,63 +33,65 @@ Released at May 23th, 2018
 # Changes in lastest Version
 
 #### UI -> Collector GraphQL query protocol
-  - Replace all tps to throughtput/cpm(calls per min)
-  - Add `getThermodynamic` service
-  - Update version to beta
+  - Add order and status in trace query.
 
 #### Agent Changes
-  - Support TLS.
-  - Support namespace.
-  - Support direct link.
-  - Support token.
-  - Add across thread toolkit.
-  - Add new plugin extend machenism to override agent core implementations.
-  - Fix an agent start up sequence bug.
-  - Fix wrong gc count.
-  - Remove system env override.
-  - Add Spring AOP aspect patch to avoid aop conflicts.
+  - Add SOFA plugin.
+  - Add witness class for Kafka plugin.
+  - Add RuntimeContext in Context.
+  - Fix RuntimeContext fail in Tomcat plugin.
+  - Fix incompatible for `getPropertyDescriptors` in Spring core.
+  - Fix spymemcached plugin bug.
+  - Fix database URL parser bug.
+  - Fix `StringIndexOutOfBoundsException` when mysql jdbc url without databaseName。
+  - Fix duplicate slash in Spring MVC plugin bug.
+  - Fix namespace bug.
+  - Fix NPE in Okhttp plugin when connect failed.
+  - FIx `MalformedURLException` in httpClientComponent plugin.
+  - Remove unused dependencies in Dubbo plugin.
+  - Remove gRPC timeout to avoid out of memory leak.
+  - Rewrite Async http client plugin.
+  - [Incubating] Add trace custom ignore optional plugin.
 
 #### Collector Changes
-  - Trace query based on timeline.
-  - Delete JVM aggregation in second.
-  - Support TLS.
-  - Support namespace.
-  - Support token auth.
-  - Group and aggregate requests based on reponse time and timeline, support Thermodynamic chart query
-  - Support component librariy setting through yml file for better extendibility.
-  - Optimize performance.
-  - Support short column name in ES or other storage implementor.
-  - Add a new cache module implementor, based on **Caffeine**.
-  - Support system property override settings.
-  - Refactor settings initialization.
-  - Provide collector instrumentation agent.
-  - Support .NET core component libraries.
-  - Fix `divide zero` in query.
-  - Fix `Data don't remove as expected` in ES implementor.
-  - Add some checks in collector modulization core.
-  - Add some test cases.
+  - Topology query optimization for more than 100 apps.
+  - Error rate alarm is not triggered.
+  - Tolerate unsupported segments.
+  - Support Integer Array, Long Array, String Array, Double Array in streaming data model.
+  - Support multiple entry span and multiple service name in one segment durtaion record.
+  - Use BulkProcessor to control the linear writing of data by multiple threads.
+  - Determine the log is enabled for the DEBUG level before printing message.
+  - Add `static` modifier to Logger.
+  - Add AspNet component.
+  - Filter inactive service in query.
+  - Support to query service based on Application.
+  - Fix `RemoteDataMappingIdNotFoundException`
+  - Exclude component-libaries.xml file in collector-*.jar, make sure it is in `/conf` only.
+  - Separate a single TTL in minute to in minute, hour, day, month metric and trace.
+  - Add order and status in trace query.
+  - Add folder lock to buffer folder.
+  - Modify operationName search from `match` to `match_phrase`.
+  - [Incubating] Add Zipkin span receiver. Support analysis Zipkin v1/v2 formats.
+  - [Incubating] Support sharding-sphere as storage implementor.
 
 #### UI Changes
-  - New trace query UI.
-  - New Application UI, merge server tab(removed) into applciation as sub page.
-  - New Topology UI.
-  - New response time / throughput TopN list.
-  - Add Thermodynamic chart in overview page.
-  - Change all tps to cpm(calls per minutes).
-  - Fix wrong osName in server view.
-  - Fix wrong startTime in trace view.
-  - Fix some icons internet requirements.
+  - Support login and access control.
+  - Add new webapp.yml configuration file.
+  - Modify webapp startup script.
+  - Link to trace query from Thermodynamic graph
+  - Add application selector in service view.
+  - Add order and status in trace query.
 
 #### Documents
-   - Add TLS document.
-   - Add namespace document.
-   - Add direct link document.
-   - Add token document.
-   - Add across thread toolkit document.
-   - Add a FAQ about, `Agent or collector version upgrade`.
-   - Sync all English document to Chinese.
+  - Add architecture design doc.
+  - Reformat deploy document.
+  - Adjust Tomcat deploy document.
+  - Remove all Apache licenses files in dist release packages.
+  - Update user cases.
+  - Update UI licenses.
+  - Add incubating sections in doc.
 
-  [Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/24)
+[Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/28)
 
 <br/>
 # Verify the releases
@@ -121,6 +125,18 @@ pgp apache-skywalking-apm-incubating********.asc
 
 <br/>
 # Old releases
+
+## 5.0.0-beta
+Released at May 23th, 2018
+  - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz.sha512)
+  - [Documents](https://github.com/apache/incubator-skywalking/blob/v5.0.0-beta/docs/README.md) for this release.
+  - Windows: [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz.sha512)
+  - Linux: [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.sha512)
 
 ## 5.0.0-alpha
 Released at April 3rd, 2018
