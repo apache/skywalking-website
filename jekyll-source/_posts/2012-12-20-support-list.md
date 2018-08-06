@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Supported middlewares, frameworks and libraries"
-date:   2017-12-01
+date:   2018-08-06
 desc: ""
 keywords: "server,client,library"
 categories: [HTML]
@@ -39,10 +39,12 @@ icon: icon-html
   * [Dubbox](https://github.com/dangdangdotcom/dubbox) 2.8.4
   * [Motan](https://github.com/weibocom/motan) 0.2.x -> 1.1.0
   * [gRPC](https://github.com/grpc/grpc-java) 1.x
-  * [Apache ServiceComb Java Chassis](https://github.com/apache/incubator-servicecomb-java-chassis) 0.1 -> 0.5
+  * [Apache ServiceComb Java Chassis](https://github.com/apache/incubator-servicecomb-java-chassis) 0.1 -> 0.5,1.0.x
+  * [SOFARPC](https://github.com/alipay/sofa-rpc) 5.4.0
 * MQ
   * [RocketMQ](https://github.com/apache/rocketmq) 4.x
   * [Kafka](http://kafka.apache.org) 0.11.0.0 -> 1.0
+  * [ActiveMQ](https://github.com/apache/activemq) 5.x
 * NoSQL
   * Redis
     * [Jedis](https://github.com/xetorthio/jedis) 2.x
