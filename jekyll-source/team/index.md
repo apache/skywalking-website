@@ -21,6 +21,7 @@ Incubator Mentor
 - Willem Ning Jiang , Apache ID: ningjiang
 
 PPMC
+- Haoyang Liu	     , Apache ID: liuhaoyangzz
 - Hongtao Gao      , Apache ID: hanahmily
 - Sheng Wu         , Apache ID: wusheng
 - Shinn Zhang      , Apache ID:	zhangxin
@@ -28,7 +29,6 @@ PPMC
 
 Committer
 - DongXue Si, Apache ID: 	ilucky
-- Haoyang Liu	, Apache ID: liuhaoyangzz
 - Kai Wang	, Apache ID: wangkai
 - Sheng Wang	, Apache ID: wangsheng
 - Yang Bai	, Apache ID: baiyang
