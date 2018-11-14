@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Dowload the SkyWalking releases"
-date:   2018-10-17
+date:   2018-11-14
 desc: ""
 keywords: "release, source codes"
 categories: [HTML]
@@ -10,6 +10,41 @@ icon: icon-html
 ---
 
 Use the links below to download the Apache SkyWalking (incubating) from one of our mirrors.
+
+# 6.x Latest Version
+
+## 6.0.0-alpha
+Released at Nov. 14th, 2018
+  - Source codes: [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.sha512)
+  - [Documents](https://github.com/apache/incubator-skywalking/blob/v6.0.0-alpha/docs/README.md) for this release.
+  - Windows: [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.sha512)
+  - Linux: [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz)
+  [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.asc)
+  [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.sha512)
+
+
+
+[PGP signatures KEYS](https://www.apache.org/dist/incubator/skywalking/KEYS)
+
+<br/>
+# Changes in 6.0.0-alpha
+
+SkyWalking 6 is totally new milestone for the project. At this point, we are not just a distributing
+tracing system with analysis and visualization capabilities. We are an **Observability Analysis Platform(OAL)**.
+
+The core and most important features in v6 are
+1. Support to collect telemetry data from different sources, such as multiple language agents and service mesh.
+1. Extensible stream analysis core. Make SQL and cache analysis available in core level, although haven't
+provided in this release.
+1. Provide **Observability Analysis Language(OAL)** to make analysis metric customization available.
+1. New GraphQL query protocol. Not binding with UI now.
+1. UI topology is better now.
+1. New alarm core provided. In alpha, only on service related metric.
+
+[Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/29?closed=1)
 
 # Stable Release - Latest Version
 

@@ -26,14 +26,16 @@ PPMC
 - Sheng Wu         , Apache ID: wusheng
 - Shinn Zhang      , Apache ID:	zhangxin
 - Yongsheng Peng   , Apache ID: pengys
-
-Committer
 - DongXue Si, Apache ID: 	ilucky
 - Kai Wang	, Apache ID: wangkai
 - Sheng Wang	, Apache ID: wangsheng
 - Yang Bai	, Apache ID: baiyang
 - Yuntao Li	, Apache ID: liyuntao
 - Zhang Kewei	, Apache ID: zhangkewei
+
+Committer
+- Can Li, Apache ID: lican
+- Wenbing Wang, Apache ID: wangwenbin
 
 # Contributors
 SkyWalking have a lot of Contributors, since we are using GitHub, you could find them in our repository contribution list.
