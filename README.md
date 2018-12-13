@@ -15,8 +15,9 @@ Note, branch `asf-site` don't accept pull request, all `asf-site` branch HTMLs s
 Usage:
 
 1. Git pull branch `asf-site`
-2. Run `npm run build`
-3. Push files and send pull request if necessary.
+2. Run `npm run clean`
+3. Run `npm run build`
+4. Push files and send pull request if necessary.
 
 
 ## How to add document in the site
