@@ -7,6 +7,7 @@ This is the repository including all source codes of `http://skywalking.incubato
 Usage:
 
 1. Git pull branch `asf-site`
+1. You need to run `npm install` before your start somehow.
 1. Run `npm run clean`
 1. Run `npm run dev` in your local env, open `http://localhost:8080` in browser, check whether it works fine
 1. Run `npm run build` to generate static files.
