@@ -29,6 +29,8 @@ Usage:
 |   |-- .vuepress
 |   |   |-- config.js       // website config
 |   |   |-- public          // public resources
+|   |   |   |-- static      // public static folder
+|   |   |   |   |-- blog    // public static blog folder
 |   |   |-- theme           // vue theme project
 |   |-- blog
 |   |   |-- xxx.md          // other blog markdowns
@@ -52,3 +54,12 @@ Usage:
 |   |   |   |-- README.md   // team's markdown
 
 ```
+
+
+## How to add and manage markdown images in the site
+
+You can put your markdown images in the path ``` /docs/.vuepress/public/static/ ``` and use the folder to separate the site parts. 
+
+Such as adding a ```blog``` folder in ``` /docs/.vuepress/public/static/ ```,and then you can make a folder which names about your blog in it. Put the images in this named folder.
+
+In markdown, you can use ```/docs/.vuepress/public/static/blog/{blogName}/{imageName} ``` path to add the image into markdown doc.
