@@ -53,3 +53,6 @@ You can put your markdown images in the path ``` /docs/.vuepress/public/static/ 
 Such as adding a ```blog``` folder in ``` /docs/.vuepress/public/static/ ```,and then you can make a folder which names about your blog in it. Put the images in this named folder.
 
 In markdown, you can use ```/docs/.vuepress/public/static/blog/{blogName}/{imageName} ``` path to add the image into markdown doc.
+
+## Blog
+When you try to publish blogs in Apache SkyWalking official website, no advertising is allowed here. You could add markdown test link(`[name](url)`) pointing to you personal website/twitter and company website.
