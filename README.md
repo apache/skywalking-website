@@ -47,7 +47,7 @@ Usage:
 
 ```
 
-# How to add and manage images in the site
+## How to add and manage images in the site
 You can put your markdown images in the path ``` /docs/.vuepress/public/static/ ``` and use the folder to separate the site parts. 
 
 Such as adding a ```blog``` folder in ``` /docs/.vuepress/public/static/ ```,and then you can make a folder which names about your blog in it. Put the images in this named folder.
