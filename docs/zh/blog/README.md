@@ -8,6 +8,9 @@ blog:
   time: 刘浩扬
   short: 用于SkyWalking的.NET Core SDK
 
-
+- title: Apache SkyWalking 5.0中文版图文详解使用手册
+  name: 2018-12-18-skywalking-net
+  time: 公众号【工匠小猪猪的技术世界】原创
+  short: Apache SkyWalking 5.0 UserGuide
 
 ---
