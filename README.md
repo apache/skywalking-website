@@ -6,12 +6,11 @@ This is the repository including all source codes of `http://skywalking.incubato
 
 Usage:
 
-1. Git pull branch `asf-site`
-1. You may need to run `npm install` before your start somehow.
-1. Run `npm run clean`
-1. Run `npm run dev` in your local env, open `http://localhost:8080` in browser, check whether it works fine
-1. Run `npm run build` to generate static files.
-1. Push files and send pull request if necessary, with screenshots showing how you would change.
+1. Git pull branch `master`
+2. You may need to run `npm install` before your start somehow.
+3. Run `npm run clean` to remove dist folder
+4. Run `npm run dev` in your local env, open `http://localhost:8080` in browser, check whether it works fine
+6. Push files and send pull request if necessary, with screenshots showing how you would change.
 
 
 ## How to add document in the site
@@ -23,6 +22,9 @@ Usage:
 |   |-- .vuepress
 |   |   |-- config.js       // website config
 |   |   |-- public          // public resources
+|   |   |   |-- assets          // website static resources
+|   |   |   |-- static          // markdown resources
+|   |   |   |   |-- blog          // blog  markdown resources
 |   |   |-- theme           // vue theme project
 |   |-- blog
 |   |   |-- xxx.md          // other blog markdowns
