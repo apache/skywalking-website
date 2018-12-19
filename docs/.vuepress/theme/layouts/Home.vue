@@ -2,8 +2,8 @@
   <div class="home">
     <div class="wrapper">
       <div class="avatar">
-        <img src="/circuit-board.svg" width="100%" :style="`transform: translate3d(${x/30}px, ${y/30}px, 0px);`">
-        <img src="/circuit-board.svg" width="84%" :style="`transform: translate3d(${100+x/15}px, ${y/15-200}px, 0px);`">
+        <img src="/assets/circuit-board.svg" width="100%" :style="`transform: translate3d(${x/30}px, ${y/30}px, 0px);`">
+        <img src="/assets/circuit-board.svg" width="84%" :style="`transform: translate3d(${100+x/15}px, ${y/15-200}px, 0px);`">
         <div class="vertical-middle">
           <div class="avatar-wrapper">
             <div class="product-name">
@@ -27,7 +27,7 @@
         <div class="home-card-about tc">
           <h1>{{data.what.title}}</h1>
           <p v-for="i in data.what.content">{{i}}</p>
-          <img style="margin-top:20px;max-width:900px;box-shadow: 0 2px 5px #00000033;" src="/frame.jpeg" width="100%">
+          <img style="margin-top:20px;max-width:900px;box-shadow: 0 2px 5px #00000033;" src="/assets/frame.jpeg" width="100%">
         </div>
         <div class="home-card-feature">
           <h1 class="tc">{{data.feature.title}}</h1>
@@ -35,16 +35,16 @@
             <col style="width:50%"/>
 	          <col style="width:50%"/>
             <tr>
-              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/search.svg">{{data.feature.content[0]}}</td>
-              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/more.svg">{{data.feature.content[1]}}</td>
+              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/assets/search.svg">{{data.feature.content[0]}}</td>
+              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/assets/more.svg">{{data.feature.content[1]}}</td>
             </tr>
             <tr>
-              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/light.svg">{{data.feature.content[2]}}</td>
-              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/list.svg">{{data.feature.content[3]}}</td>
+              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/assets/light.svg">{{data.feature.content[2]}}</td>
+              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/assets/list.svg">{{data.feature.content[3]}}</td>
             </tr>
             <tr>
-              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/alarm.svg">{{data.feature.content[4]}}</td>
-              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/ui.svg">{{data.feature.content[5]}}</td>
+              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/assets/alarm.svg">{{data.feature.content[4]}}</td>
+              <td class="home-card-feature-td"><img class="home-card-feature-img" src="/assets/ui.svg">{{data.feature.content[5]}}</td>
             </tr>
           </table>
         </div>
@@ -59,7 +59,7 @@
         <div class="home-card-user tc">
           <h1>{{data.user.title}}</h1>
           <p>{{data.user.content}}</p>
-          <img style="margin-top:20px;max-width:900px" src="/users.png" width="100%">
+          <img style="margin-top:20px;max-width:900px" src="/assets/users.png" width="100%">
         </div>
       </div>
       <Footer/>
@@ -171,7 +171,7 @@ export default {
   right: -100px;
   bottom: -400px;
   background-color: #f9fafa;
-  background-image: url("../../public/moon.svg");
+  background-image: url("../../public/assets/moon.svg");
   background-size: cover;
 }
 
