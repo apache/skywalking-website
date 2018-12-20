@@ -4,7 +4,7 @@ layout: LayoutBlog
 blog: 
 
 - title: Apache SkyWalking 5.0中文版图文详解使用手册
-  name: 2018-12-18-skywalking-net
+  name: 2018-12-18-Apache-SkyWalking-5-0-UserGuide
   time: 公众号【工匠小猪猪的技术世界】原创, 12月20日，2018
   short: Apache SkyWalking 5.0 UserGuide
 
