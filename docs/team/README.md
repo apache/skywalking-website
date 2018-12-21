@@ -55,4 +55,4 @@ SkyWalking have a lot of Contributors, since we are using GitHub, you could find
 
 SkyWalking follows the Apache way to build the community. Anyone can become a committer once they have contributed sufficiently to the project and earned the trust. Read [Contributing Guides](https://github.com/apache/incubator-skywalking/blob/master/docs/en/guides/README.md) to take part in the community.
 
-SkyWalking community follows the Apache Community’s [process](http://community.apache.org/newcommitter.html) on accepting a new committer.
+SkyWalking community follows the Apache Community’s [Guide :: Podling Project Management Committee](https://incubator.apache.org/guides/ppmc.html#voting_in_a_new_ppmc_member) on accepting a new committer.
