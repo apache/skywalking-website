@@ -13,6 +13,9 @@ blog:
   time: 刘浩扬
   short: 用于SkyWalking的.NET Core SDK
 
-
+- title: Apache SkyWalking 之高级用法
+  name: 2018-12-18-Apache-SkyWalking-advanced-usage
+  time: 公众号【贝壳产品技术】原创, 12月20日，2018
+  short: Apache SkyWalking 5.0 Advanced Usage
 
 ---
