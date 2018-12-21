@@ -3,7 +3,7 @@ layout: LayoutBlog
 
 blog: 
 
-- title: SkyWalking源码源码解析合集
+- title: SkyWalking源码解析合集
   name: 2018-12-21-SkyWalking-source-code-read
   time: 芋道源码 整理，12月21日，2018
   short: 源码解析的博客，可以帮助你更好的读懂SkyWalking的源码
