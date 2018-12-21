@@ -50,4 +50,4 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 ## 成为提交者
 SkyWalking遵循Apache的方式来构建社区。一旦为项目做出了足够的贡献并赢得了信任，任何人都可以成为提交者。你可以阅读[贡献指南](https://github.com/apache/incubator-skywalking/blob/master/docs/en/guides/README.md)来参与社区。
 
-SkyWalking社区遵循Apache社区的[流程](http://community.apache.org/newcommitter.html)来接受新的提交者。
+SkyWalking社区遵循Apache社区的[Guide :: Podling Project Management Committee](https://incubator.apache.org/guides/ppmc.html#voting_in_a_new_ppmc_member)来接受新的提交者。
