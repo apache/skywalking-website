@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎王垚成为PPMC
+###### 2018年12月22日
+根据他的贡献，包括制作了[RocketBot](https://github.com/TinyAllen/rocketbot)作为我们的第二套UI, 新的[网站](http://skywalking.apache.org/) 和非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。
+
 ## 欢迎曹奕雄成为committer
 ###### 2018年12月10日
 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。

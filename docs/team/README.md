@@ -29,6 +29,7 @@ Members include PPMC, committer and mentor of SkyWalking project. The List in al
 |Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
 |Shinn Zhang| zhangxin |
+|Yao Wang| ywang |
 
 ### Committer
 | Name |Apache ID|
