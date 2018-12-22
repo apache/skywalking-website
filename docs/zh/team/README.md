@@ -27,6 +27,7 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 |Yang Bai| baiyang |
 |Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
+|Yao Wang| ywang |
 
 ### 提交者
 | 名字 |Apache ID|

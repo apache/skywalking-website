@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Yao Wang as a new PPMC.
+###### Dec. 22th, 2018
+Based on his contributions. Including created [RocketBot](https://github.com/TinyAllen/rocketbot) as our secondary UI, new [website](http://skywalking.apache.org/) and very cool trace view page in next release. he has been accepted as SkyWalking PPMC. Welcome aboard.
+
 ## Welcome Yixiong Cao as a new committer.
 ###### Dec. 10th, 2018
 Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
