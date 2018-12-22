@@ -48,12 +48,31 @@
             </tr>
           </table>
         </div>
-        <div class="home-card-news clear">
+        <div class="home-card-news">
           <h1 class="tc">{{data.news.title}}</h1>
-          <div class="home-card-news-item" v-for="i in data.news.content">
-            <h4 class="mb10 mt0">{{i.header}}</h4>
-            <div class="sm mb10"><span style="color:#999;margin-right:10px">{{i.time}}</span></div>
-            <p class="mt0">{{i.content}}</p>
+          <div class="clear">
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[0].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[0].time}}</span></div>
+              <p class="mt0">{{data.news.content[0].content}}</p>
+            </div>
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[1].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[1].time}}</span></div>
+              <p class="mt0">{{data.news.content[1].content}}</p>
+            </div>
+          </div>
+          <div class="clear">
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[2].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[2].time}}</span></div>
+              <p class="mt0">{{data.news.content[2].content}}</p>
+            </div>
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[3].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[3].time}}</span></div>
+              <p class="mt0">{{data.news.content[3].content}}</p>
+            </div>
           </div>
         </div>
         <div class="home-card-user tc">
@@ -93,6 +112,7 @@ export default {
 </script>
 
 <style>
+.clear:after{display:table; content:''; clear:both;}
 .incubating{
   font-size: 18px;vertical-align: top;
   position: relative;
