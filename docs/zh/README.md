@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎王垚成为PPMC
+    content: 根据他的贡献，包括制作了RocketBot作为我们的第二套UI, 新的Skywalking官网和下一版本中非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。
+    time: 2018年12月22日
   - header: 欢迎曹奕雄成为committer
     content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
     time: 2018年12月10日
@@ -35,8 +38,4 @@ news:
   - header: 欢迎谭建成为committer
     content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
     time: 2018年12月2日
-  - header: 发布Apache SkyWalking 6.0.0-alpha版本
-    content: APM始终兼容多语言探针（Java，.Net，NodeJS）、第三方追踪数据格式（Zipkin）和服务网格遥测数据（Istio）。
-    time: 2018年11月14日
-    tags: SkyWalking APM, Observalibity Analysis Platform, New Release
 ---
