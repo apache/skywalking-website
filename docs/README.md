@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Yao Wang as a new PPMC.
+    content: Based on his contributions. Including created RocketBot as our secondary UI, new website and very cool trace view page in next release. he has been accepted as SkyWalking PPMC. Welcome aboard.
+    time: Dec. 22th, 2018
   - header: Welcome Yixiong Cao as a new committer.
     content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
     time: Dec. 10th, 2018
@@ -34,8 +37,4 @@ news:
   - header: Welcome Jian Tan as a new committer.
     content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
     time: Dec. 2rd, 2018
-  - header: Release Apache SkyWalking APM 6.0.0-alpha
-    content: APM consistently compatible in language agent(Java, .Net, NodeJS), 3rd party format(Zipkin) and service mesh telemetry(Istio)
-    time: Nov. 14th, 2018
-    tags: SkyWalking APM, Observalibity Analysis Platform, New Release
 ---
