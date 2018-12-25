@@ -1,5 +1,10 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 6.0.0-beta
+###### Dec 25th, 2018
+6.0.0-beta release. Go to [downloads](/downloads) page to find release tars.
+
+
 ## Welcome Yao Wang as a new PPMC.
 ###### Dec. 22th, 2018
 Based on his contributions. Including created [RocketBot](https://github.com/TinyAllen/rocketbot) as our secondary UI, new [website](http://skywalking.apache.org/) and very cool trace view page in next release. he has been accepted as SkyWalking PPMC. Welcome aboard.

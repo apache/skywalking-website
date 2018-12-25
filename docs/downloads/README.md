@@ -6,13 +6,13 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 ## 6.x releases
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| Nov. 14th, 2018 | 6.0.0-alpha | Source codes| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.sha512)|
-| | | Windows| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.sha512)|
-| | | Linux | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.sha512)|
-| | | Document| [Document](https://github.com/apache/incubator-skywalking/blob/v5.0.0-GA/docs/README.md) |
+| Nov. 25th, 2018 | 6.0.0-beta | Source codes| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.sha512)|
+| | | Windows| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.sha512)|
+| | | Linux | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.sha512)|
+| | | Document| [Document](https://github.com/apache/incubator-skywalking/blob/v6.0.0-beta/docs/README.md) |
 
 
-### Changes in 6.0.0-alpha
+### Changes in 6.0.0-beta
 
 SkyWalking 6 is totally new milestone for the project. At this point, we are not just a distributing
 tracing system with analysis and visualization capabilities. We are an **Observability Analysis Platform(OAL)**.
@@ -25,8 +25,9 @@ provided in this release.
 1. New GraphQL query protocol. Not binding with UI now.
 1. UI topology is better now.
 1. New alarm core provided. In alpha, only on service related metric.
+1. Support MySQL and TiDB as storage. 
 
-[Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/29?closed=1)
+[Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/31?closed=1)
 
 ## 5.x releases
 | Date | Version| | Downloads |
