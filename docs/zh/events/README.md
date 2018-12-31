@@ -4,6 +4,12 @@
 ###### 2018年12月25日
 6.0.0-beta发布。跳转到[下载](/zh/downloads/)页面查找发布版本。
 
+关键更新
+1. 修复大量BUG，稳定性接近GA
+1. 提供新的数据协议，老协议依然支持
+1. 支持 Spring 5
+1. 支持MySQL和TiDB作为新的可选存储
+
 ## 欢迎王垚成为PPMC
 ###### 2018年12月22日
 根据他的贡献，包括制作了[RocketBot](https://github.com/TinyAllen/rocketbot)作为我们的第二套UI, 新的[Skywalking官网](http://skywalking.apache.org/) 和下一版本中非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。

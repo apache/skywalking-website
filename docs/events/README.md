@@ -4,6 +4,12 @@
 ###### Dec 25th, 2018
 6.0.0-beta release. Go to [downloads](/downloads) page to find release tars.
 
+Key updates
+1. Bugs fixed, closed to GA
+1. New protocols provided, old still compatible.
+1. Spring 5 supported
+1. MySQL and TiDB as optional storage
+
 
 ## Welcome Yao Wang as a new PPMC.
 ###### Dec. 22th, 2018

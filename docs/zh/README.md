@@ -4,13 +4,13 @@ description: '分布式系统的应用程序性能监视工具，专为微服务
 start: 快速开始
 what:
   title: 什么是 SkyWalking
-  content: 
+  content:
     - SkyWalking 是观察性分析平台和应用性能管理系统。
     - 提供分布式追踪、服务网格遥测分析、度量聚合和可视化一体化解决方案.
 
 feature:
   title: 特性一览
-  content: 
+  content:
     - 多种监控手段，语言探针和service mesh
     - 多语言自动探针，Java，.NET Core和Node.JS
     - 轻量高效，不需要大数据
@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 6.0.0-beta 发布
+    content: Bug修复。提供新的可选存储。更多的Java插件，包括Spring 5 MVC和webflux。
+    time: Dec 25th, 2018
   - header: 欢迎王垚成为PPMC
     content: 根据他的贡献，包括制作了RocketBot作为我们的第二套UI, 新的Skywalking官网和下一版本中非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。
     time: 2018年12月22日
@@ -35,7 +38,4 @@ news:
   - header: 欢迎李浪成为committer
     content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
     time: 2018年12月6日
-  - header: 欢迎谭建成为committer
-    content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
-    time: 2018年12月2日
 ---

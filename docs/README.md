@@ -4,7 +4,7 @@ description: 'Application performance monitor tool for distributed systems, espe
 start: Quick Start
 what:
   title: What is SkyWalking
-  content: 
+  content:
     - SkyWalking is Observalibity Analysis Platform and Application Performance Management system.
     - Provide distributed tracing, service mesh telemetry analysis, metric aggregation and visualization all-in-one solution.
 
@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: 6.0.0-beta release
+    content: Bug fixed. New storage options. More java agent plugins, including Spring 5 MVC and webflux.
+    time: Dec 25th, 2018
   - header: Welcome Yao Wang as a new PPMC.
     content: Based on his contributions. Including created RocketBot as our secondary UI, new website and very cool trace view page in next release. he has been accepted as SkyWalking PPMC. Welcome aboard.
     time: Dec. 22th, 2018
@@ -34,7 +37,4 @@ news:
   - header: Welcome Lang Li as a new committer.
     content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
     time: Dec. 6th, 2018
-  - header: Welcome Jian Tan as a new committer.
-    content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
-    time: Dec. 2rd, 2018
 ---
