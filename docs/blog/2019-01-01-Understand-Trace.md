@@ -25,7 +25,7 @@ In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk a
 
 SkyWalking v6 includes two trace views:
 1. TreeMode: The first time provided. Help you easier to identify issues.
-1. ListMode: Traditional view in long time, also usually seen in other tracing system, such as Zipkin.
+1. ListMode: Traditional view in time line, also usually seen in other tracing system, such as Zipkin.
 
 ## Error occurred
 In the trace view, the easiest part is locating the error, possibly caused by a code exception or network fault. Both ListMode and TreeMode can identify errors, while the span detail screen provides details.
