@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog: 
 
+- title: 关于elasticsearch因basic认证导致skywalking无法正常调用接口问题
+  name: 2019-01-12-skywalking-elasticsearch-basic.md
+  time: 刘离勇
+  short: elasticsearch basic验证
+  
 - title: SkyWalking源码解析合集
   name: 2018-12-21-SkyWalking-source-code-read
   time: 芋道源码 整理，12月21日，2018
