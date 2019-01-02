@@ -1,7 +1,7 @@
-# Understand distributed trace better
+# Understand distributed trace easier in the incoming 6-GA
 
 - Auther: Wu Sheng, tetrate, SkyWalking original creator
-- [GitHub](https://github.com/wu-sheng), [Linkedin](https://www.linkedin.com/in/wusheng1108)
+- [GitHub](https://github.com/wu-sheng), [Twitter](https://twitter.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
 
 Jan. 1st, 2019
 
@@ -29,6 +29,7 @@ even for the developer, designer or operate team. Like the following graph, it g
 a clear view of 4 projects, kafka and two outside dependencies.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/demo-spring.png)
+<p align="center">-Topology in SkyWalking optional UI, RocketBot-</p>
 
 # Trace
 In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk and Network)
@@ -76,7 +77,8 @@ but still cause the trace very slow, like this one.
 <p align="center">-Trace with no slow span-</p>
 
 But we still need to know why trace is slow. In this case, you could use `Top 5 of children span number`
-filter to find out, whether too many children spans in each span.
+filter to find out, whether too many children spans in each span. This filter shows
+the children number of each span, highlights the top 5.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/too-many-child.png)
 <p align="center">-13 database accesses of a span-</p>
@@ -87,8 +89,27 @@ you see overview of trace, database cost 1380ms of this 2000ms trace.
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/database-long-duration.png)
 <p align="center">-1380ms database accesses-</p>
 
-Through these steps, this trace root cause is doing too many database accesses. This kind of root cause
-also happens in too many RPCs and cache accesses.
+Through these steps, this trace root cause is doing too many database accesses.
+This kind of root cause also happens in too many RPCs and cache accesses.
 
 ## Trace depth
-Trace depth is also
+Trace depth is also related latency. In this case, same as [too many child spans](#too-many-child-spans) scenairo,
+each span latency looks good, but the whole trace is slow.
+
+![](../.vuepress/public/static/blog/2018-01-01-understand-trace/deep-trace-1.png)
+<p align="center">-Trace depth-</p>
+
+Like this one, the slowest spans are less than 500ms, which are not too slow for a 2000ms trace.
+But when you see the first line, there are four different colors representing four services involved
+in this distributed trace. Every one of them costs 100~400ms. For all four, there nearly 2000ms.
+From here, we know, this slow trace is caused by 3 RPCs in the serial sequence.
+
+# At the end
+Distributed tracing and APM tool are helping the user to locate the root causes,
+then the developer and operator teams could work on optimizations. Hope you love Apache SkyWalking and
+our new trace visualization, [give us a star on GitHub](https://github.com/apache/incubator-skywalking) to encourage us.
+
+This new version is going to release at the end of Jan. 2019. You can contact the project team through the following channels:
+- Follow [SkyWalking twitter](https://twitter.com/ASFSkyWalking)
+- Subscribe mailing list: dev@skywalking.apache.org . Send to dev-subscribe@kywalking.apache.org to subscribe the mail list.
+- Join [Gitter](https://gitter.im/OpenSkywalking/Lobby) room.
