@@ -4,7 +4,7 @@ layout: LayoutBlog
 blog: 
 
 - title: 关于elasticsearch因basic认证导致skywalking无法正常调用接口问题
-  name: 2019-01-12-skywalking-elasticsearch-basic.md
+  name: 2019-01-02-skywalking-elasticsearch-basic.md
   time: 刘离勇
   short: elasticsearch basic验证
   
