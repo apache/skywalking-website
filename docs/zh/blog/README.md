@@ -22,3 +22,8 @@ blog:
   name: 2018-05-24-skywalking-net
   time: 刘浩扬
   short: 用于SkyWalking的.NET Core SDK
+  
+- title: 关于elasticsearch因basic认证导致skywalking无法正常调用接口问题
+  name: 2019-01-12-skywalking-elasticsearch-basic.md
+  time: 刘离勇
+  short: elasticsearch basic验证
