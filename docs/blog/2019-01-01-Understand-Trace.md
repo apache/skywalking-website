@@ -6,46 +6,29 @@
 Jan. 1st, 2019
 
 # Background
-In modern microservices architecture, distributed tracing is being treated
-as a neccesary system. But how to use distributed tracing data, how to understand
-the trace data, are not very clear to some end users.
-In this blog, I am going to use some typical scenarios, help
-the new user to understand the trace,
-through the incoming new visualization features in SkyWalking 6.0.0 GA.
+Distributed tracing is a necessary part of modern microservices architecture, but how to understand or use distributed tracing data is unclear to some end users. This blog overviews typical distributed tracing use cases with new visualization features in SkyWalking v6. We hope new users will understand more through these examples.
 
 # Metric and topology
-Through trace data, you could have these two obvious and well knwon features, **metric**
-and **topology**.
+Trace data underpins in two well known analysis features: **metric** and **topology**
 
-**Metric** of each service, service instance, endpoint are able to be calculated by
-entry spans in trace, which represent each time access performance. So, you could
-have average response time, 99% response time, successful rate... indicators
-for the service, service instance, endpoint.
+**Metric** of each service, service instance, endpoint are derived from entry spans in trace. Metrics represent response time performance. So, you could have average response time, 99% response time, success rate, etc. These are broken down by service, service instance, endpoint.
 
-**Topology** is the most attractive feature, when people meet distributed tracing system,
-besides tracing itself. The reason people think the topology so important is that,
-in a distributed enviroment service relationships and dependencies are impossible known,
-even for the developer, designer or operate team. Like the following graph, it gives
-a clear view of 4 projects, kafka and two outside dependencies.
+**Topology** represents links between services and is distributed tracing's most attractive feature. Topologies allows all users to understand distributed service relationships and dependencies even when they are varied or complex. This is important as it brings a single view to all interested parties, regardless of if they are a developer, designer or operator.
+
+Here's an example topology of 4 projects, including Kafka and two outside dependencies.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/demo-spring.png)
 <p align="center">-Topology in SkyWalking optional UI, RocketBot-</p>
 
 # Trace
-In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk and Network)
-to generate, transport and persistent trace data.
+In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk and Network) to generate, transport and persistent trace data. Let's try to answer why we do this? What are the typical diagnosis and system performance questions we can answer with trace data?
 
-Then what are the typical scenarios
-of use trace data to diagnose system performance issue?
-
-Because we dive in, from SkyWalking v6.0.0-GA, it includes two trace views.
-1. TreeMode. The first time provided. Help you easier to identify issues.
-1. ListMode. Tranditional view in long time, also usually seen in other tracing system, such as Zipkin.
+SkyWalking v6 includes two trace views:
+1. TreeMode: The first time provided. Help you easier to identify issues.
+1. ListMode: Traditional view in long time, also usually seen in other tracing system, such as Zipkin.
 
 ## Error occurred
-In the trace view, the easiest part is locating the error, which may be caused by
-code exception or network. Go into the span detail, you will easier to find out.
-No matter in ListMode or TreeMode.
+In the trace view, the easiest part is locating the error, possibly caused by a code exception or network fault. Both ListMode and TreeMode can identify errors, while the span detail screen provides details.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/span-error.png)
 <p align="center">-ListMode error span-</p>
@@ -54,62 +37,43 @@ No matter in ListMode or TreeMode.
 <p align="center">-TreeMode error span-</p>
 
 ## Slow span
-In spans, we have known, all of them includes their execution duration, so identify
-the slowest spans is the high priority jobs when read the trace.
-In old ListMode trace view, parent span always includes the child spans duration in most cases,
-because the child span is executed nested inside parent span. Then when a slow span happens,
-nearly all of its parent spans become slow span too.
-In SkyWalking 6-GA,
-we provide `Top 5 of slow span` filter to help you locate the spans directly.
+A high priority feature is identifying the slowest spans in a trace. This uses execution duration captured by application agents. In the old ListMode trace view, parent span almost always includes the child span's duration, due to nesting. In other words, a slow span usually causes its parent to also become slow. In SkyWalking 6, we provide `Top 5 of slow span` filter to help you locate the spans directly.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/top5-span.png)
 <p align="center">-Top 5 slow span-</p>
 
-In the above demo screenshot, the UI highlights the top 5 slow spans, which already excludes
-the child span duration. Also show all span's self execution time. You could find the slowest spans
-very easily.
+The above screenshot highlights the top 5 slow spans, excluding child span duration. Also, this shows all spans' execution time, which helps identify the slowest ones.
 
 ## Too many child spans
-In some cases, single one time access is quick enough,
-but still cause the trace very slow, like this one.
+In some cases, individual durations are quick, but the trace is still slow, like this one:
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/top5-not-clear.png)
 <p align="center">-Trace with no slow span-</p>
 
-But we still need to know why trace is slow. In this case, you could use `Top 5 of children span number`
-filter to find out, whether too many children spans in each span. This filter shows
-the children number of each span, highlights the top 5.
+To understand if the root problem is related to too many operations, use `Top 5 of children span number`. This filter shows the amount of children each span has, highlighting the top 5.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/too-many-child.png)
 <p align="center">-13 database accesses of a span-</p>
 
-In this screenshot, there is a span with 13 children span, which are all Database accesses. Also, when
-you see overview of trace, database cost 1380ms of this 2000ms trace.
+In this screenshot, there is a span with 13 children, which are all Database accesses. Also, when you see overview of trace, database cost 1380ms of this 2000ms trace.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/database-long-duration.png)
 <p align="center">-1380ms database accesses-</p>
 
-Through these steps, this trace root cause is doing too many database accesses.
-This kind of root cause also happens in too many RPCs and cache accesses.
+In this example, the root cause is too many database accesses. This is also typical in other scenarios like too many RPCs or cache accesses.
 
 ## Trace depth
-Trace depth is also related latency. In this case, same as [too many child spans](#too-many-child-spans) scenairo,
-each span latency looks good, but the whole trace is slow.
+Trace depth is also related latency. Like the [too many child spans](#too-many-child-spans) scenario, each span latency looks good, but the whole trace is slow.
 
 ![](../.vuepress/public/static/blog/2018-01-01-understand-trace/deep-trace-1.png)
 <p align="center">-Trace depth-</p>
 
-Like this one, the slowest spans are less than 500ms, which are not too slow for a 2000ms trace.
-But when you see the first line, there are four different colors representing four services involved
-in this distributed trace. Every one of them costs 100~400ms. For all four, there nearly 2000ms.
-From here, we know, this slow trace is caused by 3 RPCs in the serial sequence.
+Here, the slowest spans are less than 500ms, which are not too slow for a 2000ms trace. When you see the first line, there are four different colors representing four services involved in this distributed trace. Every one of them costs 100~400ms. For all four, there nearly 2000ms. From here, we know this slow trace is caused by 3 RPCs in a serial sequence.
 
 # At the end
-Distributed tracing and APM tool are helping the user to locate the root causes,
-then the developer and operator teams could work on optimizations. Hope you love Apache SkyWalking and
-our new trace visualization, [give us a star on GitHub](https://github.com/apache/incubator-skywalking) to encourage us.
+Distributed tracing and APM tools help users identify root causes, allowing development and operation teams to optimize accordingly. We hope you enjoyed this, and love Apache SkyWalking and our new trace visualization. If so, [give us a star on GitHub](https://github.com/apache/incubator-skywalking) to encourage us.
 
-This new version is going to release at the end of Jan. 2019. You can contact the project team through the following channels:
+SkyWalking 6 is scheduled to release at the end of January 2019. You can contact the project team through the following channels:
 - Follow [SkyWalking twitter](https://twitter.com/ASFSkyWalking)
 - Subscribe mailing list: dev@skywalking.apache.org . Send to dev-subscribe@kywalking.apache.org to subscribe the mail list.
 - Join [Gitter](https://gitter.im/OpenSkywalking/Lobby) room.
