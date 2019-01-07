@@ -28,7 +28,7 @@ news:
   content:
   - header: 6.0.0-beta 发布
     content: Bug修复。提供新的可选存储。更多的Java插件，包括Spring 5 MVC和webflux。
-    time: Dec 25th, 2018
+    time: 2018年12月25日
   - header: 欢迎王垚成为PPMC
     content: 根据他的贡献，包括制作了RocketBot作为我们的第二套UI, 新的Skywalking官网和下一版本中非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。
     time: 2018年12月22日
