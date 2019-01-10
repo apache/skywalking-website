@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎付金林成为新的committer
+    content: 付金林贡献了4个新的插件，包括gson, activemq, rabbitmq 和 canal，使得SkyWalking支持所有的主流开源MQ。同时提供了部分文档和BUG修复。SkyWalking PPMC基于这些贡献，接纳他成为新的committer。
+    time: 2019年1月10日
   - header: 6.0.0-beta 发布
     content: Bug修复。提供新的可选存储。更多的Java插件，包括Spring 5 MVC和webflux。
     time: 2018年12月25日
@@ -35,7 +38,4 @@ news:
   - header: 欢迎曹奕雄成为committer
     content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
     time: 2018年12月10日
-  - header: 欢迎李浪成为committer
-    content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
-    time: 2018年12月6日
 ---

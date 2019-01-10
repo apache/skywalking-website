@@ -1,5 +1,10 @@
 # SkyWalking 事件概要
 
+## 欢迎付金林成为新的committer
+###### 2019年1月10日
+付金林贡献了4个新的插件，包括gson, activemq, rabbitmq 和 canal，使得SkyWalking支持所有的主流开源MQ。
+同时提供了部分文档和BUG修复。SkyWalking PPMC基于这些贡献，接纳他成为新的committer。
+
 ## 发布Apache SkyWalking APM 6.0.0-beta版本
 ###### 2018年12月25日
 6.0.0-beta发布。跳转到[下载](/zh/downloads/)页面查找发布版本。

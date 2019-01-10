@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Jinlin Fu as a new committer.
+    content: Jinlin Fu has contributed 4 new plugins, including gson, activemq, rabbitmq and canal. The SkyWalking PPMC based on these, promote him as new committer. Welcome on board.
+    time: Jan. 10th, 2019
   - header: 6.0.0-beta release
     content: Bug fixed. New storage options. More java agent plugins, including Spring 5 MVC and webflux.
     time: Dec 25th, 2018
@@ -34,7 +37,4 @@ news:
   - header: Welcome Yixiong Cao as a new committer.
     content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
     time: Dec. 10th, 2018
-  - header: Welcome Lang Li as a new committer.
-    content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
-    time: Dec. 6th, 2018
 ---
