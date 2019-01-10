@@ -36,8 +36,8 @@ Members include PPMC, committer and mentor of SkyWalking project. The List in al
 |:---:|:--:|
 |Can Li| lican |
 |Jian Tan| tanjian |
-|Jinlin Fu| withlin |
 |Jiaqi Lin| linjiaqi |
+|Jinlin Fu| withlin |
 |Lang Li| lilang |
 |Yixiong Cao| caoyixiong |
 |Wenbing Wang| wangwenbin |
