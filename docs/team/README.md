@@ -34,6 +34,7 @@ Members include PPMC, committer and mentor of SkyWalking project. The List in al
 ### Committer
 | Name |Apache ID|
 |:---:|:--:|
+|Jinlin Fu| withlin |
 |Can Li| lican |
 |Jian Tan| tanjian |
 |Jiaqi Lin| linjiaqi |
