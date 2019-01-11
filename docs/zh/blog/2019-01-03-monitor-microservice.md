@@ -11,10 +11,10 @@
 Skywalking是一款国内开源的应用性能监控工具，支持对分布式系统的监控、跟踪和诊断。
 
 它提供了如下的主要功能特性：
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wvj8gT0MnUnmcc4xpGicKfO2TjnbSIS5h4quQ9Cl4MLqL7wBuSgm09BTw/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/features.jpg)
 
 ### Skywalking 技术架构
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wvp0ewYriaAbaYW1bicTD5eufNY8nWD2mZwPrksRdXGhy7rQ1Mp0Z5WPXw/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/architecture.jpg)
 
 SW总体可以分为四部分：
 
@@ -30,7 +30,7 @@ SW总体可以分为四部分：
 
 从skywalking支持环境变量配置加载，在启动的时候优先读取环境变量中的相关配置。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wv6UjheN6qLiaFbLmSKI4u8MvAvOpAZMuqVYEBqAvZZXWPLlxUDOgRsjA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/config.jpg)
 
 - agent.namespace: 跨进程链路中的header，不同的namespace会导致跨进程的链路中断
 - agent.service_name:一个服务（项目）的唯一标识，这个字段决定了在sw的UI上的关于service的展示名称
@@ -47,7 +47,7 @@ Collector支持集群部署，zookeeper、kubernetes（如果你的应用是部�
 
 **Collector端口设置**
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wv31pNHibL0uFZdVgZDJiajhkjeRFwiaqFibZJrFggmXy4YyB1kKY98WwFsQ/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/port.jpg)
 
 - downsampling: 采样汇总统计维度，会分别按照分钟、【小时、天、月】（可选）来统计各项指标数据。
 - 通过设置TTL相关配置项可以对数据进行自动清理。
@@ -62,13 +62,13 @@ UI使用rest http通信，agent在大多数场景下使用grpc方式通信，在
 
 在application.yml中配置的storage模块配置中选择要使用的数据库类型，并填写相关的配置信息。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wv4pAXFKrpjmsfBfzkamLexdmy2zf145NdMTTJgS98qia2nBqhZ42Bo6A/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/yml.jpg)
 
 **Collector Receiver**
 
 Receiver是Skywalking在6.x提出的新的概念，负责从被监控的系统中接受指标数据。用户完全可以参照OpenTracing规范来上传自定义的监控数据。Skywalking官方提供了service-mesh、istio、zipkin的相关能力。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvEf45ibJ4DgmKAA9YcMichZoYhL85O8LJadUVVR1r5LEbOFKErIHVt4dQ/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/collector.jpg)
 
 现在Skywalking支持服务端采样，配置项为sampleRate，比例采样，如果配置为5000则采样率就是50%。
 
@@ -76,7 +76,7 @@ Receiver是Skywalking在6.x提出的新的概念，负责从被监控的系统�
 
 关于服务采样配置的一点建议，如果Collector以集群方式部署，比如：Acollector和Bcollector，建议Acollector.sampleRate = Bcollector.sampleRate。如果采样率设置不相同可能会出现数据丢失问题。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvzKWODgl80aLJVoH1B6ib1sAEbAMua7VTGVsTEnGJAmGMeUgWMsfxpQA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/zookeeper.jpg)
 
 假设Agent端将所有数据发送到后端Collector处，A采样率设置为30%，B采样率为50%。
 
@@ -90,7 +90,7 @@ Receiver是Skywalking在6.x提出的新的概念，负责从被监控的系统�
 
 我们简单模拟一次服务之间的调用。新建两个服务，service-provider以及service-consumer，服务之间简单的通过Feign Client 来模拟远程调用。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvamHibn7BUuPQZ6j1aO42DKWGaIVSR2n05Bn9kFuxX6WFYicTaScbqTUg/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/topo.jpg)
 
 从图中可以看到:
 - 有两个服务节点：provider & consumer
@@ -108,12 +108,12 @@ Skywalking通过业务调用监控进行依赖分析，提供给我们了服务�
 
 我们在之前看到consumer节点服务中发生了错误，让我们一起来定位下错误是发生在了什么地方又是什么原因呢？
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvZB2R1wo3uVCX2fV7RnnHM6dgia8pmsO71JgExZIlQSEbFNuFFu0YaSQ/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/trace.jpg)
 
 在每一条trace的信息中都可以看到当前请求的时间、GloableId、以及请求被调用的时间。我们分别看一看正确的调用和异常的调用。
 
 ### Trace调用链路监控
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wvia8GU08HbRu9RbWb8KA5juMyuDnzWiaAqocSko6jTZ6MDxCBu63icRMbQ/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/trace_detail.jpg)
 
 图示展示的是一次正常的响应，这条响应总耗时19ms，它有4个span：
 - span1 /getStore = 19ms  响应的总流转时间
@@ -129,13 +129,13 @@ Skywalking通过业务调用监控进行依赖分析，提供给我们了服务�
 - HttpMethod: GET
 - Url: http://192.168.16.125:10002/demo2/stores
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvqYzb1Zh5dxLFngrnGDe2ftrfBtkY2JAzzyw0HCJqEtZ0sBGxkmjBSA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/span.jpg)
 
 这是一次正常的请求调用Trace日志，可能我们并不关心正常的时候，毕竟一切正常不就是我们期待的么！
 
 我们再来看下，异常状态下我们的Trace以及Span又是什么样的呢。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvwYFobCoCKDFiczZQMaxvTqZ5YHJPKfgiciaNX9kWPhhYoI0WQiafKhlxGw/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/span_detail.jpg)
 
 发生错误的调用链中Span中的is error标识变为true，并且在名为Logs的TAB中可以看到错误发生的具体原因。根据异常情况我们就可以轻松定位到影响业务的具体原因，从而快速定位问题，解决问题。
 
@@ -152,7 +152,7 @@ Skywalking还可以查看具体Service的性能指标，根据相关的性能指
 - CPM: 每分钟调用次数
 - Avg Response Time: 平均响应时间
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wv5QkhQxFvWqr1yqLhzsyMiauSTZ5Cp1quYN1Y2ZuiasnsiblwSAIrlHwHg/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/frame.jpg)
 
 从应用整体外部来看我们可以监测到应用在一定时间段内的
 1. 服务可用性指标SLA
@@ -162,7 +162,7 @@ Skywalking还可以查看具体Service的性能指标，根据相关的性能指
 1. 服务所在物理机的IP、HostName、Operation System
 
 ### Service JVM信息监控
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvzG4E235ibTMB4R80yy53ZibXyomHFSTYRPic0X1w8Hwm130Q3gdqpCxwA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/index.jpg)
 
 还可以监控到Service运行时的CPU、堆内存、非堆内存使用率、以及GC情况。这些信息来源于JVM。注意这里的数据可不是机器本身的数据。
 
@@ -174,7 +174,7 @@ Skywalking还可以查看具体Service的性能指标，根据相关的性能指
 ## Skywalking 服务告警
 先来看一下告警的规则配置。在alarm-settings.xml中可以配置告警规则，告警规则支持自定义。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvmxgMqJkx2ZJf0q9GeXfBcYLPYV2kBPh3PXnTJUkYf4wNSt10Ykx3Mg/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/rule.jpg)
 
 一份告警配置由以下几部分组成：
 1. service_resp_time_rule：告警规则名称 ***_rule （规则名称可以自定义但是必须以’_rule’结尾
@@ -189,13 +189,13 @@ Skywalking还可以查看具体Service的性能指标，根据相关的性能指
 
 Skywalking通过HttpClient的方式远程调用在配置项webhooks中定义的告警通知服务地址。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15WvAOWjqtt6WW5O0M6hR3SeTjHkTnHqbAUZ0seO7QBBhH5zFKiaJ3gLauw/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/alarm.jpg)
 
 了解了SW所传送的数据格式我们就可以对告警信息进行接收处理，实现我们需要的告警通知服务啦！
 
 我们将一个服务停掉，并将另外一个服务的某个对外暴露的接口让他休眠一定的时间。然后调用一定的次数观察服务的状态信息以及告警情况。
 
-![](https://mmbiz.qpic.cn/mmbiz_png/icQbWvrFMeJWsjOsicg3eiaXv00m8Du15Wv8RdNBS4PB5awnfUiaJ09dI3K7iaQEoy4aegrYBLibkp8PuwUicmwKJkRSQ/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+![](../../.vuepress/public/static/blog/2019-01-03-monitor-microservice/alarm_show.jpg)
 
 # 总结
 本文简单的通过skwaylking的配置来对skywlaking的功能进行一次初步的了解，对skwaylking新提出的概念以及新功能进行简单的诠释，方便大家了解和使用。通过使用APM工具，可以让我们方便的查看微服务架构中系统瓶颈以及性能问题等。
