@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog:
 
+- title: SkyWalking Java 插件贡献实践
+  name: 2019-01-21-agent-plugin-practice
+  time: 赵禹光，1月21日，2019
+  short: 本文将基于SkyWalking 6.0.0-GA-SNAPSHOT版本，以编写Redis客户端Lettuce的SkyWalking Java Agent 插件为例，与大家分享我贡献PR的过程，希望对大家了解SkyWalking Java Agent插件有所帮助。
+
 - title: （转载自 普元公众号EAWorld） Skywalking微服务监控分析
   name: 2019-01-03-monitor-microservice
   time:  赵瑞栋，1月3日，2019
