@@ -61,7 +61,7 @@ public String ping(HttpServletRequest request) throws ExecutionException, Interr
 Lettuce对Redis封装与Redisson <a href="#Redisson">`Redisson`</a> 类似，目的均是实现简单易用，且无学习曲线的Java的Redis客户端。所以要是先对Redis操作的拦截，需要学习对应客户端的源码。
 
 ### 设计插件
-![Lettuce时序图](https://raw.githubusercontent.com/zhaoyuguang/test/master/lettuce.png)
+![Lettuce时序图](../../.vuepress/public/static/blog/2019-01-21-agent-plugin-practice/lettuce.png)
 理解插件实现过程，找到最佳InterceptPoint位置是实现插件融入SkyWalking的核心所在。
 
 ### 代码实现
