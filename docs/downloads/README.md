@@ -2,6 +2,8 @@
 
 Use the links below to download the Apache SkyWalking (incubating) from one of our mirrors.
 
+**Only source code releases are official Apache releases, the Windows and Linux binary releases are just for end users connivance.**
+
 
 ## 6.x releases
 | Date | Version| | Downloads |
@@ -28,7 +30,7 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 - Support SkyWalking Cross Process Propagation Headers Protocol v1 running in compatible way. Need declare open explicitly.
 - Support SpringMVC 5
 - Support webflux
-- Support a new way to override agent.config by system env. 
+- Support a new way to override agent.config by system env.
 - Span tag can override by explicit way.
 - Fix Spring Controller Inherit issue.
 - Fix ElasticSearch plugin NPE.

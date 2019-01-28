@@ -1,6 +1,8 @@
 # 下载SkyWalking发布版本
 从下面提供的链接从Apache SkyWalking（孵化）镜像下载。
 
+**只有源码包属于Apache官方发布包，其他Linux和Windows平台二进制发布包只是为了方便用户使用。**
+
 ## 6.x 版本
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
@@ -25,7 +27,7 @@
 - 支持 SkyWalking Cross Process Propagation Headers Protocol v1 在兼容模式下运行. 需要显示声明打开.
 - 支持 SpringMVC 5
 - 支持 webflux
-- 支持使用环境变量复写agent.config. 
+- 支持使用环境变量复写agent.config.
 - 可以显示复写Span tag.
 - 修复 Spring Controller Inherit 问题.
 - 修复 ElasticSearch plugin 空指针.
@@ -101,11 +103,11 @@
   - 在探针设置中添加对包名称的忽略。这些包中的类将被增强，甚至插件声明。
   - 支持Undertow 2.x插件。
   - 修复Motan插件的错误类名，而不是与功能相关的问题，只是命名修改。
- 
+
 #### Collector改变
   - 使缓冲文件处理程序更安全地关闭。
   - 在AlarmService中修复NPE。
- 
+
 #### 文档
   - Fix compiling doc link.
   - 更新新的演示地址。
