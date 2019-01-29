@@ -16,19 +16,19 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 ### 孵化器项目管理委员会
 | 名字 |Apache ID|
 :---:|:--:|
+|DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
+|Jian Tan| tanjian |
+|Sheng Wang| wangsheng |
 |Sheng Wu| wusheng |
 |Shinn Zhang| zhangxin |
-|Yongsheng Peng| pengys |
-|DongXue Si| ilucky |
 |Kai Wang| wangkai |
-|Sheng Wang| wangsheng |
 |Yang Bai| baiyang |
+|Yao Wang| ywang |
+|Yongsheng Peng| pengys |
 |Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
-|Yao Wang| ywang |
-|Jian Tan| tanjian |
 
 ### 提交者
 | 名字 |Apache ID|
