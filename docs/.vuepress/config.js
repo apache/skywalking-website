@@ -28,8 +28,7 @@ module.exports = {
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
             { text: 'Latest dev version', link: "https://github.com/apache/incubator-skywalking/tree/master/docs" },
-            { text: '6.0.0-beta', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-beta/docs"},
-            { text: '5.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v5.0.0-GA/docs"}
+            { text: '6.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-GA/docs"},
           ], },
           { text: "Events", link: "/events/" },
           { text: "Blog", link: "/blog/" },
@@ -60,8 +59,7 @@ module.exports = {
           { text: "文档",
             items: [
               { text: '开发版本文档', link: "https://github.com/apache/incubator-skywalking/tree/master/docs" },
-              { text: '6.0.0-beta', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-beta/docs"},
-              { text: '5.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v5.0.0-GA/docs"}
+              { text: '6.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-GA/docs"},
             ],
           },
           { text: "事件", link: "/zh/events/" },

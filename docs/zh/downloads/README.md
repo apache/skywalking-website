@@ -6,6 +6,10 @@
 ## 6.x 版本
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
+| Jan 29th, 2019 | 6.0.0-GA | 源码| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA-src.tgz.sha512)|
+| | | Windows| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.tar.gz.sha512)|
+| | | Linux | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.zip.sha512)|
+| | | Document| [文档](https://github.com/apache/incubator-skywalking/blob/v6.0.0-GA/docs/README.md) |
 | Dec 25th, 2018 | 6.0.0-beta | 源码| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.sha512)|
 | | | Windows| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.sha512)|
 | | | Linux | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.sha512)|
@@ -15,63 +19,44 @@
 | | | Linux | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.sha512)|
 | | | 文档| [文档](https://github.com/apache/incubator-skywalking/blob/v6.0.0-alpha/docs/README.md) |
 
-### 6.0.0-beta更新日志
-
-#### 协议
-- 提供 Trace Data Protocol v2
-- 提供 SkyWalking Cross Process Propagation Headers Protocol v2.
+### 6.0.0-GA更新日志
 
 #### Java Agent
-- 支持 Trace Data Protocol v2
-- 支持 SkyWalking Cross Process Propagation Headers Protocol v2.
-- 支持 SkyWalking Cross Process Propagation Headers Protocol v1 在兼容模式下运行. 需要显示声明打开.
-- 支持 SpringMVC 5
-- 支持 webflux
-- 支持使用环境变量复写agent.config.
-- 可以显示复写Span tag.
-- 修复 Spring Controller Inherit 问题.
-- 修复 ElasticSearch plugin 空指针.
-- 修复 agent classloader 死锁问题.
-- 修复 agent 日志拼写错误.
-- 修复 resettemplete plugin 中错误的组件id.
-- 修复错误使用 transform `ignore()`.
-- 修复 H2 查询问题.
+- 支持 gson 可选插件
+- 支持 canal 插件.
+- 修复 ojdbc component id 配置.
+- 修复 dubbo 插件冲突问题 .
+- 修复 OpenTracing tag 匹配问题.
+- 修复 ignore 插件中一个校验逻辑失效.
 
 #### Backend
-- 支持 Trace Data Protocol v2 并且 Trace Data Protocol v1 仍然继续有效.
-- 支持 MySQL 作为存储.
-- 支持 TiDB 作为存储.
-- 支持使用环境变量复写application.yml.
-- 支持 service instance 和 endpoint 告警.
-- 支持 istio 的 namespace.
-- 支持多种新的查询结果，包括service throughput(cpm), successful rate(sla), avg response time and p99/p95/p90/p75/p50 response time.
-- 支持后端trace采样.
-- 支持 Zipkin 格式.
-- 支持 init 模式.
-- 支持Zookeeper的namespace.
-- 支持在集群管理中使用consul.
-- OAL 生成工具被合并到主库，在 `compile` 阶段可以使用.
-- 优化 trace 分页查询.
-- 修复 trace 查询没有使用fuzzy query.
-- 修复告警激活错误的问题.
-- 去掉在数据库和缓存中非必要的条件.
-- 修复在ES存储中错误的namespace问题.
-- 修复 `Remote clients selector error: / by zero `.
-- 修复 segment TTL 不生效的问题.
+- 调整 service inventory 存储实体, 增加 properties属性
+- 调整 service instance inventory 存储实体, 增加 properties属性
+- 调整service inventory 存储实体，增加NodeType属性
+- 修复在ref中存在local和exit span的operation name，segment会整体丢失问题
+- 修复日志中错误的索引名称
+- 修复错误的告警信息
+- 增加一个span数量限制的测试用例
+- 增加一个服务端自监控模块，提供prometheus作为默认实现，并提供grafana UI配置
+- 重构注册API
+- 修复H2和MySQL存储，endpoint依赖图不完整。
+- 优化实体注册和修改注册实现
+- 加快buffer文件读取速度
+- 修复和移除不必要的注册操作。
 
 #### UI
-- 支持多种新的图表，包括 service throughput(cpm), successful rate(sla), avg response time and p99/p95/p90/p75/p50 response time.
-- 修复 TopN endpoint 链接错误的问题.
-- 增强 trace stack 现实效果.
-- 修复 CI.
+- 增加新的Trace视图
+- 对Tag value支持word-break
 
-#### 文档
-- 增加更多的 agent 设置文档.
-- 增加更多的贡献者文档.
-- 更新用户墙.
-- 增加 RocketBot UI 项目链接.
+#### Document
+- 新增两种启动模式文档
+- 增加php探针项目链接
+- 补充部分文档
+- 更新年份到2019
+- 更新用户墙
+- 修正编译说明中的部分描述
 
-问题和Pull Requests 在 [这里](https://github.com/apache/incubator-skywalking/milestone/31?closed=1)
+[问题和Pull Requests](https://github.com/apache/incubator-skywalking/milestone/30?closed=1)
 
 ## 5.x 版本
 | 日期 | 版本| | 下载 |
