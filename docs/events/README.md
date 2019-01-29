@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Jian Tan as a new PPMC.
+###### Jan 29th, 2019
+Based on his contributions to the project, he has been accepted as SkyWalking PPMC. Welcome aboard.
+
 ## Release Apache SkyWalking APM 6.0.0-GA
 ###### Jan 29th, 2019
 6.0.0-GA release. Go to [downloads](/downloads) page to find release tars.

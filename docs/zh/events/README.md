@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎谭建成为PPMC
+###### 2019年01月29日
+根据他对该项目的贡献，他已被接纳为SkyWalking PPMC。欢迎。
+
 ## Release Apache SkyWalking APM 6.0.0-GA
 ###### Jan 29th, 2019
 6.0.0-GA发布。跳转到 [下载](/downloads) 页面查找发布版本。

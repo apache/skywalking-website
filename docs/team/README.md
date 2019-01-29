@@ -21,16 +21,16 @@ Members include PPMC, committer and mentor of SkyWalking project. The List in al
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
+|Jian Tan| tanjian |
 |Sheng Wang| wangsheng |
 |Sheng Wu| wusheng |
+|Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
 |Yang Bai| baiyang |
+|Yao Wang| ywang |
 |Yongsheng Peng| pengys |
 |Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
-|Shinn Zhang| zhangxin |
-|Yao Wang| ywang |
-|Jian Tan| tanjian |
 
 ### Committer
 | Name |Apache ID|
