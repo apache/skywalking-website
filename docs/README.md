@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: 6.0.0-GA release
+    content: Bug fixed. Stable version for v6 core.
+    time: Jan 29th, 2019
   - header: Welcome Jinlin Fu as a new committer.
     content: Jinlin Fu has contributed 4 new plugins, including gson, activemq, rabbitmq and canal. The SkyWalking PPMC based on these, promote him as new committer. Welcome on board.
     time: Jan. 10th, 2019
@@ -34,7 +37,4 @@ news:
   - header: Welcome Yao Wang as a new PPMC.
     content: Based on his contributions. Including created RocketBot as our secondary UI, new website and very cool trace view page in next release. he has been accepted as SkyWalking PPMC. Welcome aboard.
     time: Dec. 22th, 2018
-  - header: Welcome Yixiong Cao as a new committer.
-    content: Based on his contributions to the project, he has been accepted as SkyWalking committer. Welcome aboard.
-    time: Dec. 10th, 2018
 ---

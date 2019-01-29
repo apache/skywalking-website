@@ -1,5 +1,15 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking APM 6.0.0-GA
+###### Jan 29th, 2019
+6.0.0-GA发布。跳转到 [下载](/downloads) 页面查找发布版本。
+这是一个重要的里程碑版本，我们建议所有用户更新到此版本
+
+关键更新
+1. BUG修复
+1. 注册BUG修复，重构和性能优化
+1. 新的Trace展示页面
+
 ## 欢迎付金林成为新的committer
 ###### 2019年1月10日
 付金林贡献了4个新的插件，包括gson, activemq, rabbitmq 和 canal，使得SkyWalking支持所有的主流开源MQ。
