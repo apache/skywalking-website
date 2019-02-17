@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Transfer Docker Images to Apache Official Repository
+    content: According to Apache Software Foundation release policy all docker images of Apache Skywalking should be tranfered from skywalking to apache.
+    time: Feb 17th, 2019
   - header: 6.0.0-GA release
     content: Bug fixed. Stable version for v6 core.
     time: Jan 29th, 2019
@@ -34,7 +37,4 @@ news:
   - header: 6.0.0-beta release
     content: Bug fixed. New storage options. More java agent plugins, including Spring 5 MVC and webflux.
     time: Dec 25th, 2018
-  - header: Welcome Yao Wang as a new PPMC.
-    content: Based on his contributions. Including created RocketBot as our secondary UI, new website and very cool trace view page in next release. he has been accepted as SkyWalking PPMC. Welcome aboard.
-    time: Dec. 22th, 2018
 ---

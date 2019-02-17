@@ -1,5 +1,17 @@
 # SkyWalking Events
 
+## Transfer Docker Images to Apache Official Repository
+###### Feb 17th, 2019
+According to Apache Software Foundation release policy all docker images of Apache Skywalking should be
+tranfered from [skywalking](https://hub.docker.com/u/skywalking) to [apache](https://hub.docker.com/u/apache) with 
+a prefix *skywalking-*. The trasfer details are as follows
+
+ - skywalking/base -> apache/skywalking-base
+ - skywalking/oap -> apache/skywalking-oap-server
+ - skywalking/ui -> apache/skywalking-ui
+
+ All of repositories in [skywalking](https://hub.docker.com/u/skywalking) will be **removed after one week**.
+
 ## Welcome Jian Tan as a new PPMC.
 ###### Jan 29th, 2019
 Based on his contributions to the project, he has been accepted as SkyWalking PPMC. Welcome aboard.

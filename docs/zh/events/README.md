@@ -1,5 +1,17 @@
 # SkyWalking 事件概要
 
+## 迁移Docker镜像到Apache官方仓库
+###### 2019年2月17日
+根据Apache Software Foundation的发版政策，Apache Skywalking的所有docker镜像将会
+从[skywalking](https://hub.docker.com/u/skywalking)迁移到[apache](https://hub.docker.com/u/apache)中。
+skywalking的镜像将以 *skywalking-* 为前缀。具体迁移方案如下:
+
+ -  skywalking/base  -> apache/skywalking-base
+ -  skywalking/oap  -> apache/skywalking-oap-server
+ -  skywalking/ui  -> apache/skywalking-ui
+
+[skywalking](https://hub.docker.com/u/skywalking)中的所有库将在**一周后删除**。
+
 ## 欢迎谭建成为PPMC
 ###### 2019年01月29日
 根据他对该项目的贡献，他已被接纳为SkyWalking PPMC。欢迎。

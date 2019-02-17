@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 迁移Docker镜像到Apache官方仓库
+    content: 根据Apache Software Foundation的发版政策，Apache Skywalking的所有docker镜像将会从skywalking迁移到apache中。
+    time: 2019年2月17日
   - header: 欢迎付金林成为新的committer
     content: 付金林贡献了4个新的插件，包括gson, activemq, rabbitmq 和 canal，使得SkyWalking支持所有的主流开源MQ。同时提供了部分文档和BUG修复。SkyWalking PPMC基于这些贡献，接纳他成为新的committer。
     time: 2019年1月10日
@@ -35,7 +38,4 @@ news:
   - header: 欢迎王垚成为PPMC
     content: 根据他的贡献，包括制作了RocketBot作为我们的第二套UI, 新的Skywalking官网和下一版本中非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。
     time: 2018年12月22日
-  - header: 欢迎曹奕雄成为committer
-    content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
-    time: 2018年12月10日
 ---
