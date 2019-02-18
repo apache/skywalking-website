@@ -2,7 +2,7 @@
 
 ## 迁移Docker镜像到Apache官方仓库
 ###### 2019年2月17日
-根据Apache Software Foundation的发版政策，Apache Skywalking的所有docker镜像将会
+根据Apache Software Foundation的品牌政策，Apache Skywalking的所有docker镜像将会
 从[skywalking](https://hub.docker.com/u/skywalking)迁移到[apache](https://hub.docker.com/u/apache)中。
 skywalking的镜像将以 *skywalking-* 为前缀。具体迁移方案如下:
 
