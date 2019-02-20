@@ -24,7 +24,7 @@ server {
                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                  proxy_pass http://localhost:9200;
                  #Basic字符串就是使用你的用户名(admin),密码(12345)编码后的值
-                 #注意:在进行Basic加密的时候要使用如下格式如:admin 123456 注意中间有个空格，如果使用其它格式，那么结果我们是无法预知的，最起码笔者使用上诉格式没有出现问题。
+                 #注意:在进行Basic加密的时候要使用如下格式如:admin:123456 注意中间有个冒号
                  proxy_set_header Authorization "Basic YWRtaW4gMTIzNDU2";
         }
     }
