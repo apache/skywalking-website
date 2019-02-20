@@ -19,6 +19,13 @@
 | | | Linux | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.sha512)|
 | | | 文档| [文档](https://github.com/apache/incubator-skywalking/blob/v6.0.0-alpha/docs/README.md) |
 
+## Docker 镜像
+**Docker镜像不属于Apache官方发布包，在此提供仅为了方便用户使用。**
+
+- Base, https://hub.docker.com/r/apache/skywalking-base
+- SkyWalking OAP Server, https://hub.docker.com/r/apache/skywalking-oap-server
+- SkyWalking UI, https://hub.docker.com/r/apache/skywalking-ui
+
 ### 6.0.0-GA更新日志
 
 #### Java Agent
