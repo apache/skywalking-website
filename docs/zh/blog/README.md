@@ -2,6 +2,11 @@
 layout: LayoutBlog
 
 blog:
+- title: APM巅峰对决：skywalking P.K. Pinpoint
+  name: 2019-02-24-skywalking-pk-pinpoint
+  time: 阿飞的博客，2月24日，2019
+  short: 这应该是目前两款最优秀的开源APM软件：skywalking和Pinpoint，本文基于它们截止2019年2月最新的版本，进行最全方位的对比。看看到底谁能更胜一筹...
+
 - title: Skywalking的远程调试
   name: 2019-01-24-skywalking-remote-debug
   time: 丁兵兵，1月24日，2019
