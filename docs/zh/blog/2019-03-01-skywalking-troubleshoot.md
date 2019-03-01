@@ -103,7 +103,7 @@ watch org.elasticsearch.action.index.IndexRequest validate "target"
 
 执行后，就看到了我们希望了解到的内容，如：
 
-![](https://oscimg.oschina.net/oscnet/f5009134737d16a4062223f35e862006274.jpg)
+![Arthas](../../.vuepress/public/static/blog/2019-03-01-skywalking-troubleshoot/Arthas.jpg)
 
 索引id的具体内容看到后，就好办了。我们暂时把定位到的这个应用启动脚本中的的skywalking agent移除后（计划后面重新设计下接口）重启了下系统验证下。果然疯狂输出的日志停住了，但是问题并没完全解决，skywalking页面上的数据还是没有恢复。
 
@@ -144,7 +144,7 @@ Desired survivor size 8716288 bytes, new threshold 6 (max 6)
 
 根据`Xmx`不超过物理RAM的50％上面的jvm优化建议。后面将Xms和Xmx都设置成了3G。然后先停掉skywalking（由于skywalking中会缓存部分数据，如果直接先停ES，会报索引找不到的类似异常，这个大部分skywalking用户应该有遇到过），清空skywalking缓存目录下的内容，如：
 
-![](https://oscimg.oschina.net/oscnet/9efd2b343a75591db248a7767037c936ce3.jpg)
+![skywalking-trace-buffer](../../.vuepress/public/static/blog/2019-03-01-skywalking-troubleshoot/skywalking-trace-buffer.jpg)
 
 在重启elasticsearch，接着启动skywalking后页面终于恢复了
 
