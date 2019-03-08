@@ -55,7 +55,7 @@ SkyWalking have a lot of Contributors, since we are using GitHub, you could find
 - [SkyWalking website](https://github.com/apache/incubator-skywalking-website/graphs/contributors)
 
 
-## Becomming a Committer
+## Becoming a Committer
 
 SkyWalking follows the Apache way to build the community. Anyone can become a committer once they have contributed sufficiently to the project and earned the trust. Read [Contributing Guides](https://github.com/apache/incubator-skywalking/blob/master/docs/en/guides/README.md) to take part in the community.
 
