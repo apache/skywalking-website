@@ -34,7 +34,6 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 | 名字 |Apache ID|
 |:---:|:--:|
 |Can Li| lican |
-|Jian Tan| tanjian |
 |Jiaqi Lin| linjiaqi |
 |Jinlin Fu| withlin |
 |Lang Li| lilang |
