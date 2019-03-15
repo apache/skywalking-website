@@ -12,7 +12,7 @@ feature:
   title: Feature List
   content:
     - Consistent in multiple scenarios. supported telemetry sources from language agents and service mesh.
-    - Multiple language agents, Java, .Net Core and NodJS auto instrument agents.
+    - Multiple language agents, Java, .Net Core and NodeJS auto instrument agents.
     - Light. No big data platform required, even observing the high payload cluster.
     - Modulization. Have multiple options for UI, storage, cluster managements.
     - Alarm supported.
