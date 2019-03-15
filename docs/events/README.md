@@ -3,8 +3,8 @@
 ## Transfer Docker Images to Apache Official Repository
 ###### Feb 17th, 2019
 According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be
-tranfered from [skywalking](https://hub.docker.com/u/skywalking) to [apache](https://hub.docker.com/u/apache) with 
-a prefix *skywalking-*. The trasfer details are as follows
+transferred from [skywalking](https://hub.docker.com/u/skywalking) to [apache](https://hub.docker.com/u/apache) with 
+a prefix *skywalking-*. The transfer details are as follows
 
  - skywalking/base -> apache/skywalking-base
  - skywalking/oap -> apache/skywalking-oap-server

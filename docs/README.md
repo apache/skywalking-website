@@ -26,7 +26,7 @@ news:
   title: Events & News
   content:
   - header: Transfer Docker Images to Apache Official Repository
-    content: According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be tranfered from skywalking to apache.
+    content: According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be transferred from skywalking to apache.
     time: Feb 17th, 2019
   - header: 6.0.0-GA release
     content: Bug fixed. Stable version for v6 core.
