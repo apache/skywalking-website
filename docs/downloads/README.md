@@ -4,22 +4,13 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 
 **Only source code releases are official Apache releases, the Windows and Linux binary distributions are just for end users connivance.**
 
-
-## 6.x releases
+## Download the last version
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
 | Jan 29th, 2019 | 6.0.0-GA | Source code| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA-src.tgz.sha512)|
 | | | Binary Distribution (Windows)| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.zip.sha512)|
 | | | Binary Distribution (Linux) | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-GA/apache-skywalking-apm-incubating-6.0.0-GA.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/incubator-skywalking/blob/v6.0.0-GA/docs/README.md) |
-| Dec 25th, 2018 | 6.0.0-beta | Source code| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.sha512)|
-| | | Binary Distribution (Windows)| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.sha512)|
-| | | Binary Distribution (Linux) | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/incubator-skywalking/blob/v6.0.0-beta/docs/README.md) |
-| Nov. 14th, 2018 | 6.0.0-alpha | Source code| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.sha512)|
-| | | Binary Distribution (Windows)| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.sha512)|
-| | | Binary Distribution (Linux) | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/incubator-skywalking/blob/v6.0.0-alpha/docs/README.md) |
 
 ### Docker Images for convenience
 **Docker images are not official ASF releases but provided for convenience. Recommended usage is always to build the source**
@@ -28,8 +19,7 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 - SkyWalking OAP Server, https://hub.docker.com/r/apache/skywalking-oap-server
 - SkyWalking UI, https://hub.docker.com/r/apache/skywalking-ui
 
-6.0.0-GA
-------------------
+### Changes in the last version
 #### Java Agent
 - Support gson plugin(optional).
 - Support canal plugin.
@@ -67,7 +57,20 @@ Use the links below to download the Apache SkyWalking (incubating) from one of o
 
 All issues and pull requests are [here](https://github.com/apache/incubator-skywalking/milestone/30?closed=1)
 
-## 5.x releases
+## 6.x old releases
+| Date | Version| | Downloads |
+|:---:|:--:|:--:|:--:|
+| Dec 25th, 2018 | 6.0.0-beta | Source code| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.sha512)|
+| | | Binary Distribution (Windows)| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.sha512)|
+| | | Binary Distribution (Linux) | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.sha512)|
+| | | Documentation| [Documentation](https://github.com/apache/incubator-skywalking/blob/v6.0.0-beta/docs/README.md) |
+| Nov. 14th, 2018 | 6.0.0-alpha | Source code| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.sha512)|
+| | | Binary Distribution (Windows)| [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.sha512)|
+| | | Binary Distribution (Linux) | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.sha512)|
+| | | Documentation| [Documentation](https://github.com/apache/incubator-skywalking/blob/v6.0.0-alpha/docs/README.md) |
+
+
+## 5.x old releases
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
 | Oct. 17th, 2018 | 5.0.0-GA | Source code| [[src]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA-src.tgz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA-src.tgz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA-src.tgz.sha512) |
@@ -90,24 +93,6 @@ All issues and pull requests are [here](https://github.com/apache/incubator-skyw
 | | | Binary Distribution (Windows) | [[zip]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.sha512)|
 | | | Binary Distribution (Linux) | [[tar]](http://www.apache.org/dyn/closer.cgi/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz) [[asc]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz.asc) [[sha512]](https://www.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz.sha512)|
 | | | Documentation | [Documentation](https://github.com/apache/incubator-skywalking/blob/v5.0.0-alpha/docs/README.md) |
-
-### Changes in 5.0.0-GA
-
-#### Agent Changes
-  - Add several package names ignore in agent settings. Classes in these packages would be enhanced, even plugin declared.
-  - Support Undertow 2.x plugin.
-  - Fix wrong class names of Motan plugin, not a feature related issue, just naming.
-
-#### Collector Changes
-  - Make buffer file handler close more safety.
-  - Fix NPE in AlarmService
-
-#### Documentations
-  - Fix compiling doc link.
-  - Update new live demo address.
-
-[Issues and Pull requests](https://github.com/apache/incubator-skywalking/milestone/27?closed=1)
-
 
 
 <br/>
