@@ -2,6 +2,11 @@
 layout: LayoutBlog
 
 blog:
+- title: Skywalking调研与初步实践
+  name: 2019-03-29-introduction-of-skywalking-and-simple-practice
+  time: linz.ink，3月23日，2019
+  short: 在为公司进行调用链跟踪系统进行技术选型的过程中，详细的了解了一下Skywalking，同时也进行了初步的实践，给其他同样在了解Skywalking的同学提供一些参考...
+
 - title: skywalking线上问题排查定位
   name: 2019-03-01-skywalking-troubleshoot
   time: 凯京技术博客，3月1日，2019
