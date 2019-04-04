@@ -82,7 +82,7 @@ APM和调用链跟踪均不是新诞生事务，很多公司已经有了大量�
 
 如果分别去看Pinpoint/Skywalking/CAT的整体设计，我们会发现三者更像是一个规范的三种实现，虽然各自有不同的机制和特性，但是从模块划分和功能基本是一致的：
 
-![模块用例图](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/模块用例图.png)
+![模块用例图](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/use_case.png)
 
 当然也有一些微小的区别：
 
@@ -159,7 +159,7 @@ Skywalking也提供了其他的一些特性：
 
 openTracing基本上是目前开源调用链跟踪系统的一个事实标准，它制定了调用链跟踪的基本流程和基本的数据结构，同时也提供了各个语言的实现。如果用一张图来表现openTracing，则是如下：
 
-![openTracing基本结构](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/openTracing基本结构.png)
+![openTracing基本结构](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/openTracing_base_structure.png)
 
 其中：
 
@@ -172,13 +172,13 @@ openTracing基本上是目前开源调用链跟踪系统的一个事实标准，
 
 以一个Trace为例：
 
-![span间的关系](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/span间的关系.png)
+![span间的关系](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/span_relationship.png)
 
 首先是外部请求调用A，然后A依次同步调用了B和C，而B被调用时会去同步调用D，C被调用的时候会依次同步调用E和F，F被调用的时候会通过异步调用G，G则会异步调用H，最终完成一次调用。
 
 上图是通过Span之间的依赖关系来表现一个Trace，而在时间线上，则可以有如下的表达：
 
-![span的调用顺序](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/span的调用顺序.png)
+![span的调用顺序](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/span_time_line.png)
 
 当然，如果是同步调用的话，父Span的时间占用是包括子Span的时间消耗的。
 
@@ -373,23 +373,23 @@ public interface InstanceMethodsAroundInterceptor {
 
 拓扑图：
 
-![测试拓扑图](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/测试拓扑图.png)
+![测试拓扑图](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/topological_graph.png)
 
 OAP机器监控：
 
-![OAP监控](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/OAP监控.png)
+![OAP监控](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/OAP_monitor.png)
 
 ES机器监控：
 
-![es机器监控](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/es机器监控.png)
+![es机器监控](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/es_mechine.png)
 
 服务监控面板：
 
-![服务面板](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/服务面板.png)
+![服务面板](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/service_dashboard.png)
 
 其中一个调用链记录：
 
-![测试调用链](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/测试调用链.png)
+![测试调用链](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/tracing_chain.png)
 
 可以看出，Skywalking非常依赖CPU（不论是OAP还是ES），同时对于网络IO也有一定的要求，至于ES的文件IO在可接受范围内，毕竟确实有大量内容需要持久化。测试结果也基本达到预期要求，调用链和各个指标的监控都工作良好。
 
@@ -415,9 +415,9 @@ ES机器监控：
 
 OAP负载情况：
 
-![第一次测试CPU](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/第一次测试CPU.png)
+![第一次测试CPU](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/first_test_cpu.png)
 
-![第一次测试网络](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/第一次测试网络.png)
+![第一次测试网络](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/first_test_network.png)
 
 可以看到机器的CPU和网络均有较大的波动，但是也都没有真正打爆服务器，但是我们的实例却经常出现两种日志：
 
@@ -462,11 +462,11 @@ OAP负载情况：
 
 OAP负载情况：
 
-![二次测试](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/二次测试.png)
+![二次测试](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/sencond_test.png)
 
 ES集群负载：
 
-![二测es监控](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/二测es监控.png)
+![二测es监控](../../.vuepress/public/static/blog/2019-03-29-introduction-of-skywalking-and-simple-practice/second_test_es.png)
 
 测试过程中，我们先接入了一台机器上的两个实例，完全没有遇到一测中的延迟或者数据丢弃的问题，三天后我们又接入了另外两台机器的4个实例，这之后两天我们又接入了另外两台机器的2个实例。依然没有遇到一测中的延迟或者数据丢弃的问题。
 
