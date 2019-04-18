@@ -13,32 +13,32 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 |Michael Semb Wever| mck |
 |Willem Ning Jiang| ningjiang |
 
-### 孵化器项目管理委员会
+### 项目管理委员会
 | 名字 |Apache ID|
 :---:|:--:|
+|Can Li| lican |
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
 |Jian Tan| tanjian |
-|Sheng Wang| wangsheng |
 |Sheng Wu| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
+|Jiaqi Lin| linjiaqi |
+|Jinlin Fu| withlin |
+|Lang Li| lilang |
+|Wenbing Wang| wangwenbin |
 |Yang Bai| baiyang |
 |Yao Wang| ywang |
+|Yixiong Cao| caoyixiong |
 |Yongsheng Peng| pengys |
-|Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
 
 ### 提交者
 | 名字 |Apache ID|
 |:---:|:--:|
-|Can Li| lican |
-|Jiaqi Lin| linjiaqi |
-|Jinlin Fu| withlin |
-|Lang Li| lilang |
-|Yixiong Cao| caoyixiong |
-|Wenbing Wang| wangwenbin |
+|Sheng Wang| wangsheng |
+|Yuntao Li| liyuntao |
 
 ## 贡献者
 自从Skywalking使用Github之后，拥有了许多的贡献者，你可以在我们的存储库贡献列表中找到它们。

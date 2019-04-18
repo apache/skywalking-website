@@ -4,13 +4,13 @@ module.exports = {
   locales: {
     '/': {
       lang: 'en-US', // 将会被设置为 <html> 的 lang 属性
-      title: ' Apache SkyWalking™ (incubating)|SkyWalking Team ',
+      title: ' Apache SkyWalking™ | SkyWalking Team ',
       logo: "/favicon.ico",
       head: [["link", { rel: "icon", href: `/logo.svg` }]],
     },
     '/zh/': {
       lang: 'zh-CN',
-      title: ' Apache SkyWalking™ (incubating)|SkyWalking Team ',
+      title: ' Apache SkyWalking™ | SkyWalking Team ',
       logo: "/favicon.ico",
       head: [["link", { rel: "icon", href: `/logo.svg` }]],
     }

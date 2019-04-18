@@ -9,7 +9,6 @@
             <div class="product-name">
               <div class="avatar-title">
                 Apache SkyWalking
-                <span class="incubating">Incubating</span>
               </div>
             </div>
             <p
@@ -113,27 +112,6 @@ export default {
 
 <style>
 .clear:after{display:table; content:''; clear:both;}
-.incubating{
-  font-size: 18px;vertical-align: top;
-  position: relative;
-  background:rgba(255, 255, 255, 0.15);
-  padding: 3px 10px 3px 12px;
-  border-radius: 4px;
-}
-.incubating::after {
-  right: 100%;
-	top: 50%;
-	border: solid transparent;
-	content: " ";
-	height: 0;
-	width: 0;
-	position: absolute;
-	pointer-events: none;
-	border-color: rgba(0, 0, 0, 0);
-	border-right-color: rgba(255, 255, 255, 0.15);
-	border-width: 8px;
-	margin-top: -8px;
-}
 .avatar {
   overflow: hidden;
   position: relative;

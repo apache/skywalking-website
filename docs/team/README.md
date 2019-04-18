@@ -15,33 +15,32 @@ Members include PPMC, committer and mentor of SkyWalking project. The List in al
 |Michael Semb Wever| mck |
 |Willem Ning Jiang| ningjiang |
 
-### PPMC
+### PMC
 | Name |Apache ID|
 :---:|:--:|
+|Can Li| lican |
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
 |Jian Tan| tanjian |
-|Sheng Wang| wangsheng |
 |Sheng Wu| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
+|Jiaqi Lin| linjiaqi |
+|Jinlin Fu| withlin |
+|Lang Li| lilang |
+|Wenbing Wang| wangwenbin |
 |Yang Bai| baiyang |
 |Yao Wang| ywang |
+|Yixiong Cao| caoyixiong |
 |Yongsheng Peng| pengys |
-|Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
 
 ### Committer
 | Name |Apache ID|
 |:---:|:--:|
-|Can Li| lican |
-|Jiaqi Lin| linjiaqi |
-|Jinlin Fu| withlin |
-|Lang Li| lilang |
-|Yixiong Cao| caoyixiong |
-|Wenbing Wang| wangwenbin |
-
+|Sheng Wang| wangsheng |
+|Yuntao Li| liyuntao |
 
 ## Contributors
 
