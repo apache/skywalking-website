@@ -1,15 +1,7 @@
 <template>
   <footer class="footer-container">
     <div class="cols-container">
-      <div class="col col-18">
-          <dl>
-        <dt>Disclaimer</dt>
-        <dd>
-        <p>Apache SkyWalking (incubating) is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by Incubator. Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.</p>
-            </dd>
-             </dl>
-      </div>
-      <div class="col col-6">
+      <div class="clear">
         <dl>
           <dt>ASF</dt>
           <dd class="asf">
@@ -42,7 +34,7 @@ export default {};
 
 <style>
 .footer-container{
-  padding: 2rem 2em 0.3em;
+  padding: 2rem 2em 0em;
 }
 .footer-container dt{
   font-size: 16px;
@@ -54,16 +46,17 @@ export default {};
   font-size: 12px;
   color: #999;
   line-height: 18px;
-  margin: 8px 0;
+  margin: 5px 0;
 }
 .footer-container .asf{
-  width: 40%;
+  width: 33%;
   float: left;
 }
 .footer-container  dd a {
   color: inherit;
 }
 .footer-container .copyright {
+  padding-top: 10px;
   border-top: 1px solid #eaecef;
   min-height: 60px;
   line-height: 20px;
@@ -74,27 +67,9 @@ export default {};
   display: flex;
   align-items: center;
 }
-.footer-container .cols-container .col-18 {
-    width: 75%;
-    padding-right: 70px;
-    padding-left: 10px;
-}
-.footer-container .cols-container .col-6 {
-    width: 24%;
+.footer-container .cols-container{
     padding-right: 10px;
     padding-left: 10px;
+    margin-bottom: 10px;
 }
-.footer-container .cols-container .col {
-    display: inline-block;
-    box-sizing: border-box;
-    vertical-align: top;
-}
-@media screen and (max-width: 640px) {
-  .footer-container .cols-container .col {
-      width: 100%;
-      text-align: center;
-      padding: 0;
-  }
-}
-
 </style>

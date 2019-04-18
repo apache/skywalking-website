@@ -6,42 +6,35 @@ The SkyWalking team is comprised of Members and Contributors. Members have direc
 
 Members include PPMC, committer and mentor of SkyWalking project. The List in alphabeta order.
 
-### Incubator Mentor
-
-| Name |Apache ID|
-|:---:|:--:|
-|Ignasi Barrera| nacx |
-|Luke Han| lukehan |
-|Michael Semb Wever| mck |
-|Willem Ning Jiang| ningjiang |
-
-### PPMC
+### PMC
 | Name |Apache ID|
 :---:|:--:|
+|Can Li| lican |
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
+|Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
-|Sheng Wang| wangsheng |
 |Sheng Wu| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
+|Michael Semb Wever| mck |
+|Jiaqi Lin| linjiaqi |
+|Jinlin Fu| withlin |
+|Lang Li| lilang |
+|Wenbing Wang| wangwenbin |
+|Willem Ning Jiang| ningjiang |
 |Yang Bai| baiyang |
 |Yao Wang| ywang |
+|Yixiong Cao| caoyixiong |
 |Yongsheng Peng| pengys |
-|Yuntao Li| liyuntao |
 |Zhang Kewei| zhangkewei |
 
 ### Committer
 | Name |Apache ID|
 |:---:|:--:|
-|Can Li| lican |
-|Jiaqi Lin| linjiaqi |
-|Jinlin Fu| withlin |
-|Lang Li| lilang |
-|Yixiong Cao| caoyixiong |
-|Wenbing Wang| wangwenbin |
-
+|Sheng Wang| wangsheng |
+|Yuntao Li| liyuntao |
 
 ## Contributors
 
