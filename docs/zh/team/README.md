@@ -5,14 +5,6 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 ## 成员
 成员包括孵化器项目管理委员会、提交者、Skywalking项目导师。
 
-### 孵化导师
-| 名字 |Apache ID|
-:---:|:--:|
-|Ignasi Barrera| nacx |
-|Luke Han| lukehan |
-|Michael Semb Wever| mck |
-|Willem Ning Jiang| ningjiang |
-
 ### 项目管理委员会
 | 名字 |Apache ID|
 :---:|:--:|
@@ -20,14 +12,17 @@ SkyWalking团队由孵化器项目管理委员会成员（以下简称“成员�
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
+|Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
 |Sheng Wu| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
+|Michael Semb Wever| mck |
 |Jiaqi Lin| linjiaqi |
 |Jinlin Fu| withlin |
 |Lang Li| lilang |
 |Wenbing Wang| wangwenbin |
+|Willem Ning Jiang| ningjiang |
 |Yang Bai| baiyang |
 |Yao Wang| ywang |
 |Yixiong Cao| caoyixiong |
