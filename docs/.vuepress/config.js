@@ -27,8 +27,8 @@ module.exports = {
         nav: [
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
-            { text: 'Latest dev version', link: "https://github.com/apache/incubator-skywalking/tree/master/docs" },
-            { text: '6.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-GA/docs"},
+            { text: 'Latest dev version', link: "https://github.com/apache/skywalking/tree/master/docs" },
+            { text: '6.0.0-GA', link: "https://github.com/apache/skywalking/tree/v6.0.0-GA/docs"},
           ], },
           { text: "Events", link: "/events/" },
           { text: "Blog", link: "/blog/" },
@@ -37,7 +37,7 @@ module.exports = {
           { text: "Links",
             items: [
               { text: 'Apache Software Foundation', link: "http://www.apache.org/" },
-              { text: 'GitHub Issue Tracker', link: "https://github.com/apache/incubator-skywalking/issues" },
+              { text: 'GitHub Issue Tracker', link: "https://github.com/apache/skywalking/issues" },
               { text: 'Dev Mailing List', link: "https://lists.apache.org/list.html?dev@skywalking.apache.org" },
               { text: 'License', link: "http://www.apache.org/licenses/" },
               { text: 'Apache Events', link: "http://www.apache.org/events/current-event" },
@@ -58,8 +58,8 @@ module.exports = {
           { text: "主页", link: "/zh/" },
           { text: "文档",
             items: [
-              { text: '开发版本文档', link: "https://github.com/apache/incubator-skywalking/tree/master/docs" },
-              { text: '6.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-GA/docs"},
+              { text: '开发版本文档', link: "https://github.com/apache/skywalking/tree/master/docs" },
+              { text: '6.0.0-GA', link: "https://github.com/apache/skywalking/tree/v6.0.0-GA/docs"},
             ],
           },
           { text: "事件", link: "/zh/events/" },
@@ -69,7 +69,7 @@ module.exports = {
           { text: "链接",
           items: [
             { text: 'Apache Software Foundation', link: "http://www.apache.org/" },
-            { text: 'GitHub Issue Tracker', link: "https://github.com/apache/incubator-skywalking/issues" },
+            { text: 'GitHub Issue Tracker', link: "https://github.com/apache/skywalking/issues" },
             { text: 'Dev Mailing List', link: "https://lists.apache.org/list.html?dev@skywalking.apache.org" },
             { text: 'License', link: "http://www.apache.org/licenses/" },
             { text: 'Apache Events', link: "http://www.apache.org/events/current-event" },

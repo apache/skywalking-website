@@ -1,5 +1,5 @@
 # 下载SkyWalking发布版本
-从下面提供的链接从Apache SkyWalking（孵化）镜像下载。
+从下面提供的链接从Apache SkyWalking镜像下载。
 
 **只有源码包属于Apache官方发布包，其他Linux和Windows平台二进制发布包只是为了方便用户使用。**
 
@@ -57,42 +57,13 @@
 
 [问题和Pull Requests](https://github.com/apache/incubator-skywalking/milestone/30?closed=1)
 
-## 6.x 版本
-| 日期 | 版本| | 下载 |
-|:---:|:--:|:--:|:--:|
-| Dec 25th, 2018 | 6.0.0-beta | 源码| [[src]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta-src.tgz.sha512)|
-| | | Windows| [[zip]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.zip.sha512)|
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-beta/apache-skywalking-apm-incubating-6.0.0-beta.tar.gz.sha512)|
-| | | 文档| [文档](https://github.com/apache/incubator-skywalking/blob/v6.0.0-beta/docs/README.md) |
-| Nov. 14th, 2018 | 6.0.0-alpha | 源码| [[src]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha-src.tgz.sha512)|
-| | | Windows| [[zip]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.zip.sha512)|
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/6.0.0-alpha/apache-skywalking-apm-incubating-6.0.0-alpha.tar.gz.sha512)|
-| | | 文档| [文档](https://github.com/apache/incubator-skywalking/blob/v6.0.0-alpha/docs/README.md) |
+## 历史版本
+可以从Apache 镜像库和归档库中找到历史版本
 
+* [Apache 孵化器阶段发行版镜像库](https://www.apache.org/dyn/closer.cgi/incubator/skywalking/).
+* [Archive 孵化器阶段发行版归档库](https://archive.apache.org/dist/incubator/skywalking/).
 
-## 5.x 版本
-| 日期 | 版本| | 下载 |
-|:---:|:--:|:--:|:--:|
-| Oct. 17th, 2018 | 5.0.0-GA | 源码| [[src]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA-src.tgz.sha512) |
-| | | Windows| [[zip]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA.zip.sha512)|
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-GA/apache-skywalking-apm-incubating-5.0.0-GA.zip.sha512)|
-| | | 文档 | [文档](https://github.com/apache/incubator-skywalking/blob/v5.0.0-GA/docs/README.md)|
-| Sep. 12th, 2018 |5.0.0-RC2 | Source codes | [[src]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2-src.tgz.sha512) |
-| | | Windows| [[zip]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2.zip.sha512) |
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-RC2/apache-skywalking-apm-incubating-5.0.0-RC2.zip.sha512) |
-| | | 文档 | [文档](https://github.com/apache/incubator-skywalking/blob/v5.0.0-RC2/docs/README.md) |
-| July 11th, 2018 |5.0.0-beta2 | Source codes | [[src]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2-src.tgz.sha512)|
-| | | Windows | [[zip]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip.sha512) |
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta2/apache-skywalking-apm-incubating-5.0.0-beta2.zip.sha512)|
-| | | 文档 | [文档](https://github.com/apache/incubator-skywalking/blob/v5.0.0-beta2/docs/README.md) |
-| May 23th, 2018 |5.0.0-beta | Source codes |[[src]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta-src.tgz.sha512)|
-| | | Windows | [[zip]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.sha512)|
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-beta/apache-skywalking-apm-incubating-5.0.0-beta.zip.sha512) |
-| | | 文档 | [文档](https://github.com/apache/incubator-skywalking/blob/v5.0.0-beta/docs/README.md) |
-| April 3rd, 2018 |5.0.0-alpha | Source codes |[[src]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha-src.tgz.sha512)|
-| | | Windows | [[zip]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.sha512)|
-| | | Linux | [[tar]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.tar.gz) [[asc]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.asc) [[sha512]](https://archive.apache.org/dist/incubator/skywalking/5.0.0-alpha/apache-skywalking-apm-incubating-5.0.0-alpha.zip.sha512)|
-| | | 文档 | [文档](https://github.com/apache/incubator-skywalking/blob/v5.0.0-alpha/docs/README.md) |
+所有版本的[变更说明](https://github.com/apache/incubator-skywalking/blob/master/CHANGES.md).
 
 # 验证版本
 使用PGP或SHA签名验证下载文件的完整性至关重要。可以使用GPG或PGP验证PGP签名。请下载KEYS以及发布的asc签名文件。建议从主发布目录而不是镜像中获取这些文件。
@@ -122,6 +93,3 @@ or
 
 pgp apache-skywalking-apm-incubating********.asc
 ```
-
-# 所有变更
-[变更](https://github.com/apache/incubator-skywalking/blob/master/CHANGES.md)文档.
