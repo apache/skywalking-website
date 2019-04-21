@@ -15,7 +15,7 @@ Members include Project Management Committee members and committers. The List in
 |Hongtao Gao| hanahmily |
 |Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
-|Sheng Wu| wusheng |
+|Sheng Wu (V.P. and Chair of PMC)| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
 |Michael Semb Wever| mck |

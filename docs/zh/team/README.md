@@ -14,7 +14,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Hongtao Gao| hanahmily |
 |Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
-|Sheng Wu| wusheng |
+|Sheng Wu(V.P. and Chair of PMC)| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
 |Michael Semb Wever| mck |
