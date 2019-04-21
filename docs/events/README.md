@@ -1,9 +1,17 @@
 # SkyWalking Events
 
+## SkyWalking graduated as Apache Top Level Project
+###### April 17th 2019
+Apache board approved SkyWalking graduated as TLP at April 17th 2019. 
+
+## Welcome Yuguang Zhao as a new committer
+###### April 15th, 2019
+Based on his continuous contributions, he has been accepted as a new committer.
+
 ## Transfer Docker Images to Apache Official Repository
 ###### Feb 17th, 2019
 According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be
-transferred from [skywalking](https://hub.docker.com/u/skywalking) to [apache](https://hub.docker.com/u/apache) with 
+transferred from [skywalking](https://hub.docker.com/u/skywalking) to [apache](https://hub.docker.com/u/apache) with
 a prefix *skywalking-*. The transfer details are as follows
 
  - skywalking/base -> apache/skywalking-base

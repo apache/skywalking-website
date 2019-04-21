@@ -1,5 +1,13 @@
 # SkyWalking 事件概要
 
+## SkyWalking 毕业成为Apache顶级项目
+###### 2019年4月17日
+Apache董事会批准SkyWalking孵化器毕业，成为顶级项目。
+
+## 欢迎赵禹光成为新的committer
+###### 2019年4月15日
+根据他长期的项目贡献，他被提升为项目的committer。
+
 ## 迁移Docker镜像到Apache官方仓库
 ###### 2019年2月17日
 根据Apache Software Foundation的品牌政策，Apache Skywalking的所有docker镜像将会

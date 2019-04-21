@@ -26,16 +26,15 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking 毕业成为Apache顶级项目
+    content: Apache董事会批准SkyWalking孵化器毕业，成为顶级项目。
+    time: 2019年4月17日
+  - header: 欢迎赵禹光成为新的committer
+    content: 根据他长期的项目贡献，他被提升为项目的committer。
+    time: 2019年4月15日
   - header: 迁移Docker镜像到Apache官方仓库
     content: 根据Apache Software Foundation的品牌政策，Apache Skywalking的所有docker镜像将会从skywalking迁移到apache中。
     time: 2019年2月17日
-  - header: 欢迎付金林成为新的committer
-    content: 付金林贡献了4个新的插件，包括gson, activemq, rabbitmq 和 canal，使得SkyWalking支持所有的主流开源MQ。同时提供了部分文档和BUG修复。SkyWalking PPMC基于这些贡献，接纳他成为新的committer。
-    time: 2019年1月10日
-  - header: 6.0.0-beta 发布
-    content: Bug修复。提供新的可选存储。更多的Java插件，包括Spring 5 MVC和webflux。
-    time: 2018年12月25日
-  - header: 欢迎王垚成为PPMC
-    content: 根据他的贡献，包括制作了RocketBot作为我们的第二套UI, 新的Skywalking官网和下一版本中非常酷的链路追踪页面.他已被接纳为SkyWalking PPMC。欢迎。
-    time: 2018年12月22日
----
+  - header: 6.0.0-GA发布
+    content: BUG修复，6.0的稳定版本。
+    time: 2019年1月29日

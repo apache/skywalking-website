@@ -25,16 +25,16 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking graduated as Apache Top Level Project
+    content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
+    time: April 17th 2019
+  - header: Welcome Yuguang Zhao as a new committer
+    content: Based on his continuous contributions, he has been accepted as a new committer.
+    time: April 15th, 2019
   - header: Transfer Docker Images to Apache Official Repository
     content: According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be transferred from skywalking to apache.
     time: Feb 17th, 2019
   - header: 6.0.0-GA release
     content: Bug fixed. Stable version for v6 core.
     time: Jan 29th, 2019
-  - header: Welcome Jinlin Fu as a new committer.
-    content: Jinlin Fu has contributed 4 new plugins, including gson, activemq, rabbitmq and canal. The SkyWalking PPMC based on these, promote him as new committer. Welcome on board.
-    time: Jan. 10th, 2019
-  - header: 6.0.0-beta release
-    content: Bug fixed. New storage options. More java agent plugins, including Spring 5 MVC and webflux.
-    time: Dec 25th, 2018
 ---
