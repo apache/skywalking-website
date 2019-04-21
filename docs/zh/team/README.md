@@ -7,7 +7,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 
 ### 项目管理委员会
 | 名字 |Apache ID|
-:---:|:--:|
+|:---|:--|
 |Can Li| lican |
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
@@ -31,7 +31,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 
 ### 提交者
 | 名字 |Apache ID|
-|:---:|:--:|
+|:---|:--|
 |Sheng Wang| wangsheng |
 |Yuntao Li| liyuntao |
 

@@ -8,7 +8,7 @@ Members include Project Management Committee members and committers. The List in
 
 ### Project Management Committee
 | Name |Apache ID|
-:---:|:--:|
+|:---|:--|
 |Can Li| lican |
 |DongXue Si| ilucky |
 |Haoyang Liu| liuhaoyangzz |
@@ -32,7 +32,7 @@ Members include Project Management Committee members and committers. The List in
 
 ### Committer
 | Name |Apache ID|
-|:---:|:--:|
+|:---|:--|
 |Sheng Wang| wangsheng |
 |Yuntao Li| liyuntao |
 
