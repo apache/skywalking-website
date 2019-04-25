@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## RocketBot UI被接受为SkyWalking主UI
+###### 2019年4月23日
+Apache SkyWalking PMC 同意接受RocketBot UI项目。在完成IP确认工作后，它将随SkyWalking 6.1发布。
+
 ## SkyWalking 毕业成为Apache顶级项目
 ###### 2019年4月17日
 Apache董事会批准SkyWalking孵化器毕业，成为顶级项目。

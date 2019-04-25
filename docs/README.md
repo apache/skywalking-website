@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: RocketBot UI has been accepted as SkyWalking primary UI
+    content: New UI for SkyWalking
+    time: April 23th 2019
   - header: SkyWalking graduated as Apache Top Level Project
     content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
     time: April 17th 2019
@@ -34,7 +37,4 @@ news:
   - header: Transfer Docker Images to Apache Official Repository
     content: According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be transferred from skywalking to apache.
     time: Feb 17th, 2019
-  - header: 6.0.0-GA release
-    content: Bug fixed. Stable version for v6 core.
-    time: Jan 29th, 2019
 ---

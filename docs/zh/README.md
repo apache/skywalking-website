@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: RocketBot 被接受为SkyWalking主UI
+    content: SkyWalking新UI
+    time: 2019年4月23日
   - header: SkyWalking 毕业成为Apache顶级项目
     content: Apache董事会批准SkyWalking孵化器毕业，成为顶级项目。
     time: 2019年4月17日
@@ -35,6 +38,3 @@ news:
   - header: 迁移Docker镜像到Apache官方仓库
     content: 根据Apache Software Foundation的品牌政策，Apache Skywalking的所有docker镜像将会从skywalking迁移到apache中。
     time: 2019年2月17日
-  - header: 6.0.0-GA发布
-    content: BUG修复，6.0的稳定版本。
-    time: 2019年1月29日

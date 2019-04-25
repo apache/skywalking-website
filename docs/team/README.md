@@ -41,13 +41,16 @@ Members include Project Management Committee members and committers. The List in
 SkyWalking have a lot of Contributors, since we are using GitHub, you could find them in our repository contribution list.
 
 - [SkyWalking main repository](https://github.com/apache/skywalking/graphs/contributors)
-- [SkyWalking UI](https://github.com/apache/skywalking-ui/graphs/contributors)
+- [SkyWalking RocketBot UI](https://github.com/apache/skywalking-rocketbot-ui/graphs/contributors)
 - [SkyWalking data collect protocol](https://github.com/apache/skywalking-data-collect-protocol/graphs/contributors)
 - [SkyWalking query protocol](https://github.com/apache/skywalking-query-protocol/graphs/contributors)
 - [SkyWalking website](https://github.com/apache/skywalking-website/graphs/contributors)
 - [SkyWalking docker](https://github.com/apache/skywalking-docker/graphs/contributors)
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
 
+Archived
+
+- [SkyWalking UI](https://github.com/apache/incubator-skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
 
 ## Becoming a Committer
 
@@ -55,7 +58,7 @@ SkyWalking follows the Apache way to build the community. Anyone can become a co
 
 The SkyWalking community follows the [Apache Community’s process](http://community.apache.org/newcommitter.html) on accepting a new committer.
 
-1. Start the vote in @private.
+1. Start the discussion and vote in @private. Only current PMC member could nominate.
 1. If the vote passes, send an offer to become a committer with @private CC’ed.
 1. Add the committer to the team page
 1. Setup committer rights

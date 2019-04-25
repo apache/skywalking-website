@@ -1,8 +1,12 @@
 # SkyWalking Events
 
+## RocketBot UI has been accepted as SkyWalking primary UI
+###### April 23th 2019
+Apache SkyWalking PMC accept the RocketBot UI contributions. After IP clearance, it will be released in SkyWalking 6.1 soon.
+
 ## SkyWalking graduated as Apache Top Level Project
 ###### April 17th 2019
-Apache board approved SkyWalking graduated as TLP at April 17th 2019. 
+Apache board approved SkyWalking graduated as TLP at April 17th 2019.
 
 ## Welcome Yuguang Zhao as a new committer
 ###### April 15th, 2019
