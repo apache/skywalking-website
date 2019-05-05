@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking 6.1.0 release
+    content: First release after being Top Level Project, including RocketBot UI.
+    time: May 5th 2019
   - header: RocketBot UI has been accepted as SkyWalking primary UI
     content: New UI for SkyWalking
     time: April 23th 2019
@@ -34,7 +37,4 @@ news:
   - header: Welcome Yuguang Zhao as a new committer
     content: Based on his continuous contributions, he has been accepted as a new committer.
     time: April 15th, 2019
-  - header: Transfer Docker Images to Apache Official Repository
-    content: According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be transferred from skywalking to apache.
-    time: Feb 17th, 2019
 ---

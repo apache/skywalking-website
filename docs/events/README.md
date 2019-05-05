@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 6.1.0
+###### May 5th, 2019
+6.1.0 release. Go to [downloads](/downloads) page to find release tars.
+This is the first top level project version.
+
+Key updates
+
 ## RocketBot UI has been accepted as SkyWalking primary UI
 ###### April 23th 2019
 Apache SkyWalking PMC accept the RocketBot UI contributions. After IP clearance, it will be released in SkyWalking 6.1 soon.

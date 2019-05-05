@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking 6.1.0发布
+    content: SkyWalking毕业后首个版本发布，包含新RocketBot UI。
+    time: 2019年5月5日
   - header: RocketBot 被接受为SkyWalking主UI
     content: SkyWalking新UI
     time: 2019年4月23日
@@ -35,6 +38,3 @@ news:
   - header: 欢迎赵禹光成为新的committer
     content: 根据他长期的项目贡献，他被提升为项目的committer。
     time: 2019年4月15日
-  - header: 迁移Docker镜像到Apache官方仓库
-    content: 根据Apache Software Foundation的品牌政策，Apache Skywalking的所有docker镜像将会从skywalking迁移到apache中。
-    time: 2019年2月17日

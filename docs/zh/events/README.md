@@ -1,5 +1,14 @@
 # SkyWalking 事件概要
 
+## SkyWalking 6.1.0 发布
+###### 2019年5月5日
+Apache SkyWalking 6.1.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
+这是成为顶级项目后的第一个版本。
+
+关键更新
+1. RocketBot UI
+1. OAP后端性能大幅提升
+
 ## RocketBot UI被接受为SkyWalking主UI
 ###### 2019年4月23日
 Apache SkyWalking PMC 同意接受RocketBot UI项目。在完成IP确认工作后，它将随SkyWalking 6.1发布。
