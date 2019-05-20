@@ -2,7 +2,7 @@
 
 Use the links below to download the Apache SkyWalking from one of our mirrors.
 
-**Only source code releases are official Apache releases, the Windows and Linux binary distributions are just for end users connivance.**
+**Only source code releases are official Apache releases: Windows and Linux binary distributions are just for end user convenience.**
 
 ## Download the last version
 | Date | Version| | Downloads |
