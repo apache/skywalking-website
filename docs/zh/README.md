@@ -1,6 +1,6 @@
 ---
 layout: LayoutHome
-description: '分布式系统的应用程序性能监视工具，专为微服务、云本机架构和基于容器（Docker、K8s、Mesos）架构而设计。'
+description: '分布式系统的应用程序性能监视工具，专为微服务、云原生架构和基于容器（Docker、K8s、Mesos）架构而设计。'
 start: 快速开始
 what:
   title: 什么是 SkyWalking
