@@ -35,7 +35,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Sheng Wang| wangsheng |
 |Yuntao Li| liyuntao |
 |Zhenxu Ke| kezhenxu94 |
-|Yuguang Zhao| zhaoyuguang |
 
 ## 贡献者
 自从Skywalking使用Github之后，拥有了许多的贡献者，你可以在我们的存储库贡献列表中找到它们。
