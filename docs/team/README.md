@@ -34,6 +34,7 @@ Members include Project Management Committee members and committers. The List in
 | Name |Apache ID|
 |:---|:--|
 |Sheng Wang| wangsheng |
+|Yuguang Zhao| zhaoyuguang |
 |Yuntao Li| liyuntao |
 |Zhenxu Ke| kezhenxu94 |
 
