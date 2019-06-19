@@ -37,7 +37,4 @@ news:
   - header: SkyWalking graduated as Apache Top Level Project
     content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
     time: April 17th 2019
-  - header: Welcome Yuguang Zhao as a new committer
-    content: Based on his continuous contributions, he has been accepted as a new committer.
-    time: April 15th, 2019
----
+
