@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Zhenxu Ke as a new committer
+    content: Based on his continuous contributions, he has been voted as a new committer.
+    time: June 17th, 2019
   - header: SkyWalking 6.1.0 release
     content: First release after being Top Level Project, including RocketBot UI.
     time: May 5th 2019
@@ -34,7 +37,4 @@ news:
   - header: SkyWalking graduated as Apache Top Level Project
     content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
     time: April 17th 2019
-  - header: Welcome Yuguang Zhao as a new committer
-    content: Based on his continuous contributions, he has been accepted as a new committer.
-    time: April 15th, 2019
----
+

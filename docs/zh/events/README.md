@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎柯振旭成为新的committer
+###### 2019年6月17日
+根据他长期的项目贡献，他被投票选举为项目的 committer。
+
 ## SkyWalking 6.1.0 发布
 ###### 2019年5月5日
 Apache SkyWalking 6.1.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
