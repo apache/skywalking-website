@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Zhenxu Ke as a new committer
+    content: Based on his continuous contributions, he has been voted as a new committer.
+    time: June 17th, 2019
   - header: SkyWalking 6.1.0 release
     content: First release after being Top Level Project, including RocketBot UI.
     time: May 5th 2019

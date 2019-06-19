@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Zhenxu Ke as a new committer
+###### June 17th, 2019
+Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://github.com/kezhenxu94)) has been voted as a new committer.
+
 ## Release Apache SkyWalking APM 6.1.0
 ###### May 5th, 2019
 6.1.0 release. Go to [downloads](/downloads) page to find release tars.
