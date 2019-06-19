@@ -33,6 +33,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 | 名字 |Apache ID|
 |:---|:--|
 |Sheng Wang| wangsheng |
+|Yuguang Zhao| zhaoyuguang |
 |Yuntao Li| liyuntao |
 |Zhenxu Ke| kezhenxu94 |
 
