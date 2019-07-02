@@ -1,5 +1,10 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 6.2.0
+###### July 2nd, 2019
+6.2.0 release. Go to [downloads](/downloads) page to find release tars.
+ElasticSearch storage implementation changed, high reduce payload to ElasticSearch cluster.
+
 ## Welcome Zhenxu Ke as a new committer
 ###### June 17th, 2019
 Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://github.com/kezhenxu94)) has been voted as a new committer.
@@ -10,6 +15,8 @@ Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://git
 This is the first top level project version.
 
 Key updates
+1. RocketBot UI
+1. OAP performance improvement
 
 ## RocketBot UI has been accepted as SkyWalking primary UI
 ###### April 23th 2019

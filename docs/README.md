@@ -25,16 +25,15 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking 6.2.0 release
+    content: ElasticSearch storage implementation changed, high reduce payload to ElasticSearch cluster.
+    time: July 2nd 2019
   - header: Welcome Zhenxu Ke as a new committer
     content: Based on his continuous contributions, he has been voted as a new committer.
     time: June 17th, 2019
-  - header: SkyWalking 6.1.0 release
-    content: First release after being Top Level Project, including RocketBot UI.
-    time: May 5th 2019
   - header: RocketBot UI has been accepted as SkyWalking primary UI
     content: New UI for SkyWalking
     time: April 23th 2019
   - header: SkyWalking graduated as Apache Top Level Project
     content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
     time: April 17th 2019
-
