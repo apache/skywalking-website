@@ -28,6 +28,7 @@ module.exports = {
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
             { text: 'Latest dev version', link: "https://github.com/apache/skywalking/tree/master/docs" },
+            { text: '6.2.0', link: "https://github.com/apache/skywalking/tree/v6.2.0/docs"},
             { text: '6.1.0', link: "https://github.com/apache/skywalking/tree/v6.1.0/docs"},
             { text: '6.0.0-GA', link: "https://github.com/apache/skywalking/tree/v6.0.0-GA/docs"},
           ], },
@@ -60,6 +61,7 @@ module.exports = {
           { text: "文档",
             items: [
               { text: '开发版本文档', link: "https://github.com/apache/skywalking/tree/master/docs" },
+              { text: '6.2.0', link: "https://github.com/apache/skywalking/tree/v6.2.0/docs"},
               { text: '6.1.0', link: "https://github.com/apache/skywalking/tree/v6.1.0/docs"},
               { text: '6.0.0-GA', link: "https://github.com/apache/skywalking/tree/v6.0.0-GA/docs"},
             ],
