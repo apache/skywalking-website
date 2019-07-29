@@ -128,7 +128,7 @@ export default {
       opacity 1
   .nav-item
     color #fff
-    font-family Avenir-Medium
+    font-family Lato, sans-serif
     position relative
     display inline-block
     margin-left 1.5rem
