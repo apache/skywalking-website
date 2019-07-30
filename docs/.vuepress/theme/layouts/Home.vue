@@ -125,7 +125,7 @@ export default {
 .avatar-title {
   font-size: 48px;
   color: #fff;
-  font-family: Lato;
+  font-family: Lato, sans-serif;
   font-weight: 600;
   margin: 0;  
 }
@@ -221,7 +221,7 @@ export default {
   background-color:#0091ff;
 }
 .home-card h1 {
-  font-family: Lato;
+  font-family: Lato, sans-serif;
   text-shadow: 4px 6px 0 rgba(0,0,0,.07);
 }
 .home-card p {
