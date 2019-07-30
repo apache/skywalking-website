@@ -39,7 +39,7 @@ export default {};
 .footer-container dt{
   font-size: 16px;
   font-weight: bold;
-  font-family: Avenir-Medium;
+  font-family: Lato, sans-serif;
 }
 .footer-container  dd{
   margin: 0;
@@ -61,7 +61,7 @@ export default {};
   min-height: 60px;
   line-height: 20px;
   text-align: center;
-  font-family: Avenir-Medium;
+  font-family: Lato, sans-serif;
   font-size: 12px;
   color: #999;
   display: flex;

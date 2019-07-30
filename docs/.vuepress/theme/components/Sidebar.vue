@@ -98,7 +98,7 @@ function resolveOpenGroupIndex (route, items) {
       display block
       line-height 1.25rem
       color #2c3e50
-      font-family Avenir-Medium
+      font-family Lato, sans-serif
       padding 0.5rem 0 0.5rem 1.5rem
   .sidebar-links
     padding 1.5rem 0
