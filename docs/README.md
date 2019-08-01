@@ -5,7 +5,7 @@ start: Quick Start
 what:
   title: What is SkyWalking
   content:
-    - SkyWalking is Observalibity Analysis Platform and Application Performance Management system.
+    - SkyWalking is Observability Analysis Platform and Application Performance Management system.
     - Provide distributed tracing, service mesh telemetry analysis, metric aggregation and visualization all-in-one solution.
 
 feature:
