@@ -25,9 +25,9 @@ user:
 news:
   title: Events & News
   content:
-  - header: SkyWalking 6.2.0 release
+  - header: SkyWalking 6.3.0 release
     content: ElasticSearch storage implementation changed, high reduce payload to ElasticSearch cluster.
-    time: July 2nd 2019
+    time: Aug. 8th 2019
   - header: Welcome Zhenxu Ke as a new committer
     content: Based on his continuous contributions, he has been voted as a new committer.
     time: June 17th, 2019

@@ -1,5 +1,11 @@
 # SkyWalking 事件概要
 
+## SkyWalking 6.3.0 发布
+###### 2019年8月8日
+Apache SkyWalking 6.3.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
+1. 进一步优化ElasticSearch存储实现修
+1. 后端重新安装、升级时，探针不需要重启
+
 ## SkyWalking 6.2.0 发布
 ###### 2019年7月2日
 Apache SkyWalking 6.2.0发布。跳转到 [下载](/downloads) 页面查找发布版本。

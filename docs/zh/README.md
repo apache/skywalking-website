@@ -26,9 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
-  - header: SkyWalking 6.2.0发布
+  - header: SkyWalking 6.3.0发布
     content: ElasticSearch存储实现修改，大幅减少对ElasticSearch集群的压力。
-    time: 2019年7月2日
+    time: 2019年8月8日
   - header: 欢迎柯振旭成为新的 committer
     content: 根据他对项目长期的贡献，他被投票选举为项目的 committer。
     time: 2019年4月15日
