@@ -37,6 +37,7 @@ Members include Project Management Committee members and committers. The List in
 |Yuguang Zhao| zhaoyuguang |
 |Yuntao Li| liyuntao |
 |Zhenxu Ke| kezhenxu94 |
+|Yanlong He| heyanlong |
 
 ## Contributors
 
