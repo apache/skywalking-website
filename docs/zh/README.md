@@ -38,6 +38,3 @@ news:
   - header: RocketBot 被接受为SkyWalking主UI
     content: SkyWalking新UI
     time: 2019年4月23日
-  - header: SkyWalking 毕业成为Apache顶级项目
-    content: Apache董事会批准SkyWalking孵化器毕业，成为顶级项目。
-    time: 2019年4月17日

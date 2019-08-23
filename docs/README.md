@@ -37,6 +37,3 @@ news:
   - header: RocketBot UI has been accepted as SkyWalking primary UI
     content: New UI for SkyWalking
     time: April 23th 2019
-  - header: SkyWalking graduated as Apache Top Level Project
-    content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
-    time: April 17th 2019
