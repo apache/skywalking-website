@@ -29,6 +29,7 @@ Members include Project Management Committee members and committers. The List in
 |Yixiong Cao| caoyixiong |
 |Yongsheng Peng| pengys |
 |Zhang Kewei| zhangkewei |
+|Zhenxu Ke| kezhenxu94 |
 
 ### Committer
 | Name |Apache ID|
@@ -37,7 +38,6 @@ Members include Project Management Committee members and committers. The List in
 |Yuguang Zhao| zhaoyuguang |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
-|Zhenxu Ke| kezhenxu94 |
 
 ## Contributors
 

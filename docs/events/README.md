@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Zhenxu Ke to join the PMC
+###### August 23rd, 2019
+Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://github.com/kezhenxu94)) has been invited to join the PMC. Welcome aboard.
+
 ## Release Apache SkyWalking APM 6.3.0
 ###### Aug. 8th, 2019
 6.3.0 release. Go to [downloads](/downloads) page to find release tars.
@@ -25,7 +29,7 @@ Key updates
 1. OAP performance improvement
 
 ## RocketBot UI has been accepted as SkyWalking primary UI
-###### April 23th 2019
+###### April 23rd 2019
 Apache SkyWalking PMC accept the RocketBot UI contributions. After IP clearance, it will be released in SkyWalking 6.1 soon.
 
 ## SkyWalking graduated as Apache Top Level Project
@@ -117,7 +121,7 @@ A stable version of 5.x release. Go to [downloads](/downloads) page to find rele
 5.0.0-beta2 release. Go to [downloads](/downloads) page to find release tars.
 
 ## Release Apache SkyWalking 5.0.0-beta
-###### May 23th, 2018
+###### May 23rd, 2018
 5.0.0-beta release. Go to [downloads](/downloads) page to find release tars.
 
 ## Release Apache SkyWalking APM 5.0.0-alpha

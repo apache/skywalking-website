@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎柯振旭加入项目管理委员会
+    content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
+    time: 2019年8月23日
   - header: SkyWalking 6.3.0发布
     content: ElasticSearch存储实现修改，大幅减少对ElasticSearch集群的压力。
     time: 2019年8月8日
@@ -35,6 +38,3 @@ news:
   - header: RocketBot 被接受为SkyWalking主UI
     content: SkyWalking新UI
     time: 2019年4月23日
-  - header: SkyWalking 毕业成为Apache顶级项目
-    content: Apache董事会批准SkyWalking孵化器毕业，成为顶级项目。
-    time: 2019年4月17日

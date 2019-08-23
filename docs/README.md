@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Zhenxu Ke to join the PMC
+    content: Based on his continuous contributions, Zhenxu Ke has been invited to join the PMC. Welcome aboard.
+    time: August 23rd, 2019
   - header: SkyWalking 6.3.0 release
     content: ElasticSearch storage implementation changed, high reduce payload to ElasticSearch cluster.
     time: Aug. 8th 2019
@@ -34,6 +37,3 @@ news:
   - header: RocketBot UI has been accepted as SkyWalking primary UI
     content: New UI for SkyWalking
     time: April 23th 2019
-  - header: SkyWalking graduated as Apache Top Level Project
-    content: Apache board approved SkyWalking graduated as TLP at April 17th 2019.
-    time: April 17th 2019
