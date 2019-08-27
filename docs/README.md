@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Yuguang Zhao to join the PMC
+    content: Based on his continuous contributions, Yuguang Zhao has been invited to join the PMC. Welcome aboard.
+    time: August 27th, 2019
   - header: Welcome Zhenxu Ke to join the PMC
     content: Based on his continuous contributions, Zhenxu Ke has been invited to join the PMC. Welcome aboard.
     time: August 23rd, 2019
@@ -34,6 +37,3 @@ news:
   - header: Welcome Zhenxu Ke as a new committer
     content: Based on his continuous contributions, he has been voted as a new committer.
     time: June 17th, 2019
-  - header: RocketBot UI has been accepted as SkyWalking primary UI
-    content: New UI for SkyWalking
-    time: April 23th 2019
