@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Yuguang Zhao to join the PMC
+###### August 27th, 2019
+Based on his continuous contributions, Yuguang Zhao (a.k.a [zhaoyuguang](https://github.com/zhaoyuguang)) has been invited to join the PMC. Welcome aboard.
+
 ## Welcome Zhenxu Ke to join the PMC
 ###### August 23rd, 2019
 Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://github.com/kezhenxu94)) has been invited to join the PMC. Welcome aboard.

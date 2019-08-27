@@ -28,6 +28,7 @@ Members include Project Management Committee members and committers. The List in
 |Yao Wang| ywang |
 |Yixiong Cao| caoyixiong |
 |Yongsheng Peng| pengys |
+|Yuguang Zhao| zhaoyuguang |
 |Zhang Kewei| zhangkewei |
 |Zhenxu Ke| kezhenxu94 |
 
@@ -35,7 +36,6 @@ Members include Project Management Committee members and committers. The List in
 | Name |Apache ID|
 |:---|:--|
 |Sheng Wang| wangsheng |
-|Yuguang Zhao| zhaoyuguang |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
 

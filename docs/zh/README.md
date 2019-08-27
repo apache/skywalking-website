@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎赵禹光加入项目管理委员会
+    content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
+    time: 2019年8月27日
   - header: 欢迎柯振旭加入项目管理委员会
     content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
     time: 2019年8月23日
@@ -35,6 +38,3 @@ news:
   - header: 欢迎柯振旭成为新的 committer
     content: 根据他对项目长期的贡献，他被投票选举为项目的 committer。
     time: 2019年4月15日
-  - header: RocketBot 被接受为SkyWalking主UI
-    content: SkyWalking新UI
-    time: 2019年4月23日
