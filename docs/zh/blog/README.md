@@ -6,7 +6,7 @@ blog:
 - title: 如何使用 Skywalking Agent ？
   name: 2019-08-30-how-to-use-Skywalking-Agent
   time: innerpeacez，8月30日，2019
-  short: 本文将教你如果在 docker 或者 kubernetes 使用Skywalking Agent...
+  short: 本文将教你如何在 docker 或者 kubernetes 使用Skywalking Agent...
 
 - title: Skywalking调研与初步实践
   name: 2019-03-29-introduction-of-skywalking-and-simple-practice
