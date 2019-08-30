@@ -1,8 +1,8 @@
+### 如何使用 Skywalking Agent ？
+
 > - 作者：innerpeacez
 > - [原文地址](<https://ipzgo.top/2019-08-30-%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8-Skywalking-Agent/>)
 >
-
-#### 如何使用 Skywalking Agent ？
 
 如果你还不知道 Skywalking agent 是什么，[请点击这里查看 Probe](https://github.com/apache/skywalking/blob/master/docs/en/concepts-and-designs/README.md) 或者[这里查看快速了解agent](https://github.com/apache/skywalking/blob/master/docs/en/setup/service-agent/java-agent/README.md),由于我这边大部分都是 JAVA 服务，所以下文以 Java 中使用 agent 为例，提供了以下三种方式供你选择
 
