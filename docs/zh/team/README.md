@@ -33,11 +33,11 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 | 名字 |Apache ID|
 |:---|:--|
 |Sheng Wang| wangsheng |
+|Weijie Zou| kdump |
 |Yuguang Zhao| zhaoyuguang |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
 |Zhenxu Ke| kezhenxu94 |
-|Weijie Zou| kdump |
 
 ## 贡献者
 自从Skywalking使用Github之后，拥有了许多的贡献者，你可以在我们的存储库贡献列表中找到它们。
