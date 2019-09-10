@@ -2,7 +2,7 @@
 
 ## Welcome Weijie Zou as a new committer
 ###### September 10th, 2019
-Based on his continuous contributions, he has been accepted as a new committer.
+Based on his continuous contributions, Weijie Zou (a.k.a [kdump](https://github.com/x22x22)) has been accepted as a new committer.
 
 ## Welcome Yuguang Zhao to join the PMC
 ###### August 27th, 2019
