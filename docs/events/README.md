@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Weijie Zou as a new committer
+###### September 10th, 2019
+Based on his contributions to the skywalking ui project, Weijie Zou (a.k.a [Kdump](https://github.com/x22x22)) has been accepted as a new committer.
+
 ## Welcome Yuguang Zhao to join the PMC
 ###### August 27th, 2019
 Based on his continuous contributions, Yuguang Zhao (a.k.a [zhaoyuguang](https://github.com/zhaoyuguang)) has been invited to join the PMC. Welcome aboard.
