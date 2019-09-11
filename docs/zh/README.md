@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking 6.4.0发布
+    content: Pxx计算函数存在严重bug，强烈建议升级。探针支持JDK9+模块化组件
+    time: 2019年8月8日
   - header: 欢迎邹伟杰成为新的committer
     content: 由于他在UI上对 Skywalking 项目的贡献，邹伟杰(a.k.a [Kdump](https://github.com/x22x22))被投票选举为项目的committer。
     time: 2019年9月10日
@@ -35,6 +38,3 @@ news:
   - header: 欢迎柯振旭加入项目管理委员会
     content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
     time: 2019年8月23日
-  - header: SkyWalking 6.3.0发布
-    content: ElasticSearch存储实现修改，大幅减少对ElasticSearch集群的压力。
-    time: 2019年8月8日
