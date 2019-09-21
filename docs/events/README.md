@@ -1,5 +1,17 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 6.4.0
+###### Sep. 9th, 2019
+6.4.0 release. Go to [downloads](/downloads) page to find release tars.
+1. Highly recommend to upgrade due to Pxx metrics calculation bug.
+1. Make agent working in JDK9+ Module system.
+
+Read [changelog](https://github.com/apache/skywalking/blob/master/CHANGES.md) for the details.
+
+## Welcome Weijie Zou as a new committer
+###### September 10th, 2019
+Based on his contributions to the skywalking ui project, Weijie Zou (a.k.a [Kdump](https://github.com/x22x22)) has been accepted as a new committer.
+
 ## Welcome Yuguang Zhao to join the PMC
 ###### August 27th, 2019
 Based on his continuous contributions, Yuguang Zhao (a.k.a [zhaoyuguang](https://github.com/zhaoyuguang)) has been invited to join the PMC. Welcome aboard.
@@ -14,10 +26,14 @@ Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://git
 1. Improve ElasticSearch storage implementation performance again.
 1. OAP backend re-install w/o agent reboot required.
 
+Read [changelog](https://github.com/apache/skywalking/blob/master/CHANGES.md) for the details.
+
 ## Release Apache SkyWalking APM 6.2.0
 ###### July 2nd, 2019
 6.2.0 release. Go to [downloads](/downloads) page to find release tars.
 ElasticSearch storage implementation changed, high reduce payload to ElasticSearch cluster.
+
+Read [changelog](https://github.com/apache/skywalking/blob/master/CHANGES.md) for the details.
 
 ## Welcome Zhenxu Ke as a new committer
 ###### June 17th, 2019

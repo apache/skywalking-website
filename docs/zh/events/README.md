@@ -1,5 +1,17 @@
 # SkyWalking 事件概要
 
+## SkyWalking 6.4.0 发布
+###### 2019年9月11日
+Apache SkyWalking 6.4.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
+1. Pxx计算函数存在严重bug，强烈建议升级。
+1. 探针支持JDK9+模块化组件
+
+阅读 [changelog](https://github.com/apache/skywalking/blob/master/CHANGES.md) 了解详细升级内容。
+
+## 欢迎邹伟杰成为新的committer
+###### 2019 年 09 月 10 日
+由于他在UI上对skywalking项目的贡献，邹伟杰(a.k.a [Kdump](https://github.com/x22x22))被投票选举为项目的 committer。
+
 ## 欢迎赵禹光成为项目管理委员会成员
 ###### 2019 年 08 月 27 日
 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。欢迎。
@@ -14,10 +26,14 @@ Apache SkyWalking 6.3.0发布。跳转到 [下载](/downloads) 页面查找发�
 1. 进一步优化ElasticSearch存储实现性能
 1. 后端重新安装、升级时，探针不需要重启
 
+阅读 [changelog](https://github.com/apache/skywalking/blob/master/CHANGES.md) 了解详细升级内容。
+
 ## SkyWalking 6.2.0 发布
 ###### 2019年7月2日
 Apache SkyWalking 6.2.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
 ElasticSearch存储实现修改，大幅减少对ElasticSearch集群的压力。
+
+阅读 [changelog](https://github.com/apache/skywalking/blob/master/CHANGES.md) 了解详细升级内容。
 
 ## 欢迎柯振旭成为新的committer
 ###### 2019年6月17日
