@@ -29,7 +29,7 @@
 ## 正式阶段
 
 1. PMC正式邮件邀请
-    * 当你收到PMC正式的邀请邮件时, 候恭喜你, 你已经通过了PMC的内部投票, 你需要用英文回答接受邀请或者拒绝邀请, 记住回复的时候一定要选择`全部回复`.
+    * 当你收到PMC正式的邀请邮件时, 恭喜你, 你已经通过了PMC的内部投票, 你需要用英文回答接受邀请或者拒绝邀请, 记住回复的时候一定要选择`全部回复`.
 1. 填写Apache iCLA申请表
     * 在你收到的PMC邮件中, 有几个ASF官方链接需要你去浏览, 重点的内容是查看[CLAs](http://www.apache.org/licenses/contributor-agreements.html#clas), 并填写[Individual Contributor License Agreement](http://www.apache.org/licenses/icla.pdf), 你可以将`icla.pdf`文件下载到本地, 使用PDF工具填写里面所需的信息, 并打印出来签名(一定要手写签名, 否则会被要求重新签名), 再扫描(或手机拍照)成电子文档(需要回复PDF格式, 文件名建议重命名为`你的名字-icla.pdf`), 使用gpg对电子文档进行签名(参考[HOW-TO: SUBMITTING LICENSE AGREEMENTS AND GRANTS
 ](http://www.apache.org/licenses/contributor-agreements.html#submitting)), Window可以使用GnuPG或者Gpg4win.
