@@ -4,7 +4,7 @@ The SkyWalking team is comprised of Members and Contributors. Members have direc
 
 ## Members
 
-Members include Project Management Committee members and committers. The List in alphabeta order.
+Members include Project Management Committee members and committers. The List in alphabet order.
 
 ### Project Management Committee
 | Name |Apache ID|
