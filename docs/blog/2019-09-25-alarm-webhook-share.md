@@ -1,4 +1,4 @@
-# Skywalking alarm webhook practice sharing
+# Skywalking alarm webhook sharing
 
 - Auther: Wei Qiang
 - [GitHub](https://github.com/weiqiang333)
