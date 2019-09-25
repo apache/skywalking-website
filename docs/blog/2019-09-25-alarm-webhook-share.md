@@ -1,6 +1,6 @@
 # Skywalking alarm webhook sharing
 
-- Auther: Wei Qiang
+- Author: Wei Qiang
 - [GitHub](https://github.com/weiqiang333)
 
 Sep. 25st, 2019
