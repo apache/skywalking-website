@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog:
 
+- title: 使用 chart 部署 skywalking
+  name: 2019-10-08-how-to-use-sw-chart
+  time: innerpeacez，10月8日，2019
+  short: 本文主要讲述的是如何使用 Helm Charts  将 SkyWalking 部署到 Kubernetes 集群中...
+
 - title: Apache SkyWalking Committer申请流程
   name: 2019-09-12-apache-skyWalking-committer-apply-process
   time: x22x22，9月12日，2019
