@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎庄浩潮成为新的committer
+###### 2019 年 10 月 20 日
+由于他在UI上对skywalking项目的贡献，庄浩潮(a.k.a [dmsolr](https://github.com/dmsolr))被投票选举为项目的 committer。
+
 ## SkyWalking 6.4.0 发布
 ###### 2019年9月11日
 Apache SkyWalking 6.4.0发布。跳转到 [下载](/downloads) 页面查找发布版本。

@@ -35,6 +35,7 @@ Members include Project Management Committee members and committers. The List in
 ### Committer
 | Name |Apache ID|
 |:---|:--|
+|Haochao Zhuang| daming |
 |Hongwei Zhai| innerpeacez |
 |Sheng Wang| wangsheng |
 |Weijie Zou| kdump |
