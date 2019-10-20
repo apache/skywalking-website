@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Haochao Zhuang as new committer
+    content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been voted as a new committer.
+    time: Oct. 20th 2019
   - header: SkyWalking 6.4.0 release
     content: Highly recommend to upgrade due to Pxx metrics calculation bug. Make agent working in JDK9+ Module system.
     time: Sep. 11th 2019
@@ -34,6 +37,3 @@ news:
   - header: Welcome Yuguang Zhao to join the PMC
     content: Based on his continuous contributions, Yuguang Zhao has been invited to join the PMC. Welcome aboard.
     time: August 27th, 2019
-  - header: Welcome Zhenxu Ke to join the PMC
-    content: Based on his continuous contributions, Zhenxu Ke has been invited to join the PMC. Welcome aboard.
-    time: August 23rd, 2019
