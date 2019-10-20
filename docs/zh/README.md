@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎庄浩潮成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
+    time: 2019 年 10 月 20 日
   - header: SkyWalking 6.4.0发布
     content: Pxx计算函数存在严重bug，强烈建议升级。探针支持JDK9+模块化组件
     time: 2019年8月8日
@@ -35,6 +38,3 @@ news:
   - header: 欢迎赵禹光加入项目管理委员会
     content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
     time: 2019年8月27日
-  - header: 欢迎柯振旭加入项目管理委员会
-    content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
-    time: 2019年8月23日

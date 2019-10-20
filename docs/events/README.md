@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Haochao Zhuang as new committer
+###### Oct. 20th, 2019
+Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been voted as a new committer.
+
 ## Release Apache SkyWalking APM 6.4.0
 ###### Sep. 9th, 2019
 6.4.0 release. Go to [downloads](/downloads) page to find release tars.
