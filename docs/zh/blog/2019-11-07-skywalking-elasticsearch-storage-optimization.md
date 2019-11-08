@@ -20,17 +20,39 @@ elasticsearch:6.3.2(下文用es代替)
    * 关闭索引（我的skywalking索引命名空间是dry_trace）
      ` curl -XPOST  "http://localhost:9200/dry_trace*/_close"`
    * 设置参数
-    ` curl -XPUT 'http://localhost:9200/dry_trace*/_settings?preserve_existing=true' -H 'Content-type:application/json' -d '{
-      "index.refresh_interval" : "10s",
-      "index.translog.durability" : "async",
-      "index.translog.flush_threshold_size" : "1024mb",
-      "index.translog.sync_interval" : "120s"
-     }'`
+    curl -XPUT 'http://localhost:9200/dry_trace*/_settings?preserve_existing=true' -H 'Content-type:application/json' -d '{  
+      "index.refresh_interval" : "10s",  
+      "index.translog.durability" : "async",  
+      "index.translog.flush_threshold_size" : "1024mb",  
+      "index.translog.sync_interval" : "120s"  
+     }'
    *打开索引
     `curl -XPOST  "http://localhost:9200/dry_trace*/_open"`
-5:截止目前为止运行一周，还未发现挂掉，一切看起来正常
+5. 还有一点，第四步的方式只适用于现有的索引设置，那么新的索引设置呢，总不能每天重复下第四步吧。当然不需要，来干货
+首先登陆kinaba控制台找到开发工具
+贴入以下代码
+ PUT /_template/dry_trace_tmp  
+{
+	"index_patterns": "dry_trace*",
+	"order": 1,
+	"settings": {
+		"index": {
+			"refresh_interval": "30s",
+			"translog": {
+				"flush_threshold_size": "1GB",
+				"sync_interval": "60s",
+				"durability": "async"
+			}
+		}
+	}
+}
 
 
+
+
+  
+6. 截止目前为止运行一周，还未发现挂掉，一切看起来正常
+****
 
 
 ### 完结---
