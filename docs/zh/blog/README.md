@@ -2,6 +2,10 @@
 layout: LayoutBlog
 
 blog:
+- title: skywalking使用elasticsearch存储的优化
+  name: 2019-11-07-skywalking-elasticsearch-storage-optimization
+  time: langyan1022，11月7日，2019
+  short: skywalking使用elasticsearch存储的优化
 
 - title: 使用 chart 部署 skywalking
   name: 2019-10-08-how-to-use-sw-chart
