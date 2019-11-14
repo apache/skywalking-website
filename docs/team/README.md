@@ -41,6 +41,7 @@ Members include Project Management Committee members and committers. The List in
 |Weijie Zou| kdump |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
+|Wei Zhang| zhangwei24 |
 
 ## Contributors
 
