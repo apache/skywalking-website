@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎张伟成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
+    time: 2019 年 11 月 14 日
   - header: 欢迎庄浩潮成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
     time: 2019 年 10 月 20 日
