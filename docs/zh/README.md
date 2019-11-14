@@ -38,6 +38,3 @@ news:
   - header: 欢迎邹伟杰成为新的committer
     content: 由于他在UI上对 Skywalking 项目的贡献，邹伟杰(a.k.a [Kdump](https://github.com/x22x22))被投票选举为项目的committer。
     time: 2019年9月10日
-  - header: 欢迎赵禹光加入项目管理委员会
-    content: 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。
-    time: 2019年8月27日
