@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Wei Zhang as new committer
+    content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
+    time: Nov. 14th 2019
   - header: Welcome Haochao Zhuang as new committer
     content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been voted as a new committer.
     time: Oct. 20th 2019
@@ -34,6 +37,3 @@ news:
   - header: Welcome Weijie Zou to join the committer
     content: Based on his contributions to the Skywalking ui project, Weijie Zou (a.k.a [Kdump](https://github.com/x22x22)) has been accepted as a new committer.
     time: September 10th, 2019
-  - header: Welcome Yuguang Zhao to join the PMC
-    content: Based on his continuous contributions, Yuguang Zhao has been invited to join the PMC. Welcome aboard.
-    time: August 27th, 2019

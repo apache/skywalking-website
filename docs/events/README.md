@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Wei Zhang as new committer
+###### Nov. 14th, 2019
+Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
+
 ## Welcome Haochao Zhuang as new committer
 ###### Oct. 20th, 2019
 Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been voted as a new committer.
