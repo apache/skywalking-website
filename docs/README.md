@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking 6.5.0 release
+    content: New metrics comparison view in UI. Dynamic Alert setting supported. JDK9-12 supported in backend.
+    time: Nov. 15th 2019
   - header: Welcome Wei Zhang as new committer
     content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
     time: Nov. 14th 2019
@@ -34,6 +37,3 @@ news:
   - header: SkyWalking 6.4.0 release
     content: Highly recommend to upgrade due to Pxx metrics calculation bug. Make agent working in JDK9+ Module system.
     time: Sep. 11th 2019
-  - header: Welcome Weijie Zou to join the committer
-    content: Based on his contributions to the Skywalking ui project, Weijie Zou (a.k.a [Kdump](https://github.com/x22x22)) has been accepted as a new committer.
-    time: September 10th, 2019

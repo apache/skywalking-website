@@ -26,15 +26,15 @@ user:
 news:
   title: 事件 & 新闻
   content:
-  - header: 欢迎张伟成为新的committer
+  - header: SkyWalking 6.5.0发布
+    content: 新的指标比较视图。支持动态告警配置。后端支持在JDK9-12中部署。
+    time: 2019 年 11 月 15 日
+  - header: 欢迎张伟成为的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
     time: 2019 年 11 月 14 日
   - header: 欢迎庄浩潮成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
     time: 2019 年 10 月 20 日
   - header: SkyWalking 6.4.0发布
-    content: Pxx计算函数存在严重bug，强烈建议升级。探针支持JDK9+模块化组件
+    content: 修复Pxx计算函数存在严重bug，强烈建议升级。探针支持JDK9+模块化组件
     time: 2019年8月8日
-  - header: 欢迎邹伟杰成为新的committer
-    content: 由于他在UI上对 Skywalking 项目的贡献，邹伟杰(a.k.a [Kdump](https://github.com/x22x22))被投票选举为项目的committer。
-    time: 2019年9月10日

@@ -7,22 +7,17 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 ## Download the last version
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
+| Nov. 15th, 2019 | 6.5.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0-src.tgz.sha512)|
+| | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.zip.sha512)|
+| | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz.sha512)|
+| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.5.0/docs/README.md) |
 | Sep. 11th, 2019 | 6.4.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0-src.tgz.sha512)|
 | | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.zip.sha512)|
 | | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.4.0/docs/README.md) |
-| Aug. 8th, 2019 | 6.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.3.0/apache-skywalking-apm-6.3.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.3.0/apache-skywalking-apm-6.3.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.3.0/apache-skywalking-apm-6.3.0-src.tgz.sha512)|
-| | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.3.0/apache-skywalking-apm-6.3.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.3.0/apache-skywalking-apm-6.3.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.3.0/apache-skywalking-apm-6.3.0.zip.sha512)|
-| | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.3.0/apache-skywalking-apm-6.3.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.3.0/apache-skywalking-apm-6.3.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.3.0/apache-skywalking-apm-6.3.0.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.3.0/docs/README.md) |
-| July 2nd, 2019 | 6.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.2.0/apache-skywalking-apm-6.2.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.2.0/apache-skywalking-apm-6.2.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.2.0/apache-skywalking-apm-6.2.0-src.tgz.sha512)|
-| | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.2.0/apache-skywalking-apm-6.2.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.2.0/apache-skywalking-apm-6.2.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.2.0/apache-skywalking-apm-6.2.0.zip.sha512)|
-| | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.2.0/apache-skywalking-apm-6.2.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.2.0/apache-skywalking-apm-6.2.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.2.0/apache-skywalking-apm-6.2.0.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.2.0/docs/README.md) |
-| May 5th, 2019 | 6.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.1.0/apache-skywalking-apm-6.1.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.1.0/apache-skywalking-apm-6.1.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.1.0/apache-skywalking-apm-6.1.0-src.tgz.sha512)|
-| | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.1.0/apache-skywalking-apm-6.1.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.1.0/apache-skywalking-apm-6.1.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.1.0/apache-skywalking-apm-6.1.0.zip.sha512)|
-| | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.1.0/apache-skywalking-apm-6.1.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.1.0/apache-skywalking-apm-6.1.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.1.0/apache-skywalking-apm-6.1.0.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.1.0/docs/README.md) |
+
+
+* Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)
 
 ### Docker Images for convenience
 **Docker images are not official ASF releases but provided for convenience. Recommended usage is always to build the source**

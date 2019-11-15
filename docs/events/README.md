@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 6.5.0
+###### Nov. 15th, 2019
+6.5.0 release. Go to [downloads](/downloads) page to find release tars.
+1. New metrics comparison view in UI. 
+2. Dynamic Alert setting supported. 
+3. JDK9-12 supported in backend.
+
 ## Welcome Wei Zhang as new committer
 ###### Nov. 14th, 2019
 Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
