@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Qiuxia Fan as new committer
+###### Nov. 23th, 2019
+Based on her continuous contributions, Qiuxia Fan (a.k.a [Fine0830](https://github.com/Fine0830)) has been voted as a new committer.
+
 ## Release Apache SkyWalking APM 6.5.0
 ###### Nov. 15th, 2019
 6.5.0 release. Go to [downloads](/downloads) page to find release tars.

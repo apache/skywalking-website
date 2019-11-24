@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎范秋霞成为新的committer
+###### 2019 年 11 月 14 日
+根据她长期的项目贡献，她被投票选举为项目的 committer。
+
 ## SkyWalking 6.5.0 发布
 ###### 2019年11月15日
 Apache SkyWalking 6.5.0发布。跳转到 [下载](/downloads) 页面查找发布版本。

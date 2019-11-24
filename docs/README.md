@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Qiuxia Fan as new committer
+    content: Based on his continuous contributions, Qiuxia Fan (a.k.a [Fine0830](https://github.com/Fine0830)) has been voted as a new committer.
+    time: Nov. 23th 2019
   - header: SkyWalking 6.5.0 release
     content: New metrics comparison view in UI. Dynamic Alert setting supported. JDK9-12 supported in backend.
     time: Nov. 15th 2019

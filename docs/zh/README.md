@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎范秋霞成为的committer
+    content: 根据她长期的项目贡献，她被投票选举为项目的 committer。
+    time: 2019 年 11 月 23 日
   - header: SkyWalking 6.5.0发布
     content: 新的指标比较视图。支持动态告警配置。后端支持在JDK9-12中部署。
     time: 2019 年 11 月 15 日
