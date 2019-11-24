@@ -37,6 +37,3 @@ news:
   - header: Welcome Haochao Zhuang as new committer
     content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been voted as a new committer.
     time: Oct. 20th 2019
-  - header: SkyWalking 6.4.0 release
-    content: Highly recommend to upgrade due to Pxx metrics calculation bug. Make agent working in JDK9+ Module system.
-    time: Sep. 11th 2019
