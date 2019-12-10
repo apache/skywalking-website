@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking CLI 0.1.0 发布
+    content: SkyWalking CLI 0.1.0 已经基本可用, 基础功能已经提供了相应命令支持.
+    time: 2019 年 12 月 10 日
   - header: 欢迎范秋霞成为的committer
     content: 根据她长期的项目贡献，她被投票选举为项目的 committer。
     time: 2019 年 11 月 23 日
@@ -35,6 +38,3 @@ news:
   - header: 欢迎张伟成为的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
     time: 2019 年 11 月 14 日
-  - header: 欢迎庄浩潮成为新的committer
-    content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
-    time: 2019 年 10 月 20 日

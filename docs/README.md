@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking CLI 0.1.0 release
+    content: SkyWalking CLI 0.1.0 is generally available, basic functionalities are supported by multiple commands.
+    time: Dec. 10th 2019
   - header: Welcome Qiuxia Fan as new committer
     content: Based on his continuous contributions, Qiuxia Fan (a.k.a [Fine0830](https://github.com/Fine0830)) has been voted as a new committer.
     time: Nov. 23th 2019
@@ -34,6 +37,3 @@ news:
   - header: Welcome Wei Zhang as new committer
     content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
     time: Nov. 14th 2019
-  - header: Welcome Haochao Zhuang as new committer
-    content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been voted as a new committer.
-    time: Oct. 20th 2019
