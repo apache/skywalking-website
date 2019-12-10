@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Weiyi Liu as new committer
+    content: Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.
+    time: Dec. 10th 2019
   - header: SkyWalking CLI 0.1.0 release
     content: SkyWalking CLI 0.1.0 is generally available, basic functionalities are supported by multiple commands.
     time: Dec. 10th 2019
