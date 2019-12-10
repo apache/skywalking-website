@@ -38,6 +38,3 @@ news:
   - header: SkyWalking 6.5.0发布
     content: 新的指标比较视图。支持动态告警配置。后端支持在JDK9-12中部署。
     time: 2019 年 11 月 15 日
-  - header: 欢迎张伟成为的committer
-    content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
-    time: 2019 年 11 月 14 日

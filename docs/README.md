@@ -37,6 +37,3 @@ news:
   - header: SkyWalking 6.5.0 release
     content: New metrics comparison view in UI. Dynamic Alert setting supported. JDK9-12 supported in backend.
     time: Nov. 15th 2019
-  - header: Welcome Wei Zhang as new committer
-    content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
-    time: Nov. 14th 2019
