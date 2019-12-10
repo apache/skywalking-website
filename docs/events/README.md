@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Weiyi Liu as new committer
+###### Dec. 10th, 2019
+Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.
+
 ## Release Apache SkyWalking CLI 0.1.0
 ###### Dec. 10th, 2019
 SkyWalking CLI 0.1.0 is released. Go to [downloads](/downloads) page to find release tars.

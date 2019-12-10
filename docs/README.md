@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Weiyi Liu as new committer
+    content: Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.
+    time: Dec. 10th 2019
   - header: SkyWalking CLI 0.1.0 release
     content: SkyWalking CLI 0.1.0 is generally available, basic functionalities are supported by multiple commands.
     time: Dec. 10th 2019
@@ -34,6 +37,3 @@ news:
   - header: SkyWalking 6.5.0 release
     content: New metrics comparison view in UI. Dynamic Alert setting supported. JDK9-12 supported in backend.
     time: Nov. 15th 2019
-  - header: Welcome Wei Zhang as new committer
-    content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been voted as a new committer.
-    time: Nov. 14th 2019

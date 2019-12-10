@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎刘唯一成为的committer
+    content: 根据他长期的项目贡献，她被投票选举为项目的 committer
+    time: 2019 年 12 月 10 日
   - header: SkyWalking CLI 0.1.0 发布
     content: SkyWalking CLI 0.1.0 已经基本可用, 基础功能已经提供了相应命令支持.
     time: 2019 年 12 月 10 日
@@ -35,6 +38,3 @@ news:
   - header: SkyWalking 6.5.0发布
     content: 新的指标比较视图。支持动态告警配置。后端支持在JDK9-12中部署。
     time: 2019 年 11 月 15 日
-  - header: 欢迎张伟成为的committer
-    content: 根据他长期的项目贡献，他被投票选举为项目的 committer。
-    time: 2019 年 11 月 14 日
