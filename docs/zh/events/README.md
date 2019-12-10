@@ -1,5 +1,14 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking CLI 0.1.0
+###### Dec. 10th, 2019
+SkyWalking CLI 0.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
+1. 添加命令 `swctl service` 列出服务.
+1. 添加命令 `swctl instance` 和 `swctl search` 列出/搜索某个服务的所有实例.
+1. 添加命令 `swctl endpoint` 列出服务的 endpoints.
+1. 添加命令 `swctl linear-metrics` 来查询线性指标并绘制成 Ascii Graph 模式.
+1. 添加命令 `swctl single-metrics` 来查询单值的指标.
+
 ## 欢迎范秋霞成为新的committer
 ###### 2019 年 11 月 23 日
 根据她长期的项目贡献，她被投票选举为项目的 committer。

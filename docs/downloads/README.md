@@ -5,6 +5,8 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 **Only source code releases are official Apache releases: Windows and Linux binary distributions are just for end user convenience.**
 
 ## Download the last version
+
+### SkyWalking APM
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
 | Nov. 15th, 2019 | 6.5.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0-src.tgz.sha512)|
@@ -16,6 +18,11 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 | | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.4.0/docs/README.md) |
 
+### SkyWalking CLI
+| Date | Version| | Downloads |
+|:---:|:--:|:--:|:--:|
+| Dec. 10th, 2019 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.sha512)|
+| | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz) [[asc]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.sha512)|
 
 * Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)
 
