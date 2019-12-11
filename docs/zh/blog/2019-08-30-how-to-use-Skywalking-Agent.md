@@ -109,7 +109,7 @@ spec:
         name: demo-sw
     spec:
       initContainers:
-      - image: registry-hz.rubikstack.com/library/sidecar-sw:latest
+      - image: innerpeacez/sw-agent-sidecar:latest
         name: sw-agent-sidecar
         imagePullPolicy: IfNotPresent
         command: ['sh']
