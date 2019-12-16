@@ -20,7 +20,7 @@ feature:
 
 user:
   title: Who is using SkyWalking
-  content: Various companies and organizations use SkyWalking for research, production and commercial products. This is SkyWalking's user wall.
+  content: Various companies and organizations use SkyWalking for research, production and commercial products. 
 
 news:
   title: Events & News

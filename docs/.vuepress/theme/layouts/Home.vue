@@ -78,6 +78,7 @@
           <h1>{{data.user.title}}</h1>
           <p>{{data.user.content}}</p>
           <img style="margin-top:20px;max-width:900px" src="/assets/users.png" width="100%">
+          <p>The <a href='https://github.com/apache/skywalking/blob/master/docs/powered-by.md'>PoweredBy</a> page includes more users of the project.</p>
         </div>
       </div>
       <Footer/>
