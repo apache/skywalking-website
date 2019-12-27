@@ -1,5 +1,11 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Chart 1.0.0 for SkyWalking 6.5.0
+###### Dec. 26th, 2019
+SkyWalking Chart 1.0.0 is released. Go to [downloads](/downloads) page to find release tars.
+1. Deploy SkyWalking 6.5.0 by Chart.
+2. Elasticsearch deploy optional.
+
 ## Welcome Weiyi Liu as new committer
 ###### Dec. 10th, 2019
 Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.

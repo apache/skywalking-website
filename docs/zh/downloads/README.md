@@ -23,6 +23,13 @@
 | Dec. 10th, 2019 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.sha512)|
 | | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz) [[asc]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.sha512)|
 
+### SkyWalking Chart
+| 日期 | 版本| | 下载 |
+|:---:|:--:|:--:|:--:|
+| Dec. 26th, 2019 | 1.0.0 for SkyWalking 6.5.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.sha512)|
+| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.sha512)|
+
+
 * 可以在[归档库](https://archive.apache.org/dist/skywalking/)中，找到SkyWalking所有的历史发布版本
 
 ## Docker 镜像

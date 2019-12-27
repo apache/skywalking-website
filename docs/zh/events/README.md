@@ -1,5 +1,11 @@
 # SkyWalking 事件概要
 
+## SkyWalking Chart 1.0.0 发布（SkyWalking 6.5.0）
+###### Dec. 26th, 2019
+SkyWalking Chart 1.0.0 发布。 请到[下载页面](/downloads)查找发行版本。
+1. 部署 SkyWalking 6.5.0 到 Kubernetes 集群。
+2. Elasticsearch 部署可选。
+
 ## 欢迎刘唯一成为新的committer
 ###### 2019 年 12 月 10 日
 根据他长期的项目贡献，他被投票选举为项目的 committer
