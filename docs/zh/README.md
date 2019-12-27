@@ -28,10 +28,10 @@ news:
   content:
   - header: SkyWalking 6.6.0 发布
     content: 新增服务实例依赖, 可以选择ElasticSearch7 作为存储, 降低注册压力
-    time: Dec. 27th 2019
+    time: 2019 年 12 月 27 日
   - header: SkyWalking Chart 1.0.0 发布
     content: 部署 SkyWalking 6.5.0 到 Kubernetes 集群中
-    time: Dec. 26th 2019
+    time: 2019 年 12 月 26 日
   - header: 欢迎刘唯一成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2019 年 12 月 10 日
