@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 6.6.0
+###### Dec. 27th, 2019
+6.6.0 release. Go to [downloads](/downloads) page to find release tars.
+1. Service Instance dependency are available.
+2. Support ElasticSearch 7 as a storage option.
+3. Reduce the register load
+
 ## Welcome Weiyi Liu as new committer
 ###### Dec. 10th, 2019
 Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.

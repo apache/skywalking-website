@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## SkyWalking 6.6.0 发布
+###### 2019年12月27日
+Apache SkyWalking 6.6.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
+1. 新增服务实例依赖
+2. 可以选择ElasticSearch7 作为存储
+3. 降低注册压力
+
 ## 欢迎刘唯一成为新的committer
 ###### 2019 年 12 月 10 日
 根据他长期的项目贡献，他被投票选举为项目的 committer
