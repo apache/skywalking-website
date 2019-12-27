@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Chart 1.0.0 for SkyWaling 6.5.0 release
+    content: SkyWalking Chart is used to deploy SkyWalking to Kubernetes cluster.
+    time: Dec. 26th 2019
   - header: Welcome Weiyi Liu as new committer
     content: Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.
     time: Dec. 10th 2019
@@ -34,6 +37,3 @@ news:
   - header: Welcome Qiuxia Fan as new committer
     content: Based on his continuous contributions, Qiuxia Fan (a.k.a [Fine0830](https://github.com/Fine0830)) has been voted as a new committer.
     time: Nov. 23th 2019
-  - header: SkyWalking 6.5.0 release
-    content: New metrics comparison view in UI. Dynamic Alert setting supported. JDK9-12 supported in backend.
-    time: Nov. 15th 2019
