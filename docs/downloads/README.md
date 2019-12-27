@@ -24,6 +24,13 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 | Dec. 10th, 2019 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.sha512)|
 | | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz) [[asc]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.sha512)|
 
+### SkyWalking Chart
+| Date | Version| | Downloads |
+|:---:|:--:|:--:|:--:|
+| Dec. 26th, 2019 | 1.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.sha512)|
+| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.sha512)|
+
+
 * Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)
 
 ### Docker Images for convenience
