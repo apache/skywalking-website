@@ -27,7 +27,7 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 ### SkyWalking Chart
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| Dec. 26th, 2019 | 1.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.sha512)|
+| Dec. 26th, 2019 | 1.0.0 for SkyWalking 6.5.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.sha512)|
 | | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz) [[asc]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.asc) [[sha512]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.sha512)|
 
 
