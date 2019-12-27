@@ -28,9 +28,11 @@ module.exports = {
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
             { text: 'Latest dev version', link: "https://github.com/apache/skywalking/tree/master/docs" },
+            { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
             { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
             { text: '6.4.0', link: "https://github.com/apache/skywalking/tree/v6.4.0/docs"},
             { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
+            { text: 'Kubernetes helm 0.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.0.0"},
           ], },
           { text: "Events", link: "/events/" },
           { text: "Blog", link: "/blog/" },
@@ -61,9 +63,11 @@ module.exports = {
           { text: "文档",
             items: [
               { text: '开发版本文档', link: "https://github.com/apache/skywalking/tree/master/docs" },
+              { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
               { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
               { text: '6.4.0', link: "https://github.com/apache/skywalking/tree/v6.4.0/docs"},
               { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
+              { text: 'Kubernetes helm 0.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.0.0"},
             ],
           },
           { text: "事件", link: "/zh/events/" },

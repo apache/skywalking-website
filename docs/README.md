@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking 6.6.0 release
+    content: Service Instance dependency detection is available. Support ElasticSearch 7 as a storage option. Reduce the register load.
+    time: Dec. 27th 2019
   - header: SkyWalking Chart 1.0.0 for SkyWaling 6.5.0 release
     content: SkyWalking Chart is used to deploy SkyWalking to Kubernetes cluster.
     time: Dec. 26th 2019
@@ -34,6 +37,3 @@ news:
   - header: SkyWalking CLI 0.1.0 release
     content: SkyWalking CLI 0.1.0 is generally available, basic functionalities are supported by multiple commands.
     time: Dec. 10th 2019
-  - header: Welcome Qiuxia Fan as new committer
-    content: Based on his continuous contributions, Qiuxia Fan (a.k.a [Fine0830](https://github.com/Fine0830)) has been voted as a new committer.
-    time: Nov. 23th 2019

@@ -3,9 +3,9 @@
 ## Release Apache SkyWalking APM 6.6.0
 ###### Dec. 27th, 2019
 6.6.0 release. Go to [downloads](/downloads) page to find release tars.
-1. Service Instance dependency are available.
+1. Service Instance dependency detection are available.
 2. Support ElasticSearch 7 as a storage option.
-3. Reduce the register load
+3. Reduce the register load.
 
 ## Release Apache SkyWalking Chart 1.0.0 for SkyWalking 6.5.0
 ###### Dec. 26th, 2019
