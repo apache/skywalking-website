@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎翟宏伟成为项目管理委员会成员
+    content: 由于他对该项目的持续贡献，翟宏伟 (a.k.a [innerpeacez](https://github.com/innerpeacez)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
+    time: 2020 年 1 月 3 日
   - header: SkyWalking 6.6.0 发布
     content: 新增服务实例依赖, 可以选择ElasticSearch7 作为存储, 降低注册压力
     time: 2019 年 12 月 27 日
@@ -34,7 +37,4 @@ news:
     time: 2019 年 12 月 26 日
   - header: 欢迎刘唯一成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
-    time: 2019 年 12 月 10 日
-  - header: SkyWalking CLI 0.1.0 发布
-    content: SkyWalking CLI 0.1.0 已经基本可用, 基础功能已经提供了相应命令支持.
     time: 2019 年 12 月 10 日
