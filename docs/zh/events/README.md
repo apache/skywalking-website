@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎翟宏伟成为项目管理委员会成员
+###### 2020 年 1 月 3 日
+由于他对该项目的持续贡献，翟宏伟 (a.k.a [innerpeacez](https://github.com/innerpeacez)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
+
 ## SkyWalking 6.6.0 发布
 ###### 2019年12月27日
 Apache SkyWalking 6.6.0发布。跳转到 [下载](/downloads) 页面查找发布版本。

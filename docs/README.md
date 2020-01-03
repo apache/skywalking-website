@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Hongwei Zhai to join the PMC
+    content: Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.
+    time: Jan. 3rd, 2020
   - header: SkyWalking 6.6.0 release
     content: Service Instance dependency detection is available. Support ElasticSearch 7 as a storage option. Reduce the register load.
     time: Dec. 27th 2019
@@ -33,7 +36,4 @@ news:
     time: Dec. 26th 2019
   - header: Welcome Weiyi Liu as new committer
     content: Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.
-    time: Dec. 10th 2019
-  - header: SkyWalking CLI 0.1.0 release
-    content: SkyWalking CLI 0.1.0 is generally available, basic functionalities are supported by multiple commands.
     time: Dec. 10th 2019

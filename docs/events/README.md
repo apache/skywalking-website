@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Hongwei Zhai to join the PMC
+###### Jan. 3rd, 2020
+Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.
+
 ## Release Apache SkyWalking APM 6.6.0
 ###### Dec. 27th, 2019
 6.6.0 release. Go to [downloads](/downloads) page to find release tars.
