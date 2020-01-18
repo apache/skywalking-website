@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog:
 
+- title: SkyWalking hits 200 contributors mark
+  name: 2020-01-20-celebrate-200th-contributor
+  time: Sheng Wu. Jan. 20st, 2020
+  short: SkyWalking community joins the 200+ contributors open source club
+
 - title: Skywalking alarm webhook sharing
   name: 2019-09-25-alarm-webhook-share
   time: Wei Qiang. Sep. 25st, 2019
