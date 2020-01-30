@@ -3,7 +3,7 @@
 
 **只有源码包属于Apache官方发布包，其他Linux和Windows平台二进制发布包只是为了方便用户使用。**
 
-## 下载6.x最新版本
+## 下载最新版本
 
 ### SkyWalking APM
 | 日期 | 版本| | 下载 |
@@ -18,10 +18,7 @@
 | | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.zip.sha512)|
 | | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.5.0/docs/README.md) |
-| Sep. 11th, 2019 | 6.4.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0-src.tgz) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0-src.tgz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0-src.tgz.sha512)|
-| | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0.zip) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.zip.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.zip.sha512)|
-| | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz) [[asc]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz.asc) [[sha512]](https://www.apache.org/dist/skywalking/6.4.0/apache-skywalking-apm-6.4.0.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.4.0/docs/README.md) |
+
 
 ### SkyWalking CLI
 | 日期 | 版本| | 下载 |
@@ -38,6 +35,7 @@
 
 ### 所有历史版本
 * 可以在[归档库](https://archive.apache.org/dist/skywalking/)中，找到SkyWalking所有的历史发布版本
+* [孵化器阶段发行版归档库](ttps://archive.apache.org/dist/incubator/skywalking/)包含SkyWalking还在孵化器时的发布版本。
 
 ## Docker 镜像
 **Docker镜像不属于Apache官方发布包，在此提供仅为了方便用户使用。**
@@ -46,11 +44,7 @@
 - SkyWalking OAP Server, https://hub.docker.com/r/apache/skywalking-oap-server
 - SkyWalking UI, https://hub.docker.com/r/apache/skywalking-ui
 
-## 孵化器历史版本
-可以从Apache 孵化器归档库中找到历史版本
-
-* [孵化器阶段发行版归档库](ttps://archive.apache.org/dist/incubator/skywalking/).
-
+## 变更说明
 所有版本的[变更说明](https://github.com/apache/incubator-skywalking/blob/master/CHANGES.md).
 
 # 验证版本
