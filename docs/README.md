@@ -25,6 +25,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Han Liu as new committer
+    content: Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
+    time: Feb. 8rd, 2020
   - header: Welcome Hongwei Zhai to join the PMC
     content: Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.
     time: Jan. 3rd, 2020
@@ -34,6 +37,3 @@ news:
   - header: SkyWalking Chart 1.0.0 for SkyWaling 6.5.0 release
     content: SkyWalking Chart is used to deploy SkyWalking to Kubernetes cluster.
     time: Dec. 26th 2019
-  - header: Welcome Weiyi Liu as new committer
-    content: Based on his continuous contributions, Weiyi Liu (a.k.a [wayilau](https://github.com/wayilau)) has been voted as a new committer.
-    time: Dec. 10th 2019
