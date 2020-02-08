@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎刘晗成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
+    time: 2020 年 2 月 8 日
   - header: 欢迎翟宏伟成为项目管理委员会成员
     content: 由于他对该项目的持续贡献，翟宏伟 (a.k.a [innerpeacez](https://github.com/innerpeacez)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
     time: 2020 年 1 月 3 日
@@ -35,6 +38,3 @@ news:
   - header: SkyWalking Chart 1.0.0 发布
     content: 部署 SkyWalking 6.5.0 到 Kubernetes 集群中
     time: 2019 年 12 月 26 日
-  - header: 欢迎刘唯一成为新的committer
-    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
-    time: 2019 年 12 月 10 日

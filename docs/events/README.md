@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Han Liu as new committer
+###### Feb. 8th, 2020
+Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
+
 ## Welcome Hongwei Zhai to join the PMC
 ###### Jan. 3rd, 2020
 Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.

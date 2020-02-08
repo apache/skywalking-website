@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎刘晗成为新的committer
+###### 2020 年 2 月 8 日
+根据他长期的项目贡献，他被投票选举为项目的 committer
+
 ## 欢迎翟宏伟成为项目管理委员会成员
 ###### 2020 年 1 月 3 日
 由于他对该项目的持续贡献，翟宏伟 (a.k.a [innerpeacez](https://github.com/innerpeacez)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
