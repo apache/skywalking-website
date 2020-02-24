@@ -27,8 +27,6 @@ module.exports = {
         nav: [
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
-            { text: 'Main Repo Dev Doc', link: "https://github.com/apache/skywalking/tree/master/docs" },
-            { text: 'Nginx LUA Agent Dev Doc', link: "https://github.com/apache/skywalking-nginx-lua"},
             { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
             { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
             { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
@@ -74,8 +72,6 @@ module.exports = {
           { text: "主页", link: "/zh/" },
           { text: "文档",
             items: [
-              { text: '开发版本文档', link: "https://github.com/apache/skywalking/tree/master/docs" },
-              { text: 'Nginx LUA agent 开发文档', link: "https://github.com/apache/skywalking-nginx-lua"},
               { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
               { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
               { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
