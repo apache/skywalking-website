@@ -49,15 +49,17 @@ Members include Project Management Committee members and committers. The List in
 
 ## Contributors
 
-SkyWalking have a lot of Contributors, since we are using GitHub, you could find them in our repository contribution list.
+SkyWalking have hundreds of Contributors, you could find them in our repository contribution list.
 
 - [SkyWalking main repository](https://github.com/apache/skywalking/graphs/contributors)
+- [SkyWalking Nginx LUA](https://github.com/apache/skywalking-nginx-lua/graphs/contributors)
 - [SkyWalking RocketBot UI](https://github.com/apache/skywalking-rocketbot-ui/graphs/contributors)
 - [SkyWalking data collect protocol](https://github.com/apache/skywalking-data-collect-protocol/graphs/contributors)
 - [SkyWalking query protocol](https://github.com/apache/skywalking-query-protocol/graphs/contributors)
 - [SkyWalking website](https://github.com/apache/skywalking-website/graphs/contributors)
 - [SkyWalking docker](https://github.com/apache/skywalking-docker/graphs/contributors)
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
+- [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
 
 Archived
 

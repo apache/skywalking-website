@@ -46,15 +46,17 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Yanlong He| heyanlong |
 
 ## 贡献者
-自从Skywalking使用Github之后，拥有了许多的贡献者，你可以在我们的存储库贡献列表中找到它们。
+SkyWalking拥有数百位的贡献者，你可以在我们的存储库贡献列表中找到它们。
 
 - [SkyWalking main repository](https://github.com/apache/skywalking/graphs/contributors)
+- [SkyWalking Nginx LUA](https://github.com/apache/skywalking-nginx-lua/graphs/contributors)
 - [SkyWalking RocketBot UI](https://github.com/apache/skywalking-rocketbot-ui/graphs/contributors)
 - [SkyWalking data collect protocol](https://github.com/apache/skywalking-data-collect-protocol/graphs/contributors)
 - [SkyWalking query protocol](https://github.com/apache/skywalking-query-protocol/graphs/contributors)
 - [SkyWalking website](https://github.com/apache/skywalking-website/graphs/contributors)
 - [SkyWalking docker](https://github.com/apache/skywalking-docker/graphs/contributors)
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
+- [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
 
 已归档项目
 
