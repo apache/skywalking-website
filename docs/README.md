@@ -7,12 +7,14 @@ what:
   content:
     - SkyWalking is an Observability Analysis Platform and Application Performance Management system.
     - Provide distributed tracing, service mesh telemetry analysis, metric aggregation and visualization all-in-one solution.
+    - Java, .Net Core, PHP, NodeJS, Golang, LUA agents supported
+    - Istio + Envoy Service Mesh supported
 
 feature:
   title: Feature List
   content:
     - Consistent in multiple scenarios. supported telemetry sources from language agents and service mesh.
-    - Multiple language agents, Java, .Net Core and NodeJS auto instrument agents.
+    - Multiple language agents, including Java, .Net Core, PHP, NodeJS, Golang, LUA agents.
     - Light. No big data platform required, even observing the high payload cluster.
     - Modulization. Have multiple options for UI, storage, cluster managements.
     - Alarm supported.

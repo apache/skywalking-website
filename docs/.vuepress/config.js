@@ -3,7 +3,7 @@ module.exports = {
   dest: "dist",
   locales: {
     '/': {
-      lang: 'en-US', // 将会被设置为 <html> 的 lang 属性
+      lang: 'en-US', 
       title: ' Apache SkyWalking™ | SkyWalking Team ',
       logo: "/favicon.ico",
       head: [["link", { rel: "icon", href: `/logo.svg` }]],
