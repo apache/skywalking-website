@@ -22,11 +22,14 @@ feature:
 
 user:
   title: Who is using SkyWalking
-  content: Various companies and organizations use SkyWalking for research, production and commercial products. 
+  content: Various companies and organizations use SkyWalking for research, production and commercial products.
 
 news:
   title: Events & News
   content:
+  - header: Welcome Zhusheng Xu as new committer
+    content: Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
+    time: Feb. 21st, 2020
   - header: Welcome Han Liu as new committer
     content: Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
     time: Feb. 8rd, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking 6.6.0 release
     content: Service Instance dependency detection is available. Support ElasticSearch 7 as a storage option. Reduce the register load.
     time: Dec. 27th 2019
-  - header: SkyWalking Chart 1.0.0 for SkyWaling 6.5.0 release
-    content: SkyWalking Chart is used to deploy SkyWalking to Kubernetes cluster.
-    time: Dec. 26th 2019

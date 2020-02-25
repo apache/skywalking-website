@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎徐竹胜成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
+    time: 2020 年 2 月 21 日
   - header: 欢迎刘晗成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 2 月 8 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking 6.6.0 发布
     content: 新增服务实例依赖, 可以选择ElasticSearch7 作为存储, 降低注册压力
     time: 2019 年 12 月 27 日
-  - header: SkyWalking Chart 1.0.0 发布
-    content: 部署 SkyWalking 6.5.0 到 Kubernetes 集群中
-    time: 2019 年 12 月 26 日
