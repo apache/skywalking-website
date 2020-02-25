@@ -37,6 +37,3 @@ news:
   - header: SkyWalking 6.6.0 release
     content: Service Instance dependency detection is available. Support ElasticSearch 7 as a storage option. Reduce the register load.
     time: Dec. 27th 2019
-  - header: SkyWalking Chart 1.0.0 for SkyWaling 6.5.0 release
-    content: SkyWalking Chart is used to deploy SkyWalking to Kubernetes cluster.
-    time: Dec. 26th 2019

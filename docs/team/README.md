@@ -35,7 +35,6 @@ Members include Project Management Committee members and committers. The List in
 ### Committer
 | Name |Apache ID|
 |:---|:--|
-|Zhusheng Xu| aderm |
 |Han Liu | liuhan |
 |Haochao Zhuang| daming |
 |Hongwei Zhai| innerpeacez |
@@ -46,6 +45,7 @@ Members include Project Management Committee members and committers. The List in
 |Weiyi Liu | wayilau |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
+|Zhusheng Xu| aderm |
 
 
 ## Contributors

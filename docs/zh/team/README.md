@@ -34,7 +34,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 ### 提交者
 | 名字 |Apache ID|
 |:---|:--|
-|Zhusheng Xu| aderm |
 |Han Liu| liuhan |
 |Haochao Zhuang| daming |
 |Hongwei Zhai| innerpeacez |
@@ -45,6 +44,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Weiyi Liu| wayilau |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
+|Zhusheng Xu| aderm |
 
 ## 贡献者
 SkyWalking拥有数百位的贡献者，你可以在我们的存储库贡献列表中找到它们。
