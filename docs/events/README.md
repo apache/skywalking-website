@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Zhusheng Xu as new committer
+###### Feb. 21st, 2020
+Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
+
 ## Welcome Han Liu as new committer
 ###### Feb. 8th, 2020
 Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
@@ -41,8 +45,8 @@ Based on her continuous contributions, Qiuxia Fan (a.k.a [Fine0830](https://gith
 ## Release Apache SkyWalking APM 6.5.0
 ###### Nov. 15th, 2019
 6.5.0 release. Go to [downloads](/downloads) page to find release tars.
-1. New metrics comparison view in UI. 
-2. Dynamic Alert setting supported. 
+1. New metrics comparison view in UI.
+2. Dynamic Alert setting supported.
 3. JDK9-12 supported in backend.
 
 ## Welcome Wei Zhang as new committer

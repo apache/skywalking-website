@@ -20,11 +20,14 @@ feature:
 
 user:
   title: Who is using SkyWalking
-  content: Various companies and organizations use SkyWalking for research, production and commercial products. 
+  content: Various companies and organizations use SkyWalking for research, production and commercial products.
 
 news:
   title: Events & News
   content:
+  - header: Welcome Zhusheng Xu as new committer
+    content: Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
+    time: Feb. 21st, 2020
   - header: Welcome Han Liu as new committer
     content: Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
     time: Feb. 8rd, 2020

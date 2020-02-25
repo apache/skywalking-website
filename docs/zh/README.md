@@ -26,6 +26,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎徐竹胜成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
+    time: 2020 年 2 月 21 日
   - header: 欢迎刘晗成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 2 月 8 日
