@@ -77,6 +77,10 @@ Based on his continuous contributions, Yuguang Zhao (a.k.a [zhaoyuguang](https:/
 ###### August 23rd, 2019
 Based on his continuous contributions, Zhenxu Ke (a.k.a [kezhenxu94](https://github.com/kezhenxu94)) has been invited to join the PMC. Welcome aboard.
 
+## Welcome Yanlong He as a new committer
+###### Aug. 9th, 2019
+Based on his contributions to the skywalking PHP project, Yanlong He (a.k.a [heyanlong] (https://github.com/heyanlong)) has been accepted as a new committer.
+
 ## Release Apache SkyWalking APM 6.3.0
 ###### Aug. 8th, 2019
 6.3.0 release. Go to [downloads](/downloads) page to find release tars.

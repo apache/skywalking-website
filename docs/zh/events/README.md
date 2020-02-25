@@ -77,6 +77,10 @@ Apache SkyWalking 6.4.0发布。跳转到 [下载](/downloads) 页面查找发�
 ###### 2019 年 08 月 23 日
 由于他对该项目的持续贡献，他已被邀请加入 SkyWalking 项目管理委员会。欢迎。
 
+## 欢迎何延龙成为新的committer
+###### 2019 年 08 月 09 日
+由于他在SkyAPM-PHP上对该项目的持续贡献，何延龙(a.k.a [heyanlong](https://github.com/heyanlong))被投票选举为项目的 committer。
+
 ## SkyWalking 6.3.0 发布
 ###### 2019年8月8日
 Apache SkyWalking 6.3.0发布。跳转到 [下载](/downloads) 页面查找发布版本。
