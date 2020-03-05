@@ -1,6 +1,6 @@
-# Apache SkyWalking webpage
+# Apache SkyWalking Website
 
-This is the repository including all source codes of `http://skywalking.incubator.apache.org`.
+This is the repository including all source codes of `http://skywalking.apache.org`.
 
 ## Compile, preview and generate static files
 
