@@ -13,6 +13,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Haochao Zhuang| daming |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
+|Hongwei Zhai| innerpeacez |
 |Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
 |Sheng Wu(V.P. and Chair of PMC)| wusheng |
@@ -36,7 +37,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 | 名字 |Apache ID|
 |:---|:--|
 |Han Liu| liuhan |
-|Hongwei Zhai| innerpeacez |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
 |Wei Zhang| zhangwei24 |

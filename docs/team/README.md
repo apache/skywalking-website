@@ -14,6 +14,7 @@ Members include Project Management Committee members and committers. The List in
 |Haochao Zhuang| daming |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
+|Hongwei Zhai| innerpeacez |
 |Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
 |Sheng Wu (V.P. and Chair of PMC)| wusheng |
@@ -37,7 +38,6 @@ Members include Project Management Committee members and committers. The List in
 | Name |Apache ID|
 |:---|:--|
 |Han Liu | liuhan |
-|Hongwei Zhai| innerpeacez |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
 |Wei Zhang| zhangwei24 |
