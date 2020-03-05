@@ -30,7 +30,7 @@ news:
   content:
   - header: 欢迎庄浩潮成为项目管理委员会成员
     content: 由于他对该项目的持续贡献，庄浩潮 (a.k.a [dmsolr](https://github.com/dmsolr)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
-    time: 2020 年 1 月 3 日
+    time: 2020 年 3 月 5 日
   - header: 欢迎徐竹胜成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 2 月 21 日
