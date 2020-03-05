@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎庄浩潮成为项目管理委员会成员
+    content: 由于他对该项目的持续贡献，庄浩潮 (a.k.a [dmsolr](https://github.com/dmsolr)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
+    time: 2020 年 3 月 5 日
   - header: 欢迎徐竹胜成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 2 月 21 日
@@ -37,6 +40,3 @@ news:
   - header: 欢迎翟宏伟成为项目管理委员会成员
     content: 由于他对该项目的持续贡献，翟宏伟 (a.k.a [innerpeacez](https://github.com/innerpeacez)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
     time: 2020 年 1 月 3 日
-  - header: SkyWalking 6.6.0 发布
-    content: 新增服务实例依赖, 可以选择ElasticSearch7 作为存储, 降低注册压力
-    time: 2019 年 12 月 27 日

@@ -10,6 +10,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |:---|:--|
 |Can Li| lican |
 |DongXue Si| ilucky |
+|Haochao Zhuang| daming |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
 |Ignasi Barrera| nacx |
@@ -35,7 +36,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 | 名字 |Apache ID|
 |:---|:--|
 |Han Liu| liuhan |
-|Haochao Zhuang| daming |
 |Hongwei Zhai| innerpeacez |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |

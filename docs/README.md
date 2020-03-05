@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Haochao Zhuang to join the PMC
+    content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been invited to join the PMC. Welcome aboard.
+    time: Mar. 5th, 2020
   - header: Welcome Zhusheng Xu as new committer
     content: Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
     time: Feb. 21st, 2020
@@ -36,6 +39,3 @@ news:
   - header: Welcome Hongwei Zhai to join the PMC
     content: Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.
     time: Jan. 3rd, 2020
-  - header: SkyWalking 6.6.0 release
-    content: Service Instance dependency detection is available. Support ElasticSearch 7 as a storage option. Reduce the register load.
-    time: Dec. 27th 2019

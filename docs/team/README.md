@@ -11,6 +11,7 @@ Members include Project Management Committee members and committers. The List in
 |:---|:--|
 |Can Li| lican |
 |DongXue Si| ilucky |
+|Haochao Zhuang| daming |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
 |Ignasi Barrera| nacx |
@@ -36,7 +37,6 @@ Members include Project Management Committee members and committers. The List in
 | Name |Apache ID|
 |:---|:--|
 |Han Liu | liuhan |
-|Haochao Zhuang| daming |
 |Hongwei Zhai| innerpeacez |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
