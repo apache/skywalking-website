@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Haochao Zhuang to join the PMC
+###### Mar. 5th, 2020
+Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been invited to join the PMC. Welcome aboard.
+
 ## Welcome Zhusheng Xu as new committer
 ###### Feb. 21st, 2020
 Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
