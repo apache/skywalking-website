@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Ming Wen as new committer
+###### Mar. 9th, 2020
+Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.
+
 ## Welcome Haochao Zhuang to join the PMC
 ###### Mar. 5th, 2020
 Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been invited to join the PMC. Welcome aboard.

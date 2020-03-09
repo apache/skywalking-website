@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Ming Wen as new committer
+    content: Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.
+    time: Mar. 9th, 2020
   - header: Welcome Haochao Zhuang to join the PMC
     content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been invited to join the PMC. Welcome aboard.
     time: Mar. 5th, 2020
@@ -36,6 +39,3 @@ news:
   - header: Welcome Han Liu as new committer
     content: Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
     time: Feb. 8rd, 2020
-  - header: Welcome Hongwei Zhai to join the PMC
-    content: Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.
-    time: Jan. 3rd, 2020
