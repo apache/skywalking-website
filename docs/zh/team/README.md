@@ -37,6 +37,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 | 名字 |Apache ID|
 |:---|:--|
 |Han Liu| liuhan |
+|Ming Wen | wenming |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
 |Wei Zhang| zhangwei24 |

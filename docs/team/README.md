@@ -38,6 +38,7 @@ Members include Project Management Committee members and committers. The List in
 | Name |Apache ID|
 |:---|:--|
 |Han Liu | liuhan |
+|Ming Wen | wenming |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
 |Wei Zhang| zhangwei24 |
