@@ -39,6 +39,3 @@ news:
   - header: Welcome Han Liu as new committer
     content: Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
     time: Feb. 8rd, 2020
-  - header: Welcome Hongwei Zhai to join the PMC
-    content: Based on his continuous contributions, Hongwei Zhai (a.k.a [innerpeacez](https://github.com/innerpeacez)) has been invited to join the PMC. Welcome aboard.
-    time: Jan. 3rd, 2020
