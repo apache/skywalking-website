@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## SkyWalking Nginx LUA 0.1.0 release
+###### Mar. 10th, 2020
+Support tracing and collect metrics from Nginx server. Require SkyWalking APM 7.0+.
+
 ## Welcome Ming Wen as new committer
 ###### Mar. 9th, 2020
 Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.

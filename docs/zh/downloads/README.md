@@ -19,6 +19,13 @@
 | | | Binary Distribution (Linux) | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/6.5.0/apache-skywalking-apm-6.5.0.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v6.5.0/docs/README.md) |
 
+### SkyWalking Nginx LUA
+SkyWalking Nginx LUA agent 要求 SkyWalking APM 7.0以上版本
+
+| 日期 | 版本| | 下载 |
+|:---:|:--:|:--:|:--:|
+| Mar. 10th, 2020 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.1.0//skywalking-nginx-lua-0.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.1.0/skywalking-nginx-lua-0.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.1.0/skywalking-nginx-lua-0.1.0-src.tgz.sha512)|
+
 
 ### SkyWalking CLI
 | 日期 | 版本| | 下载 |

@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## SkyWalking Nginx Lua探针0.1.0发布
+###### 2020 年 3 月 10 日
+支持基于Nginx的分布式追踪和指标收集。需要SkyWalking APM 7.0以上版本。
+
 ## 欢迎温铭成为新的committer
 ###### 2020 年 3 月 9 日
 根据他长期的项目贡献，他被投票选举为项目的 committer

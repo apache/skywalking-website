@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Nginx LUA 0.1.0 release
+    content: Support tracing and collect metrics from Nginx server.
+    time: Mar. 10th, 2020
   - header: Welcome Ming Wen as new committer
     content: Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.
     time: Mar. 9th, 2020
@@ -36,6 +39,3 @@ news:
   - header: Welcome Zhusheng Xu as new committer
     content: Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
     time: Feb. 21st, 2020
-  - header: Welcome Han Liu as new committer
-    content: Based on his continuous contributions, Han Liu (a.k.a [mrproliu](https://github.com/mrproliu)) has been voted as a new committer.
-    time: Feb. 8rd, 2020
