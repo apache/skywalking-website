@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
+    content: 支持部署 SkyWalking 6.6.0, Elasticsearch 7
+    time: 2020 年 3 月 16 日
   - header: SkyWalking Nginx Lua探针0.1.0发布
     content: 支持基于Nginx的分布式追踪和指标收集
     time: 2020 年 3 月 10 日
@@ -37,6 +40,3 @@ news:
   - header: 欢迎庄浩潮成为项目管理委员会成员
     content: 由于他对该项目的持续贡献，庄浩潮 (a.k.a [dmsolr](https://github.com/dmsolr)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎
     time: 2020 年 3 月 5 日
-  - header: 欢迎徐竹胜成为新的committer
-    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
-    time: 2020 年 2 月 21 日
