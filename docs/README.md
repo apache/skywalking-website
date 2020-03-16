@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Chart 1.1.0 for SkyWalking 6.6.0 Release
+    content: Support deploy SkyWalking 6.6.0 and Elasticsearch 7.
+    time: Mar. 16th, 2020
   - header: SkyWalking Nginx LUA 0.1.0 release
     content: Support tracing and collect metrics from Nginx server.
     time: Mar. 10th, 2020
@@ -36,6 +39,3 @@ news:
   - header: Welcome Haochao Zhuang to join the PMC
     content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been invited to join the PMC. Welcome aboard.
     time: Mar. 5th, 2020
-  - header: Welcome Zhusheng Xu as new committer
-    content: Based on his continuous contributions, Zhusheng Xu (a.k.a [aderm](https://github.com/aderm)) has been voted as a new committer.
-    time: Feb. 21st, 2020

@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
+###### Mar. 16th, 2020
+SkyWalking Chart 1.1.0 发布。 请到[下载页面](/downloads)查找发行版本。
+- 支持 SkyWalking 6.6.0
+- 支持部署 Elasticsearch 7
+- 修改 helm 官方仓库为 elastic 官方仓库
+
 ## SkyWalking Nginx Lua探针0.1.0发布
 ###### 2020 年 3 月 10 日
 支持基于Nginx的分布式追踪和指标收集。需要SkyWalking APM 7.0以上版本。
