@@ -27,12 +27,12 @@ module.exports = {
         nav: [
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
+            { text: 'Kubernetes helm 1.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.1.0"},
             { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
             { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
             { text: 'Nginx LUA 0.1.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.1.0"},
             { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
             { text: 'Kubernetes helm 1.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.0.0"},
-            { text: 'Kubernetes helm 1.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.1.0"},
           ], },
           { text: "GitHub",  items: [
             { text: 'Main Repo, Javaagent and Backend', link: "https://github.com/apache/skywalking/" },
@@ -74,12 +74,12 @@ module.exports = {
           { text: "主页", link: "/zh/" },
           { text: "文档",
             items: [
+              { text: 'Kubernetes helm 1.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.1.0"},
               { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
               { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
               { text: 'Nginx LUA 0.1.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.1.0"},
               { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
               { text: 'Kubernetes helm 1.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.0.0"},
-              { text: 'Kubernetes helm 1.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.1.0"},
             ],
           },
           { text: "GitHub",  items: [
