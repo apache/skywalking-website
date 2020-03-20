@@ -1,5 +1,13 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking CLI 0.2.0
+###### Mar. 20th, 2019
+SkyWalking CLI 0.2.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Support visualization of heat map
+- Support top N entities, `swctl metrics top 5 --name service_sla`
+- Support thermodynamic metrics, `swctl metrics thermodynamic --name all_heatmap`
+- Support multiple linear metrics, `swctl --display=graph --debug metrics multiple-linear --name all_percentile`
+
 ## Release Apache SkyWalking Chart 1.1.0 for SkyWalking 6.6.0
 ###### Mar. 16th, 2020
 SkyWalking Chart 1.1.0 is released. Go to [downloads](/downloads) page to find release tars.

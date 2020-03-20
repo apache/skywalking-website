@@ -1,5 +1,14 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking CLI 0.1.0
+###### Dec. 10th, 2019
+SkyWalking CLI 0.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
+1. 支持热力图可视化.
+1. 支持 top n 命令展示 top n 个实体.
+1. 支持热力图 metrics.
+1. 支持多线性 metrics
+1. 自动使用后端时区(如果支持)
+
 ## SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
 ###### Mar. 16th, 2020
 SkyWalking Chart 1.1.0 发布。 请到[下载页面](/downloads)查找发行版本。

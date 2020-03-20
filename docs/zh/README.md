@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking CLI 0.2.0 发布
+    content: 本版本包含许多新命令和优化
+    time: Mar. 20th, 2020
   - header: SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
     content: 支持部署 SkyWalking 6.6.0, Elasticsearch 7
     time: 2020 年 3 月 16 日
@@ -37,6 +40,3 @@ news:
   - header: 欢迎温铭成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 3 月 9 日
-  - header: 欢迎庄浩潮成为项目管理委员会成员
-    content: 由于他对该项目的持续贡献，庄浩潮 (a.k.a [dmsolr](https://github.com/dmsolr)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎
-    time: 2020 年 3 月 5 日

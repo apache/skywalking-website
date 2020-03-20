@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking CLI 0.2.0 is released
+    content: New commands and enhancements are included
+    time: Mar. 20th, 2020
   - header: SkyWalking Chart 1.1.0 for SkyWalking 6.6.0 Release
     content: Support deploy SkyWalking 6.6.0 and Elasticsearch 7.
     time: Mar. 16th, 2020
@@ -36,6 +39,3 @@ news:
   - header: Welcome Ming Wen as new committer
     content: Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.
     time: Mar. 9th, 2020
-  - header: Welcome Haochao Zhuang to join the PMC
-    content: Based on his continuous contributions, Haochao Zhuang (a.k.a [dmsolr](https://github.com/dmsolr)) has been invited to join the PMC. Welcome aboard.
-    time: Mar. 5th, 2020
