@@ -30,8 +30,8 @@ SkyWalking Nginx LUA agent 要求 SkyWalking APM 7.0以上版本
 ### SkyWalking CLI
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
-| Dec. 10th, 2019 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.1.0/skywalking-cli-0.1.0-src.tgz.sha512)|
-| | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.1.0/skywalking-cli-0.1.0-bin.tgz.sha512)|
+| Dec. 10th, 2019 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.2.0/skywalking-cli-0.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-src.tgz.sha512)|
+| | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.2.0/skywalking-cli-0.2.0-bin.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-bin.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-bin.tgz.sha512)|
 
 ### SkyWalking Chart
 | 日期 | 版本| | 下载 |
