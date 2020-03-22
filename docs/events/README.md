@@ -1,7 +1,13 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 7.0.0
+SkyWalking APM 7.0.0 is release. Go to [downloads](/downloads) page to find release tars.
+- Upgrade JDK minimal JDK requirement to JDK8
+- Support profiling code level performance 
+- Don't support SkyWalking v5 agent in-wire and out-wire protocol. V6 is required.
+
 ## Release Apache SkyWalking CLI 0.2.0
-###### Mar. 20th, 2019
+###### Mar. 20th, 2020
 SkyWalking CLI 0.2.0 is released. Go to [downloads](/downloads) page to find release tars.
 - Support visualization of heat map
 - Support top N entities, `swctl metrics top 5 --name service_sla`

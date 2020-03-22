@@ -9,6 +9,10 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 ### SkyWalking APM
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
+| Mar. 22nd, 2020 | 7.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/7.0.0/apache-skywalking-apm-7.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0-src.tgz.sha512)|
+| | | Binary Distribution | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/7.0.0/apache-skywalking-apm-7.0.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0.tar.gz.sha512)|
+| | | Binary Distribution for ElasticSearch 7 | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/7.0.0/apache-skywalking-apm-es7-7.0.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-es7-7.0.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-es7-7.0.0.tar.gz.sha512)|
+| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v7.0.0/docs/README.md) |
 | Dec. 27th, 2019 | 6.6.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/6.6.0/apache-skywalking-apm-6.6.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/6.6.0/apache-skywalking-apm-6.6.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/6.6.0/apache-skywalking-apm-6.6.0-src.tgz.sha512)|
 | | | Binary Distribution (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.6.0/apache-skywalking-apm-6.6.0.zip) [[asc]](https://downloads.apache.org/skywalking/6.6.0/apache-skywalking-apm-6.6.0.zip.asc) [[sha512]](https://downloads.apache.org/skywalking/6.6.0/apache-skywalking-apm-6.6.0.zip.sha512)|
 | | | Binary Distribution for ElasticSearch 7 (Windows)| [[zip]](https://www.apache.org/dyn/closer.cgi/skywalking/6.6.0/apache-skywalking-apm-es7-6.6.0.zip) [[asc]](https://downloads.apache.org/skywalking/6.6.0/apache-skywalking-apm-es7-6.6.0.zip.asc) [[sha512]](https://downloads.apache.org/skywalking/6.6.0/apache-skywalking-apm-es7-6.6.0.zip.sha512)|
@@ -56,7 +60,7 @@ SkyWalking Nginx LUA agent requires SkyWalking APM 7.0+.
 
 
 ## Changelog
-You can also read the [changelogs](https://github.com/apache/incubator-skywalking/blob/master/CHANGES.md) for all versions.
+You can also read the [changelogs](https://github.com/apache/skywalking/blob/master/CHANGES.md) for all versions.
 
 
 <br/>

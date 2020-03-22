@@ -27,8 +27,11 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking APM 7.0.0 is released
+    content: JDK 1.8 is required in the java agent. Support profiling code level performance.
+    time: Mar. 20th, 2020
   - header: SkyWalking CLI 0.2.0 is released
-    content: New commands and enhancements are included
+    content: New commands and enhancements are included.
     time: Mar. 20th, 2020
   - header: SkyWalking Chart 1.1.0 for SkyWalking 6.6.0 Release
     content: Support deploy SkyWalking 6.6.0 and Elasticsearch 7.
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking Nginx LUA 0.1.0 release
     content: Support tracing and collect metrics from Nginx server.
     time: Mar. 10th, 2020
-  - header: Welcome Ming Wen as new committer
-    content: Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.
-    time: Mar. 9th, 2020
