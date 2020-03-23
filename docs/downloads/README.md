@@ -66,7 +66,7 @@ You can also read the [changelogs](https://github.com/apache/skywalking/blob/mas
 <br/>
 
 # Verify the releases
-[PGP signatures KEYS](https://downloads.apache.org/incubator/skywalking/KEYS)
+[PGP signatures KEYS](https://downloads.apache.org/skywalking/KEYS)
 
 It is essential that you verify the integrity of the downloaded files using the PGP or SHA signatures. The PGP signatures can be verified using GPG or PGP. Please download the KEYS as well as the asc signature files for relevant distribution. It is recommended to get these files from the main distribution directory and not from the mirrors.
 
@@ -85,15 +85,15 @@ pgp -ka KEYS
 To verify the binaries/sources you can download the relevant asc files for it from main distribution directory and follow the below guide.
 
 ```
-gpg --verify apache-skywalking-apm-incubating********.asc apache-skywalking-apm-incubating*********
+gpg --verify apache-skywalking-apm-********.asc apache-skywalking-apm-*********
 
 or
 
-pgpv apache-skywalking-apm-incubating********.asc
+pgpv apache-skywalking-apm-********.asc
 
 or
 
-pgp apache-skywalking-apm-incubating********.asc
+pgp apache-skywalking-apm-********.asc
 ```
 
 <br/>
