@@ -31,7 +31,7 @@
 
 性能剖析激活时，会对指定线程周期性的进行线程栈快照，并将所有的快照进行汇总分析，如果两个连续的快照含有同样的方法栈，则说明此栈中的方法大概率在这个时间间隔内都处于执行状态。从而，通过这种连续快照的时间间隔累加成为估算的方法执行时间。时间估算方法如下图所示：
 
-![Profile Time estimation](docs/img/profile_time_estimation_zh.png)
+![Profile Time estimation](../../.vuepress/public/static/blog/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/time_estimation_zh.png)
 
 在上图中，d0-d10 代表 10 次连续的内存栈快照，实际方法执行时间在 d3-d4 区间，结束时间在 d8-d9 之间。性能剖析无法告诉你方法的准确执行时间，但是他会估算出方法执行时间为 d4-d8 的 4 个快照采集间隔时间之和，这已经是非常的精确的时间估算了。
 
@@ -61,13 +61,13 @@ try {
 
 针对于这种情况，我们看看性能剖析会怎样直接定位此问题。
 
-![Profile Trace](../../img/profile_trace_zh.png)
+![Profile Trace](../../.vuepress/public/static/blog/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/trace_zh.png)
 
 上图所示的就是我们在进行链路追踪时所看到的真实执行情况，其中我们可以看到在 service/processWithThreadPool 执行速度缓慢，这正是我们植入问题代码的方法。此时在这个调用中没有后续链路了，所以并没有更细致的原因，我们也不打算去 review 代码，从而增加新埋点。这时，我们可以对 HelloService 进行性能剖析，并执行只剖析响应速度大于 500 毫秒的请求。
 
 注意，指定特定响应时间的剖析是保证剖析有效性的重要特性，如果方法在平均响应时间上已经出现问题，往往通过分布式链路可以快速定位，因为此时链路总时间长，新埋点带来的性能影响相对可控。但是方法性能抖动是不容易用新增埋点来解决的，而且往往只发生在生产环境。
 
-![Profile Thread Stack](../../img/profile_thread_stack.png)
+![Profile Thread Stack](../../.vuepress/public/static/blog/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/thread_stack.png)
 
 上图就是我们进行性能剖析后的真实结果图。从左到右分别表示：栈帧名称、该栈帧总计耗时（包含其下面所有自栈帧）、当前栈帧自身耗时和监控次数。我们可以在最后一行看到，线程卡在了 sun.misc.Unsafe.park 中了。如果你熟悉 Java 就可以知道此时进行了锁等待，我们继续按照树的结构向上推，便可以看到线程真正是卡在了 CountDownLatch.await 方法中。
 
