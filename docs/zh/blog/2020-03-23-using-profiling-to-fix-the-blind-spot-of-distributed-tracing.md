@@ -61,7 +61,7 @@ try {
 
 针对于这种情况，我们看看性能剖析会怎样直接定位此问题。
 
-![Profile Trace](docs/img/profile_trace_zh.png)
+![Profile Trace](../../img/profile_trace_zh.png)
 
 上图所示的就是我们在进行链路追踪时所看到的真实执行情况，其中我们可以看到在 service/processWithThreadPool 执行速度缓慢，这正是我们植入问题代码的方法。此时在这个调用中没有后续链路了，所以并没有更细致的原因，我们也不打算去 review 代码，从而增加新埋点。这时，我们可以对 HelloService 进行性能剖析，并执行只剖析响应速度大于 500 毫秒的请求。
 
