@@ -41,11 +41,10 @@ SkyWalking Nginx LUA agent requires SkyWalking APM 7.0+.
 ### SkyWalking Chart
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
+| Mar. 31th, 2020 | 2.0.0 for SkyWalking 7.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/2.0.0/skywalking-kubernetes-2.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-kubernetes-2.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-kubernetes-2.0.0-src.tgz.sha512)|
+| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/2.0.0/skywalking-2.0.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-2.0.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-2.0.0.tgz.sha512)|
 | Mar. 16th, 2020 | 1.1.0 for SkyWalking 6.6.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.1.0/skywalking-kubernetes-1.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/1.1.0/skywalking-kubernetes-1.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/1.1.0/skywalking-kubernetes-1.1.0-src.tgz.sha512)|
 | | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.1.0/skywalking-1.1.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/1.1.0/skywalking-1.1.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/1.1.0/skywalking-1.1.0.tgz.sha512)|
-| Dec. 26th, 2019 | 1.0.0 for SkyWalking 6.5.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/1.0.0/skywalking-kubernetes-1.0.0-src.tgz.sha512)|
-| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/1.0.0/skywalking-1.0.0.tgz.sha512)|
-
 
 ### All Releases
 * Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)

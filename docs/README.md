@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Chart 2.0.0 is released
+    content: Support deploy SkyWalking 7.0.0.
+    time: Mar. 31th, 2020
   - header: SkyWalking APM 7.0.0 is released
     content: JDK 1.8 is required in the java agent. Support profiling code level performance.
     time: Mar. 20th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking Chart 1.1.0 for SkyWalking 6.6.0 Release
     content: Support deploy SkyWalking 6.6.0 and Elasticsearch 7.
     time: Mar. 16th, 2020
-  - header: SkyWalking Nginx LUA 0.1.0 release
-    content: Support tracing and collect metrics from Nginx server.
-    time: Mar. 10th, 2020

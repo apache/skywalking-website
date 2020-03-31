@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Chart 2.0.0 for SkyWalking 7.0.0
+###### Mar. 31th, 2020
+SkyWalking Chart 2.0.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Support SkyWalking 7.0.0
+- Support set ES user/password
+- Add CI for release
+
 ## Release Apache SkyWalking APM 7.0.0
 SkyWalking APM 7.0.0 is release. Go to [downloads](/downloads) page to find release tars.
 - Upgrade JDK minimal JDK requirement to JDK8
