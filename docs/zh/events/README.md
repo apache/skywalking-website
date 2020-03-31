@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Chart 2.0.0 for SkyWalking 7.0.0
+###### Mar. 31th, 2020
+SkyWalking Chart 2.0.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- 支持 SkyWalking 7.0.0
+- 支持设置 ES user/password
+- 添加 CI 流程
+
 ## Release Apache SkyWalking APM 7.0.0
 ###### Mar. 22nd, 2020
 SkyWalking APM 7.0.0 发布. 请到[下载页面](/downloads)查找发行版本.

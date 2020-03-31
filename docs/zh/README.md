@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Chart 2.0.0 发布
+    content: 支持部署 SkyWalking 7.0.0
+    time: 2020 年 3 月 31 日
   - header: SkyWalking APM 7.0.0 发布
     content: 探针升级到JDK1.8，支持代码级性能剖析
     time: 2020 年 3 月 22 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
     content: 支持部署 SkyWalking 6.6.0, Elasticsearch 7
     time: 2020 年 3 月 16 日
-  - header: SkyWalking Nginx Lua探针0.1.0发布
-    content: 支持基于Nginx的分布式追踪和指标收集
-    time: 2020 年 3 月 10 日
