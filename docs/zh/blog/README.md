@@ -2,6 +2,11 @@
 layout: LayoutBlog
 
 blog:
+- title: SkyWalking 极简入门
+  name: 2020-04-19-skywalking-quick-start
+  time: 芋道源码，4月19日，2020
+  short: 从 0 开始入门 SkyWalking，搭建 SkyWalking 服务，并接入 Java 项目中实现分布式链路追踪
+
 - title: 在线代码级性能剖析，补全分布式追踪的最后一块“短板”
   name: 2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing
   time: 吴晟，刘晗，3月23日，2020
