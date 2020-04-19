@@ -3,14 +3,14 @@ module.exports = {
   dest: "dist",
   locales: {
     '/': {
-      lang: 'en-US', // 将会被设置为 <html> 的 lang 属性
-      title: ' Apache SkyWalking™ (incubating)|SkyWalking Team ',
+      lang: 'en-US', 
+      title: ' Apache SkyWalking™ | SkyWalking Team ',
       logo: "/favicon.ico",
       head: [["link", { rel: "icon", href: `/logo.svg` }]],
     },
     '/zh/': {
       lang: 'zh-CN',
-      title: ' Apache SkyWalking™ (incubating)|SkyWalking Team ',
+      title: ' Apache SkyWalking™ | SkyWalking Team ',
       logo: "/favicon.ico",
       head: [["link", { rel: "icon", href: `/logo.svg` }]],
     }
@@ -27,9 +27,25 @@ module.exports = {
         nav: [
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
-            { text: 'Latest dev version', link: "https://github.com/apache/incubator-skywalking/tree/master/docs" },
-            { text: '6.0.0-alpha', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-alpha/docs"},
-            { text: '5.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v5.0.0-GA/docs"}
+            { text: '7.0.0', link: "https://github.com/apache/skywalking/tree/v7.0.0/docs"},
+            { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
+            { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
+            { text: 'Nginx LUA 0.1.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.1.0"},
+            { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
+            { text: 'Kubernetes helm 2.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v2.0.0"},
+            { text: 'Kubernetes helm 1.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.1.0"},
+          ], },
+          { text: "GitHub",  items: [
+            { text: 'Main Repo, Javaagent and Backend', link: "https://github.com/apache/skywalking/" },
+            { text: 'Nginx LUA Agent', link: "https://github.com/apache/skywalking-nginx-lua"},
+            { text: 'RocketBot UI', link: "https://github.com/apache/skywalking-rocketbot-ui"},
+            { text: 'CLI', link: "https://github.com/apache/skywalking-cli/"},
+            { text: 'Data Collect Protocol', link: "https://github.com/apache/skywalking-data-collect-protocol"},
+            { text: 'Data Query Protocol', link: "https://github.com/apache/skywalking-query-protocol"},
+            { text: 'Docker', link: "https://github.com/apache/skywalking-docker"},
+            { text: 'Kubernetes helm', link: "https://github.com/apache/skywalking-kubernetes/"},
+            { text: 'K8s Operator', link: "https://github.com/apache/skywalking-swck"},
+            { text: 'Website', link: "https://github.com/apache/skywalking-website"},
           ], },
           { text: "Events", link: "/events/" },
           { text: "Blog", link: "/blog/" },
@@ -38,7 +54,7 @@ module.exports = {
           { text: "Links",
             items: [
               { text: 'Apache Software Foundation', link: "http://www.apache.org/" },
-              { text: 'GitHub Issue Tracker', link: "https://github.com/apache/incubator-skywalking/issues" },
+              { text: 'GitHub Issue Tracker', link: "https://github.com/apache/skywalking/issues" },
               { text: 'Dev Mailing List', link: "https://lists.apache.org/list.html?dev@skywalking.apache.org" },
               { text: 'License', link: "http://www.apache.org/licenses/" },
               { text: 'Apache Events', link: "http://www.apache.org/events/current-event" },
@@ -59,11 +75,27 @@ module.exports = {
           { text: "主页", link: "/zh/" },
           { text: "文档",
             items: [
-              { text: '开发版本文档', link: "https://github.com/apache/incubator-skywalking/tree/master/docs" },
-              { text: '6.0.0-alpha', link: "https://github.com/apache/incubator-skywalking/tree/v6.0.0-alpha/docs"},
-              { text: '5.0.0-GA', link: "https://github.com/apache/incubator-skywalking/tree/v5.0.0-GA/docs"}
+              { text: '7.0.0', link: "https://github.com/apache/skywalking/tree/v7.0.0/docs"},
+              { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
+              { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
+              { text: 'Nginx LUA 0.1.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.1.0"},
+              { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
+              { text: 'Kubernetes helm 1.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.1.0"},
+              { text: 'Kubernetes helm 1.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v1.0.0"},
             ],
           },
+          { text: "GitHub",  items: [
+            { text: 'Main Repo, Javaagent and Backend', link: "https://github.com/apache/skywalking/" },
+            { text: 'Nginx LUA Agent', link: "https://github.com/apache/skywalking-nginx-lua"},
+            { text: 'RocketBot UI', link: "https://github.com/apache/skywalking-rocketbot-ui"},
+            { text: 'CLI', link: "https://github.com/apache/skywalking-cli/"},
+            { text: 'Data Collect Protocol', link: "https://github.com/apache/skywalking-data-collect-protocol"},
+            { text: 'Data Query Protocol', link: "https://github.com/apache/skywalking-query-protocol"},
+            { text: 'Docker', link: "https://github.com/apache/skywalking-docker"},
+            { text: 'Kubernetes helm', link: "https://github.com/apache/skywalking-kubernetes/"},
+            { text: 'K8s Operator', link: "https://github.com/apache/skywalking-swck"},
+            { text: 'Website', link: "https://github.com/apache/skywalking-website"},
+          ], },
           { text: "事件", link: "/zh/events/" },
           { text: "博客", link: "/zh/blog/" },
           { text: "下载", link: "/zh/downloads/" },
@@ -71,7 +103,7 @@ module.exports = {
           { text: "链接",
           items: [
             { text: 'Apache Software Foundation', link: "http://www.apache.org/" },
-            { text: 'GitHub Issue Tracker', link: "https://github.com/apache/incubator-skywalking/issues" },
+            { text: 'GitHub Issue Tracker', link: "https://github.com/apache/skywalking/issues" },
             { text: 'Dev Mailing List', link: "https://lists.apache.org/list.html?dev@skywalking.apache.org" },
             { text: 'License', link: "http://www.apache.org/licenses/" },
             { text: 'Apache Events', link: "http://www.apache.org/events/current-event" },

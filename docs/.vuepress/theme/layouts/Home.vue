@@ -9,7 +9,6 @@
             <div class="product-name">
               <div class="avatar-title">
                 Apache SkyWalking
-                <span class="incubating">Incubating</span>
               </div>
             </div>
             <p
@@ -48,18 +47,38 @@
             </tr>
           </table>
         </div>
-        <div class="home-card-news clear">
+        <div class="home-card-news">
           <h1 class="tc">{{data.news.title}}</h1>
-          <div class="home-card-news-item" v-for="i in data.news.content">
-            <h4 class="mb10 mt0">{{i.header}}</h4>
-            <div class="sm mb10"><span style="color:#999;margin-right:10px">{{i.time}}</span></div>
-            <p class="mt0">{{i.content}}</p>
+          <div class="clear">
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[0].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[0].time}}</span></div>
+              <p class="mt0">{{data.news.content[0].content}}</p>
+            </div>
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[1].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[1].time}}</span></div>
+              <p class="mt0">{{data.news.content[1].content}}</p>
+            </div>
+          </div>
+          <div class="clear">
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[2].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[2].time}}</span></div>
+              <p class="mt0">{{data.news.content[2].content}}</p>
+            </div>
+            <div class="home-card-news-item">
+              <h4 class="mb10 mt0">{{data.news.content[3].header}}</h4>
+              <div class="sm mb10"><span style="color:#999;margin-right:10px">{{data.news.content[3].time}}</span></div>
+              <p class="mt0">{{data.news.content[3].content}}</p>
+            </div>
           </div>
         </div>
         <div class="home-card-user tc">
           <h1>{{data.user.title}}</h1>
           <p>{{data.user.content}}</p>
           <img style="margin-top:20px;max-width:900px" src="/assets/users.png" width="100%">
+          <p>The <a href='https://github.com/apache/skywalking/blob/master/docs/powered-by.md'>PoweredBy</a> page includes more users of the project.</p>
         </div>
       </div>
       <Footer/>
@@ -93,27 +112,7 @@ export default {
 </script>
 
 <style>
-.incubating{
-  font-size: 18px;vertical-align: top;
-  position: relative;
-  background:rgba(255, 255, 255, 0.15);
-  padding: 3px 10px 3px 12px;
-  border-radius: 4px;
-}
-.incubating::after {
-  right: 100%;
-	top: 50%;
-	border: solid transparent;
-	content: " ";
-	height: 0;
-	width: 0;
-	position: absolute;
-	pointer-events: none;
-	border-color: rgba(0, 0, 0, 0);
-	border-right-color: rgba(255, 255, 255, 0.15);
-	border-width: 8px;
-	margin-top: -8px;
-}
+.clear:after{display:table; content:''; clear:both;}
 .avatar {
   overflow: hidden;
   position: relative;
@@ -127,7 +126,7 @@ export default {
 .avatar-title {
   font-size: 48px;
   color: #fff;
-  font-family: Avenir-Heavy;
+  font-family: Lato, sans-serif;
   font-weight: 600;
   margin: 0;  
 }
@@ -223,7 +222,7 @@ export default {
   background-color:#0091ff;
 }
 .home-card h1 {
-  font-family: Avenir-Heavy;
+  font-family: Lato, sans-serif;
   text-shadow: 4px 6px 0 rgba(0,0,0,.07);
 }
 .home-card p {

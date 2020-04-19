@@ -1,18 +1,20 @@
 ---
 layout: LayoutHome
-description: '分布式系统的应用程序性能监视工具，专为微服务、云本机架构和基于容器（Docker、K8s、Mesos）架构而设计。'
+description: '分布式系统的应用程序性能监视工具，专为微服务、云原生架构和基于容器（Docker、K8s、Mesos）架构而设计。'
 start: 快速开始
 what:
   title: 什么是 SkyWalking
-  content: 
+  content:
     - SkyWalking 是观察性分析平台和应用性能管理系统。
     - 提供分布式追踪、服务网格遥测分析、度量聚合和可视化一体化解决方案.
+    - 支持Java, .Net Core, PHP, NodeJS, Golang, LUA语言探针
+    - 支持Envoy + Istio构建的Service Mesh
 
 feature:
   title: 特性一览
-  content: 
+  content:
     - 多种监控手段，语言探针和service mesh
-    - 多语言自动探针，Java，.NET Core和Node.JS
+    - 多语言自动探针，Java, .Net Core, PHP, NodeJS, Golang, LUA
     - 轻量高效，不需要大数据
     - 模块化，UI、存储、集群管理多种机制可选
     - 支持告警
@@ -26,17 +28,15 @@ user:
 news:
   title: 事件 & 新闻
   content:
-  - header: 欢迎曹奕雄成为committer
-    content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
-    time: 2018年12月10日
-  - header: 欢迎李浪成为committer
-    content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
-    time: 2018年12月6日
-  - header: 欢迎谭建成为committer
-    content: 根据他对该项目的贡献，他已被接纳为SkyWalking提交者。欢迎。
-    time: 2018年12月2日
-  - header: 发布Apache SkyWalking 6.0.0-alpha版本
-    content: APM始终兼容多语言探针（Java，.Net，NodeJS）、第三方追踪数据格式（Zipkin）和服务网格遥测数据（Istio）。
-    time: 2018年11月14日
-    tags: SkyWalking APM, Observalibity Analysis Platform, New Release
----
+  - header: SkyWalking Chart 2.0.0 发布
+    content: 支持部署 SkyWalking 7.0.0
+    time: 2020 年 3 月 31 日
+  - header: SkyWalking APM 7.0.0 发布
+    content: 探针升级到JDK1.8，支持代码级性能剖析
+    time: 2020 年 3 月 22 日
+  - header: SkyWalking CLI 0.2.0 发布
+    content: 本版本包含许多新命令和优化
+    time: 2020 年 3 月 20 日
+  - header: SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
+    content: 支持部署 SkyWalking 6.6.0, Elasticsearch 7
+    time: 2020 年 3 月 16 日
