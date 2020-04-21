@@ -24,6 +24,7 @@ Members include Project Management Committee members and committers. The List in
 |Jiaqi Lin| linjiaqi |
 |Jinlin Fu| withlin |
 |Lang Li| lilang |
+|Wei Zhang| zhangwei24 |
 |Wenbing Wang| wangwenbin |
 |Willem Ning Jiang| ningjiang |
 |Yang Bai| baiyang |
@@ -41,7 +42,6 @@ Members include Project Management Committee members and committers. The List in
 |Ming Wen | wenming |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
-|Wei Zhang| zhangwei24 |
 |Weijie Zou| kdump |
 |Weiyi Liu | wayilau |
 |Yuntao Li| liyuntao |

@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Wei Zhang to join the PMC
+###### Apr. 20th, 2020
+Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
+
 ## Release Apache SkyWalking Chart 2.0.0 for SkyWalking 7.0.0
 ###### Mar. 31th, 2020
 SkyWalking Chart 2.0.0 is released. Go to [downloads](/downloads) page to find release tars.

@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎张伟成为项目管理委员会成员
+    content: 由于他对该项目的持续贡献，张伟 (a.k.a [arugal](https://github.com/arugal)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
+    time: 2020 年 4 月 20 日
   - header: SkyWalking Chart 2.0.0 发布
     content: 支持部署 SkyWalking 7.0.0
     time: 2020 年 3 月 31 日
