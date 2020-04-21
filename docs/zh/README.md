@@ -40,6 +40,3 @@ news:
   - header: SkyWalking CLI 0.2.0 发布
     content: 本版本包含许多新命令和优化
     time: 2020 年 3 月 20 日
-  - header: SkyWalking Chart 1.1.0 发布（SkyWalking 6.6.0）
-    content: 支持部署 SkyWalking 6.6.0, Elasticsearch 7
-    time: 2020 年 3 月 16 日
