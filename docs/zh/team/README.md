@@ -23,6 +23,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Jiaqi Lin| linjiaqi |
 |Jinlin Fu| withlin |
 |Lang Li| lilang |
+|Wei Zhang| zhangwei24 |
 |Wenbing Wang| wangwenbin |
 |Willem Ning Jiang| ningjiang |
 |Yang Bai| baiyang |
@@ -40,7 +41,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Ming Wen | wenming |
 |Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
-|Wei Zhang| zhangwei24 |
 |Weijie Zou| kdump |
 |Weiyi Liu| wayilau |
 |Yuntao Li| liyuntao |
