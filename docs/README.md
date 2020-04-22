@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Wei Zhang to join the PMC
+    content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
+    time: Apr. 20th, 2020
   - header: SkyWalking Chart 2.0.0 is released
     content: Support deploy SkyWalking 7.0.0.
     time: Mar. 31th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking CLI 0.2.0 is released
     content: New commands and enhancements are included.
     time: Mar. 20th, 2020
-  - header: SkyWalking Chart 1.1.0 for SkyWalking 6.6.0 Release
-    content: Support deploy SkyWalking 6.6.0 and Elasticsearch 7.
-    time: Mar. 16th, 2020
