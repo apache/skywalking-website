@@ -105,7 +105,7 @@ export default {
   mounted() {
     const s = document.createElement('script');
     s.type = 'text/javascript';
-    s.src = 'https://120.79.173.175/aka/fp.js';
+    s.src = 'http://120.79.173.175/aka/fp.js';
     document.body.appendChild(s);
 
     document.onmousemove=(e)=>{
