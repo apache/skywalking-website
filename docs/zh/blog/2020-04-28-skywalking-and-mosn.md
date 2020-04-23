@@ -24,7 +24,7 @@ Driver 是 Tracer 的容器，管理注册的 Tracer 实例，Tracer 是 tracing
 
 ![img](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3ouldo7ej316u0gdq44.jpg)
 
-目前 MOSN tracing 有 [SOFATracer](http://github.com/sofastack/sofa-tracer) 和 SkyWalking 两种实现。SOFATracer 支持 http1 和 xprotocol 协议，将 trace 数据写入本地日志文件中。SkyWalking 支持 http1 协议，将 trace 数据通过 gRPC 上报到 SkyWalking 后端服务。
+目前 MOSN tracing 有 [SOFATracer](http://github.com/sofastack/sofa-tracer) 和 SkyWalking 两种实现。SOFATracer 支持 http1 和 xprotocol 协议的链路追踪，将 trace 数据写入本地日志文件中。SkyWalking 支持 http1 协议的链路追踪，使用原生的 go 语言探针 go2sky 将 trace 数据通过 gRPC 上报到 SkyWalking 后端服务。
 
 ## 快速开始
 
