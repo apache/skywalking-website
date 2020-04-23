@@ -39,6 +39,3 @@ news:
   - header: SkyWalking APM 7.0.0 is released
     content: JDK 1.8 is required in the java agent. Support profiling code level performance.
     time: Mar. 20th, 2020
-  - header: SkyWalking CLI 0.2.0 is released
-    content: New commands and enhancements are included.
-    time: Mar. 20th, 2020
