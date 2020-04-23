@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: Welcome Brandon Fergerson as new committer
+    content: Based on his continuous contributions, Brandon Fergerson (a.k.a [bfergerson](https://github.com/bfergerson)) has been voted as a new committer.
+    time: Apr. 23rd, 2020
   - header: Welcome Wei Zhang to join the PMC
     content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
     time: Apr. 20th, 2020
