@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Brandon Fergerson as new committer
+###### Apr. 23rd, 2020
+Based on his continuous contributions, Brandon Fergerson (a.k.a [bfergerson](https://github.com/bfergerson)) has been voted as a new committer.
+
 ## Welcome Wei Zhang to join the PMC
 ###### Apr. 20th, 2020
 Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
