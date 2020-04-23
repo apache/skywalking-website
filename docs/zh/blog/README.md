@@ -2,6 +2,12 @@
 layout: LayoutBlog
 
 blog:
+
+- title: SkyWalking 支持云原生网络代理 MOSN 做分布式追踪
+  name: 2020-04-28-skywalking-and-mosn
+  time: Jimmy Song，张伟，4 月 28 日，2020
+  short: 日前，观察性分析平台和应用性能管理系统 SkyWalking 完成了与云原生网络代理 MOSN 的集成，作为 MOSN 中的支持的分布式追踪系统之一，旨在实现在微服务和 Service Mesh 中的更强大的可观察性。
+
 - title: SkyWalking 极简入门
   name: 2020-04-19-skywalking-quick-start
   time: 芋道源码，4月19日，2020
