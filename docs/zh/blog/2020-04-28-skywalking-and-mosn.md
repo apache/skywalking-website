@@ -2,7 +2,7 @@
 
 作者：[Jimmy Song](https://jimmysong.io)、[张伟](https://github.com/arugal)
 
-日前，观察性分析平台和应用性能管理系统 SkyWalking 完成了与云原生网络代理 MOSN 的集成，作为 MOSN 中的支持的分布式追踪系统之一，旨在实现在微服务和 Service Mesh 中的更强大的可观察性。
+日前，云原生网络代理 MOSN v0.12.0 发布，观察性分析平台和应用性能管理系统 SkyWalking 完成了与 MOSN 的集成，作为 MOSN 中的支持的分布式追踪系统之一，旨在实现在微服务和 Service Mesh 中的更强大的可观察性。
 
 ## 背景
 
@@ -38,7 +38,9 @@ Driver 是 Tracer 的容器，管理注册的 Tracer 实例，Tracer 是 tracing
 
 - [安装 docker-compose](https://docs.docker.com/compose/install/)
 
-需要一个编译好的 MOSN 程序。
+需要一个编译好的 MOSN 程序，您可以[下载 MOSN 源码](https://github.com/mosn/mosn)自行编译，或者直接下载 [MOSN v0.12.0 发行版](https://github.com/mosn/mosn/releases/tag/v0.12.0)以获取 MOSN 的运行时二进制文件。
+
+下面将以源码编译的方式演示 MOSN 如何与 SkyWalking 集成。
 
 ```bash
 cd ${projectpath}/cmd/mosn/main
