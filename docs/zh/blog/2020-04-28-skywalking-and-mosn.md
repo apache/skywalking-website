@@ -8,7 +8,7 @@
 
 相比传统的巨石（Monolith）应用，微服务的一个主要变化是将应用中的不同模块拆分为了独立的进程。在微服务架构下，原来进程内的方法调用成为了跨进程的远程方法调用。相对于单一进程内的方法调用而言，跨进程调用的调试和故障分析是非常困难的，难以使用传统的代码调试程序或者日志打印来对分布式的调用过程进行查看和分析。
 
-![img](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3oukfgezj30pj0d5t9l.jpg)
+![分布式追踪示意图](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3oukfgezj30pj0d5t9l.jpg)
 
 如上图右边所示，微服务架构中系统中各个微服务之间存在复杂的调用关系。
 
@@ -22,7 +22,7 @@ MOSN 的 tracing 框架由 Driver、Tracer 和 Span 三个部分组成。
 
 Driver 是 Tracer 的容器，管理注册的 Tracer 实例，Tracer 是 tracing 的入口，根据请求信息创建一个 Span，Span 存储当前跨度的链路信息。
 
-![img](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3ouldo7ej316u0gdq44.jpg)
+![MOSN 中的 tracing 架构](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3ouldo7ej316u0gdq44.jpg)
 
 目前 MOSN tracing 有 [SOFATracer](http://github.com/sofastack/sofa-tracer) 和 SkyWalking 两种实现。SOFATracer 支持 http1 和 xprotocol 协议的链路追踪，将 trace 数据写入本地日志文件中。SkyWalking 支持 http1 协议的链路追踪，使用原生的 go 语言探针 go2sky 将 trace 数据通过 gRPC 上报到 SkyWalking 后端服务。
 
@@ -98,15 +98,30 @@ go run server.go
 go run client.go
 ```
 
-打开 [http://127.0.0.1:8080](http://127.0.0.1:8080/) 查看 SkyWalking-UI。
+打开 [http://127.0.0.1:8080](http://127.0.0.1:8080/) 查看 SkyWalking-UI，SkyWalking Dashboard 界面如下图所示。
 
-下面来看一段 Demo 视频。
+![SkyWalking Dashboard](https://tva1.sinaimg.cn/large/007S8ZIlly1ge99xmtrz9j31hc0r2mxz.jpg)
 
-[![img](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3oul0bf7j31bs0qoae2.jpg)](https://www.bilibili.com/video/BV17i4y1t7mZ/)
+在打开 Dashboard 后请点击右上角的 `Auto` 按钮以使页面自动刷新。
+
+### Demo 视频
+
+下面来看一下该 Demo 的操作视频。
+
+[![Demo](https://tva1.sinaimg.cn/large/007S8ZIlly1ge3oul0bf7j31bs0qoae2.jpg)](https://www.bilibili.com/video/BV17i4y1t7mZ/)
+
+### 清理
+
+要想销毁 SkyWalking 后台运行的 docker 容器只需要下面的命令。
+
+```bash
+cd ${projectpath}/examples/codes/trace/skywalking/http/
+docker-compose -f skywalking-docker-compose.yaml down
+```
 
 ## 未来计划
 
-在今年五月份，SkyWalking  8.0 版本会进行一次全面升级，采用新的探针协议和分析逻辑，探针将更具互感知能力，更好的在service mesh下使用探针进行监控。同时，SkyWalking 将开放之前仅存在于内核中的 metrics 指标分析体系。Prmoetheus、Spring Cloud Sleuth、Zabbix 等常用的metrics监控方式，都会被统一的接入进来，进行分析。此外， SkyWalking 与 MOSN 社区将继续合作：支持追踪 Dubbo 和 SOFARPC，同时适配 sidecar 模式下的链路追踪。
+在今年五月份，SkyWalking  8.0 版本会进行一次全面升级，采用新的探针协议和分析逻辑，探针将更具互感知能力，更好的在 Service Mesh 下使用探针进行监控。同时，SkyWalking 将开放之前仅存在于内核中的 metrics 指标分析体系。Prmoetheus、Spring Cloud Sleuth、Zabbix 等常用的 metrics 监控方式，都会被统一的接入进来，进行分析。此外， SkyWalking 与 MOSN 社区将继续合作：支持追踪 Dubbo 和 [SOFARPC](https://github.com/sofastack/sofa-rpc)，同时适配 sidecar 模式下的链路追踪。
 
 ## 关于 MOSN
 
@@ -117,7 +132,7 @@ MOSN 是一款使用 Go 语言开发的网络代理软件，由蚂蚁金服开�
 
 ## 关于 Skywalking
 
-SkyWalking 是观察性分析平台和应用性能管理系统。提供分布式追踪、服务网格遥测分析、度量聚合和可视化一体化解决方案。支持 Java、.Net Core、PHP、NodeJS、Golang、LUA 语言探针，支持 Envoy/MOSN + Istio构建的Service Mesh。
+SkyWalking 是观察性分析平台和应用性能管理系统。提供分布式追踪、服务网格遥测分析、度量聚合和可视化一体化解决方案。支持 Java、.Net Core、PHP、NodeJS、Golang、LUA 语言探针，支持 Envoy/MOSN + Istio 构建的 Service Mesh。
 
 - GitHub：<https://github.com/apache/skywalking>
 - 官网：<https://skywalking.apache.org>
