@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking APM 8.0.0 发布
+    content: 支持新的探针v3协议。支持新的查询协议和UI。
+    time: 2020 年 6 月 15 日
   - header: 欢迎张伟成为项目管理委员会成员
     content: 由于他对该项目的持续贡献，张伟 (a.k.a [arugal](https://github.com/arugal)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
     time: 2020 年 4 月 20 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking APM 7.0.0 发布
     content: 探针升级到JDK1.8，支持代码级性能剖析
     time: 2020 年 3 月 22 日
-  - header: SkyWalking CLI 0.2.0 发布
-    content: 本版本包含许多新命令和优化
-    time: 2020 年 3 月 20 日

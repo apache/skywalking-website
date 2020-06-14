@@ -1,5 +1,13 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 7.0.0
+###### June 15th, 2020
+SkyWalking APM 8.0.0 is release. Go to [downloads](/downloads) page to find release tars.
+- v3 protocol is added and implemented
+- New Dashboard UI and new Query Protocol are provided
+- Prometheus fetcher is supported. Once you have Prometheus SDK instrumented app, the metrics could be read by SkyWalking.
+- Register mechanism has been removed due to buckets effect on performance and memory cost.
+
 ## Welcome Wei Zhang to join the PMC
 ###### Apr. 20th, 2020
 Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.

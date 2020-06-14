@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking APM 8.0.0
+###### 2020 年 6 月 15 日
+SkyWalking APM 8.0.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- 新的v3探针协议
+- 新的UI dashboard和新查询协议
+- 注册机制被彻底删除
+
 ## 欢迎张伟成为项目管理委员会成员
 ###### 2020 年 4 月 20 日
 由于他对该项目的持续贡献，张伟 (a.k.a [arugal](https://github.com/arugal)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
