@@ -26,7 +26,7 @@
         <div class="home-card-about tc">
           <h1>{{data.what.title}}</h1>
           <p v-for="i in data.what.content">{{i}}</p>
-          <img style="margin-top:20px;max-width:900px;box-shadow: 0 2px 5px #00000033;" src="/assets/frame.jpeg" width="100%">
+          <img style="margin-top:20px;max-width:900px;box-shadow: 0 2px 5px #00000033;" src="/assets/frame-v8.jpeg" width="100%">
         </div>
         <div class="home-card-feature">
           <h1 class="tc">{{data.feature.title}}</h1>
