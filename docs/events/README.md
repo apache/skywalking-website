@@ -1,6 +1,6 @@
 # SkyWalking Events
 
-## Release Apache SkyWalking APM 7.0.0
+## Release Apache SkyWalking APM 8.0.0
 ###### June 15th, 2020
 SkyWalking APM 8.0.0 is release. Go to [downloads](/downloads) page to find release tars.
 - v3 protocol is added and implemented
