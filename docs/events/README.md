@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Relase Apache SkyWalking Nginx LUA 0.2.0
+###### June 21th, 2020
+SkyWalking Nginx LUA 0.2.0 is release. Go to [downloads](/downloads) page to find release tars.
+- Adapt the new v3 protocol.
+- Implement correlation protocol.
+- Support batch segment report.
+
 ## Release Apache SkyWalking APM 8.0.0
 ###### June 15th, 2020
 SkyWalking APM 8.0.0 is release. Go to [downloads](/downloads) page to find release tars.

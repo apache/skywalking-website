@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Nginx LUA 0.2.0
+###### 2020 年 6 月 21 日
+SkyWalking APM 8.0.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- 适配新的v3探针协议
+- 支持correlation protocol
+- 支持Segment批量上传
+
 ## Release Apache SkyWalking APM 8.0.0
 ###### 2020 年 6 月 15 日
 SkyWalking APM 8.0.0 发布. 请到[下载页面](/downloads)查找发行版本.
