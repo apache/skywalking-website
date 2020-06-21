@@ -27,15 +27,15 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Nginx LUA 0.2.0 released
+    content: Adapt the new v3 protocol. Implement correlation protocol and support batch segment report.
+    time: Jun. 21th, 2020
   - header: SkyWalking APM 8.0.0 is released
     content: v3 protocol is added and implemented. New Dashboard UI and new Query Protocol are provided
-    time: June 15th, 2020
+    time: Jun. 15th, 2020
   - header: Welcome Wei Zhang to join the PMC
     content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
     time: Apr. 20th, 2020
   - header: SkyWalking Chart 2.0.0 is released
     content: Support deploy SkyWalking 7.0.0.
     time: Mar. 31th, 2020
-  - header: SkyWalking APM 7.0.0 is released
-    content: JDK 1.8 is required in the java agent. Support profiling code level performance.
-    time: Mar. 20th, 2020
