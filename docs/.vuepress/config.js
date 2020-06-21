@@ -27,6 +27,7 @@ module.exports = {
         nav: [
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
+            { text: '8.0.1', link: "https://github.com/apache/skywalking/tree/v8.0.1/docs"},
             { text: '8.0.0', link: "https://github.com/apache/skywalking/tree/v8.0.0/docs"},
             { text: '7.0.0', link: "https://github.com/apache/skywalking/tree/v7.0.0/docs"},
             { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
@@ -76,6 +77,7 @@ module.exports = {
           { text: "主页", link: "/zh/" },
           { text: "文档",
             items: [
+              { text: '8.0.1', link: "https://github.com/apache/skywalking/tree/v8.0.1/docs"},
               { text: '8.0.0', link: "https://github.com/apache/skywalking/tree/v8.0.0/docs"},
               { text: '7.0.0', link: "https://github.com/apache/skywalking/tree/v7.0.0/docs"},
               { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
