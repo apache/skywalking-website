@@ -38,6 +38,7 @@ Members include Project Management Committee members and committers. The List in
 ### Committer
 | Name |Apache ID|
 |:---|:--|
+|Brandon Fergerson | bfergerson |
 |Han Liu | liuhan |
 |Ming Wen | wenming |
 |Qiuxia Fan| qiuxiafan |
