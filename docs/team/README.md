@@ -63,6 +63,7 @@ SkyWalking have hundreds of Contributors, you could find them in our repository 
 - [SkyWalking docker](https://github.com/apache/skywalking-docker/graphs/contributors)
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
 - [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
+- [SkyWalking Python Agent](https://github.com/apache/skywalking-python/graphs/contributors)
 
 Archived
 

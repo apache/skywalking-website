@@ -60,6 +60,7 @@ SkyWalking拥有数百位的贡献者，你可以在我们的存储库贡献列�
 - [SkyWalking docker](https://github.com/apache/skywalking-docker/graphs/contributors)
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
 - [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
+- [SkyWalking Python Agent](https://github.com/apache/skywalking-python/graphs/contributors)
 
 已归档项目
 
