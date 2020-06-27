@@ -1,5 +1,10 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Chart 3.0.0 for SkyWalking 8.0.1
+###### Mar. 31th, 2020
+SkyWalking Chart 3.0.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- 支持 SkyWalking 8.0.1
+
 ## Release Apache SkyWalking Nginx LUA 0.2.0
 ###### 2020 年 6 月 21 日
 SkyWalking APM 8.0.0 发布. 请到[下载页面](/downloads)查找发行版本.

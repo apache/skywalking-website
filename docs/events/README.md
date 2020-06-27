@@ -1,5 +1,10 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Chart 3.0.0 for SkyWalking 8.0.1
+###### Jun. 27th, 2020
+SkyWalking Chart 3.0.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Support SkyWalking 8.0.1
+
 ## Relase Apache SkyWalking Nginx LUA 0.2.0
 ###### June 21th, 2020
 SkyWalking Nginx LUA 0.2.0 is release. Go to [downloads](/downloads) page to find release tars.
