@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Chart 3.0.0 发布
+    content: 支持部署 SkyWalking 8.0.1
+    time: 2020 年 6 月 27 日
   - header: SkyWalking Nginx Lua 0.2.0 发布
     content: 适配新的v3探针协议。支持correlation protocol和支持Segment批量上报。
     time: 2020 年 6 月 21 日
@@ -37,6 +40,3 @@ news:
   - header: 欢迎张伟成为项目管理委员会成员
     content: 由于他对该项目的持续贡献，张伟 (a.k.a [arugal](https://github.com/arugal)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
     time: 2020 年 4 月 20 日
-  - header: SkyWalking Chart 2.0.0 发布
-    content: 支持部署 SkyWalking 7.0.0
-    time: 2020 年 3 月 31 日

@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Chart 3.0.0 is released
+    content: Support deploy SkyWalking 8.0.1.
+    time: Jun. 27th, 2020
   - header: SkyWalking Nginx LUA 0.2.0 released
     content: Adapt the new v3 protocol. Implement correlation protocol and support batch segment report.
     time: Jun. 21th, 2020
@@ -36,6 +39,3 @@ news:
   - header: Welcome Wei Zhang to join the PMC
     content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
     time: Apr. 20th, 2020
-  - header: SkyWalking Chart 2.0.0 is released
-    content: Support deploy SkyWalking 7.0.0.
-    time: Mar. 31th, 2020
