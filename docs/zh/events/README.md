@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Python 0.1.0
+###### Jun. 28th, 2020
+SkyWalking Python 0.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- API: agent 核心 API, 查看 [API 列表及其示例](https://github.com/apache/skywalking-python/blob/3892cab9d5d2c03107cfb2b1c59a6c77c5c3cc35/README.md#api)
+- 插件: 支持 Python 内置模块 `http`, `urllib.request` 以及三方库 `requests`.
+- 测试: 搭建 agent 测试框架, 上述插件相应测试也已补充.
+
 ## Release Apache SkyWalking Chart 3.0.0 for SkyWalking 8.0.1
 ###### Mar. 31th, 2020
 SkyWalking Chart 3.0.0 发布. 请到[下载页面](/downloads)查找发行版本.
