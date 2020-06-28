@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Python 0.1.0 发布
+    content: 支持内置库 `http`, `urllib.request`, 三方库 library `requrests`
+    time: 2020 年 6 月 28 日
   - header: SkyWalking Chart 3.0.0 发布
     content: 支持部署 SkyWalking 8.0.1
     time: 2020 年 6 月 27 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking APM 8.0.0 发布
     content: 支持新的探针v3协议。支持新的查询协议和UI。
     time: 2020 年 6 月 15 日
-  - header: 欢迎张伟成为项目管理委员会成员
-    content: 由于他对该项目的持续贡献，张伟 (a.k.a [arugal](https://github.com/arugal)) 已被邀请加入 SkyWalking 项目管理委员会。欢迎。
-    time: 2020 年 4 月 20 日

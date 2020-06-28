@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Python 0.1.0 is released
+    content: Built-in libraries `http` and `urllib.request`, third-party library `requrests` are supported
+    time: Jun. 28th, 2020
   - header: SkyWalking Chart 3.0.0 is released
     content: Support deploy SkyWalking 8.0.1.
     time: Jun. 27th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking APM 8.0.0 is released
     content: v3 protocol is added and implemented. New Dashboard UI and new Query Protocol are provided
     time: Jun. 15th, 2020
-  - header: Welcome Wei Zhang to join the PMC
-    content: Based on his continuous contributions, Wei Zhang (a.k.a [arugal](https://github.com/arugal)) has been invited to join the PMC. Welcome aboard.
-    time: Apr. 20th, 2020
