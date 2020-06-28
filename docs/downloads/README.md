@@ -46,6 +46,11 @@ SkyWalking Nginx LUA agent requires SkyWalking APM 7.0+.
 | Mar. 20th, 2020 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.2.0/skywalking-cli-0.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-src.tgz.sha512)|
 | | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.2.0/skywalking-cli-0.2.0-bin.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-bin.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.2.0/skywalking-cli-0.2.0-bin.tgz.sha512)|
 
+### SkyWalking Python
+| Date | Version| | Downloads |
+|:---:|:--:|:--:|:--:|
+| Jun. 28th, 2020 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.1.0/skywalking-python-src.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.1.0/skywalking-python-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.1.0/skywalking-python-src.tgz.sha512)|
+| | | Binary Distribution (MacOS, Linux, Windows)| [[Install via pip]](https://pypi.org/project/apache-skywalking/0.1.0/) |
 
 ### SkyWalking Chart
 | Date | Version| | Downloads |
