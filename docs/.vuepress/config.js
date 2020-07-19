@@ -36,6 +36,7 @@ module.exports = {
             { text: 'CLI 0.1.0', link: "https://github.com/apache/skywalking-cli/tree/0.1.0"},
             { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
             { text: 'Kubernetes helm 2.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v2.0.0"},
+            { text: 'Python Agent 0.1.0', link: "https://github.com/apache/skywalking-python/blob/v0.1.0/README.md"},
           ], },
           { text: "GitHub",  items: [
             { text: 'Main Repo, Javaagent and Backend', link: "https://github.com/apache/skywalking/" },
@@ -88,6 +89,7 @@ module.exports = {
               { text: 'Python 0.1.0', link: "https://github.com/apache/skywalking-python/tree/v0.1.0"},
               { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
               { text: 'Kubernetes helm 2.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v2.0.0"},
+              { text: 'Python Agent 0.1.0', link: "https://github.com/apache/skywalking-python/blob/v0.1.0/README.md"},
             ],
           },
           { text: "GitHub",  items: [
