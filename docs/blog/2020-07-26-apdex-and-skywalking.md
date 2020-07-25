@@ -1,5 +1,5 @@
 # The Apdex Score for Measuring Service Mesh Health
-- Auther: Srinivasan Ramaswamy, tetrate
+- Author: Srinivasan Ramaswamy, tetrate
 - Original link, [Tetrate.io blog](https://www.tetrate.io/blog/the-apdex-score-for-measuring-service-mesh-health/)
 - July. 26th, 2020
 
@@ -134,8 +134,7 @@ Tetrate’s approach to “service mesh health” is not only to offer managemen
 
 Our customers deserve healthy systems! Please do share your thoughts on making service mesh an exciting and robust experience for our customers.
 
-
-### **References  **
+### **References**
 
 [https://en.wikipedia.org/wiki/Apdex](https://en.wikipedia.org/wiki/Apdex)
 
