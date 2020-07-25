@@ -5,8 +5,7 @@
 
 ## Asking `How are you` is more profound than `What are your symptoms`
 
-![alt_text](../img/intro_image.png "Intro to Apdex")
-
+![alt_text](../.vuepress/public/static/blog/2020-07-26-apdex-and-skywalking/intro_image.png "Intro to Apdex")
 
 ### **Background**
 
@@ -25,7 +24,7 @@ We can measure the performance of any observed service through RED metrics.  RED
 
 To establish the context of any service and observe them, it's ideal to visualize the mesh as a topology. 
 
-![alt_text](../img/mesh-1.png "Topology")
+![alt_text](../.vuepress/public/static/blog/2020-07-26-apdex-and-skywalking/mesh-1.png "Topology")
 
 A topology visualization of the mesh not only allows for picking any service and watching its metrics, but also gives vital information about service dependencies and the potential impact of a given service on the mesh.
 
@@ -91,7 +90,7 @@ To visualize this, let’s look at our topology using traffic light colors, mark
 
 Let’s incorporate this coloring into our topology visualization and take its usability to the next level. If implemented, we will be looking at something like this.
 
-![alt_text](../img/mesh-2.png "Health For Services")
+![alt_text](../.vuepress/public/static/blog/2020-07-26-apdex-and-skywalking/mesh-2.png "Health For Services")
 
 ### **Moving further**
 
@@ -109,7 +108,7 @@ Tuning service that is a part of a high throughput transaction offers exponentia
 
 If we look at implementing such a visualization, which includes the health of interactions and throughput of such interactions, we would be looking at something like below : 
 
-![alt_text](../img/mesh-4.png "Health for Services and Interactions")
+![alt_text](../.vuepress/public/static/blog/2020-07-26-apdex-and-skywalking/mesh-4.png "Health for Services and Interactions")
 
 ### **The day is not far**
 
@@ -123,7 +122,7 @@ The visualization with rich historical data can also empower the Network Enginee
 
 An earnest implementation of such a visualization would be something like below : 
 
-![alt_text](../img/mesh-5.png "Health and Prediction")
+![alt_text](../.vuepress/public/static/blog/2020-07-26-apdex-and-skywalking/mesh-5.png "Health and Prediction")
 
 ### **To conclude**
 
