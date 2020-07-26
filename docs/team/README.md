@@ -17,6 +17,7 @@ Members include Project Management Committee members and committers. The List in
 |Hongwei Zhai| innerpeacez |
 |Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
+|Qiuxia Fan| qiuxiafan |
 |Sheng Wu (V.P. and Chair of PMC)| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
@@ -41,7 +42,6 @@ Members include Project Management Committee members and committers. The List in
 |Brandon Fergerson | bfergerson |
 |Han Liu | liuhan |
 |Ming Wen | wenming |
-|Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
 |Weijie Zou| kdump |
 |Weiyi Liu | wayilau |
