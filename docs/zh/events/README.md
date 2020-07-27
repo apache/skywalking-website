@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking CLI 0.3.0
+###### July 27th, 2020
+SkyWalking CLI 0.3.0 发布. 请到[下载页面](/downloads) 查看如何使用.
+- Command: OAP 健康检查命令
+- Command: trace 命令
+- BugFix: 修复错误的 metrics graphql 查询文件路径
+
 ## Release Apache SkyWalking Python 0.1.0
 ###### Jun. 28th, 2020
 SkyWalking Python 0.1.0 发布. 请到 [下载页面](/downloads) 查看如何使用.

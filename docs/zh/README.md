@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking CLI 0.3.0 发布
+    content: 新增 OAP 健康检查命令和 trace 命令
+    time: 2020 年 7 月 27 日
   - header: SkyWalking Python 0.1.0 发布
     content: 支持内置库 `http`, `urllib.request`, 三方库 library `requrests`
     time: 2020 年 6 月 28 日
@@ -37,6 +40,4 @@ news:
   - header: SkyWalking Nginx Lua 0.2.0 发布
     content: 适配新的v3探针协议。支持correlation protocol和支持Segment批量上报。
     time: 2020 年 6 月 21 日
-  - header: SkyWalking APM 8.0.0 发布
-    content: 支持新的探针v3协议。支持新的查询协议和UI。
-    time: 2020 年 6 月 15 日
+

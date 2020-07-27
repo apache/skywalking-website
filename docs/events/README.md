@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking CLI 0.3.0
+###### July 27th, 2020
+SkyWalking CLI 0.3.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Command: health check command
+- Command: Add trace command
+- BugFix: Fix wrong metrics graphql path
+
 ## Release Apache SkyWalking Python 0.1.0
 ###### Jun. 28th, 2020
 SkyWalking Python 0.1.0 is released. Go to [downloads](/downloads) page to find release tars.
