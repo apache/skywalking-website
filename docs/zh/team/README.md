@@ -16,6 +16,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Hongwei Zhai| innerpeacez |
 |Ignasi Barrera| nacx |
 |Jian Tan| tanjian |
+|Qiuxia Fan| qiuxiafan |
 |Sheng Wu(V.P. and Chair of PMC)| wusheng |
 |Shinn Zhang| zhangxin |
 |Kai Wang| wangkai |
@@ -40,7 +41,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Brandon Fergerson | bfergerson |
 |Han Liu| liuhan |
 |Ming Wen | wenming |
-|Qiuxia Fan| qiuxiafan |
 |Sheng Wang| wangsheng |
 |Weijie Zou| kdump |
 |Weiyi Liu| wayilau |
