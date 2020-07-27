@@ -39,6 +39,3 @@ news:
   - header: SkyWalking Nginx LUA 0.2.0 released
     content: Adapt the new v3 protocol. Implement correlation protocol and support batch segment report.
     time: Jun. 21th, 2020
-  - header: SkyWalking APM 8.0.0 is released
-    content: v3 protocol is added and implemented. New Dashboard UI and new Query Protocol are provided
-    time: Jun. 15th, 2020
