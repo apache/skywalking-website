@@ -1,5 +1,26 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Python 0.2.0
+###### July 28th, 2020
+SkyWalking Python 0.2.0 发布. 前往[下载页面](/downloads) 查看如何使用.
+- 新增插件
+    - Kafka Plugin (#50)
+    - Tornado Plugin (#48)
+    - Redis Plugin (#44)
+    - Django Plugin (#37)
+    - PyMsql Plugin (#35)
+    - Flask plugin (#31)
+
+- API
+    - 增加 `ignore_suffix` 配置, 支持忽略后缀的 endpoint (#40)
+    - 增加 `log` 方法 (#34)
+    - 增加 `SegmentRef` 相等逻辑 (#30)
+    - 使用上下文载体 `carrier` 前, 判断其是否合法 (#29)
+
+- 事务性和测试
+    - 测试: 插件测试失败时, 打印期望的数据和实际的数据的差别 (#46)
+    - 添加搭建开发环境所需的脚本 (#38)
+
 ## Release Apache SkyWalking CLI 0.3.0
 ###### July 27th, 2020
 SkyWalking CLI 0.3.0 发布. 请到[下载页面](/downloads) 查看如何使用.
