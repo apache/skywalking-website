@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Python 0.2.0 发布
+    content: 新增多个插件和忽略后缀的 endpoint, 详见[ChangeLog](https://github.com/apache/skywalking-python/blob/v0.2.0/CHANGELOG.md) 
+    time: 2020 年 7 月 28 日
   - header: SkyWalking CLI 0.3.0 发布
     content: 新增 OAP 健康检查命令和 trace 命令
     time: 2020 年 7 月 27 日
@@ -37,7 +40,4 @@ news:
   - header: SkyWalking Chart 3.0.0 发布
     content: 支持部署 SkyWalking 8.0.1
     time: 2020 年 6 月 27 日
-  - header: SkyWalking Nginx Lua 0.2.0 发布
-    content: 适配新的v3探针协议。支持correlation protocol和支持Segment批量上报。
-    time: 2020 年 6 月 21 日
 
