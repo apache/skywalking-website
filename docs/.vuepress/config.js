@@ -27,11 +27,9 @@ module.exports = {
         nav: [
           { text: "Home", link: "/" },
           { text: "Docs",  items: [
+            { text: '8.1.0', link: "https://github.com/apache/skywalking/tree/v8.0.1/docs"},
             { text: '8.0.1', link: "https://github.com/apache/skywalking/tree/v8.0.1/docs"},
-            { text: '8.0.0', link: "https://github.com/apache/skywalking/tree/v8.0.0/docs"},
             { text: '7.0.0', link: "https://github.com/apache/skywalking/tree/v7.0.0/docs"},
-            { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
-            { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
             { text: 'Nginx LUA 0.1.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.1.0"},
             { text: 'CLI 0.3.0', link: "https://github.com/apache/skywalking-cli/tree/0.3.0"},
             { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},
@@ -79,11 +77,9 @@ module.exports = {
           { text: "主页", link: "/zh/" },
           { text: "文档",
             items: [
+              { text: '8.1.0', link: "https://github.com/apache/skywalking/tree/v8.0.1/docs"},
               { text: '8.0.1', link: "https://github.com/apache/skywalking/tree/v8.0.1/docs"},
-              { text: '8.0.0', link: "https://github.com/apache/skywalking/tree/v8.0.0/docs"},
               { text: '7.0.0', link: "https://github.com/apache/skywalking/tree/v7.0.0/docs"},
-              { text: '6.6.0', link: "https://github.com/apache/skywalking/tree/v6.6.0/docs"},
-              { text: '6.5.0', link: "https://github.com/apache/skywalking/tree/v6.5.0/docs"},
               { text: 'Nginx LUA 0.1.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.1.0"},
               { text: 'CLI 0.3.0', link: "https://github.com/apache/skywalking-cli/tree/0.3.0"},
               { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},

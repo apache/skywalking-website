@@ -27,16 +27,16 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking 8.1.0 is released
+    content: Support Kafka as an optional trace, JVM metrics, profiling snapshots and meter system data transport layer. Support Meter system, including the native metrics APIs and the Spring Sleuth adoption.
+    time: Aug. 3rd, 2020
   - header: SkyWalking Python 0.2.0 is released
-    content: add multiple plugins and config to ignore endpoints with specific suffix, [details](https://github.com/apache/skywalking-python/blob/v0.2.0/CHANGELOG.md) 
+    content: Add multiple plugins and config to ignore endpoints with specific suffix.
     time: July. 28th, 2020
   - header: SkyWalking CLI 0.3.0 is released
-    content: add OAP health check command and trace command
+    content: Add OAP health check command and trace command
     time: July. 27th, 2020
   - header: SkyWalking Python 0.1.0 is released
     content: Built-in libraries `http` and `urllib.request`, third-party library `requrests` are supported
     time: Jun. 28th, 2020
-  - header: SkyWalking Chart 3.0.0 is released
-    content: Support deploy SkyWalking 8.0.1.
-    time: Jun. 27th, 2020
 

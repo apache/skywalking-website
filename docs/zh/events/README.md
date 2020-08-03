@@ -1,5 +1,12 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking APM 8.1.0
+###### 2020 年 8 月 3 日
+SkyWalking APM 8.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- 支持使用支持使用MQ传输监控数据传输监控数据
+- 执行新的指标系统MeterSystem，提供原生的metrics API，并支持Spring Sleuth
+- 支持JVM线程指标监控
+
 ## Release Apache SkyWalking Python 0.2.0
 ###### July 28th, 2020
 SkyWalking Python 0.2.0 发布. 前往[下载页面](/downloads) 查看如何使用.

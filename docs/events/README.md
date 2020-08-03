@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 8.1.0
+###### Aug. 3rd, 2020
+SkyWalking APM 8.1.0 is release. Go to [downloads](/downloads) page to find release tars.
+- Support Kafka as an optional trace, JVM metrics, profiling snapshots and meter system data transport layer.
+- Support Meter system, including the native metrics APIs and the Spring Sleuth adoption.
+- Support JVM thread metrics.  
+
 ## Release Apache SkyWalking Python 0.2.0
 ###### July 28th, 2020
 SkyWalking Python 0.2.0 is released. Go to [downloads](/downloads) page to find release tars.

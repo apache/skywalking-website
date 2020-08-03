@@ -28,8 +28,11 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking 8.1.0 发布
+    content: 支持使用Kafka传输监控数据.执行新的指标系统MeterSystem，提供原生的metrics API，并支持Spring Sleuth.
+    time: 2020 年 8 月 3 日
   - header: SkyWalking Python 0.2.0 发布
-    content: 新增多个插件和忽略后缀的 endpoint, 详见[ChangeLog](https://github.com/apache/skywalking-python/blob/v0.2.0/CHANGELOG.md) 
+    content: 新增多个插件和忽略后缀的 endpoint.
     time: 2020 年 7 月 28 日
   - header: SkyWalking CLI 0.3.0 发布
     content: 新增 OAP 健康检查命令和 trace 命令
@@ -37,7 +40,4 @@ news:
   - header: SkyWalking Python 0.1.0 发布
     content: 支持内置库 `http`, `urllib.request`, 三方库 library `requrests`
     time: 2020 年 6 月 28 日
-  - header: SkyWalking Chart 3.0.0 发布
-    content: 支持部署 SkyWalking 8.0.1
-    time: 2020 年 6 月 27 日
 
