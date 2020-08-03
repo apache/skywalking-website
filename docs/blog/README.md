@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog:
 
+- title: Features in SkyWalking 8.1
+  name: 2020-08-03-skywalking8-1-release
+  time: Sheng Wu, Hongtao Gao, and Tevah Platt. Aug. 3rd, 2020
+  short: SpringSleuth metrics, endpoint dependency detection, Kafka transport traces and metrics
+
 - title: The Apdex Score for Measuring Service Mesh Health
   name: 2020-07-26-apdex-and-skywalking
   time: Srinivasan Ramaswamy. Jul. 26th, 2020
