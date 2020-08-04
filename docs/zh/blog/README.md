@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog:
 
+- title: 度量服务网格健康度 -- Apdex得分
+  name: 2020-07-26-apdex-and-skywalking
+  time: Srinivasan Ramaswamy. 唐昊杰，南京大学在读学生. 7 月 26 日，2020
+  short: 在管理Service Mesh的服务时，"你的症状是什么 " 比 "你感觉怎么样" 更重要。Apdex帮助了解服务的健康状况。
+
 - title: SkyWalking 支持云原生网络代理 MOSN 做分布式追踪
   name: 2020-04-28-skywalking-and-mosn
   time: Jimmy Song，张伟，4 月 28 日，2020
