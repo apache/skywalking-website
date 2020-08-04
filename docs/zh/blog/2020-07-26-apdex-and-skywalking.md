@@ -5,7 +5,7 @@
 - Original link, [Tetrate.io blog](https://www.tetrate.io/blog/the-apdex-score-for-measuring-service-mesh-health/)
 - July. 26th, 2020
 
-## "你的症状是什么 " 比 "你感觉怎么样" 更重要
+## "你感觉怎么样" 比 "你的症状是什么" 更重要
 
 ![alt_text](../../.vuepress/public/static/blog/2020-07-26-apdex-and-skywalking/intro_image.png "Intro to Apdex")
 
