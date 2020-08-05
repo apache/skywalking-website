@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Wei Hua as new committer
+###### Mar. 9th, 2020
+Based on his continuous contributions, Wei Hua (a.k.a [alonelaval](https://github.com/alonelaval)) has been voted as a new committer.
+
 ## Release Apache SkyWalking APM 8.1.0
 ###### Aug. 3rd, 2020
 SkyWalking APM 8.1.0 is release. Go to [downloads](/downloads) page to find release tars.
