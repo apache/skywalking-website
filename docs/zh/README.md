@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎华卫成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
+    time: 2020 年 8 月 1 日
   - header: SkyWalking 8.1.0 发布
     content: 支持使用Kafka传输监控数据.执行新的指标系统MeterSystem，提供原生的metrics API，并支持Spring Sleuth.
     time: 2020 年 8 月 3 日
