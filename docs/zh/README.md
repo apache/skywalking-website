@@ -40,7 +40,3 @@ news:
   - header: SkyWalking CLI 0.3.0 发布
     content: 新增 OAP 健康检查命令和 trace 命令
     time: 2020 年 7 月 27 日
-  - header: SkyWalking Python 0.1.0 发布
-    content: 支持内置库 `http`, `urllib.request`, 三方库 library `requrests`
-    time: 2020 年 6 月 28 日
-

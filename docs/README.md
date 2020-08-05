@@ -27,7 +27,7 @@ user:
 news:
   title: Events & News
   content:
-    - header: Welcome Wei Hua as new committer
+  - header: Welcome Wei Hua as new committer
     content: Based on his continuous contributions, Wei Hua (a.k.a [alonelaval](https://github.com/alonelaval)) has been voted as a new committer.
     time: Aug. 1st, 2020
   - header: SkyWalking 8.1.0 is released
@@ -39,7 +39,4 @@ news:
   - header: SkyWalking CLI 0.3.0 is released
     content: Add OAP health check command and trace command
     time: July. 27th, 2020
-  - header: SkyWalking Python 0.1.0 is released
-    content: Built-in libraries `http` and `urllib.request`, third-party library `requrests` are supported
-    time: Jun. 28th, 2020
 
