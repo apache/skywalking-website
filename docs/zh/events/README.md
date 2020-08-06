@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎华卫成为新的committer
+###### 2020 年 8 月 1 日
+根据他长期的项目贡献，他被投票选举为项目的 committer
+
 ## Release Apache SkyWalking APM 8.1.0
 ###### 2020 年 8 月 3 日
 SkyWalking APM 8.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
