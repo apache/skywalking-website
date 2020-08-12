@@ -28,7 +28,7 @@ The conclusion: push mode is the native way, but pull mode works in some special
 
 Metrics rely on mathematical theories and calculations. Percentile is a good measure for identifying the long tail issue, and reasonable average response time and successful rate are good SLO(s). But those are not all. Distributed tracing provides not just traces with detailed information, but high values metrics that can be analyzed.
 
-The service topology map is required from Ops and SRE teams for the NOC dashboard and confirmation of system data flow. SkyWalking uses the [STAM (Streaming Topology Analysis Method)](https://wu-sheng.github.io/STAM/) to analyze topology from the traces, or based on ALC (Envoy Access Log Service) in the service mesh environment. This topology and metrics of nodes (services) and lines (service relationships) can't be pulled from simple metrics SDKs.
+The service topology map is required from Ops and SRE teams for the NOC dashboard and confirmation of system data flow. SkyWalking uses the [STAM (Streaming Topology Analysis Method)](https://wu-sheng.github.io/STAM/) to analyze topology from the traces, or based on ALS (Envoy Access Log Service) in the service mesh environment. This topology and metrics of nodes (services) and lines (service relationships) can't be pulled from simple metrics SDKs.
 
 ![SkyWalkingTopology](https://lh5.googleusercontent.com/mmEhxSqUQOzFPWNWNkGEzML0g9b72TgbKbNJexNe-Ok1jC66LUq-g5jdOQe3MKd_a0DT5fud6_NtqGdOSTus-y4rQ3aoBOp44wRmofN6IEnvegZy3sahOLghn37W55ybQWgyayVq)
 
