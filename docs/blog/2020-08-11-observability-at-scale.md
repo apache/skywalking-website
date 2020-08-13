@@ -30,11 +30,11 @@ Metrics rely on mathematical theories and calculations. Percentile is a good mea
 
 The service topology map is required from Ops and SRE teams for the NOC dashboard and confirmation of system data flow. SkyWalking uses the [STAM (Streaming Topology Analysis Method)](https://wu-sheng.github.io/STAM/) to analyze topology from the traces, or based on ALS (Envoy Access Log Service) in the service mesh environment. This topology and metrics of nodes (services) and lines (service relationships) can't be pulled from simple metrics SDKs.
 
-![SkyWalkingTopology](https://lh5.googleusercontent.com/mmEhxSqUQOzFPWNWNkGEzML0g9b72TgbKbNJexNe-Ok1jC66LUq-g5jdOQe3MKd_a0DT5fud6_NtqGdOSTus-y4rQ3aoBOp44wRmofN6IEnvegZy3sahOLghn37W55ybQWgyayVq)
+![](../.vuepress/public/static/blog/2020-08-11-observability-at-scale/topology-v8.png)
 
 As with fixing the limitation of endpoint metrics collection, SkyWalking needs to do endpoint dependency analysis from trace data too. Endpoint dependency analysis provides more important and specific information, including upstream and downstream. Those dependency relationships and metrics help the developer team to locate the boundaries of a performance issue, to specific code blocks.
 
-![SkyWalking endpoint dependencies](https://lh5.googleusercontent.com/ApgzsVgNsm4uddS_jCl_MegQefY8Ea3q5cmt1pphjy7bJ7SpKOWkE7IGOVD5TErTcdlzo3AadJPUaeeuLH6K_p7ZjzSrIRJb7AcNXd6b_8eQwchHD0-yzFkdG0blEPteInG61Tu8)
+![](../.vuepress/public/static/blog/2020-08-11-observability-at-scale/endpoint-dependency-v8.png)
 
 ### **Pre-calculation vs. query stage calculation?** 
 
