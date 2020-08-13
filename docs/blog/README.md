@@ -3,7 +3,7 @@ layout: LayoutBlog
 
 blog:
 
-- title: Observability at scale: SkyWalking it is!
+- title: Observability at scale, SkyWalking it is!
   name: 2020-08-11-observability-at-scale
   time: Sheng Wu. Aug. 11th, 2020
   short: SkyWalking evolved to address the problem of observability at scale, and grew from a pure tracing system to a feature-rich observability platform that is now used to analyze deployments that collect tens of billions of traces per day. 
