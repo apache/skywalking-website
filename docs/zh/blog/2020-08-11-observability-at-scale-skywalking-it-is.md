@@ -33,10 +33,13 @@ Agent将在数据收集后的短时间内发送出去。这样，我们就不必
 度量指标依赖于数学理论和计算。Percentile是识别响应慢的一个很好的指标，合理的平均响应时间和成功率是很好的SLO（s）。
 但这些并不是全部。分布式跟踪不仅为跟踪提供了详细的信息，还提供了可以分析的高价值指标。
 
-Ops和SRE团队需要提供服务拓扑图，用于NOC仪表板和系统数据流的确认。SkyWalking依靠trace数据，使用STAM（Streaming Topology Analysis Method）方法进行分析拓扑结构。在服务网格环境下，使用ALS（Envoy Access Log Service）进行分析。进行拓扑分析。这种节点（services）和线路（service relationships）的拓扑和度量数据，无法从简单的度量sdk中提取。
+Ops和SRE团队需要提供服务拓扑图，用于NOC仪表板和系统数据流的确认。SkyWalking依靠trace数据，使用[STAM（Streaming Topology Analysis Method）](https://wu-sheng.github.io/STAM/)方法进行分析拓扑结构。在服务网格环境下，使用ALS（Envoy Access Log Service）进行分析。进行拓扑分析。这种节点（services）和线路（service relationships）的拓扑和度量数据，无法从简单的度量sdk中提取。
+
+![](https://skywalking.apache.org/assets/img/topology-v8.3e6120f9.png)
 
 为了解决端点度量收集的局限性，SkyWalking还需要从跟踪数据中进行端点依赖性分析。端点依赖性分析提供包括上游和下游在内的更重要和更具体的信息。这些依赖关系和度量有助于开发团队将性能问题的边界定位到特定的代码块。
 
+![](https://skywalking.apache.org/assets/img/endpoint-dependency-v8.1d737ddc.png)
 ### 预计算与查询阶段计算？
 
 查询阶段计算提供了灵活性。在分析阶段，预计算可以提供更好、更稳定的性能。回想一下我们的设计原则：SkyWalking是为了一个大规模的分布式系统而设计。查询阶段计算的范围非常有限，大多数度量计算都需要预先定义和预先计算。支持大数据集的关键是在设计阶段减小数据集。预计算允许将原始数据合并到下游的聚合结果中，用于查询，甚至用于警报检查。
@@ -94,6 +97,6 @@ SkyWalking的可观测性方法遵循以下原则：
 
 ### 资源
 - 阅读[SkyWalking 8.1发布亮点](https://github.com/apache/skywalking/blob/master/CHANGES.md)。
-- 在Twitter上获取更多SkyWalking更新。
+- 在[Twitter](https://twitter.com/asfskywalking?lang=en)上获取更多SkyWalking更新。
 - [注册Tetrate](https://www.tetrate.io/contact-us/)以了解更多有关SkyWalking可观测性的信息。
 
