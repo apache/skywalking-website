@@ -1,7 +1,7 @@
 ## SkyWalking为超大规模而生
 - 作者：吴晟
-
-- 原文链接：https://www.tetrate.io/blog/observability-at-scale-skywalking-it-is/
+- 翻译：董旭 金蝶医疗
+- 原文链接：[Tetrate.io blog](https://www.tetrate.io/blog/observability-at-scale-skywalking-it-is/)
 
 SkyWalking是Apache的顶级项目，是一个开源的APM和可观测性分析平台，它解决了21世纪日益庞大、分布式和异构的系统的问题。
 它是为应对当前系统管理所面临的困难而构建的：
