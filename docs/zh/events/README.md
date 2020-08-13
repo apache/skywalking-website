@@ -1,5 +1,11 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Chart 3.1.0 for SkyWalking 8.1.0
+###### Aug. 13th, 2020
+SkyWalking Chart 3.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
+- 支持 SkyWalking 8.1.0
+- 支持基于 kubernetes comfigmap 的 OAP 动态配置
+
 ## 欢迎华卫成为新的committer
 ###### 2020 年 8 月 1 日
 根据他长期的项目贡献，他被投票选举为项目的 committer
