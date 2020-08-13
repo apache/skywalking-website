@@ -1,5 +1,11 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Chart 3.1.0 for SkyWalking 8.1.0
+###### Aug. 13th, 2020
+SkyWalking Chart 3.1.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Support SkyWalking 8.1.0
+- Support enable oap dynamic configuration through k8s configmap
+
 ## Welcome Wei Hua as new committer
 ###### Aug. 1st, 2020
 Based on his continuous contributions, Wei Hua (a.k.a [alonelaval](https://github.com/alonelaval)) has been voted as a new committer.
