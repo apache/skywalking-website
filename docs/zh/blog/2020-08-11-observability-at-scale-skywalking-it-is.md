@@ -93,7 +93,7 @@ SkyWalking的可观测性方法遵循以下原则：
 4. 保持不同体系结构之间的一致性，以及APM本身的性能。
 
 ### 资源
-- 阅读SkyWalking 8.1发布亮点。
+- 阅读[SkyWalking 8.1发布亮点](https://github.com/apache/skywalking/blob/master/CHANGES.md)。
 - 在Twitter上获取更多SkyWalking更新。
-- 注册以了解更多有关SkyWalking可观测性的信息。
+- [注册Tetrate](https://www.tetrate.io/contact-us/)以了解更多有关SkyWalking可观测性的信息。
 
