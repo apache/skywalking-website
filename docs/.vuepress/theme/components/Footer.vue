@@ -24,7 +24,7 @@
     </div>
     <div
       class="copyright"
-    >Copyright © 2017-2018, The Apache Software Foundation, Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</div>
+    >Copyright © 2017-2020, The Apache Software Foundation, Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</div>
   </footer>
 </template>
 
