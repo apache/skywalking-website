@@ -30,7 +30,7 @@ SkyWalking即便使用了推送模式，同时也可进行数据拉取。在最�
 
 度量指标依赖于数学理论和计算。Percentile（百分率）是用来度量响应情况的指标。服务具备合理的平均响应时间和成功率，说明服务的服务等级目标(SLO）很好。除此之外，分布式跟踪还为跟踪提供了详细的信息，以及可分析的高价值指标。
 
-运维团队（OPS）和系统稳定性（SRE）团队需要通过服务拓扑图，观察NOC仪表板、确认系统数据流。SkyWalking依靠trace（跟踪数据），使用[STAM（Streaming Topology Analysis Method）](https://wu-sheng.github.io/STAM/)方法进行分析拓扑结构。在服务网格环境下，使用ALS（Envoy Access Log Service）进行拓扑分析。节点（services）和线路（service relationships）的拓扑结构和度量数据，无法从简单的度量sdk中提取。
+运维团队（OPS）和系统稳定性（SRE）团队通过服务拓扑图，用来观察网络情况（当做NOC dashboard使用）、确认系统数据流。SkyWalking依靠trace（跟踪数据），使用[STAM（Streaming Topology Analysis Method）](https://wu-sheng.github.io/STAM/)方法进行分析拓扑结构。在服务网格环境下，使用ALS（Envoy Access Log Service）进行拓扑分析。节点（services）和线路（service relationships）的拓扑结构和度量数据，无法从简单的度量sdk中提取。
 
 ![](https://skywalking.apache.org/assets/img/topology-v8.3e6120f9.png)
 
