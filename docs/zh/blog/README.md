@@ -2,10 +2,14 @@
 layout: LayoutBlog
 
 blog:
-
+- title: SkyWalking为超大规模而生
+  name: 2020-08-11-observability-at-scale-skywalking-it-is
+  time: 吴晟. [译]董旭，金蝶医疗. 8 月 13 日，2020
+  short: SkyWalking为超大规模而生。无论你的微服务是否在服务网格(Service Mesh)架构下，它都可以提供高性能且一致性的监控。
+  
 - title: 度量服务网格健康度 -- Apdex得分
   name: 2020-07-26-apdex-and-skywalking
-  time: Srinivasan Ramaswamy. 唐昊杰，南京大学在读学生. 7 月 26 日，2020
+  time: Srinivasan Ramaswamy. [译]唐昊杰，南京大学在读学生. 7 月 26 日，2020
   short: 在管理Service Mesh的服务时，"你感觉怎么样" 比 "你的症状是什么" 更重要。Apdex帮助了解服务的健康状况。
 
 - title: SkyWalking 支持云原生网络代理 MOSN 做分布式追踪
