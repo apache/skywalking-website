@@ -1,5 +1,5 @@
 ## SkyWalking为超大规模而生
-- 作者：吴晟（SkyWalking创始人）
+- 作者：吴晟
 - 翻译：董旭 金蝶医疗
 - 原文链接：[Tetrate.io blog](https://www.tetrate.io/blog/observability-at-scale-skywalking-it-is/)
 
