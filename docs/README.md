@@ -29,7 +29,7 @@ news:
   content:
   - header: SkyWalking Python 0.3.0 is released
     content: add multiple plugins and thread propagation
-    time: July. 28th, 2020
+    time: Aug. 28th, 2020
   - header: SkyWalking Chart 3.1.0 is released
     content: Support deploy SkyWalking 8.1.0.
     time: Aug. 13th, 2020
