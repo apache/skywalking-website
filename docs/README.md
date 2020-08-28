@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Python 0.3.0 is released
+    content: add multiple plugins and thread propagation
+    time: July. 28th, 2020
   - header: SkyWalking Chart 3.1.0 is released
     content: Support deploy SkyWalking 8.1.0.
     time: Aug. 13th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking 8.1.0 is released
     content: Support Kafka as an optional trace, JVM metrics, profiling snapshots and meter system data transport layer. Support Meter system, including the native metrics APIs and the Spring Sleuth adoption.
     time: Aug. 3rd, 2020
-  - header: SkyWalking Python 0.2.0 is released
-    content: Add multiple plugins and config to ignore endpoints with specific suffix.
-    time: July. 28th, 2020
