@@ -35,7 +35,6 @@ module.exports = {
             { text: 'Kubernetes helm 3.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
             { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},
             { text: 'Kubernetes helm 2.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v2.0.0"},
-            { text: 'Python Agent 0.2.0', link: "https://github.com/apache/skywalking-python/tree/v0.2.0"},
             { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
           ], },
           { text: "GitHub",  items: [
@@ -87,7 +86,6 @@ module.exports = {
               { text: 'Kubernetes helm 3.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
               { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},
               { text: 'Kubernetes helm 2.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v2.0.0"},
-              { text: 'Python Agent 0.2.0', link: "https://github.com/apache/skywalking-python/tree/v0.2.0"},
               { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
             ],
           },
