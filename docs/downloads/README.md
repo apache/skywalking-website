@@ -39,8 +39,8 @@ SkyWalking Nginx LUA agent requires SkyWalking APM 7.0+.
 ### SkyWalking Python
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| July. 28th, 2020 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.2.0/skywalking-python-src.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.2.0/skywalking-python-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.2.0/skywalking-python-src.tgz.sha512)|
-| | | Binary Distribution (MacOS, Linux, Windows)| [[Install via pip]](https://pypi.org/project/apache-skywalking/0.2.0/) |
+| Aug. 28th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.3.0/skywalking-python-src.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src.tgz.sha512)|
+| | | Binary Distribution (MacOS, Linux, Windows)| [[Install via pip]](https://pypi.org/project/apache-skywalking/0.3.0/) |
 
 ### SkyWalking Chart
 | Date | Version| | Downloads |

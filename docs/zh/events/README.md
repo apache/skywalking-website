@@ -1,5 +1,31 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Python 0.3.0
+###### Aug 28th, 2020
+SkyWalking Python 0.3.0 发布. 前往[下载页面](/downloads) 查看如何使用.
+- 新增插件
+    - Urllib3 Plugin (#69)
+    - Elasticsearch  Plugin (#64)
+    - PyMongo Plugin (#60)
+    - Rabbitmq Plugin (#53)
+    - 使插件与Django兼容 (#52)
+    
+- API
+    - 增加进程间传播 (#67)
+    - 在装饰器上添加 `tags` (#65)
+    - 在安装插件时，进行版本检查 (#63)
+    - 增加线程间传播 (#62)
+    - 增加 `trace_ignore_path` 配置，用以忽略指定的路径 (#59)
+    - 增加线程的快照 (#56)
+    - 增加数据在不同的应用间透传 (#55)
+    
+- 事务性和测试
+    - 测试: 支持多版本的运行(#66)
+    - 事务: 为插件添加pull request模板 (#61)
+    - 事务: 添加开发文档并重新组织结构 (#58)
+    - 测试: 更新测试健康检查
+    - 事务: 添加编译发行包 (#54)
+
 ## Release Apache SkyWalking Chart 3.1.0 for SkyWalking 8.1.0
 ###### Aug. 13th, 2020
 SkyWalking Chart 3.1.0 发布. 请到[下载页面](/downloads)查找发行版本.
