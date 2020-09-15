@@ -17,18 +17,12 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 | | | Binary Distribution | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.0.1/apache-skywalking-apm-8.0.1.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-8.0.1.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-8.0.1.tar.gz.sha512)|
 | | | Binary Distribution for ElasticSearch 7 | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.0.1/apache-skywalking-apm-es7-8.0.1.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-es7-8.0.1.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-es7-8.0.1.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v8.0.1/docs/README.md) |
-| Mar. 22nd, 2020 | 7.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/7.0.0/apache-skywalking-apm-7.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0-src.tgz.sha512)|
-| | | Binary Distribution | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/7.0.0/apache-skywalking-apm-7.0.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-7.0.0.tar.gz.sha512)|
-| | | Binary Distribution for ElasticSearch 7 | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/7.0.0/apache-skywalking-apm-es7-7.0.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-es7-7.0.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/7.0.0/apache-skywalking-apm-es7-7.0.0.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v7.0.0/docs/README.md) |
 
 ### SkyWalking Nginx LUA
-SkyWalking Nginx LUA agent requires SkyWalking APM 7.0+.
 
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
 | Jun. 21th, 2020 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.2.0//skywalking-nginx-lua-0.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.2.0/skywalking-nginx-lua-0.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.2.0/skywalking-nginx-lua-0.2.0-src.tgz.sha512)|
-| Mar. 10th, 2020 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.1.0//skywalking-nginx-lua-0.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.1.0/skywalking-nginx-lua-0.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.1.0/skywalking-nginx-lua-0.1.0-src.tgz.sha512)|
 
 ### SkyWalking CLI
 | Date | Version| | Downloads |
@@ -49,8 +43,6 @@ SkyWalking Nginx LUA agent requires SkyWalking APM 7.0+.
 | | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz.sha512)|
 | Jun. 27th, 2020 | 3.0.0 for SkyWalking 8.0.1 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz.sha512)|
 | | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz.sha512)|
-| Mar. 31th, 2020 | 2.0.0 for SkyWalking 7.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/2.0.0/skywalking-kubernetes-2.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-kubernetes-2.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-kubernetes-2.0.0-src.tgz.sha512)|
-| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/2.0.0/skywalking-2.0.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-2.0.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/2.0.0/skywalking-2.0.0.tgz.sha512)|
 
 ### All Releases
 * Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)
