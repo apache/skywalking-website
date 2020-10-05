@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Huaxi Jiang as new committer
+###### Sep. 28th, 2020
+Based on his continuous contributions, Huaxi Jiang (a.k.a [fgksgf](https://github.com/fgksgf)) has been voted as a new committer.
+
 ## Release Apache SkyWalking Python 0.3.0
 ###### Aug 28th, 2020
 SkyWalking Python 0.3.0 is released. Go to [downloads](/downloads) page to find release tars.

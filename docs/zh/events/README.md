@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎江华禧成为新的committer
+###### 2020 年 9 月 28 日
+根据他长期的项目贡献，他被投票选举为项目的 committer
+
 ## Release Apache SkyWalking Python 0.3.0
 ###### Aug 28th, 2020
 SkyWalking Python 0.3.0 发布. 前往[下载页面](/downloads) 查看如何使用.
