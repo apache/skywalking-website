@@ -56,5 +56,16 @@ Such as adding a ```blog``` folder in ``` /docs/.vuepress/public/static/ ```,and
 
 In markdown, you can use ```/docs/.vuepress/public/static/blog/{blogName}/{imageName} ``` path to add the image into markdown doc.
 
+## How to add a new committer
+You can refer to the previous [PR](https://github.com/apache/skywalking-website/pull/116/files), there are six files you need to modify:
+1. `/docs/README.md`, remove the oldest one to only keep 4 pieces of news, and the date is the date you received the invitation email.
+2. `/docs/events/README.md`
+3. `/docs/team/README.md`, names should be in the alphabet order.
+4. `docs/zh/README.md`, remove the oldest one to only keep 4 pieces of news.
+5. `docs/zh/events/README.md`
+6. `docs/zh/team/README.md`, names should be in the alphabet order.
+
+If you don't know Chinese, you can only update the English documents.
+
 ## Blog
 When you try to publish blogs in Apache SkyWalking official website, no advertising is allowed here. You could add markdown test link(`[name](url)`) pointing to you personal website/twitter and company website.
