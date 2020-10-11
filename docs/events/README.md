@@ -1,5 +1,17 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking CLI 0.4.0
+###### Oct 11th, 2020
+SkyWalking CLI 0.4.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Features
+  - Add dashboard global command with auto-refresh
+  - Add dashboard global-metrics command
+  - Add traces search
+  - Refactor metrics thermodynamic command to adopt the new query protocol
+
+- Bug Fixes
+  - Fix wrong golang standard time
+
 ## Welcome Huaxi Jiang as new committer
 ###### Sep. 28th, 2020
 Based on his continuous contributions, Huaxi Jiang (a.k.a [fgksgf](https://github.com/fgksgf)) has been voted as a new committer.

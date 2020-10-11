@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking CLI 0.4.0 发布
+    content: 新增 dashboard 命令和 trace 搜索
+    time: 2020 年 10 月 11 日
   - header: 欢迎江华禧成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 9 月 28 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking Chart 3.1.0 发布
     content: 支持部署 SkyWalking 8.1.0
     time: 2020 年 8 月 13 日
-  - header: 欢迎华卫成为新的committer
-    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
-    time: 2020 年 8 月 1 日

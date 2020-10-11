@@ -27,8 +27,8 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 ### SkyWalking CLI
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| July. 27th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.3.0/skywalking-cli-0.3.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.3.0/skywalking-cli-0.3.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.3.0/skywalking-cli-0.3.0-src.tgz.sha512)|
-| | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.3.0/skywalking-cli-0.3.0-bin.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.3.0/skywalking-cli-0.3.0-bin.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.3.0/skywalking-cli-0.3.0-bin.tgz.sha512)|
+| Oct. 11th, 2020 | 0.4.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.4.0/skywalking-cli-0.4.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.4.0/skywalking-cli-0.4.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.4.0/skywalking-cli-0.4.0-src.tgz.sha512) |
+| | | Binary Distribution (MacOS, Linux, Windows)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/cli/0.4.0/skywalking-cli-0.4.0-bin.tgz) [[asc]](https://downloads.apache.org/skywalking/cli/0.4.0/skywalking-cli-0.4.0-bin.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/cli/0.4.0/skywalking-cli-0.4.0-bin.tgz.sha512) |
 
 ### SkyWalking Python
 | Date | Version| | Downloads |
