@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking CLI 0.4.0 is released
+    content: Add dashboard command and traces search
+    time: Oct. 11th, 2020
   - header: Welcome Huaxi Jiang as new committer
     content: Based on his continuous contributions, Huaxi Jiang (a.k.a [fgksgf](https://github.com/fgksgf)) has been voted as a new committer.
     time: Sep. 28th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking Chart 3.1.0 is released
     content: Support deploy SkyWalking 8.1.0.
     time: Aug. 13th, 2020
-  - header: Welcome Wei Hua as new committer
-    content: Based on his continuous contributions, Wei Hua (a.k.a [alonelaval](https://github.com/alonelaval)) has been voted as a new committer.
-    time: Aug. 1st, 2020

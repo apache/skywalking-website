@@ -1,5 +1,17 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking CLI 0.4.0
+###### Oct 11th, 2020
+SkyWalking CLI 0.4.0 发布. 前往[下载页面](/downloads) 查看如何使用.
+- 功能
+  - 增加自动刷新的全局仪表盘命令
+  - 增加 dashboard global-metrics 命令
+  - 增加 trace 搜索
+  - 采用新的查询协议重构 metrics thermodynamic 命令
+
+- 错误修复
+  - 修复错误的 golang 标准时间
+
 ## 欢迎江华禧成为新的committer
 ###### 2020 年 9 月 28 日
 根据他长期的项目贡献，他被投票选举为项目的 committer
