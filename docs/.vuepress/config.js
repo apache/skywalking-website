@@ -29,7 +29,7 @@ module.exports = {
           { text: "Docs",  items: [
             { text: '8.2.0', link: "https://github.com/apache/skywalking/tree/v8.2.0/docs"},
             { text: '8.1.0', link: "https://github.com/apache/skywalking/tree/v8.1.0/docs"},
-            { text: 'Nginx LUA 0.2.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.2.0"},
+            { text: 'Nginx LUA 0.3.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.3.0"},
             { text: 'CLI 0.4.0', link: "https://github.com/apache/skywalking-cli/tree/0.4.0"},
             { text: 'Kubernetes helm 3.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
             { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},
@@ -78,7 +78,7 @@ module.exports = {
             items: [
               { text: '8.2.0', link: "https://github.com/apache/skywalking/tree/v8.2.0/docs"},
               { text: '8.1.0', link: "https://github.com/apache/skywalking/tree/v8.1.0/docs"},
-              { text: 'Nginx LUA 0.2.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.2.0"},
+              { text: 'Nginx LUA 0.3.0', link: "https://github.com/apache/skywalking-nginx-lua/tree/v0.3.0"},
               { text: 'CLI 0.4.0', link: "https://github.com/apache/skywalking-cli/tree/0.4.0"},
               { text: 'Kubernetes helm 3.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
               { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},

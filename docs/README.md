@@ -30,13 +30,13 @@ news:
   - header: SkyWalking APM 8.2.0 is released
     content: Support browser side monitoring; Composite alert rules; Introduce meter analysis language; Query traces by tags
     time: Oct. 27th, 2020
+  - header: SkyWalking Nginx LUA 0.3.0 is released
+    content: Add prefix to avoid conflicts with other LUA libs; Add `http.status` tag
+    time: Oct. 24th, 2020
   - header: SkyWalking CLI 0.4.0 is released
     content: Add dashboard command and traces search
     time: Oct. 11th, 2020
   - header: Welcome Huaxi Jiang as new committer
     content: Based on his continuous contributions, Huaxi Jiang (a.k.a [fgksgf](https://github.com/fgksgf)) has been voted as a new committer.
     time: Sep. 28th, 2020
-  - header: SkyWalking Python 0.3.0 is released
-    content: add multiple plugins and thread propagation
-    time: Aug. 28th, 2020
 
