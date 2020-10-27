@@ -1,5 +1,20 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking APM 8.2.0
+###### 2020 年 10 月 27 日
+SkyWalking 8.2.0 发布. 前往 [下载页面](/downloads) 查看如何使用.
+- 支持浏览器端监控
+- 通过 tag 查询链路数据
+- 引入指标分析语言(Meter Analysis Language)
+- 告警条件支持配置组合条件
+
+## Release Apache SkyWalking LUA Nginx 0.3.0
+###### 2020 年 10 月 24 日
+SkyWalking LUA Nginx 0.3.0 发布. 前往 [下载页面](/downloads) 查看如何使用.
+- 从 `utils` 加载 `base64` 的模块, 不同环境使用不同的库.
+- 添加 `skywalking` 前缀, 避免与其他 LUA 库冲突.
+- 添加 `http.status` tag.
+
 ## Release Apache SkyWalking CLI 0.4.0
 ###### Oct 11th, 2020
 SkyWalking CLI 0.4.0 发布. 前往[下载页面](/downloads) 查看如何使用.

@@ -8,19 +8,19 @@
 ### SkyWalking APM
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
+| Oct. 27th, 2020 | 8.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/8.2.0/apache-skywalking-apm-8.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/8.2.0/apache-skywalking-apm-8.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.2.0/apache-skywalking-apm-8.2.0-src.tgz.sha512)|
+| | | Binary Distribution | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.2.0/apache-skywalking-apm-8.2.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.2.0/apache-skywalking-apm-8.2.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.2.0/apache-skywalking-apm-8.2.0.tar.gz.sha512)|
+| | | Binary Distribution for ElasticSearch 7 | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.2.0/apache-skywalking-apm-es7-8.2.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.2.0/apache-skywalking-apm-es7-8.2.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.2.0/apache-skywalking-apm-es7-8.2.0.tar.gz.sha512)|
+| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v8.2.0/docs/README.md) |
 | Aug. 3rd, 2020 | 8.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/8.1.0/apache-skywalking-apm-8.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/8.1.0/apache-skywalking-apm-8.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.1.0/apache-skywalking-apm-8.1.0-src.tgz.sha512)|
 | | | Binary Distribution | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.1.0/apache-skywalking-apm-8.1.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.1.0/apache-skywalking-apm-8.1.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.1.0/apache-skywalking-apm-8.1.0.tar.gz.sha512)|
 | | | Binary Distribution for ElasticSearch 7 | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.1.0/apache-skywalking-apm-es7-8.1.0.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.1.0/apache-skywalking-apm-es7-8.1.0.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.1.0/apache-skywalking-apm-es7-8.1.0.tar.gz.sha512)|
 | | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v8.1.0/docs/README.md) |
-| June. 21nd, 2020 | 8.0.1 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/8.0.1/apache-skywalking-apm-8.0.1-src.tgz) [[asc]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-8.0.1-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-8.0.1-src.tgz.sha512)|
-| | | Binary Distribution | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.0.1/apache-skywalking-apm-8.0.1.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-8.0.1.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-8.0.1.tar.gz.sha512)|
-| | | Binary Distribution for ElasticSearch 7 | [[tar]](https://www.apache.org/dyn/closer.cgi/skywalking/8.0.1/apache-skywalking-apm-es7-8.0.1.tar.gz) [[asc]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-es7-8.0.1.tar.gz.asc) [[sha512]](https://downloads.apache.org/skywalking/8.0.1/apache-skywalking-apm-es7-8.0.1.tar.gz.sha512)|
-| | | Documentation| [Documentation](https://github.com/apache/skywalking/blob/v8.0.1/docs/README.md) |
 
 ### SkyWalking Nginx LUA
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
-| Jun. 21th, 2020 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.2.0//skywalking-nginx-lua-0.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.2.0/skywalking-nginx-lua-0.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.2.0/skywalking-nginx-lua-0.2.0-src.tgz.sha512)|
+| Oct. 24th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.3.0//skywalking-nginx-lua-0.3.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz.sha512)|
 
 ### SkyWalking CLI
 | 日期 | 版本| | 下载 |
