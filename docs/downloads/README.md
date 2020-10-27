@@ -33,7 +33,7 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 ### SkyWalking Python
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| Aug. 28th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.3.0/skywalking-python-src.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src.tgz.sha512)|
+| Aug. 28th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.3.0/skywalking-python-src-v0.3.0.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src-v0.3.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src-v0.3.0.tgz.sha512)|
 | | | Binary Distribution (MacOS, Linux, Windows)| [[Install via pip]](https://pypi.org/project/apache-skywalking/0.3.0/) |
 
 ### SkyWalking Chart
