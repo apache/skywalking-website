@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking APM 8.2.0 发布
+    content: 支持浏览器端监控; 告警支持组合条件; 引入指标分析语言; 支持通过 tag 查询链路数据
+    time: Oct. 27th, 2020
   - header: SkyWalking CLI 0.4.0 发布
     content: 新增 dashboard 命令和 trace 搜索
     time: 2020 年 10 月 11 日
@@ -37,6 +40,4 @@ news:
   - header: SkyWalking Python 0.3.0 发布
     content: 新增多个插件和线程间传播的特性
     time: 2020 年 8 月 28 日
-  - header: SkyWalking Chart 3.1.0 发布
-    content: 支持部署 SkyWalking 8.1.0
-    time: 2020 年 8 月 13 日
+

@@ -1,5 +1,13 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking APM 8.2.0
+###### Oct. 27th, 2020
+SkyWalking 8.2.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Support Browser Side Monitoring
+- Query Traces by Tags
+- Introduce Meter Analysis Language
+- Allow Configuring Composite Alert Rules
+
 ## Release Apache SkyWalking CLI 0.4.0
 ###### Oct 11th, 2020
 SkyWalking CLI 0.4.0 is released. Go to [downloads](/downloads) page to find release tars.

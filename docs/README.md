@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking APM 8.2.0 is released
+    content: Support browser side monitoring; Composite alert rules; Introduce meter analysis language; Query traces by tags
+    time: Oct. 27th, 2020
   - header: SkyWalking CLI 0.4.0 is released
     content: Add dashboard command and traces search
     time: Oct. 11th, 2020
@@ -36,6 +39,4 @@ news:
   - header: SkyWalking Python 0.3.0 is released
     content: add multiple plugins and thread propagation
     time: Aug. 28th, 2020
-  - header: SkyWalking Chart 3.1.0 is released
-    content: Support deploy SkyWalking 8.1.0.
-    time: Aug. 13th, 2020
+
