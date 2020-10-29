@@ -3,6 +3,11 @@ layout: LayoutBlog
 
 blog:
 
+- title: Features in SkyWalking 8.2
+  name: 2020-10-29-skywalking8-2-release
+  time: Zhenxu Ke, Sheng Wu, Hongtao Gao, and Tevah Platt. Oct. 29th, 2020
+  short: Browser Side Monitoring; Query Traces by Tags; Meter Analysis Language; Composite Alert Rules
+
 - title: Observability at scale, SkyWalking it is!
   name: 2020-08-11-observability-at-scale
   time: Sheng Wu. Aug. 11th, 2020
