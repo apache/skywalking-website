@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Client JS 0.1.0 is released
+    content: Support Browser Side Monitoring. Require SkyWalking APM 8.2+.
+    time: Oct. 30th, 2020
   - header: SkyWalking APM 8.2.0 is released
     content: Support browser side monitoring; Composite alert rules; Introduce meter analysis language; Query traces by tags
     time: Oct. 27th, 2020
@@ -36,7 +39,4 @@ news:
   - header: SkyWalking CLI 0.4.0 is released
     content: Add dashboard command and traces search
     time: Oct. 11th, 2020
-  - header: Welcome Huaxi Jiang as new committer
-    content: Based on his continuous contributions, Huaxi Jiang (a.k.a [fgksgf](https://github.com/fgksgf)) has been voted as a new committer.
-    time: Sep. 28th, 2020
 

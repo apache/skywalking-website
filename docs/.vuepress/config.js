@@ -34,6 +34,7 @@ module.exports = {
             { text: 'Kubernetes helm 3.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
             { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},
             { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
+            { text: 'Client JS 0.1.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.1.0"},
           ], },
           { text: "GitHub",  items: [
             { text: 'Main Repo, Javaagent and Backend', link: "https://github.com/apache/skywalking/" },
@@ -47,6 +48,7 @@ module.exports = {
             { text: 'K8s Operator', link: "https://github.com/apache/skywalking-swck"},
             { text: 'Website', link: "https://github.com/apache/skywalking-website"},
             { text: 'Python Agent', link: "https://github.com/apache/skywalking-python"},
+            { text: 'Client JS', link: "https://github.com/apache/skywalking-client-js"},
           ], },
           { text: "Events", link: "/events/" },
           { text: "Blog", link: "/blog/" },
@@ -83,6 +85,7 @@ module.exports = {
               { text: 'Kubernetes helm 3.1.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.1.0"},
               { text: 'Kubernetes helm 3.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v3.0.0"},
               { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
+              { text: 'Client JS 0.1.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.1.0"},
             ],
           },
           { text: "GitHub",  items: [
@@ -97,6 +100,7 @@ module.exports = {
             { text: 'K8s Operator', link: "https://github.com/apache/skywalking-swck"},
             { text: 'Website', link: "https://github.com/apache/skywalking-website"},
             { text: 'Python Agent', link: "https://github.com/apache/skywalking-python"},
+            { text: 'Client JS', link: "https://github.com/apache/skywalking-client-js"},
           ], },
           { text: "事件", link: "/zh/events/" },
           { text: "博客", link: "/zh/blog/" },
