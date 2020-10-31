@@ -11,6 +11,7 @@ Members include Project Management Committee members and committers. The List in
 |:---|:--|
 |Can Li| lican |
 |DongXue Si| ilucky |
+|Han Liu | liuhan |
 |Haochao Zhuang| daming |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
@@ -40,7 +41,6 @@ Members include Project Management Committee members and committers. The List in
 | Name |Apache ID|
 |:---|:--|
 |Brandon Fergerson | bfergerson |
-|Han Liu | liuhan |
 |Huaxi Jiang| hoshea |
 |Ming Wen | wenming |
 |Sheng Wang| wangsheng |
@@ -66,6 +66,7 @@ SkyWalking have hundreds of Contributors, you could find them in our repository 
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
 - [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
 - [SkyWalking Python Agent](https://github.com/apache/skywalking-python/graphs/contributors)
+- [SkyWalking JS Client](https://github.com/apache/skywalking-client-js/graphs/contributors)
 
 Archived
 
