@@ -28,16 +28,16 @@ user:
 news:
   title: 事件 & 新闻
   content:
-    - header: SkyWalking Client JS 0.1.0 发布
-     content: 支持浏览器监控。需要SkyWalking APM 8.2以上版本。
-     time: 2020 年 10 月 30 日
-    - header: SkyWalking APM 8.2.0 发布
+  - header: SkyWalking Client JS 0.1.0 发布
+    content: 支持浏览器监控。需要SkyWalking APM 8.2以上版本。
+    time: 2020 年 10 月 30 日
+  - header: SkyWalking APM 8.2.0 发布
     content: 支持浏览器端监控; 告警支持组合条件; 引入指标分析语言; 支持通过 tag 查询链路数据
     time: 2020 年 10 月 27 日
-    - header: SkyWalking Nginx LUA 0.3.0 发布
+  - header: SkyWalking Nginx LUA 0.3.0 发布
     content: 库添加前缀避免与其他 LUA 库产生冲突; 添加 `http.status` tag
     time: 2020 年 10 月 24 日
-    - header: SkyWalking CLI 0.4.0 发布
+  - header: SkyWalking CLI 0.4.0 发布
     content: 新增 dashboard 命令和 trace 搜索
     time: 2020 年 10 月 11 日
 
