@@ -10,6 +10,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |:---|:--|
 |Can Li| lican |
 |DongXue Si| ilucky |
+|Han Liu| liuhan |
 |Haochao Zhuang| daming |
 |Haoyang Liu| liuhaoyangzz |
 |Hongtao Gao| hanahmily |
@@ -39,7 +40,6 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 | 名字 |Apache ID|
 |:---|:--|
 |Brandon Fergerson | bfergerson |
-|Han Liu| liuhan |
 |Huaxi Jiang| hoshea |
 |Ming Wen | wenming |
 |Sheng Wang| wangsheng |
@@ -63,6 +63,7 @@ SkyWalking拥有数百位的贡献者，你可以在我们的存储库贡献列�
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
 - [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
 - [SkyWalking Python Agent](https://github.com/apache/skywalking-python/graphs/contributors)
+- [SkyWalking JS Client](https://github.com/apache/skywalking-client-js/graphs/contributors)
 
 已归档项目
 
