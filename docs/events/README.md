@@ -1,5 +1,10 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Client JS 0.1.0
+###### Oct. 30th, 2020
+SkyWalking Client JS 0.1.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Support Browser Side Monitoring. Require SkyWalking APM 8.2+.
+
 ## Release Apache SkyWalking APM 8.2.0
 ###### Oct. 27th, 2020
 SkyWalking 8.2.0 is released. Go to [downloads](/downloads) page to find release tars.

@@ -1,5 +1,10 @@
 # SkyWalking 事件概要
 
+## SkyWalking Client JS探针0.1.0发布
+###### 2020 年 10 月 30 日
+SkyWalking Client Js 0.1.0 发布. 前往 [下载页面](/downloads) 查看如何使用.
+- 支持浏览器监控. 需要SkyWalking APM 8.2以上版本.
+
 ## Release Apache SkyWalking APM 8.2.0
 ###### 2020 年 10 月 27 日
 SkyWalking 8.2.0 发布. 前往 [下载页面](/downloads) 查看如何使用.

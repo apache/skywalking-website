@@ -22,7 +22,7 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| Oct. 24th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.3.0//skywalking-nginx-lua-0.3.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz.sha512)|
+| Oct. 24th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/nginx-lua/0.3.0/skywalking-nginx-lua-0.3.0-src.tgz.sha512)|
 
 ### SkyWalking CLI
 | Date | Version| | Downloads |
@@ -43,6 +43,11 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 | | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz.sha512)|
 | Jun. 27th, 2020 | 3.0.0 for SkyWalking 8.0.1 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz.sha512)|
 | | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz.sha512)|
+
+### SkyWalking Client JS
+| Date | Version| | Downloads |
+|:---:|:--:|:--:|:--:|
+| Oct. 30th, 2020 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz.sha512)|
 
 ### All Releases
 * Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)
