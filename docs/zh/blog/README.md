@@ -2,6 +2,11 @@
 layout: LayoutBlog
 
 blog:
+- title: 'SkyWalking 8.2.0 中的新特性: 浏览器端监控; 使用标签查询; 指标分析语言'
+  name: 2020-10-29-skywalking8-2-release
+  time: 柯振旭, 吴晟, 高洪涛, Tevah Platt. 2020 年 10 月 29 日
+  short: 浏览器端监控; 通过 tag 查找链路数据; 指标分析语言; 复合告警规则
+
 - title: SkyWalking为超大规模而生
   name: 2020-08-11-observability-at-scale-skywalking-it-is
   time: 吴晟. [译]董旭，金蝶医疗. 8 月 13 日，2020
