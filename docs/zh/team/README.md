@@ -41,6 +41,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |:---|:--|
 |Brandon Fergerson | bfergerson |
 |Huaxi Jiang| hoshea |
+|JunXu Chen | chenjunxu |
 |Ming Wen | wenming |
 |Sheng Wang| wangsheng |
 |Weijie Zou| kdump |
