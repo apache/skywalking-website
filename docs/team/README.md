@@ -47,6 +47,7 @@ Members include Project Management Committee members and committers. The List in
 |Weijie Zou| kdump |
 |Weiyi Liu | wayilau |
 |Wei Hua| alonelaval |
+|Wei Jin| kvn |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
 |Zhusheng Xu| aderm |
