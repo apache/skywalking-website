@@ -46,6 +46,7 @@ SkyWalking团队由项目成员和提交者组成。成员可以直接访问SkyW
 |Weijie Zou| kdump |
 |Weiyi Liu| wayilau |
 |Wei Hua| alonelaval |
+|Wei Jin| kvn |
 |Yuntao Li| liyuntao |
 |Yanlong He| heyanlong |
 |Zhusheng Xu| aderm |
