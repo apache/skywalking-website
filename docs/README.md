@@ -27,6 +27,10 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Kubernetes Helm Chart 4.0.0 is released
+    content: Allow overriding default configurations files; Unify usages of different SkyWalking Versions.
+    time: Nov. 3rd, 2020
+
   - header: SkyWalking Client JS 0.1.0 is released
     content: Support Browser Side Monitoring. Require SkyWalking APM 8.2+.
     time: Oct. 30th, 2020
@@ -36,7 +40,3 @@ news:
   - header: SkyWalking Nginx LUA 0.3.0 is released
     content: Add prefix to avoid conflicts with other LUA libs; Add `http.status` tag
     time: Oct. 24th, 2020
-  - header: SkyWalking CLI 0.4.0 is released
-    content: Add dashboard command and traces search
-    time: Oct. 11th, 2020
-

@@ -37,10 +37,7 @@
 ### SkyWalking Chart
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
-| Aug. 13th, 2020 | 3.1.0 for SkyWalking 8.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.1.0/skywalking-kubernetes-3.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-kubernetes-3.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-kubernetes-3.1.0-src.tgz.sha512)|
-| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.1.0/skywalking-3.1.0.tgz.sha512)|
-| Jun. 27th, 2020 | 3.0.0 for SkyWalking 8.0.1 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-kubernetes-3.0.0-src.tgz.sha512)|
-| | | Binary Distribution (Kubernetes)| [[tgz]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/3.0.0/skywalking-3.0.0.tgz.sha512)|
+| Nov. 3rd, 2020 | 4.0.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/kubernetes/4.0.0/skywalking-kubernetes-4.0.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/kubernetes/4.0.0/skywalking-kubernetes-4.0.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/kubernetes/4.0.0/skywalking-kubernetes-4.0.0-src.tgz.sha512)|
 
 ### SkyWalking Client JS
 | 日期 | 版本| | 下载 |

@@ -1,5 +1,13 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Kubernetes Helm Chart 4.0.0
+###### Nov. 3rd, 2020
+SkyWalking Kubernetes Helm Chart 4.0.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Allow overriding configurations files under /skywalking/config.
+- Unify the usages of different SkyWalking versions.
+- Add Values for init container in case of using private regestry.
+- Add services, endpoints resources in ClusterRole.
+
 ## Release Apache SkyWalking Client JS 0.1.0
 ###### Oct. 30th, 2020
 SkyWalking Client JS 0.1.0 is released. Go to [downloads](/downloads) page to find release tars.

@@ -1,5 +1,11 @@
 # SkyWalking 事件概要
 
+## SkyWalking Kubernetes Helm Chart 4.0.0 发布
+###### 2020 年 11 月 3 日
+SkyWalking Kubernetes Helm Chart 4.0.0 发布. 前往 [下载页面](/downloads) 查看如何使用.
+- 支持自定义覆盖默认的 OAP 配置文件; (`/skywalking/config`).
+- 统一不同 SkyWalking 版本的使用方式.
+
 ## SkyWalking Client JS探针0.1.0发布
 ###### 2020 年 10 月 30 日
 SkyWalking Client Js 0.1.0 发布. 前往 [下载页面](/downloads) 查看如何使用.
