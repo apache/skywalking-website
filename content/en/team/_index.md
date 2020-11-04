@@ -4,7 +4,7 @@ linkTitle: Team
 description: About SkyWalking Team.
 ---
 
-## Team
+# SkyWalking Team
 
 The SkyWalking team is comprised of Members and Contributors. Members have direct access to the source of SkyWalking project and actively evolve the code-base. Contributors improve the project through submission of patches and suggestions to the Members. The number of Contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards. More details see [here](https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md).
 
