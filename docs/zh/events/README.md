@@ -1,5 +1,9 @@
 # SkyWalking 事件概要
 
+## 欢迎刘嘉鹏成为新的committer
+###### 2020 年 11 月 5 日
+根据他长期的项目贡献，他被投票选举为项目的 committer
+
 ## SkyWalking Kubernetes Helm Chart 4.0.0 发布
 ###### 2020 年 11 月 3 日
 SkyWalking Kubernetes Helm Chart 4.0.0 发布. 前往 [下载页面](/downloads) 查看如何使用.

@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: 欢迎刘嘉鹏成为新的committer
+    content: 根据他长期的项目贡献，他被投票选举为项目的 committer
+    time: 2020 年 11 月 5 日
   - header: SkyWalking Kubernetes Helm Chart 4.0.0 发布
     content: 支持自定义覆盖默认配置文件; 统一不同 SkyWalking 版本的使用方式;
     time: 2020 年 11 月 3 日
@@ -37,7 +40,3 @@ news:
   - header: SkyWalking APM 8.2.0 发布
     content: 支持浏览器端监控; 告警支持组合条件; 引入指标分析语言; 支持通过 tag 查询链路数据
     time: 2020 年 10 月 27 日
-  - header: SkyWalking Nginx LUA 0.3.0 发布
-    content: 库添加前缀避免与其他 LUA 库产生冲突; 添加 `http.status` tag
-    time: 2020 年 10 月 24 日
-

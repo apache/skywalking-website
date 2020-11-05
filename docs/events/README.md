@@ -1,5 +1,9 @@
 # SkyWalking Events
 
+## Welcome Jiapeng Liu as new committer
+###### Nov. 5th, 2020
+Based on his continuous contributions, Jiapeng Liu (a.k.a [evanljp](https://github.com/evanljp)) has been voted as a new committer.
+
 ## Release Apache SkyWalking Kubernetes Helm Chart 4.0.0
 ###### Nov. 3rd, 2020
 SkyWalking Kubernetes Helm Chart 4.0.0 is released. Go to [downloads](/downloads) page to find release tars.

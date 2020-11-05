@@ -42,6 +42,7 @@ Members include Project Management Committee members and committers. The List in
 |:---|:--|
 |Brandon Fergerson | bfergerson |
 |Huaxi Jiang| hoshea |
+|Jiapeng Liu| liujiapeng |
 |JunXu Chen| chenjunxu |
 |Ming Wen | wenming |
 |Sheng Wang| wangsheng |
