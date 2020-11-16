@@ -34,6 +34,7 @@ module.exports = {
             { text: 'Kubernetes helm 4.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v4.0.0"},
             { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
             { text: 'Client JS 0.1.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.1.0"},
+            { text: 'Cloud on Kubernetes 0.1.0', link: "https://github.com/apache/skywalking-swck/tree/0.1.0"},
           ], },
           { text: "GitHub",  items: [
             { text: 'Main Repo, Javaagent and Backend', link: "https://github.com/apache/skywalking/" },
@@ -44,7 +45,7 @@ module.exports = {
             { text: 'Data Query Protocol', link: "https://github.com/apache/skywalking-query-protocol"},
             { text: 'Docker', link: "https://github.com/apache/skywalking-docker"},
             { text: 'Kubernetes helm', link: "https://github.com/apache/skywalking-kubernetes/"},
-            { text: 'K8s Operator', link: "https://github.com/apache/skywalking-swck"},
+            { text: 'Cloud on Kubernetes', link: "https://github.com/apache/skywalking-swck"},
             { text: 'Website', link: "https://github.com/apache/skywalking-website"},
             { text: 'Python Agent', link: "https://github.com/apache/skywalking-python"},
             { text: 'Client JS', link: "https://github.com/apache/skywalking-client-js"},
@@ -84,6 +85,7 @@ module.exports = {
               { text: 'Kubernetes helm 4.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v4.0.0"},
               { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
               { text: 'Client JS 0.1.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.1.0"},
+              { text: 'Cloud on Kubernetes 0.1.0', link: "https://github.com/apache/skywalking-swck/tree/0.1.0"},
             ],
           },
           { text: "GitHub",  items: [
@@ -95,7 +97,7 @@ module.exports = {
             { text: 'Data Query Protocol', link: "https://github.com/apache/skywalking-query-protocol"},
             { text: 'Docker', link: "https://github.com/apache/skywalking-docker"},
             { text: 'Kubernetes helm', link: "https://github.com/apache/skywalking-kubernetes/"},
-            { text: 'K8s Operator', link: "https://github.com/apache/skywalking-swck"},
+            { text: 'Cloud on Kubernetes', link: "https://github.com/apache/skywalking-swck"},
             { text: 'Website', link: "https://github.com/apache/skywalking-website"},
             { text: 'Python Agent', link: "https://github.com/apache/skywalking-python"},
             { text: 'Client JS', link: "https://github.com/apache/skywalking-client-js"},

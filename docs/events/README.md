@@ -1,5 +1,10 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Cloud on Kubernetes 0.1.0
+###### Nov. 16th, 2020
+SkyWalking Cloud on Kubernetes 0.1.0 is released. Go to [downloads](/downloads) page to find release tars.
+- Add OAPServer CRDs and controller.
+
 ## Welcome Jiapeng Liu as new committer
 ###### Nov. 5th, 2020
 Based on his continuous contributions, Jiapeng Liu (a.k.a [evanljp](https://github.com/evanljp)) has been voted as a new committer.
