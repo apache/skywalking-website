@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Cloud on Kubernetes 0.1.0 发布
+    content: 增加OAPServer自定义资源定义及其控制器
+    time: 2020 年 11 月 16 日
   - header: 欢迎刘嘉鹏成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 11 月 5 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking Client JS 0.1.0 发布
     content: 支持浏览器监控。需要SkyWalking APM 8.2以上版本。
     time: 2020 年 10 月 30 日
-  - header: SkyWalking APM 8.2.0 发布
-    content: 支持浏览器端监控; 告警支持组合条件; 引入指标分析语言; 支持通过 tag 查询链路数据
-    time: 2020 年 10 月 27 日

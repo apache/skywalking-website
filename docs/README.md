@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Cloud on Kubernetes 0.1.0 is released
+    content: OAPServer CRDs and controller
+    time: Nov. 16th, 2020
   - header: Welcome Jiapeng Liu as new committer
     content: Based on his continuous contributions, Jiapeng Liu (a.k.a [evanljp](https://github.com/evanljp)) has been voted as a new committer.
     time: Nov. 5th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking Client JS 0.1.0 is released
     content: Support Browser Side Monitoring. Require SkyWalking APM 8.2+.
     time: Oct. 30th, 2020
-  - header: SkyWalking APM 8.2.0 is released
-    content: Support browser side monitoring; Composite alert rules; Introduce meter analysis language; Query traces by tags
-    time: Oct. 27th, 2020
