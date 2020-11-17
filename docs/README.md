@@ -39,6 +39,3 @@ news:
   - header: SkyWalking Client JS 0.1.0 is released
     content: Support Browser Side Monitoring. Require SkyWalking APM 8.2+.
     time: Oct. 30th, 2020
-  - header: SkyWalking APM 8.2.0 is released
-    content: Support browser side monitoring; Composite alert rules; Introduce meter analysis language; Query traces by tags
-    time: Oct. 27th, 2020
