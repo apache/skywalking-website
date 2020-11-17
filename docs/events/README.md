@@ -1,5 +1,12 @@
 # SkyWalking Events
 
+## Release Apache SkyWalking Client JS 0.2.0
+###### Nov. 17th, 2020
+SkyWalking Client JS 0.2.0 is released. Go to [downloads](/downloads/) page to find release tars.
+- Bug Fixes
+  - Fixed a bug in `sslTime` calculate.
+  - Fixed a bug in server response status judgment.
+
 ## Release Apache SkyWalking Cloud on Kubernetes 0.1.0
 ###### Nov. 16th, 2020
 SkyWalking Cloud on Kubernetes 0.1.0 is released. Go to [downloads](/downloads) page to find release tars.

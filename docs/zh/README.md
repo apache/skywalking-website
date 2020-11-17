@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Client JS 0.2.0 发布
+    content: 修复一些性能数据上报相关的 bug
+    time: 2020 年 11 月 17 日
   - header: SkyWalking Cloud on Kubernetes 0.1.0 发布
     content: 增加OAPServer自定义资源定义及其控制器
     time: 2020 年 11 月 16 日
