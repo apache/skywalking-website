@@ -28,6 +28,9 @@ user:
 news:
   title: 事件 & 新闻
   content:
+  - header: SkyWalking Client JS 0.2.0 发布
+    content: 修复一些性能数据上报相关的 bug
+    time: 2020 年 11 月 17 日
   - header: SkyWalking Cloud on Kubernetes 0.1.0 发布
     content: 增加OAPServer自定义资源定义及其控制器
     time: 2020 年 11 月 16 日
@@ -37,6 +40,3 @@ news:
   - header: SkyWalking Kubernetes Helm Chart 4.0.0 发布
     content: 支持自定义覆盖默认配置文件; 统一不同 SkyWalking 版本的使用方式;
     time: 2020 年 11 月 3 日
-  - header: SkyWalking Client JS 0.1.0 发布
-    content: 支持浏览器监控。需要SkyWalking APM 8.2以上版本。
-    time: 2020 年 10 月 30 日

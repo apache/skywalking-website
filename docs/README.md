@@ -27,6 +27,9 @@ user:
 news:
   title: Events & News
   content:
+  - header: SkyWalking Client JS 0.2.0 is released
+    content: Fixed some bugs related to performance data report
+    time: Nov. 17th, 2020
   - header: SkyWalking Cloud on Kubernetes 0.1.0 is released
     content: OAPServer CRDs and controller
     time: Nov. 16th, 2020
@@ -36,6 +39,3 @@ news:
   - header: SkyWalking Kubernetes Helm Chart 4.0.0 is released
     content: Allow overriding default configurations files; Unify usages of different SkyWalking Versions.
     time: Nov. 3rd, 2020
-  - header: SkyWalking Client JS 0.1.0 is released
-    content: Support Browser Side Monitoring. Require SkyWalking APM 8.2+.
-    time: Oct. 30th, 2020

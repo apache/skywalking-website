@@ -49,7 +49,7 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 ### SkyWalking Client JS
 | Date | Version| | Downloads |
 |:---:|:--:|:--:|:--:|
-| Oct. 30th, 2020 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz.sha512)|
+| Nov. 17th, 2020 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/client-js/0.2.0/skywalking-client-js-0.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/client-js/0.2.0/skywalking-client-js-0.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/client-js/0.2.0/skywalking-client-js-0.2.0-src.tgz.sha512)|
 
 ### All Releases
 * Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)

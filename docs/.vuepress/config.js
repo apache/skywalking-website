@@ -33,7 +33,7 @@ module.exports = {
             { text: 'CLI 0.4.0', link: "https://github.com/apache/skywalking-cli/tree/0.4.0"},
             { text: 'Kubernetes helm 4.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v4.0.0"},
             { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
-            { text: 'Client JS 0.1.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.1.0"},
+            { text: 'Client JS 0.2.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.2.0"},
             { text: 'Cloud on Kubernetes 0.1.0', link: "https://github.com/apache/skywalking-swck/tree/0.1.0"},
           ], },
           { text: "GitHub",  items: [
@@ -84,7 +84,7 @@ module.exports = {
               { text: 'CLI 0.4.0', link: "https://github.com/apache/skywalking-cli/tree/0.4.0"},
               { text: 'Kubernetes helm 4.0.0', link: "https://github.com/apache/skywalking-kubernetes/tree/v4.0.0"},
               { text: 'Python Agent 0.3.0', link: "https://github.com/apache/skywalking-python/tree/v0.3.0"},
-              { text: 'Client JS 0.1.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.1.0"},
+              { text: 'Client JS 0.2.0', link: "https://github.com/apache/skywalking-client-js/tree/v0.2.0"},
               { text: 'Cloud on Kubernetes 0.1.0', link: "https://github.com/apache/skywalking-swck/tree/0.1.0"},
             ],
           },

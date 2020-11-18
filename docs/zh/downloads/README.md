@@ -47,7 +47,7 @@
 ### SkyWalking Client JS
 | 日期 | 版本| | 下载 |
 |:---:|:--:|:--:|:--:|
-| Oct. 30th, 2020 | 0.1.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/client-js/0.1.0/skywalking-client-js-0.1.0-src.tgz.sha512)|
+| Nov. 17th, 2020 | 0.2.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/client-js/0.2.0/skywalking-client-js-0.2.0-src.tgz) [[asc]](https://downloads.apache.org/skywalking/client-js/0.2.0/skywalking-client-js-0.2.0-src.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/client-js/0.2.0/skywalking-client-js-0.2.0-src.tgz.sha512)|
 
 ### 所有历史版本
 * 可以在[归档库](https://archive.apache.org/dist/skywalking/)中，找到SkyWalking所有的历史发布版本

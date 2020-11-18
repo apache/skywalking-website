@@ -1,5 +1,11 @@
 # SkyWalking 事件概要
 
+## Release Apache SkyWalking Client JS 0.2.0
+###### 2020年 11 月 17 日
+SkyWalking Client Js 0.2.0 发布. 前往 [下载页面](/downloads/) 查看如何使用.
+- 错误修复
+  - 修复 `sslTime` 计算错误问题
+  - 修复服务端响应状态判断问题
 
 ## SkyWalking Cloud on Kubernetes 0.1.0 发布
 ###### 2020 年 11 月 16 日
