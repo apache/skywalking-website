@@ -1,13 +1,5 @@
 # SkyWalking Events
 
-## Release Apache SkyWalking Python 0.4.0
-###### Nov. 18th, 2020
-SkyWalking Python 0.4.0 is released. Go to [downloads](/downloads/) page to find release tars.
-- Feature: Support Kafka reporter protocol (#74)
-- BugFix: Move generated packages into skywalking namespace to avoid conflicts (#72)
-- BugFix: Agent cannot reconnect after server is down (#79)
-- Test: Mitigate unsafe yaml loading (#76)
-
 ## Release Apache SkyWalking Client JS 0.2.0
 ###### Nov. 17th, 2020
 SkyWalking Client JS 0.2.0 is released. Go to [downloads](/downloads/) page to find release tars.
