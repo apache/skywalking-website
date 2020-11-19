@@ -1,13 +1,5 @@
 # SkyWalking 事件概要
 
-## Apache SkyWalking Python 0.4.0 发布
-###### 2020 年 11 月 19 日
-SkyWalking Python 0.4.0 发布. 前往 [下载页面](/downloads/) 查看如何使用.
-- Feature: 探针支持使用 Kafka 上报协议 (#74)
-- BugFix: 移动顶级包名, 避免可能与用户空间冲突 (#72)
-- BugFix: 修复探针 gRPC 上报协议无法自动重连的问题 (#79)
-- Test: YAML 安全加载 (#76)
-
 ## Release Apache SkyWalking Client JS 0.2.0
 ###### 2020年 11 月 17 日
 SkyWalking Client Js 0.2.0 发布. 前往 [下载页面](/downloads/) 查看如何使用.

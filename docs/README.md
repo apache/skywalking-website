@@ -27,9 +27,6 @@ user:
 news:
   title: Events & News
   content:
-  - header: SkyWalking Python 0.4.0 is released
-    content: Support Kafka reporter protocol between agent and OAP; Fix agent reconnecting bug and possible namespace conflicts with user codes.
-    time: Nov. 19th, 2020
   - header: SkyWalking Client JS 0.2.0 is released
     content: Fixed some bugs related to performance data report
     time: Nov. 17th, 2020
@@ -39,3 +36,6 @@ news:
   - header: Welcome Jiapeng Liu as new committer
     content: Based on his continuous contributions, Jiapeng Liu (a.k.a [evanljp](https://github.com/evanljp)) has been voted as a new committer.
     time: Nov. 5th, 2020
+  - header: SkyWalking Kubernetes Helm Chart 4.0.0 is released
+    content: Allow overriding default configurations files; Unify usages of different SkyWalking Versions.
+    time: Nov. 3rd, 2020

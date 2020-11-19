@@ -31,8 +31,8 @@
 ### SkyWalking Python
 | 日期 | 版本 | | 下载 |
 |:---:|:--:|:--:|:--:|
-| Nov. 19th, 2020 | 0.4.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.4.0/skywalking-python-src-v0.4.0.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.4.0/skywalking-python-src-v0.4.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.4.0/skywalking-python-src-v0.4.0.tgz.sha512)|
-| | | Binary Distribution (MacOS, Linux, Windows)| [[Install via pip]](https://pypi.org/project/apache-skywalking/0.4.0/) |
+| Aug. 28th, 2020 | 0.3.0 | Source code| [[src]](https://www.apache.org/dyn/closer.cgi/skywalking/python/0.3.0/skywalking-python-src-v0.3.0.tgz) [[asc]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src-v0.3.0.tgz.asc) [[sha512]](https://downloads.apache.org/skywalking/python/0.3.0/skywalking-python-src-v0.3.0.tgz.sha512)|
+| | | Binary Distribution (MacOS, Linux, Windows)| [[Install via pip]](https://pypi.org/project/apache-skywalking/0.3.0/) |
 
 ### SkyWalking Chart
 | 日期 | 版本| | 下载 |

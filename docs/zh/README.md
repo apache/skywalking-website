@@ -28,9 +28,6 @@ user:
 news:
   title: 事件 & 新闻
   content:
-  - header: SkyWalking Python 0.4.0 发布
-    content: 探针支持 Kafka 上报协议; 修复探针无法自动重连问题; 修复命名空间可能与用户代码冲突问题.
-    time: 2020 年 11 月 19 日
   - header: SkyWalking Client JS 0.2.0 发布
     content: 修复一些性能数据上报相关的 bug
     time: 2020 年 11 月 17 日
@@ -40,3 +37,6 @@ news:
   - header: 欢迎刘嘉鹏成为新的committer
     content: 根据他长期的项目贡献，他被投票选举为项目的 committer
     time: 2020 年 11 月 5 日
+  - header: SkyWalking Kubernetes Helm Chart 4.0.0 发布
+    content: 支持自定义覆盖默认配置文件; 统一不同 SkyWalking 版本的使用方式;
+    time: 2020 年 11 月 3 日
