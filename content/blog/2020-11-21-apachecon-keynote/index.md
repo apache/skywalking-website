@@ -1,6 +1,6 @@
 ---
 title: "[Video] Apache grows in China"
-date: 2020-11-21
+date: 2020-11-20
 author: Sheng Wu, Founding Engineer, Tetrate.io
 description: "ApacheCon@Home 2020 Keynote, the progress about China embracing the Apache culture, and willing of enhancing the whole Apache community."
 ---
