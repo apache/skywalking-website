@@ -10,7 +10,7 @@ Located at `content/_index.html`。
 
 ## Projects and Document
 
-TODO
+Managed by HTML. Working on separating the text into YAML.
 
 ## Event
 
