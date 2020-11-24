@@ -82,7 +82,6 @@ SkyWalking have hundreds of contributors, you could find them in our repositorie
 - [SkyWalking satellite](https://github.com/apache/skywalking-satellite/graphs/contributors)
 - [SkyWalking agent test tool](https://github.com/apache/skywalking-agent-test-tool/graphs/contributors)
 - [SkyWalking NodeJS Agent](https://github.com/apache/skywalking-nodejs/graphs/contributors)
-- [SkyWalking Rust Agent](https://github.com/apache/skywalking-rust/graphs/contributors)
 - [SkyWalking oal tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
 
 Archived
