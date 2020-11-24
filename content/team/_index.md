@@ -10,28 +10,29 @@ The SkyWalking team is comprised of Members and Contributors. Members have direc
 
 ## Members
 
-Members include Project Management Committee members and committers. The List in alphabet order.
+Members include Project Management Committee members and committers. The list is in alphabet order.
 
 ### Project Management Committee
 
 | Name                             | Apache ID    |
-| :------------------------------- | :----------- |
+|----------------------------------|--------------|
 | Can Li                           | lican        |
 | DongXue Si                       | ilucky       |
+| Han Liu                          | liuhan       |
 | Haochao Zhuang                   | daming       |
 | Haoyang Liu                      | liuhaoyangzz |
 | Hongtao Gao                      | hanahmily    |
 | Hongwei Zhai                     | innerpeacez  |
 | Ignasi Barrera                   | nacx         |
 | Jian Tan                         | tanjian      |
+| Jiaqi Lin                        | linjiaqi     |
+| Jinlin Fu                        | withlin      |
+| Kai Wang                         | wangkai      |
+| Lang Li                          | lilang       |
+| Michael Semb Wever               | mck          |
 | Qiuxia Fan                       | qiuxiafan    |
 | Sheng Wu (V.P. and Chair of PMC) | wusheng      |
 | Shinn Zhang                      | zhangxin     |
-| Kai Wang                         | wangkai      |
-| Michael Semb Wever               | mck          |
-| Jiaqi Lin                        | linjiaqi     |
-| Jinlin Fu                        | withlin      |
-| Lang Li                          | lilang       |
 | Wei Zhang                        | zhangwei24   |
 | Wenbing Wang                     | wangwenbin   |
 | Willem Ning Jiang                | ningjiang    |
@@ -46,22 +47,25 @@ Members include Project Management Committee members and committers. The List in
 ### Committer
 
 | Name              | Apache ID  |
-| :---------------- | :--------- |
+|-------------------|------------|
 | Brandon Fergerson | bfergerson |
-| Han Liu           | liuhan     |
+| Huaxi Jiang       | hoshea     |
+| Jiapeng Liu       | liujiapeng |
+| JunXu Chen        | chenjunxu  |
 | Ming Wen          | wenming    |
 | Sheng Wang        | wangsheng  |
+| Wei Hua           | alonelaval |
+| Wei Jin           | kvn        |
 | Weijie Zou        | kdump      |
 | Weiyi Liu         | wayilau    |
-| Wei Hua           | alonelaval |
-| Yuntao Li         | liyuntao   |
 | Yanlong He        | heyanlong  |
+| Yuntao Li         | liyuntao   |
 | Zhusheng Xu       | aderm      |
 
 
 ## Contributors
 
-SkyWalking have hundreds of Contributors, you could find them in our repository contribution list.
+SkyWalking have hundreds of contributors, you could find them in our repositories' contribution list.
 
 - [SkyWalking main repository](https://github.com/apache/skywalking/graphs/contributors)
 - [SkyWalking Nginx LUA](https://github.com/apache/skywalking-nginx-lua/graphs/contributors)
@@ -73,10 +77,16 @@ SkyWalking have hundreds of Contributors, you could find them in our repository 
 - [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
 - [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
 - [SkyWalking Python Agent](https://github.com/apache/skywalking-python/graphs/contributors)
+- [SkyWalking CLI](https://github.com/apache/skywalking-cli/graphs/contributors)
+- [SkyWalking Client JS](https://github.com/apache/skywalking-client-js/graphs/contributors)
+- [SkyWalking satellite](https://github.com/apache/skywalking-satellite/graphs/contributors)
+- [SkyWalking agent test tool](https://github.com/apache/skywalking-agent-test-tool/graphs/contributors)
+- [SkyWalking NodeJS Agent](https://github.com/apache/skywalking-nodejs/graphs/contributors)
 
 Archived
 
-- [SkyWalking UI](https://github.com/apache/incubator-skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
+- [SkyWalking UI](https://github.com/apache/skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
+- [SkyWalking OAL tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
 
 ## Becoming a Committer
 
