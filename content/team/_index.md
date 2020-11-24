@@ -82,11 +82,11 @@ SkyWalking have hundreds of contributors, you could find them in our repositorie
 - [SkyWalking satellite](https://github.com/apache/skywalking-satellite/graphs/contributors)
 - [SkyWalking agent test tool](https://github.com/apache/skywalking-agent-test-tool/graphs/contributors)
 - [SkyWalking NodeJS Agent](https://github.com/apache/skywalking-nodejs/graphs/contributors)
-- [SkyWalking oal tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
 
 Archived
 
 - [SkyWalking UI](https://github.com/apache/skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
+- [SkyWalking OAL tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
 
 ## Becoming a Committer
 
