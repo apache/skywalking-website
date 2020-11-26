@@ -15,7 +15,7 @@ Apache SkyWalking is an open, modern performance management tool for distributed
 
 SkyWalking has evolved into an Observability Analysis Platform that enables observation and monitoring of hundreds of services all at once. It promises solutions for some of the trickiest problems faced by system administrators using complex arrays of abundant services: Identifying why and where a request is slow, distinguishing normal from deviant system performance, comparing apples-to-apples metrics across apps regardless of programming language, and attaining a complete and meaningful view of performance.
 
-<img width="700px" src="http://skywalking.apache.org/assets/frame.jpeg"/>
+![img](0081Kckwly1gl2ctge1g5j31pc0s8h04.jpg)
 
 # SkyWalking History
 Launched in China by Wu Sheng in 2015, SkyWalking started as just a distributed tracing system, like Zipkin, but with auto instrumentation from a Java agent. This enabled JVM users to see distributed traces without any change to their source code. In the last two years, it has been used for research and production by more than [50 companies](https://github.com/apache/incubator-skywalking/blob/master/docs/powered-by.md). With its expanded capabilities, we expect to see it adopted more globally.
@@ -27,7 +27,7 @@ Istio has picked up a lot of steam as the framework of choice for distributed se
 
 So now you can use Skywalking to get metrics and understand the topology of your applications. This works not just for Java, .NET and Node using our language agents, but also for microservices running under the Istio service mesh. You can get a full topology of both kinds of applications.
 
-<img width="700px" src="http://skywalking.apache.org/screenshots/6.0.0-alpha/Istio/Topology.png"/>
+![](0081Kckwly1gl2cjmhi3uj31h80m5jwn.jpg)
 
 ## Observability analysis platform
 With its roots in tracing, SkyWalking is now transitioning into an open-standards based **Observability Analysis Platform**, which means the following:
@@ -36,8 +36,7 @@ With its roots in tracing, SkyWalking is now transitioning into an open-standard
 * Its agents support various popular software technologies and frameworks like Tomcat, Spring, Kafka. The whole supported framework list is [here](https://github.com/apache/incubator-skywalking/blob/master/docs/en/setup/service-agent/java-agent/Supported-list.md).
 * It can accept data from other compliant sources like Zipkin-formatted traces reported from Zipkin, Jaeger, or OpenCensus clients.
 
-
-<img width="700px" src="https://skywalkingtest.github.io/page-resources/6-alpha-overview.png"/>
+![img](0081Kckwly1gl2cqo4yctj31ok0s07hh.jpg)
 
 SkyWalking is logically split into four parts: Probes, Platform Backend, Storage and UI:
 
@@ -56,19 +55,19 @@ Some examples of SkyWalking’s UI:
 
 - Observe a Spring app using the SkyWalking JVM-agent
 
-<img width="700px" src="http://skywalking.apache.org/screenshots/6.0.0-alpha/Topology.png">
+![Topology](0081Kckwly1gl2ckeyyxlj31h70lvdjf.jpg)
 
 - Observe on Istio without any agent, no matter what langugage the service is written in
 
-<img width="700px" src="http://skywalking.apache.org/screenshots/6.0.0-alpha/Istio/Topology.png">
+![Topology](0081Kckwly1gl2ckwr65mj31h80m5jwn.jpg)
 
 - See fine-grained metrics like request/Call per Minute, P99/95/90/75/50 latency, avg response time, heatmap
 
-<img width="700px"  src="http://skywalking.apache.org/screenshots/6.0.0-alpha/Istio/Dashboard.png"/>
+![Dashboard](0081Kckwly1gl2cmxcrdqj31gz0qmdja.jpg)
 
 - Service dependencies and metrics
 
-<img width="700px" src="http://skywalking.apache.org/screenshots/6.0.0-alpha/Istio/Service.png"/>
+![Service](0081Kckwly1gl2cngbu84j31h00oxadw.jpg)
 
 # Service Focused
 At Tetrate, we are focused on discovery, reliability, and security of your running services.
