@@ -5,7 +5,7 @@ author: SkyWalking Team
 description: "Release Apache SkyWalking CLI 0.5.0."
 ---
 
-SkyWalking CLI 0.5.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking CLI 0.5.0 is released. Go to [downloads](https://skywalking.apache.org/downloads) page to find release tars.
 
 - Features
   - Use template files in yaml format instead
