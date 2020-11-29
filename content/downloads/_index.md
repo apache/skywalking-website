@@ -22,10 +22,6 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 
 **Docker images are not official ASF releases but provided for convenience. Recommended usage is always to build the source**
 
-- Base, https://hub.docker.com/r/apache/skywalking-base
-- SkyWalking OAP Server, https://hub.docker.com/r/apache/skywalking-oap-server
-- SkyWalking UI, https://hub.docker.com/r/apache/skywalking-ui
-
 {{< dockerhub-block >}}
 
 ## Changelog
