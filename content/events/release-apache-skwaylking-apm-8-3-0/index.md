@@ -5,7 +5,7 @@ author: SkyWalking Team
 description: "Release Apache SkyWalking 8.3.0."
 ---
 
-SkyWalking 8.3.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking 8.3.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 #### Project
 * Test: ElasticSearch version 7.0.0 and 7.9.3 as storage are E2E tested. 
