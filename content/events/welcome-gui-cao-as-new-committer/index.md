@@ -12,6 +12,6 @@ Meanwhile, he took part in the tech discussion, and show the interests to contri
 At Dec. 4th, 2020, the project management committee(PMC) passed the proposal of promoting him as a new committer.
 He has accepted the invitation at the same day.
 
-Welcome Gui Gao join the committer team.
+Welcome Gui Cao join the committer team.
 
 [1] https://github.com/apache/skywalking/commits?author=zifeihan
