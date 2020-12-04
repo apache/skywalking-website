@@ -5,7 +5,7 @@ author: SkyWalking Team
 description: "Release Apache SkyWalking 8.2.0."
 ---
 
-SkyWalking 8.2.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking 8.2.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 #### Project
 * Support Browser monitoring.
