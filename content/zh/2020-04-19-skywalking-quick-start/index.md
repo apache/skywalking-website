@@ -362,7 +362,7 @@ DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient
 
 1、首先，使用浏览器，访问下 <http://127.0.0.1:8079/demo/echo> 地址，请求下 Spring Boot 应用提供的 API。因为，我们要追踪下该链路。
 
-2、然后，继续使用浏览器，打开 <http://127.0.0.1:8080/> 地址，进入 SkyWalking UI 界面。如下图所示：![SkyWalking UI 界面 —— 仪表盘](http://www.iocoder.cn/images/SkyWalking/2017-01-01/02.png)
+2、然后，继续使用浏览器，打开 <http://127.0.0.1:8080/> 地址，进入 SkyWalking UI 界面。如下图所示：![SkyWalking UI 界面 —— 仪表盘](2017-01-01_02.png)
 
 这里，我们会看到 SkyWalking 中非常重要的三个概念：
 
@@ -378,7 +378,7 @@ DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient
 
   > 这里，我们可以看到 Spring Boot 应用的一个**端点**，为 API 接口 `/demo/echo`。
 
-3、之后，点击「拓扑图」菜单，进入查看拓扑图的界面。如下图所示：![SkyWalking UI 界面 —— 拓扑图](http://www.iocoder.cn/images/SkyWalking/2017-01-01/03.png)
+3、之后，点击「拓扑图」菜单，进入查看拓扑图的界面。如下图所示：![SkyWalking UI 界面 —— 拓扑图](2017-01-01_03.png)
 
 4、再之后，点击「追踪」菜单，进入查看链路数据的界面。如下图所示：![SkyWalking UI 界面 —— 追踪](0081Kckwly1gkl535q88ej31ds0u0k0p.jpg)
 
@@ -408,7 +408,7 @@ DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient
 
 默认情况下，SkyWalking 已经[内置告警规则](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/backend/backend-alarm.md#%E9%BB%98%E8%AE%A4%E5%91%8A%E8%AD%A6%E8%A7%84%E5%88%99)。同时，我们可以参考[告警规则](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/backend/backend-alarm.md#%E8%A7%84%E5%88%99)，进行自定义。
 
-在满足 SkyWalking 告警规则的触发规则时，我们在 SkyWaling UI 的告警界面，可以看到告警内容。如下图所示：![SkyWaling UI 界面 —— 告警](http://www.iocoder.cn/images/SkyWalking/2017-01-01/06.png)
+在满足 SkyWalking 告警规则的触发规则时，我们在 SkyWaling UI 的告警界面，可以看到告警内容。如下图所示：![SkyWaling UI 界面 —— 告警](2017-01-01_06.png)
 
 同时，我们自定义 [Webhook](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/backend/backend-alarm.md#webhook) ，对接 SkyWalking 的告警请求。而具体的邮箱、钉钉等告警方式，需要自己进行开发。至于自定义 WebHook 如何实现，可以参考：
 
