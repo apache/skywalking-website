@@ -49,6 +49,7 @@ Members include Project Management Committee members and committers. The list is
 | Name              | Apache ID  |
 |-------------------|------------|
 | Brandon Fergerson | bfergerson |
+| Gui Cao           | zifeihan   |
 | Huaxi Jiang       | hoshea     |
 | Jiapeng Liu       | liujiapeng |
 | JunXu Chen        | chenjunxu  |
