@@ -166,7 +166,7 @@ There are many cases of network congestion, such as the network problem on the h
 ![](Sender.jpg)
 
 ### Crash Recovery
-The crash recovery only works when the user selects MmapQueue in Gatherer because of persistent file system design. When facing a crash, Reading Offset would be overridden by Committed Offset that ensure the at least once delivery. And Writed Offset would be overridden Writing Offset that ensures the consumer always works properly and avoid encountering uncrossable defective data blocks.
+The crash recovery only works when the user selects MmapQueue in Gatherer because of persistent file system design. When facing a crash, Reading Offset would be overridden by Committed Offset that ensure the at least once delivery. And Writed Offset would override Writing Offset that ensures the consumer always works properly and avoid encountering uncrossable defective data blocks.
 
 ![](offset-convert.jpg)
 
