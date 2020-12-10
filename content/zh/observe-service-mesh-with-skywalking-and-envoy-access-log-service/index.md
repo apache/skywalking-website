@@ -243,12 +243,10 @@ Kubernetes 很受欢迎，可是 VM 呢？正如我们之前所说，为了替 I
 
 如果你希望在 ALS 方案或是混合式网格可观察性上获得商业支持，[TSB](https://www.tetrate.io/tetrate-service-bridge/) 会是一个好选项。
 
-Additional Resources 额外资源
+额外资源
 
 - KubeCon 2019 的录影[视频](https://www.youtube.com/watch?v=tERm39ju9ew)。
 - 在[官方网站](https://skywalking.apache.org/)上获得更多有关 SkyWalking 的最新消息吧。
-- 在我们 Tetrate 的[博客](https://www.tetrate.io/blog/category/open-source/apache-skywalking/)上阅读更多有关 SkyWalking 的资讯吧。
-- 订阅 [Tetrate](https://www.tetrate.io/contact-us/) 收听更多有关 SkyWalking 和可观察性的电子报。
 
 如有任何问题或反馈，发送邮件至 learn@tetrate.io。
 
