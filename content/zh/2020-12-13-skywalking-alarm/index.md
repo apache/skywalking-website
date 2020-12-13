@@ -15,15 +15,11 @@ SkyWalking内置了很多默认的告警策略, 然后根据告警策略生成�
 
 当我们想去让这些告警目标通知到我们时, 由于SkyWalking目前版本(8.3)已经自带了, 只需要简单配置一下即可
 
+我们先来钉钉群中创建机器人并勾选加签
 
+![image-20201213164116760](index.assets/image-20201213164116760.png)
 
-如果你是默认的配置文件, 直接执行一下命令即可(或者手动修改configs/alarm-settings.yml)
-
-当然在这之前你需要去钉钉里面创建机器人, 勾选加签
-
-![image-20201213164116760](image-20201213164116760.png)
-
-
+然后再修改告警部分的配置文件, 如果你是默认的配置文件(就像我一样), 你可以直接执行以下命令, 反之你也可以手动修改configs/alarm-settings.yml文件
 
 ```
 tee <your_skywalking_path>/configs/alarm-settings.yml <<-'EOF'
