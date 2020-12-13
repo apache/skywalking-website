@@ -53,6 +53,7 @@ Members include Project Management Committee members and committers. The list is
 | Huaxi Jiang       | hoshea     |
 | Jiapeng Liu       | liujiapeng |
 | JunXu Chen        | chenjunxu  |
+| Juntao Zhang      | zhangjuntao|
 | Ming Wen          | wenming    |
 | Sheng Wang        | wangsheng  |
 | Wei Hua           | alonelaval |

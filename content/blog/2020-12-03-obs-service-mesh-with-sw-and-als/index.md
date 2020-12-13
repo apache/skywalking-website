@@ -192,7 +192,6 @@ If you want to  have commercial support for the ALS solution or hybrid mesh obse
 ## Additional Resources
 - KubeCon 2019 Recorded [Video](https://www.youtube.com/watch?v=tERm39ju9ew). 
 - Get more SkyWalking updates on [the official website](https://skywalking.apache.org).
-- Read more about SkyWalking from Tetrate on our [blog](https://www.tetrate.io/blog/category/open-source/apache-skywalking/).
 
 _Apache SkyWalking founder Sheng Wu, SkyWalking core maintainer Zhenxu Ke are Tetrate engineers, and Tevah Platt is a content writer for Tetrate. Tetrate helps organizations adopt open source service mesh tools, including Istio, Envoy, and Apache SkyWalking, so they can manage microservices, run service mesh on any infrastructure, and modernize their applications._
  
