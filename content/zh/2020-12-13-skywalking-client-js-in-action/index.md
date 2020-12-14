@@ -7,7 +7,7 @@ description: 本文将详细介绍如何使用SkyWalking监控前端项目的页
 
 
 
-首先我们得明白前端项目是通过Nginx代理出来, 我们得修改Nginx添加SkyWalking-OAP端点, 让SkyWalking-OAP端点处于前端项目的项目根目录, Nginx案例如下(Ingress-Nginx暂略)
+首先我们前端项目是通过Nginx代理出来。我们需要修改Nginx添加SkyWalking-OAP端点, 让SkyWalking-OAP可以被浏览器访问到。我们的Nginx配置如下(Ingress-Nginx暂略)
 
 ```
 		location /browser {
