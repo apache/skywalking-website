@@ -69,4 +69,8 @@ router.beforeEach(set_skywalking_monitor)
 
 ![image-20201204200334641](image-20201204200334641.png)
 
-谢谢观看, 后续我会在SkyWalking告警这块写更多实战文章
+参考文档:
+
+https://github.com/apache/skywalking-client-js
+
+谢谢观看, 后续我会在SkyWalking-client-js这块写更多实战文章
