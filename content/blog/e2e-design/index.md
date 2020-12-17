@@ -9,16 +9,16 @@ NGE2E is the next generation End-to-End Testing framework that aims to help deve
 
 # Goal
 
-- keep the feature parity with the existing E2E framework in SkyWalking main repo;
-- support both [docker-compose](https://docs.docker.com/compose/) and [KinD](https://kind.sigs.k8s.io) to orchestrate the tested services under different environments;
-- get rid of the heavy `Java/Maven` stack, which exists in the current E2E; be language independent as much as possible, users only need to configure YAMLs and run commands, without writing codes;
+- Keep the feature parity with the existing E2E framework in SkyWalking main repo;
+- Support both [docker-compose](https://docs.docker.com/compose/) and [KinD](https://kind.sigs.k8s.io) to orchestrate the tested services under different environments;
+- Get rid of the heavy `Java/Maven` stack, which exists in the current E2E; be language independent as much as possible, users only need to configure YAMLs and run commands, without writing codes;
 
 # Non-Goal
 
-- this framework is not involved with the build process, i.e. it won't do something like `mvn package` or `docker build`, the artifacts (`.tar`, docker images) should be ready in an earlier process before this;
-- this project doesn't take the plugin tests into account, at least for now;
-- this project doesn't mean to add/remove any new/existing test case to/from the main repo;
-- this documentation won't cover too much technical details of how to implement the framework, that should go into an individual documentation;
+- This framework is not involved with the build process, i.e. it won't do something like `mvn package` or `docker build`, the artifacts (`.tar`, docker images) should be ready in an earlier process before this;
+- This project doesn't take the plugin tests into account, at least for now;
+- This project doesn't mean to add/remove any new/existing test case to/from the main repo;
+- This documentation won't cover too much technical details of how to implement the framework, that should go into an individual documentation;
 
 # Design
 
@@ -89,7 +89,7 @@ swctl e2e verify # If configuration file e2e.yaml is present
 - `--actual`: the actual data file;
 - `--expected`: the expected data file;
 - `--query`: the query to get the actual data, will be executed in command `swctl`;
-  > the `--query` option will get the output into a temporary file and use the `--actual` under the hood;
+  > The `--query` option will get the output into a temporary file and use the `--actual` under the hood;
 
 
 ### Cleanup
@@ -184,7 +184,7 @@ verify:
     expected: expected.projectC.endpoints.yaml
 ```
 
-and a single command should do the trick.
+then a single command should do the trick.
 
 ```shell
 swctl e2e run
@@ -214,38 +214,38 @@ swctl e2e run
 
 The initializer is responsible for
 
-- when `env==compose`
-    + start the `docker-compose` services;
-    + check the services' healthiness; 
-    + wait until all services are ready according to the `interval`, etc.;
+- When `env==compose`
+    + Start the `docker-compose` services;
+    + Check the services' healthiness; 
+    + Wait until all services are ready according to the `interval`, etc.;
 
 
-- when `env==kind`
-    + start the KinD cluster according to the config files;
-    + apply the resources files (`--resources`) or/and run the custom init command (`--commands`);
-    + check the pods' readiness;
-    + wait until all pods are ready according to the `interval`, etc.;
+- When `env==kind`
+    + Start the KinD cluster according to the config files;
+    + Apply the resources files (`--resources`) or/and run the custom init command (`--commands`);
+    + Check the pods' readiness;
+    + Wait until all pods are ready according to the `interval`, etc.;
 
 ## Verifier
 
 According to scenarios we have at the moment, the must-have features are:
 
-- matchers
-    + exact match
-    + not null
-    + not empty
-    + greater than 0
-    + regexp match
-    + at least one of list element match
+- Matchers
+    + Exact match
+    + Not null
+    + Not empty
+    + Greater than 0
+    + Regexp match
+    + At least one of list element match
 
 
-- functions
-    + base64 encode/decode
+- Functions
+    + Base64 encode/decode
 
 
 in order to help to identify simple bugs from the GitHub Actions workflow, there are some "nice to have" features:
 
-- printing the diff content when verification failed is a super helpful bonus proved in the Python agent repo;
+- Printing the diff content when verification failed is a super helpful bonus proved in the Python agent repo;
 
 # Logging
 
@@ -254,8 +254,8 @@ When a test case failed, all the necessary logs should be collected into a dedic
 Logs through the entire process of a test case are:
 
 - KinD clusters logs;
-- containers/pods logs;
-- the logs from the NGE2E itself;
+- Containers/pods logs;
+- The logs from the NGE2E itself;
 
 
 # More Planned
