@@ -94,7 +94,13 @@ swctl e2e verify # If configuration file e2e.yaml is present
 
 ### Cleanup
 
-This step is automatically done by the framework according to the setup step.
+```shell
+swctl e2e cleanup --env=compose --file=docker-compose.yaml
+swctl e2e cleanup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml
+swctl e2e cleanup # If configuration file e2e.yaml is present
+```
+
+This step requires the same options in the setup step so that it can clean up all things necessarily.
 
 ### Summarize
 
