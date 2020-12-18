@@ -40,11 +40,11 @@ This will run the test case in the specified directory, this command is a wrappe
 
 **NOTE**: because all the options can be loaded from a configuration file, so as long as a configuration file (say `e2e.yaml`) is given in the directory, every command should be able to run in bare mode (without any option explicitly specified in the command line);
 
-### Set Up Services
+### Set Up
 
 ```shell
-swctl e2e setup --env=compose --file=docker-compose.yaml --wait=for=service-health
-swctl e2e setup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml --wait=for=pod-ready
+swctl e2e setup --env=compose --file=docker-compose.yaml --wait-for=service/health
+swctl e2e setup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml --wait-for=pod/ready
 swctl e2e setup # If configuration file e2e.yaml is present
 ```
     
@@ -52,7 +52,7 @@ swctl e2e setup # If configuration file e2e.yaml is present
 - `--file`: the `docker-compose.yaml` or `kind.yaml` file that declares how to set up the environment;
 - `--resources`: for KinD, the resources files/directories to apply (using `kubectl apply -f`);
 - `--command`: a command to run after the environment is started, this may be useful when users need to install some extra tools or apply resources from command line, like `istioctl install --profile=demo`;
-- `--wait`: wait until the given condition is met; the most frequently-used strategy should be `for=service-health`, that makes the `e2e setup` command to wait for all services to be `healthy`; other possible strategies may be something like `for="log:Started Successfully"`, `for="http:localhost:8080/healthcheck"`, etc. if really needed;
+- `--wait-for`: can be specified multiple times to give a list of conditions to be met; wait until the given conditions are met; the most frequently-used strategy should be `--wait-for=service/health`, `--wait-for=deployments/available`, etc. that make the `e2e setup` command to wait for all conditions to be met; other possible strategies may be something like `--wait-for="log:Started Successfully"`, `--wait-for="http:localhost:8080/healthcheck"`, etc. if really needed;
 
 
 ### Trigger Inputs
@@ -141,35 +141,31 @@ a sample of `e2e.yaml` may be
 setup:
   env: kind
   file: kind.yaml
-  resources: bookinfo.yaml
-  command: | # it can be a shell script or anything executable
-    istioctl install --profile=demo -y
-    kubectl label namespace default istio-injection=enabled
+  manifests:
+    - path: bookinfo.yaml
+      wait: # you can have multiple conditions to wait
+        - namespace: bookinfo
+          label-selector: app=product
+          for: deployment/available
+        - namespace: reviews
+          label-selector: app=product
+          for: deployment/available
+        - namespace: ratings
+          label-selector: app=product
+          for: deployment/available
+
+  run:
+    - command: | # it can be a shell script or anything executable
+        istioctl install --profile=demo -y
+        kubectl label namespace default istio-injection=enabled
+      wait:
+        - namespace: istio-system
+          label-selector: app=istiod
+          for: deployment/available
 
   # OR
   # env: compose
   # file: docker-compose.yaml
-
-  wait: 
-    for: service-health
-
-  # wait: 
-  #   for: pods-ready
-
-  # OR
-  # wait:
-  #   for: log
-  #   log: Started Successfully
-
-  # OR
-  # wait:
-  #   for: http
-  #   url: localhost:8080/healthcheck
-
-  # OR
-  # wait:
-  #   for: command
-  #   cmd: curl http://localhost:8080/healthcheck
 
 trigger:
   action: http
@@ -210,6 +206,29 @@ swctl e2e run
 ✔ Clean Up
 ```
 
+Compared with running the steps one by one, the controller is also responsible for cleaning up env (by executing `cleanup` command) no mater what status other commands are, even if they are failed, the controller has the following semantics in terms of `setup` and `cleanup`.
+
+```
+// Java
+try {
+    setup();
+    // trigger step
+    // verify step
+    // ...
+} finally {
+    cleanup();
+}
+
+// GoLang
+func run() {
+    setup();
+    // trigger step
+    // verify step
+    // ...
+    defer cleanup();
+}
+```
+
 ## Initializer
 
 The initializer is responsible for
@@ -222,7 +241,7 @@ The initializer is responsible for
 
 - When `env==kind`
     + Start the KinD cluster according to the config files;
-    + Apply the resources files (`--resources`) or/and run the custom init command (`--commands`);
+    + Apply the resources files (`--manifests`) or/and run the custom init command (`--commands`);
     + Check the pods' readiness;
     + Wait until all pods are ready according to the `interval`, etc.;
 
