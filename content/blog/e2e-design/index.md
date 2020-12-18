@@ -29,11 +29,11 @@ Before diving into the design details, let's take a quick look at how the end us
 To run a test case in a directory `/path/to/the/case/directory`
 
 ```shell
-swctl e2e run /path/to/the/case/directory
+e2e run /path/to/the/case/directory
 
 # or
 
-cd /path/to/the/case/directory && swctl e2e run
+cd /path/to/the/case/directory && e2e run
 ```
 
 This will run the test case in the specified directory, this command is a wrapper that glues all the following commands, which can be executed separately, for example, to debug the case:
@@ -43,9 +43,9 @@ This will run the test case in the specified directory, this command is a wrappe
 ### Set Up
 
 ```shell
-swctl e2e setup --env=compose --file=docker-compose.yaml --wait-for=service/health
-swctl e2e setup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml --wait-for=pod/ready
-swctl e2e setup # If configuration file e2e.yaml is present
+e2e setup --env=compose --file=docker-compose.yaml --wait-for=service/health
+e2e setup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml --wait-for=pod/ready
+e2e setup # If configuration file e2e.yaml is present
 ```
     
 - `--env`: the environment, may be `compose` or `kind`, represents docker-compose and KinD respectively;
@@ -58,9 +58,9 @@ swctl e2e setup # If configuration file e2e.yaml is present
 ### Trigger Inputs
 
 ```shell
-swctl e2e trigger --interval=3s --times=0 --action=http --url="localhost:8080/users"
-swctl e2e trigger --interval=3s --times=0 --action=cmd --cmd="curl localhost:8080/users"
-swctl e2e trigger # If configuration file e2e.yaml is present
+e2e trigger --interval=3s --times=0 --action=http --url="localhost:8080/users"
+e2e trigger --interval=3s --times=0 --action=cmd --cmd="curl localhost:8080/users"
+e2e trigger # If configuration file e2e.yaml is present
 ```
 
 - `--interval=3s`: trigger the action every 3 seconds;
@@ -81,9 +81,9 @@ this does exactly the same as what `swctl` is doing at present;
 ### Verify
 
 ```shell
-swctl e2e verify --actual=actual.data.yaml --expected=expected.data.yaml
-swctl e2e verify --query="service ls" --expected=expected.data.yaml
-swctl e2e verify # If configuration file e2e.yaml is present
+e2e verify --actual=actual.data.yaml --expected=expected.data.yaml
+e2e verify --query="service ls" --expected=expected.data.yaml
+e2e verify # If configuration file e2e.yaml is present
 ```
 
 - `--actual`: the actual data file;
@@ -95,9 +95,9 @@ swctl e2e verify # If configuration file e2e.yaml is present
 ### Cleanup
 
 ```shell
-swctl e2e cleanup --env=compose --file=docker-compose.yaml
-swctl e2e cleanup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml
-swctl e2e cleanup # If configuration file e2e.yaml is present
+e2e cleanup --env=compose --file=docker-compose.yaml
+e2e cleanup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml
+e2e cleanup # If configuration file e2e.yaml is present
 ```
 
 This step requires the same options in the setup step so that it can clean up all things necessarily.
@@ -183,7 +183,7 @@ verify:
 then a single command should do the trick.
 
 ```shell
-swctl e2e run
+e2e run
 ```
 
 # Modules
@@ -192,10 +192,10 @@ This project is divided into the following modules.
 
 ## Controller
 
-A controller command (`swctl e2e run`) composes all the steps declared in the `e2e.yaml`, it should be progressive and clearly display which step is currently running. If it failed in a step, the error message should be as much comprehensive as possible. An example of the output might be
+A controller command (`e2e run`) composes all the steps declared in the `e2e.yaml`, it should be progressive and clearly display which step is currently running. If it failed in a step, the error message should be as much comprehensive as possible. An example of the output might be
 
 ```text
-swctl e2e run
+e2e run
 ✔ Started Kind Cluster - Cluster Name
 ✔ Checked Pods Readiness - All pods are ready
 ? Generating Traffic - http localhost:9090/users (progress spinner)
@@ -222,10 +222,10 @@ try {
 // GoLang
 func run() {
     setup();
+    defer cleanup();
     // trigger step
     // verify step
     // ...
-    defer cleanup();
 }
 ```
 
@@ -285,7 +285,7 @@ Debugging the E2E locally has been a strong requirement and time killer that we 
 
 The most common case when debugging is to run the E2E tests, with one or more services forwarded into the host machine, where the services are run in the IDE or in debug mode.
 
-For example, you may run the SkyWalking OAP server in an IDE and run `swctl e2e run`, expecting the other services (e.g. agent services, SkyWalking WebUI, etc.) inside the containers to connect to your local OAP, instead of the one declared in `docker-compose.yaml`.  
+For example, you may run the SkyWalking OAP server in an IDE and run `e2e run`, expecting the other services (e.g. agent services, SkyWalking WebUI, etc.) inside the containers to connect to your local OAP, instead of the one declared in `docker-compose.yaml`.  
 
 For Docker Desktop Mac/Windows, we can access the services running on the host machine inside containers via `host.docker.internal`, for Linux, it's `172.17.0.1`.
 
@@ -297,5 +297,5 @@ When adding new test case, a code generator would be of great value to eliminate
 
 
 ```shell
-swctl e2e new <case-name>
+e2e new <case-name>
 ```
