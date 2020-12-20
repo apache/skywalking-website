@@ -14,55 +14,56 @@ Members include Project Management Committee members and committers. The list is
 
 ### Project Management Committee
 
-| Name                             | Apache ID    |
-|----------------------------------|--------------|
-| Can Li                           | lican        |
-| DongXue Si                       | ilucky       |
-| Han Liu                          | liuhan       |
-| Haochao Zhuang                   | daming       |
-| Haoyang Liu                      | liuhaoyangzz |
-| Hongtao Gao                      | hanahmily    |
-| Hongwei Zhai                     | innerpeacez  |
-| Ignasi Barrera                   | nacx         |
-| Jian Tan                         | tanjian      |
-| Jiaqi Lin                        | linjiaqi     |
-| Jinlin Fu                        | withlin      |
-| Kai Wang                         | wangkai      |
-| Lang Li                          | lilang       |
-| Michael Semb Wever               | mck          |
-| Qiuxia Fan                       | qiuxiafan    |
-| Sheng Wu (V.P. and Chair of PMC) | wusheng      |
-| Shinn Zhang                      | zhangxin     |
-| Wei Zhang                        | zhangwei24   |
-| Wenbing Wang                     | wangwenbin   |
-| Willem Ning Jiang                | ningjiang    |
-| Yang Bai                         | baiyang      |
-| Yao Wang                         | ywang        |
-| Yixiong Cao                      | caoyixiong   |
-| Yongsheng Peng                   | pengys       |
-| Yuguang Zhao                     | zhaoyuguang  |
-| Zhang Kewei                      | zhangkewei   |
-| Zhenxu Ke                        | kezhenxu94   |
+| Name                             | Apache ID    | Twitter                                        |
+| -------------------------------- | ------------ | ---------------------------------------------- |
+| Can Li                           | lican        | [Candy198088](https://twitter.com/Candy198088) |
+| DongXue Si                       | ilucky       |                                                |
+| Han Liu                          | liuhan       | [dalek_zero](https://twitter.com/dalek_zero)   |
+| Haochao Zhuang                   | daming       |                                                |
+| Haoyang Liu                      | liuhaoyangzz |                                                |
+| Hongtao Gao                      | hanahmily    |                                                |
+| Hongwei Zhai                     | innerpeacez  |                                                |
+| Ignasi Barrera                   | nacx         |                                                |
+| Jian Tan                         | tanjian      |                                                |
+| Jiaqi Lin                        | linjiaqi     |                                                |
+| Jinlin Fu                        | withlin      |                                                |
+| Kai Wang                         | wangkai      |                                                |
+| Lang Li                          | lilang       |                                                |
+| Michael Semb Wever               | mck          |                                                |
+| Qiuxia Fan                       | qiuxiafan    |                                                |
+| Sheng Wu (V.P. and Chair of PMC) | wusheng      | [wusheng1108](https://twitter.com/wusheng1108) |
+| Shinn Zhang                      | zhangxin     | [ascrutae](https://twitter.com/ascrutae)       |
+| Wei Zhang                        | zhangwei24   |                                                |
+| Wenbing Wang                     | wangwenbin   |                                                |
+| Willem Ning Jiang                | ningjiang    |                                                |
+| Yang Bai                         | baiyang      |                                                |
+| Yao Wang                         | ywang        |                                                |
+| Yixiong Cao                      | caoyixiong   |                                                |
+| Yongsheng Peng                   | pengys       |                                                |
+| Yuguang Zhao                     | zhaoyuguang  |                                                |
+| Zhang Kewei                      | zhangkewei   |                                                |
+| Zhenxu Ke                        | kezhenxu94   | [kezhenxu94](https://twitter.com/kezhenxu94)   |
 
 ### Committer
 
-| Name              | Apache ID  |
-|-------------------|------------|
-| Brandon Fergerson | bfergerson |
-| Gui Cao           | zifeihan   |
-| Huaxi Jiang       | hoshea     |
-| Jiapeng Liu       | liujiapeng |
-| JunXu Chen        | chenjunxu  |
-| Juntao Zhang      | zhangjuntao|
-| Ming Wen          | wenming    |
-| Sheng Wang        | wangsheng  |
-| Wei Hua           | alonelaval |
-| Wei Jin           | kvn        |
-| Weijie Zou        | kdump      |
-| Weiyi Liu         | wayilau    |
-| Yanlong He        | heyanlong  |
-| Yuntao Li         | liyuntao   |
-| Zhusheng Xu       | aderm      |
+| Name              | Apache ID   | Twitter                                          |
+| ----------------- | ----------- | ------------------------------------------------ |
+| Brandon Fergerson | bfergerson  |                                                  |
+| Gui Cao           | zifeihan    | [zifeihan007](https://twitter.com/zifeihan007)   |
+| Huaxi Jiang       | hoshea      | [Zerone___01](https://twitter.com/Zerone___01)   |
+| Jiapeng Liu       | liujiapeng  |                                                  |
+| JunXu Chen        | chenjunxu   |                                                  |
+| Juntao Zhang      | zhangjuntao |                                                  |
+| Ke Zhang          | zhangke     | [Humbertttttt](https://twitter.com/Humbertttttt) |
+| Ming Wen          | wenming     |                                                  |
+| Sheng Wang        | wangsheng   |                                                  |
+| Wei Hua           | alonelaval  |                                                  |
+| Wei Jin           | kvn         |                                                  |
+| Weijie Zou        | kdump       | [RootShellExp](https://twitter.com/RootShellExp) |
+| Weiyi Liu         | wayilau     |                                                  |
+| Yanlong He        | heyanlong   | [YanlongHe](https://twitter.com/YanlongHe)       |
+| Yuntao Li         | liyuntao    |                                                  |
+| Zhusheng Xu       | aderm       |                                                  |
 
 
 ## Contributors
