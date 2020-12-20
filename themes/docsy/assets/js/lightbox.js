@@ -20,6 +20,9 @@ $(function () {
     return;
   }
   $('.td-main img').on('click', function (event) {
+    if($(this).data('nolightbox')){
+      return;
+    }
     event = event || window.event;
     var target = document.elementFromPoint(event.clientX, event.clientY);
     showBig(target.src);
