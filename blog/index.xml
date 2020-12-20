@@ -14,6 +14,251 @@
     
     
     <item>
+      <title>Blog: [Design] NGE2E - Next Generation End-to-End Testing Framework</title>
+      <link>https://skywalking.apache.org/blog/e2e-design/</link>
+      <pubDate>Mon, 14 Dec 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://skywalking.apache.org/blog/e2e-design/</guid>
+      <description>
+        
+        
+        &lt;p&gt;NGE2E is the next generation End-to-End Testing framework that aims to help developers to set up, debug, and verify E2E tests with ease. It&amp;rsquo;s built based on the lessons learnt from tens of hundreds of test cases in the SkyWalking main repo.&lt;/p&gt;
+&lt;h1 id=&#34;goal&#34;&gt;Goal&lt;/h1&gt;
+&lt;ul&gt;
+&lt;li&gt;Keep the feature parity with the existing E2E framework in SkyWalking main repo;&lt;/li&gt;
+&lt;li&gt;Support both &lt;a href=&#34;https://docs.docker.com/compose/&#34;&gt;docker-compose&lt;/a&gt; and &lt;a href=&#34;https://kind.sigs.k8s.io&#34;&gt;KinD&lt;/a&gt; to orchestrate the tested services under different environments;&lt;/li&gt;
+&lt;li&gt;Get rid of the heavy &lt;code&gt;Java/Maven&lt;/code&gt; stack, which exists in the current E2E; be language independent as much as possible, users only need to configure YAMLs and run commands, without writing codes;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;non-goal&#34;&gt;Non-Goal&lt;/h1&gt;
+&lt;ul&gt;
+&lt;li&gt;This framework is not involved with the build process, i.e. it won&amp;rsquo;t do something like &lt;code&gt;mvn package&lt;/code&gt; or &lt;code&gt;docker build&lt;/code&gt;, the artifacts (&lt;code&gt;.tar&lt;/code&gt;, docker images) should be ready in an earlier process before this;&lt;/li&gt;
+&lt;li&gt;This project doesn&amp;rsquo;t take the plugin tests into account, at least for now;&lt;/li&gt;
+&lt;li&gt;This project doesn&amp;rsquo;t mean to add/remove any new/existing test case to/from the main repo;&lt;/li&gt;
+&lt;li&gt;This documentation won&amp;rsquo;t cover too much technical details of how to implement the framework, that should go into an individual documentation;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;design&#34;&gt;Design&lt;/h1&gt;
+&lt;p&gt;Before diving into the design details, let&amp;rsquo;s take a quick look at how the end user might use NGE2E.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;All the following commands are mock, and are open to debate.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;To run a test case in a directory &lt;code&gt;/path/to/the/case/directory&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e run /path/to/the/case/directory
+
+&lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# or&lt;/span&gt;
+
+&lt;span style=&#34;color:#204a87&#34;&gt;cd&lt;/span&gt; /path/to/the/case/directory &lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; e2e run
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;This will run the test case in the specified directory, this command is a wrapper that glues all the following commands, which can be executed separately, for example, to debug the case:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;NOTE&lt;/strong&gt;: because all the options can be loaded from a configuration file, so as long as a configuration file (say &lt;code&gt;e2e.yaml&lt;/code&gt;) is given in the directory, every command should be able to run in bare mode (without any option explicitly specified in the command line);&lt;/p&gt;
+&lt;h3 id=&#34;set-up&#34;&gt;Set Up&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e setup --env&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;compose --file&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;docker-compose.yaml --wait-for&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;service/health
+e2e setup --env&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;kind --file&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;kind.yaml --resources&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;bookinfo.yaml,gateway.yaml --wait-for&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;pod/ready
+e2e setup &lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# If configuration file e2e.yaml is present&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;--env&lt;/code&gt;: the environment, may be &lt;code&gt;compose&lt;/code&gt; or &lt;code&gt;kind&lt;/code&gt;, represents docker-compose and KinD respectively;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--file&lt;/code&gt;: the &lt;code&gt;docker-compose.yaml&lt;/code&gt; or &lt;code&gt;kind.yaml&lt;/code&gt; file that declares how to set up the environment;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--resources&lt;/code&gt;: for KinD, the resources files/directories to apply (using &lt;code&gt;kubectl apply -f&lt;/code&gt;);&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--command&lt;/code&gt;: a command to run after the environment is started, this may be useful when users need to install some extra tools or apply resources from command line, like &lt;code&gt;istioctl install --profile=demo&lt;/code&gt;;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--wait-for&lt;/code&gt;: can be specified multiple times to give a list of conditions to be met; wait until the given conditions are met; the most frequently-used strategy should be &lt;code&gt;--wait-for=service/health&lt;/code&gt;, &lt;code&gt;--wait-for=deployments/available&lt;/code&gt;, etc. that make the &lt;code&gt;e2e setup&lt;/code&gt; command to wait for all conditions to be met; other possible strategies may be something like &lt;code&gt;--wait-for=&amp;quot;log:Started Successfully&amp;quot;&lt;/code&gt;, &lt;code&gt;--wait-for=&amp;quot;http:localhost:8080/healthcheck&amp;quot;&lt;/code&gt;, etc. if really needed;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;trigger-inputs&#34;&gt;Trigger Inputs&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e trigger --interval&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;3s --times&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0000cf;font-weight:bold&#34;&gt;0&lt;/span&gt; --action&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;http --url&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#4e9a06&#34;&gt;&amp;#34;localhost:8080/users&amp;#34;&lt;/span&gt;
+e2e trigger --interval&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;3s --times&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0000cf;font-weight:bold&#34;&gt;0&lt;/span&gt; --action&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;cmd --cmd&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#4e9a06&#34;&gt;&amp;#34;curl localhost:8080/users&amp;#34;&lt;/span&gt;
+e2e trigger &lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# If configuration file e2e.yaml is present&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;--interval=3s&lt;/code&gt;: trigger the action every 3 seconds;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--times=0&lt;/code&gt;: how many times to trigger the action, &lt;code&gt;0=infinite&lt;/code&gt;;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--action=http&lt;/code&gt;: the action of the trigger, i.e. &amp;ldquo;perform an http request as an input&amp;rdquo;;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--action=cmd&lt;/code&gt;: the action of the trigger, i.e. &amp;ldquo;execute the &lt;code&gt;cmd&lt;/code&gt; as an input&amp;rdquo;;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;query-output&#34;&gt;Query Output&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;swctl service ls
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;this does exactly the same as what &lt;code&gt;swctl&lt;/code&gt; is doing at present;&lt;/p&gt;
+&lt;h3 id=&#34;verify&#34;&gt;Verify&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e verify --actual&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;actual.data.yaml --expected&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;expected.data.yaml
+e2e verify --query&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#4e9a06&#34;&gt;&amp;#34;service ls&amp;#34;&lt;/span&gt; --expected&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;expected.data.yaml
+e2e verify &lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# If configuration file e2e.yaml is present&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;--actual&lt;/code&gt;: the actual data file;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--expected&lt;/code&gt;: the expected data file;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--query&lt;/code&gt;: the query to get the actual data, will be executed in command &lt;code&gt;swctl&lt;/code&gt;;
+&lt;blockquote&gt;
+&lt;p&gt;The &lt;code&gt;--query&lt;/code&gt; option will get the output into a temporary file and use the &lt;code&gt;--actual&lt;/code&gt; under the hood;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;cleanup&#34;&gt;Cleanup&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e cleanup --env&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;compose --file&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;docker-compose.yaml
+e2e cleanup --env&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;kind --file&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;kind.yaml --resources&lt;span style=&#34;color:#ce5c00;font-weight:bold&#34;&gt;=&lt;/span&gt;bookinfo.yaml,gateway.yaml
+e2e cleanup &lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# If configuration file e2e.yaml is present&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;This step requires the same options in the setup step so that it can clean up all things necessarily.&lt;/p&gt;
+&lt;h3 id=&#34;summarize&#34;&gt;Summarize&lt;/h3&gt;
+&lt;p&gt;To summarize, the directory structure of a test case might be&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;case-name
+├── agent-service        # optional, an arbitrary project that is used in the docker-compose.yaml if needed
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src
+├── docker-compose.yaml
+├── e2e.yaml             # see a sample below
+└── testdata
+    ├── expected.endpoints.service1.yaml
+    ├── expected.endpoints.service2.yaml
+    └── expected.services.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;or&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;case-name
+├── kind.yaml
+├── bookinfo
+│   ├── bookinfo.yaml
+│   └── bookinfo-gateway.yaml
+├── e2e.yaml             # see a sample below
+└── testdata
+    ├── expected.endpoints.service1.yaml
+    ├── expected.endpoints.service2.yaml
+    └── expected.services.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;a sample of &lt;code&gt;e2e.yaml&lt;/code&gt; may be&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;setup&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;env&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;kind&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;file&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;kind.yaml&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;manifests&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;path&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;bookinfo.yaml&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;wait&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# you can have multiple conditions to wait&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;        &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;namespace&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;bookinfo&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;label-selector&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;app=product&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;deployment/available&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;        &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;namespace&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;reviews&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;label-selector&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;app=product&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;deployment/available&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;        &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;namespace&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;ratings&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;label-selector&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;app=product&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;deployment/available&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;command&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;|&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# it can be a shell script or anything executable&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;        &lt;/span&gt;istioctl&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;install&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;--profile=demo&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;-y&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;        &lt;/span&gt;kubectl&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;label&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;namespace&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;istio-injection=enabled&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;wait&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;        &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;namespace&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;istio-system&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;label-selector&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;app=istiod&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;deployment/available&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# OR&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# env: compose&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#8f5902;font-style:italic&#34;&gt;# file: docker-compose.yaml&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;trigger&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;action&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;http&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;interval&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;3s&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;times&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0000cf;font-weight:bold&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;url&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;localhost&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#0000cf;font-weight:bold&#34;&gt;9090&lt;/span&gt;/users&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;verify&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;query&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;service&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;ls&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;expected&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;expected.services.yaml&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;query&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;endpoint&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;ls&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;--service=&lt;span style=&#34;color:#4e9a06&#34;&gt;&amp;#34;YnVzaW5lc3Mtem9uZTo6cHJvamVjdEM=.1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;expected&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt; &lt;/span&gt;expected.projectC.endpoints.yaml&lt;span style=&#34;color:#f8f8f8;text-decoration:underline&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;then a single command should do the trick.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e run
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h1 id=&#34;modules&#34;&gt;Modules&lt;/h1&gt;
+&lt;p&gt;This project is divided into the following modules.&lt;/p&gt;
+&lt;h2 id=&#34;controller&#34;&gt;Controller&lt;/h2&gt;
+&lt;p&gt;A controller command (&lt;code&gt;e2e run&lt;/code&gt;) composes all the steps declared in the &lt;code&gt;e2e.yaml&lt;/code&gt;, it should be progressive and clearly display which step is currently running. If it failed in a step, the error message should be as much comprehensive as possible. An example of the output might be&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;e2e run
+✔ Started Kind Cluster - Cluster Name
+✔ Checked Pods Readiness - All pods are ready
+? Generating Traffic - http localhost:9090/users (progress spinner)
+✔ Verified Output - service ls
+(progress spinner) Verifying Output - endpoint ls
+✘ Failed to Verify Output Data - endpoint ls
+  &amp;lt;the diff content&amp;gt;
+✔ Clean Up
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Compared with running the steps one by one, the controller is also responsible for cleaning up env (by executing &lt;code&gt;cleanup&lt;/code&gt; command) no mater what status other commands are, even if they are failed, the controller has the following semantics in terms of &lt;code&gt;setup&lt;/code&gt; and &lt;code&gt;cleanup&lt;/code&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;// Java
+try {
+    setup();
+    // trigger step
+    // verify step
+    // ...
+} finally {
+    cleanup();
+}
+
+// GoLang
+func run() {
+    setup();
+    defer cleanup();
+    // trigger step
+    // verify step
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;initializer&#34;&gt;Initializer&lt;/h2&gt;
+&lt;p&gt;The initializer is responsible for&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;When &lt;code&gt;env==compose&lt;/code&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Start the &lt;code&gt;docker-compose&lt;/code&gt; services;&lt;/li&gt;
+&lt;li&gt;Check the services&amp;rsquo; healthiness;&lt;/li&gt;
+&lt;li&gt;Wait until all services are ready according to the &lt;code&gt;interval&lt;/code&gt;, etc.;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;When &lt;code&gt;env==kind&lt;/code&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Start the KinD cluster according to the config files;&lt;/li&gt;
+&lt;li&gt;Apply the resources files (&lt;code&gt;--manifests&lt;/code&gt;) or/and run the custom init command (&lt;code&gt;--commands&lt;/code&gt;);&lt;/li&gt;
+&lt;li&gt;Check the pods&amp;rsquo; readiness;&lt;/li&gt;
+&lt;li&gt;Wait until all pods are ready according to the &lt;code&gt;interval&lt;/code&gt;, etc.;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;verifier&#34;&gt;Verifier&lt;/h2&gt;
+&lt;p&gt;According to scenarios we have at the moment, the must-have features are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Matchers&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Exact match&lt;/li&gt;
+&lt;li&gt;Not null&lt;/li&gt;
+&lt;li&gt;Not empty&lt;/li&gt;
+&lt;li&gt;Greater than 0&lt;/li&gt;
+&lt;li&gt;Regexp match&lt;/li&gt;
+&lt;li&gt;At least one of list element match&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Functions&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Base64 encode/decode&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;in order to help to identify simple bugs from the GitHub Actions workflow, there are some &amp;ldquo;nice to have&amp;rdquo; features:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Printing the diff content when verification failed is a super helpful bonus proved in the Python agent repo;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;logging&#34;&gt;Logging&lt;/h1&gt;
+&lt;p&gt;When a test case failed, all the necessary logs should be collected into a dedicated directory, which could be uploaded to the GitHub Artifacts for downloading and analysis;&lt;/p&gt;
+&lt;p&gt;Logs through the entire process of a test case are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;KinD clusters logs;&lt;/li&gt;
+&lt;li&gt;Containers/pods logs;&lt;/li&gt;
+&lt;li&gt;The logs from the NGE2E itself;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;more-planned&#34;&gt;More Planned&lt;/h1&gt;
+&lt;h2 id=&#34;debugging&#34;&gt;Debugging&lt;/h2&gt;
+&lt;p&gt;Debugging the E2E locally has been a strong requirement and time killer that we haven&amp;rsquo;t solve up to date, though we have enhancements like &lt;a href=&#34;https://github.com/apache/skywalking/pull/5198&#34;&gt;https://github.com/apache/skywalking/pull/5198&lt;/a&gt; , but in this framework, we will adopt a new method to &amp;ldquo;really&amp;rdquo; support debugging locally.&lt;/p&gt;
+&lt;p&gt;The most common case when debugging is to run the E2E tests, with one or more services forwarded into the host machine, where the services are run in the IDE or in debug mode.&lt;/p&gt;
+&lt;p&gt;For example, you may run the SkyWalking OAP server in an IDE and run &lt;code&gt;e2e run&lt;/code&gt;, expecting the other services (e.g. agent services, SkyWalking WebUI, etc.) inside the containers to connect to your local OAP, instead of the one declared in &lt;code&gt;docker-compose.yaml&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;For Docker Desktop Mac/Windows, we can access the services running on the host machine inside containers via &lt;code&gt;host.docker.internal&lt;/code&gt;, for Linux, it&amp;rsquo;s &lt;code&gt;172.17.0.1&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;One possible solution is to add an option &lt;code&gt;--debug-services=oap,other-service-name&lt;/code&gt; that rewrites all the router rules inside the containers from &lt;code&gt;oap&lt;/code&gt; to &lt;code&gt;host.docker.internal&lt;/code&gt;/&lt;code&gt;172.17.0.1&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;codegen&#34;&gt;CodeGen&lt;/h2&gt;
+&lt;p&gt;When adding new test case, a code generator would be of great value to eliminate the repeated labor and copy-pasting issues.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#f8f8f8;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;e2e new &amp;lt;&lt;span style=&#34;color:#204a87;font-weight:bold&#34;&gt;case&lt;/span&gt;-name&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Observe Service Mesh with SkyWalking and Envoy Access Log Service</title>
       <link>https://skywalking.apache.org/blog/2020-12-03-obs-service-mesh-with-sw-and-als/</link>
       <pubDate>Thu, 03 Dec 2020 00:00:00 +0000</pubDate>
