@@ -78,6 +78,10 @@ description: 博客摘要
 博客正文。
 ```
 
+### User Wall
+
+All user information are in `/data/homepage.yml`. Users encouraged to add themselves to this page.
+
 ### Links
 
 Configure in the `config.toml` file. 
