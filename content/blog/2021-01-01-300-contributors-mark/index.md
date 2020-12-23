@@ -10,33 +10,33 @@ Apache SkyWalking is an open source APM for distributed system. Provide tracing,
 Just 11 months ago, on Jan. 20th, 2020, [SkyWalking hit the 200 contributors mark](http://skywalking.apache.org/blog/2020-01-20-celebrate-200th-contributor/).
 With the growth of the project and the community, SkyWalking now includes over 20 sub(ecosystem) projects covering multiple language agents and service mesh,
 integration with mature open source projects, like Prometheus, Spring(Sleuth), hundreds of libraries to support all tracing/metrics/logs fields.
-In the past year, the number of contributors grows super astoundingly with other metrics of the community vibrancy. Many corporate titans are willing 
-to use SkyWalking in the large-scale production environment, including, Alibaba, Huawei, Baidu, Tencent, etc.
+In the past year, the number of contributors grows super astoundingly , and all its metrics point to its community vibrancy. Many corporate titans are already using
+SkyWalking in a large-scale production environment, including, Alibaba, Huawei, Baidu, Tencent, etc.
 
 ![](300-contributors.png)
 
 Recently, our [SkyWalking main repository](https://github.com/apache/skywalking) overs 300 contributors. 
 
 ![](website-access.png)
-Our [website](https://skywalking.apache.org) has thousands of accesses from most countries in the world every week.
+Our [website](https://skywalking.apache.org) has thousands of views from most countries in the world every week.
 
-Although we know, the metrics like GitHub stars, numbers of open users and contributors, are not determinants of vibrancy,
-they do show the trend. We are very proud to share the increasement of those metrics.
+Although we know that, the metrics like GitHub stars and the numbers of open users and contributors, are not a determinant of vibrancy,
+they do show the trend, we are very proud to share the increased numbers here, too.
 
 ![](community-metrics.png)
 
 We double those numbers and are honored with the development of our community. 
 
-Let's thank all of our contributors. Not just these 300 contributors of the main repository, or nearly 400 contributors in all repositories, counted by GitHub.
+Thank you, all of our contributors. Not just these 300 contributors of the main repository, or nearly 400 contributors in all repositories, counted by GitHub.
 There are countless people contributing codes to SkyWalking's subprojects, ecosystem projects, and private fork versions;
 writing blogs and guidances, translating documents, books, and presentations; 
 setting up learning sessions for new users;
 convincing friends to join the community as end-users, contributors, even committers.
 Companies behinds those contributors support their employees to work with the community to provide feedback and
-contribute the improvements and features to the upstream.
+contribute the improvements and features upstream.
 Conference organizers share the stages with speakers from the SkyWalking community. 
 
-SkyWalking can’t make this without your help. You made this community extraordinary.
+SkyWalking can’t make this happen without your help. You made this community extraordinary.
 
 At this crazy distributed computing and cloud native age, we as a community could make DEV, OPS, and SRE teams' work easier by locating the issue(s) in the haystack
 quicker than before, like why we named the project as SkyWalking, we will have a clear site line  when you stand on the glass bridge Skywalk at Grand Canyon West.
