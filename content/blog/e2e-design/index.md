@@ -75,20 +75,20 @@ e2e trigger # If configuration file e2e.yaml is present
 swctl service ls
 ```
 
-this does exactly the same as what `swctl` is doing at present;
+this is a project-specific step, different project may use different tools to query the actual output, for SkyWalking, it uses `swctl` to query the actual output.
 
 
 ### Verify
 
 ```shell
 e2e verify --actual=actual.data.yaml --expected=expected.data.yaml
-e2e verify --query="service ls" --expected=expected.data.yaml
+e2e verify --query="swctl service ls" --expected=expected.data.yaml
 e2e verify # If configuration file e2e.yaml is present
 ```
 
-- `--actual`: the actual data file;
-- `--expected`: the expected data file;
-- `--query`: the query to get the actual data, will be executed in command `swctl`;
+- `--actual`: the actual data file, only YAML file format is supported;
+- `--expected`: the expected data file, only YAML file format is supported;
+- `--query`: the query to get the actual data, the query result must have the same format as `--actual` and `--expected`;
   > The `--query` option will get the output into a temporary file and use the `--actual` under the hood;
 
 
@@ -174,9 +174,9 @@ trigger:
   url: localhost:9090/users
 
 verify:
-  - query: service ls
+  - query: swctl service ls
     expected: expected.services.yaml
-  - query: endpoint ls --service="YnVzaW5lc3Mtem9uZTo6cHJvamVjdEM=.1"
+  - query: swctl endpoint ls --service="YnVzaW5lc3Mtem9uZTo6cHJvamVjdEM=.1"
     expected: expected.projectC.endpoints.yaml
 ```
 
