@@ -8,7 +8,7 @@ This site was compiled using [Hugo](https://gohugo.io).
 
 1. Install hugo
 1. Pull this repo into your local environment, and run `hugo server`  at the root folder, you can see the site preview from http://localhost:1313
-1. To generate the static website, run `hugo`. According to ASF policy, the deployment has to be manually by a committer. Use the generated `public` folder to update the `asf-site` branch, and push the updates to the upstream.
+1. To generate the static website, run `hugo`. According to ASF policy, the deployment has to be manually done by a committer. Use the generated `public` folder to update the `asf-site` branch, and push the updates to the upstream.
 
 ## Contributing
 
@@ -93,4 +93,3 @@ The website configuration file located at `config.toml`.
 ### Images
 
 The images within the blogs, events and 中文博客 should keep at the same folder as the blog file, and you should reference that with the relative path.
-
