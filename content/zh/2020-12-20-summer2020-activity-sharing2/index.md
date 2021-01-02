@@ -4,7 +4,7 @@ date: 2020-12-20
 author: 张可
 description: 学生（张可）参与暑期 2020 活动中 Apache SkyWalking 项目的感受与收获
 tags:
-- SkyWalking
+- Open Source Promotion Plan 
 ---
 
 今年暑假期间我参加了开源软件供应链点亮计划—暑期 2020 的活动，在这个活动中，我主要参加了 Apache SkyWalking 的 Python Agent 的开发，最终项目顺利结项并获得了”最具潜力奖“，今天我想分享一下我参与这个活动以及开源社区的感受与收获。  
