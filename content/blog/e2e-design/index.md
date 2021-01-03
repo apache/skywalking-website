@@ -47,13 +47,13 @@ This will run the test case in the specified directory, this command is a wrappe
 
 ```shell
 e2e setup --env=compose --file=docker-compose.yaml --wait-for=service/health
-e2e setup --env=kind --file=kind.yaml --resources=bookinfo.yaml,gateway.yaml --wait-for=pod/ready
+e2e setup --env=kind --file=kind.yaml --manifests=bookinfo.yaml,gateway.yaml --wait-for=pod/ready
 e2e setup # If configuration file e2e.yaml is present
 ```
-    
+
 - `--env`: the environment, may be `compose` or `kind`, represents docker-compose and KinD respectively;
 - `--file`: the `docker-compose.yaml` or `kind.yaml` file that declares how to set up the environment;
-- `--resources`: for KinD, the resources files/directories to apply (using `kubectl apply -f`);
+- `--manifests`: for KinD, the resources files/directories to apply (using `kubectl apply -f`);
 - `--command`: a command to run after the environment is started, this may be useful when users need to install some extra tools or apply resources from command line, like `istioctl install --profile=demo`;
 - `--wait-for`: can be specified multiple times to give a list of conditions to be met; wait until the given conditions are met; the most frequently-used strategy should be `--wait-for=service/health`, `--wait-for=deployments/available`, etc. that make the `e2e setup` command to wait for all conditions to be met; other possible strategies may be something like `--wait-for="log:Started Successfully"`, `--wait-for="http:localhost:8080/healthcheck"`, etc. if really needed;
 
@@ -92,6 +92,7 @@ e2e verify # If configuration file e2e.yaml is present
 - `--actual`: the actual data file, only YAML file format is supported;
 - `--expected`: the expected data file, only YAML file format is supported;
 - `--query`: the query to get the actual data, the query result must have the same format as `--actual` and `--expected`;
+  
   > The `--query` option will get the output into a temporary file and use the `--actual` under the hood;
 
 
