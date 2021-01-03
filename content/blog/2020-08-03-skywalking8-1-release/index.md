@@ -3,9 +3,6 @@ title: "Features in SkyWalking 8.1: SpringSleuth metrics, endpoint dependency de
 date: 2020-08-03
 author: Srinivasan Ramaswamy(Tetrate)
 description: " SpringSleuth metrics, endpoint dependency detection, Kafka transport traces and metrics."
-tags:
-- test4
-- test1
 ---
 
 - Author: Sheng Wu, Hongtao Gao, and Tevah Platt(Tetrate)

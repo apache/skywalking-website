@@ -3,9 +3,6 @@ title: "SkyWalking alarm webhook sharing"
 date: 2019-09-25
 author: Wei Qiang
 description: " Alerts via SkyWalking alarm webhook for better perception of tracing."
-tags:
-- test3
-- test1
 ---
 
 - Author: Wei Qiang

@@ -6,7 +6,6 @@ description: "Distributed tracing is a necessary part of modern microservices ar
 
 tags:
 - tracing
-- test1
 ---
 
 ## Background

@@ -5,7 +5,6 @@ author: Hongtao Gao(Tetrate)
 description: "Service mesh receiver performance test on Google Kubernetes Engine."
 tags:
 - performance
-- test1
 ---
 
 - Author: Hongtao Gao, Apache SkyWalking & ShardingShpere PMC
