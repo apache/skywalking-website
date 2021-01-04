@@ -3,6 +3,9 @@ title: "Understand distributed trace easier in the incoming 6-GA"
 date: 2019-01-01
 author: Wu Sheng(Tetrate)
 description: "Distributed tracing is a necessary part of modern microservices architecture, but how to understand or use distributed tracing data is unclear to some end users. This blog overviews typical distributed tracing use cases with new visualization features in SkyWalking v6."
+
+tags:
+- tracing
 ---
 
 ## Background

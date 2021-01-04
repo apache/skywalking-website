@@ -3,6 +3,9 @@ title: "[Design] NGE2E - Next Generation End-to-End Testing Framework"
 date: 2020-12-14
 author: "[Zhenxu Ke](https://github.com/kezhenxu94), Tetrate.io; [Huaxi Jiang](http://github.com/fgksgf), Committer; [Ke Zhang](http://github.com/HumbertZhang), Committer"
 description: "The design of Next Generation End-to-End Testing Framework"
+
+tags:
+- e2e
 ---
 
 NGE2E is the next generation End-to-End Testing framework that aims to help developers to set up, debug, and verify E2E tests with ease. It's built based on the lessons learnt from tens of hundreds of test cases in the SkyWalking main repo.

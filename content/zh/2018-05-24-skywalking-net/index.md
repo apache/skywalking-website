@@ -3,6 +3,8 @@ title: "Apache SkyWalking 为.NET Core带来开箱即用的分布式追踪和应
 date: 2018-05-24
 author: 刘浩扬（SkyWalking .NET Core 探针维护者）
 description: "SkyWalking .NET Core SDK 现已可用。"
+tags:
+- DotNet
 ---
 
 在大型网站系统设计中，随着分布式架构，特别是微服务架构的流行，我们将系统解耦成更小的单元，通过不断的添加新的、小的模块或者重用已经有的模块来构建复杂的系统。随着模块的不断增多，一次请求可能会涉及到十几个甚至几十个服务的协同处理，那么如何准确快速的定位到线上故障和性能瓶颈，便成为我们不得不面对的棘手问题。
