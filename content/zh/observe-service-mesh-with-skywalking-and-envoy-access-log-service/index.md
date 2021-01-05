@@ -3,6 +3,8 @@ title: 使用 SkyWalking 和 Envoy 访问日志服务对服务网格进行观察
 date: 2020-12-03
 author: 柯振旭, 吴晟, Tevah Platt. tetrate.io
 description: 本文将详细介绍如何摆脱 Istio Mixer 使用 Apache SkyWalking 来观测 service mesh
+tags:
+- Service Mesh
 ---
 
 ![img](../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/canyonhorseshoe.jpg)

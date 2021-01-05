@@ -3,6 +3,8 @@ title: "SkyWalking 8.2.0 中的新特性: 浏览器端监控; 使用标签查询
 date: 2020-10-29
 author: "柯振旭, 吴晟, 高洪涛, Tevah Platt. tetrate.io"
 description: "浏览器端监控; 通过 tag 查找链路数据; 指标分析语言; 复合告警规则"
+tags:
+- Release Blog
 ---
 
 ![](0081Kckwly1gkl5gnaa2ij31lb0u0jum.jpg)

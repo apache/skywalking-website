@@ -3,6 +3,8 @@ title: SkyWalking 极简入门
 date: 2020-04-19
 author: 芋道源码
 description: 从 0 开始入门 SkyWalking，搭建 SkyWalking 服务，并接入 Java 项目中实现分布式链路追踪。
+tags:
+- User Manual
 ---
 
 目录：

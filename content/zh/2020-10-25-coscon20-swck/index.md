@@ -3,6 +3,9 @@ title: "[视频] Apache SkyWalking Cloud on Kubernetes"
 date: 2020-10-25
 author: 高洪涛
 description: "中国开源年会2020，云原生与微服务专场"
+tags:
+- Conference
+- Video
 ---
 
 ### 高洪涛

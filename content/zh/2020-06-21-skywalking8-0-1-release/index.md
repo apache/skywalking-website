@@ -3,6 +3,8 @@ title: "Apache SkyWalking 8.0.1 发布"
 date: 2020-06-21
 author: 吴晟
 description: "与 8.0.0 相比，此版本包含一个热修复程序。"
+tags:
+- Release Blog
 ---
 
 [Apache SkyWalking 8.0.1 已发布](https://github.com/apache/skywalking/releases/tag/v8.0.1)。SkyWalking 是观察性分析平台和应用性能管理系统，提供分布式追踪、服务网格遥测分析、度量聚合和可视化一体化解决方案，支持 Java, .Net Core, PHP, NodeJS, Golang, LUA 语言探针，支持 Envoy + Istio 构建的 Service Mesh。

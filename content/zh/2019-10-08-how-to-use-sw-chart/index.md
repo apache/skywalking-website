@@ -3,6 +3,8 @@ title: 使用 chart 部署 SkyWalking
 date: 2019-10-08
 author: innerpeacez
 description: 本文主要讲述的是如何使用 Helm Charts  将 SkyWalking 部署到 Kubernetes 集群中。
+tags:
+- User Manual
 ---
 
 - 作者：innerpeacez

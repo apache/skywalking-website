@@ -3,6 +3,8 @@ title: "SkyWalking 的最新动向？8.0 版本的 MeterSystem 和网格监控"
 date: 2020-06-15
 author: "吴晟, 高洪涛, Tevah Platt（tetrate.io）"
 description: "可观察性平台和开源应用程序性能监控（APM）项目 Apache SkyWalking，今天刚宣布 8.0 的发布版本。素以强劲指标、追踪与服务网格能力见称的 SkyWalking ，在最新版本中的功能性延展到用户渴求已久的功能 —— 将指标功能和包括 Prometheus 的其他指标收集系统进行了融合。"
+tags:
+- Release Blog
 ---
 
 可观察性平台和开源应用程序性能监控（APM）项目 Apache SkyWalking，今天刚宣布 8.0 的发布版本。素以强劲指标、追踪与服务网格能力见称的 SkyWalking ，在最新版本中的功能性延展到用户渴求已久的功能 —— 将指标功能和包括 Prometheus 的其他指标收集系统进行了融合。

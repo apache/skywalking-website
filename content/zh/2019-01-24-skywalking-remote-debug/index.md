@@ -3,6 +3,10 @@ title: SkyWalking的远程调试
 date: 2019-01-24
 author: 丁兵兵
 description: "远程调试的目的是为了解决代码或者说程序包部署在服务器上运行，只能通过log来查看问题，以及不能跟在本地IDE运行debug那样查找问题，观看程序运行流程..."
+tags:
+- User Manual
+- Development
+- JavaAgent
 ---
 
 ps:本文仅写给菜鸟，以及不知道如何远程调试的程序员，并且仅仅适用skywalking的远程调试

@@ -3,6 +3,9 @@ title: "[Video] Apache grows in China"
 date: 2020-11-20
 author: Sheng Wu, Founding Engineer, Tetrate.io
 description: "ApacheCon@Home 2020 Keynote, the progress about China embracing the Apache culture, and willing of enhancing the whole Apache community."
+tags:
+- Conference
+- Video
 ---
 
 Sheng Wu is a founding engineer at tetrate.io, leads the observability for service mesh and hybrid cloud. A searcher, evangelist, and developer in the observability, distributed tracing, and APM. He is a member of the Apache Software Foundation. Love open source software and culture. Created the Apache SkyWalking project and being its VP and PMC member. Co-founder and PMC member of Apache ShardingSphere. Also as a PMC member of Apache Incubator and APISIX. He is awarded as Microsoft MVP, Alibaba Cloud MVP, Tencent Cloud TVP.

@@ -3,6 +3,9 @@ title: 更容易理解将要到来的分布式链路追踪 6.0GA (翻译)
 date: 2019-01-02
 author: 吴晟
 description: 在当前的微服务架构中分布式链路追踪是很有必要的一部分，但是对于一些用户来说如何去理解和使用分布式链路追踪的相关数据是不清楚的。这个博客概述了典型的分布式跟踪用例，以及 Skywalking 的 V6 版本中新的可视化功能。我们希望新的用户通过这些示例来更好的理解。
+tags:
+- User Manual
+- Tracing
 ---
 
 - 作者: Wu Sheng, tetrate, SkyWalking original creator

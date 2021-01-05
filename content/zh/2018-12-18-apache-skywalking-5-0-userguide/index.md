@@ -3,6 +3,9 @@ title: Apache SkyWalking 5.0 中文版图文详解使用手册
 date: 2018-12-18
 author: 工匠小猪猪的技术世界（微信公众号）
 description: 本文纯粹介绍 Apache SkyWalking 如何使用，面对的群体包括了解和不了解 SkyWalking 原理的使用者和打算使用者。
+tags:
+- User Manual
+- Web UI
 ---
 
 ## 版本选择
