@@ -1,0 +1,82 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Performance</title>
+    <link>/tags/performance/</link>
+    <description>Recent content in Performance on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Fri, 25 Jan 2019 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/performance/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: SkyWalking performance in Service Mesh scenario</title>
+      <link>/blog/2019-01-25-mesh-loadtest/</link>
+      <pubDate>Fri, 25 Jan 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2019-01-25-mesh-loadtest/</guid>
+      <description>
+        
+        
+        &lt;ul&gt;
+&lt;li&gt;Author: Hongtao Gao, Apache SkyWalking &amp;amp; ShardingShpere PMC&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/hanahmily&#34;&gt;GitHub&lt;/a&gt;, &lt;a href=&#34;https://twitter.com/hanahmily&#34;&gt;Twitter&lt;/a&gt;, &lt;a href=&#34;https://www.linkedin.com/in/gao-hongtao-47b835168/&#34;&gt;Linkedin&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Service mesh receiver was first introduced in Apache SkyWalking 6.0.0-beta. It is designed to provide a common entrance for receiving telemetry data from service mesh framework, for instance, Istio, Linkerd, Envoy etc. What’s the service mesh? According to Istio’s explain:&lt;/p&gt;
+&lt;p&gt;The term service mesh is used to describe the network of microservices that make up such applications and the interactions between them.&lt;/p&gt;
+&lt;p&gt;As a PMC member of Apache SkyWalking, I tested trace receiver and well understood the performance of collectors in trace scenario. I also would like to figure out the performance of service mesh receiver.&lt;/p&gt;
+&lt;h2 id=&#34;different-between-trace-and-service-mesh&#34;&gt;Different between trace and service mesh&lt;/h2&gt;
+&lt;p&gt;Following chart presents a typical trace map:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image5.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You could find a variety of elements in it just like web service, local method, database, cache, MQ and so on. But service mesh only collect service network telemetry data that contains the entrance and exit data of a service for now(more elements will be imported soon, just like Database). A smaller quantity of data is sent to the service mesh receiver than the trace.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;But using sidecar is a little different.The client requesting “A” that will send a segment to service mesh receiver from “A”’s sidecar. If “A” depends on “B”,  another segment will be sent from “A”’s sidecar. But for a trace system, only one segment is received by the collector. The sidecar model splits one segment into small segments, that will increase service mesh receiver network overhead.&lt;/p&gt;
+&lt;h2 id=&#34;deployment-architecture&#34;&gt;Deployment Architecture&lt;/h2&gt;
+&lt;p&gt;In this test, I will pick two different backend deployment. One is called mini unit, consist of one collector and one elasticsearch instance. Another is a standard production cluster, contains three collectors and three elasticsearch instances.&lt;/p&gt;
+&lt;p&gt;Mini unit is a suitable architecture for dev or test environment. It saves your time and VM resources, speeds up depolyment process.&lt;/p&gt;
+&lt;p&gt;The standard cluster provides good performance and HA for a production scenario. Though you will pay more money and take care of the cluster carefully, the reliability of the cluster will be a good reward to you.&lt;/p&gt;
+&lt;p&gt;I pick 8 CPU and 16GB VM to set up the test environment. This test targets the performance of normal usage scenarios, so that choice is reasonable. The cluster is built on Google Kubernetes Engine(GKE), and every node links each other with a VPC network. For running collector is a CPU intensive task, the resource request of collector deployment should be 8 CPU, which means every collector instance occupy a VM node.&lt;/p&gt;
+&lt;h2 id=&#34;testing-process&#34;&gt;Testing Process&lt;/h2&gt;
+&lt;p&gt;Receiving mesh fragments per second(MPS) depends on the following variables.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Ingress query per second(QPS)&lt;/li&gt;
+&lt;li&gt;The topology of a microservice cluster&lt;/li&gt;
+&lt;li&gt;Service mesh mode(proxy or sidecar)&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In this test, I use Bookinfo app as a demo cluster.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image6.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;So every request will touch max 4 nodes. Plus picking the sidecar mode(every request will send two telemetry data),  the MPS will be QPS * 4 *2.&lt;/p&gt;
+&lt;p&gt;There are also some important metrics that should be explained&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Client Query Latency: GraphQL API query response time heatmap.&lt;/li&gt;
+&lt;li&gt;Client Mesh Sender: Send mesh segments per second. The total line represents total send amount and the error line is the total number of failed send.&lt;/li&gt;
+&lt;li&gt;Mesh telemetry latency: service mesh receiver handling data heatmap.&lt;/li&gt;
+&lt;li&gt;Mesh telemetry received: received mesh telemetry data per second.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;mini-unit&#34;&gt;Mini Unit&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;image3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You could find collector can process up to &lt;strong&gt;25k&lt;/strong&gt; data per second. The CPU usage is about 4 cores. Most of the query latency is less than 50ms. After login the VM on which collector instance running, I know that system load is reaching the limit(max is 8).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;According to the previous formula, a single collector instance could process &lt;strong&gt;3k&lt;/strong&gt; QPS of Bookinfo traffic.&lt;/p&gt;
+&lt;h3 id=&#34;standard-cluster&#34;&gt;Standard Cluster&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;image4.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Compare to the mini-unit, cluster’s throughput increases linearly. Three instances provide total 80k per second processing power. Query latency increases slightly, but it’s also very small(less than 500ms). I also checked every collector instance system load that all reached the limit. 10k QPS of BookInfo telemetry data could be processed by the cluster.&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;Let’s wrap them up. There are some important things you could get from this test.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;QPS varies by the there variables. The test results in this blog are not important. The user should pick property value according to his system.&lt;/li&gt;
+&lt;li&gt;Collector cluster’s processing power could scale out.&lt;/li&gt;
+&lt;li&gt;The collector is CPU intensive application. So you should provide sufficient CPU resource to it.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This blog gives people a common method to evaluate the throughput of Service Mesh Receiver. Users could use this to design their Apache Skywalking backend deployment architecture.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

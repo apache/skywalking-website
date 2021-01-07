@@ -1,0 +1,464 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Service Mesh</title>
+    <link>/tags/service-mesh/</link>
+    <description>Recent content in Service Mesh on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Thu, 03 Dec 2020 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/service-mesh/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Observe Service Mesh with SkyWalking and Envoy Access Log Service</title>
+      <link>/blog/2020-12-03-obs-service-mesh-with-sw-and-als/</link>
+      <pubDate>Thu, 03 Dec 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2020-12-03-obs-service-mesh-with-sw-and-als/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;canyonhorseshoe.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Author: Zhenxu Ke, Sheng Wu, and Tevah Platt. tetrate.io&lt;/li&gt;
+&lt;li&gt;Original link, &lt;a href=&#34;https://www.tetrate.io/blog/observe-service-mesh-with-skywalking-and-envoy-access-log-service/&#34;&gt;Tetrate.io blog&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Dec. 03th, 2020&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt;: an APM (application performance monitor) system, especially designed for microservices, cloud native, and container-based (Docker, Kubernetes, Mesos) architectures.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/api-v2/service/accesslog/v2/als.proto&#34;&gt;Envoy Access Log Service&lt;/a&gt;: Access Log Service (ALS) is an Envoy extension that emits detailed access logs of all requests going through Envoy.&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking has long supported observability in service mesh with Istio Mixer adapter. But since v1.5, Istio began to deprecate Mixer due to its poor performance in large scale clusters. Mixer’s functionalities have been moved into the Envoy proxies, and is supported only through the 1.7 Istio release.
+On the other hand, &lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;Sheng Wu&lt;/a&gt; and &lt;a href=&#34;https://github.com/lizan&#34;&gt;Lizan Zhou&lt;/a&gt; presented a better solution based on the Apache SkyWalking and Envoy ALS on &lt;a href=&#34;https://kccncosschn19eng.sched.com/event/NroB/observability-in-service-mesh-powered-by-envoy-and-apache-skywalking-sheng-wu-lizan-zhou-tetrate&#34;&gt;KubeCon China 2019&lt;/a&gt;,  to reduce the performance impact brought by Mixer, while retaining the same observability in service mesh. This solution was initially implemented by Sheng Wu, &lt;a href=&#34;https://github.com/hanahmily&#34;&gt;Hongtao Gao&lt;/a&gt;, Lizan Zhou, and &lt;a href=&#34;https://github.com/dio&#34;&gt;Dhi Aurrahman&lt;/a&gt; at Tetrate.io.
+If you are looking for a more efficient solution to observe your service mesh instead of using a Mixer-based solution, this is exactly what you need. In this tutorial, we will explain a little bit how the new solution works, and apply it to the bookinfo application in practice.&lt;/p&gt;
+&lt;h2 id=&#34;how-it-works&#34;&gt;How it works&lt;/h2&gt;
+&lt;p&gt;From a perspective of observability, Envoy can be typically deployed in 2 modes, sidecar, and router. As a sidecar, Envoy mostly represents a single service to receive and send requests (2 and 3 in the picture below). While as a proxy, Envoy may represent many services (1 in the picture below).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.25.17-PM.png&#34; alt=&#34;Example of Envoy deployment, as front proxy and sidecar&#34;&gt;&lt;/p&gt;
+&lt;p&gt;In both modes, the logs emitted by ALS include a node identifier. The identifier starts with &lt;code&gt;router~&lt;/code&gt; (or &lt;code&gt;ingress~&lt;/code&gt;) in router mode and &lt;code&gt;sidecar~&lt;/code&gt; in sidecar proxy mode.&lt;/p&gt;
+&lt;p&gt;Apart from the node identifier, there are &lt;a href=&#34;https://github.com/envoyproxy/envoy/blob/549164c42cae84b59154ca4c36009e408aa10b52/generated_api_shadow/envoy/data/accesslog/v2/accesslog.proto&#34;&gt;several noteworthy properties in the access logs&lt;/a&gt; that will be used in this solution:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;downstream_direct_remote_address&lt;/code&gt;: This field is the downstream direct remote address on which the request from the user was received. Note: This is always the physical peer, even if the remote address is inferred from for example the &lt;code&gt;x-forwarded-for&lt;/code&gt; header, proxy protocol, etc.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;downstream_remote_address&lt;/code&gt;: The remote/origin address on which the request from the user was received.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;downstream_local_address&lt;/code&gt;: The local/destination address on which the request from the user was received.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;upstream_remote_address&lt;/code&gt;: The upstream remote/destination address that handles this exchange.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;upstream_local_address&lt;/code&gt;: The upstream local/origin address that handles this exchange.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;upstream_cluster&lt;/code&gt;: The upstream cluster that &lt;em&gt;upstream_remote_address&lt;/em&gt; belongs to.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We will discuss more about the properties in the following sections.&lt;/p&gt;
+&lt;h3 id=&#34;sidecar&#34;&gt;Sidecar&lt;/h3&gt;
+&lt;p&gt;When serving as a sidecar, Envoy is deployed alongside a service, and delegates all the incoming/outgoing requests to/from the service.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Delegating incoming requests:&lt;/strong&gt; in this case, Envoy acts as a server side sidecar, and sets the &lt;code&gt;upstream_cluster&lt;/code&gt; in form of &lt;code&gt;inbound|portNumber|portName|Hostname[or]SidecarScopeID&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.37.49-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The SkyWalking analyzer checks whether either &lt;code&gt;downstream_remote_address&lt;/code&gt; can be mapped to a Kubernetes service:&lt;/p&gt;
+&lt;p&gt;a. If there is a service (say &lt;code&gt;Service B&lt;/code&gt;) whose implementation is running in this IP(and port), then we have a service-to-service relation, &lt;code&gt;Service B -&amp;gt; Service A&lt;/code&gt;, which can be used to build the topology. Together with the &lt;code&gt;start_time&lt;/code&gt; and &lt;code&gt;duration&lt;/code&gt; fields in the access log, we have the latency metrics now.&lt;/p&gt;
+&lt;p&gt;b. If there is no service that can be mapped to &lt;code&gt;downstream_remote_address&lt;/code&gt;, then the request may come from a service out of the mesh. Since SkyWalking cannot identify the source service where the requests come from, it simply generates the metrics without source service, according to the &lt;a href=&#34;https://wu-sheng.github.io/STAM/&#34;&gt;topology analysis method&lt;/a&gt;. The topology can be built as accurately as possible, and the metrics detected from server side are still correct.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Delegating outgoing requests:&lt;/strong&gt; in this case, Envoy acts as a client-side sidecar, and sets the &lt;code&gt;upstream_cluster&lt;/code&gt; in form of &lt;code&gt;outbound|&amp;lt;port&amp;gt;|&amp;lt;subset&amp;gt;|&amp;lt;serviceFQDN&amp;gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.43.16-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Client side detection is relatively simpler than (1. Delegating incoming requests). If &lt;code&gt;upstream_remote_address&lt;/code&gt; is another sidecar or proxy, we simply get the mapped service name and generate the topology and metrics. Otherwise, we have no idea what it is and consider it an &lt;code&gt;UNKNOWN&lt;/code&gt; service.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;proxy-role&#34;&gt;Proxy role&lt;/h3&gt;
+&lt;p&gt;When Envoy is deployed as a proxy, it is an independent service itself and doesn&amp;rsquo;t represent any other service like a sidecar does. Therefore, we can build client-side metrics as well as server-side metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.46.56-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;example&#34;&gt;Example&lt;/h2&gt;
+&lt;p&gt;In this section, we will use the typical &lt;a href=&#34;https://istio.io/latest/docs/examples/bookinfo/&#34;&gt;bookinfo application&lt;/a&gt; to demonstrate how  Apache SkyWalking 8.3.0+ (the latest version up to Nov. 30th, 2020) works together with Envoy ALS to observe a service mesh.&lt;/p&gt;
+&lt;h3 id=&#34;installing-kubernetes&#34;&gt;Installing Kubernetes&lt;/h3&gt;
+&lt;p&gt;SkyWalking 8.3.0 supports the Envoy ALS solution under both Kubernetes environment and virtual machines (VM) environment, in this tutorial, we’ll only focus on the Kubernetes scenario, for VM solution, please stay tuned for our next blog, so we need to install Kubernetes before taking further steps.&lt;/p&gt;
+&lt;p&gt;In this tutorial, we will use the &lt;a href=&#34;https://minikube.sigs.k8s.io/docs/&#34;&gt;Minikube&lt;/a&gt; tool to quickly set up a local Kubernetes(v1.17) cluster for testing. In order to run all the needed components, including the bookinfo application, the SkyWalking OAP and WebUI, the cluster may need up to 4GB RAM and 2 CPU cores.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;minikube start --memory&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;4096&lt;/span&gt; --cpus&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;2&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Next, run &lt;code&gt;kubectl get pods --namespace=kube-system --watch&lt;/code&gt; to check whether all the Kubernetes components are ready. If not, wait for the readiness before going on.&lt;/p&gt;
+&lt;h3 id=&#34;installing-istio&#34;&gt;Installing Istio&lt;/h3&gt;
+&lt;p&gt;Istio provides a very convenient way to configure the Envoy proxy and enable the access log service. The built-in configuration profiles free us from lots of manual operations. So, for demonstration purposes, we will use Istio through this tutorial.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;export ISTIO_VERSION&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;1.7.1
+curl -L https://istio.io/downloadIstio | sh - 
+sudo mv $PWD/istio-$ISTIO_VERSION/bin/istioctl /usr/local/bin/
+istioctl  install --set profile&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;demo
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Run &lt;code&gt;kubectl get pods --namespace=istio-system --watch&lt;/code&gt; to check whether all the Istio components are ready. If not, wait for the readiness before going on.&lt;/p&gt;
+&lt;h3 id=&#34;enabling-als&#34;&gt;Enabling ALS&lt;/h3&gt;
+&lt;p&gt;The &lt;code&gt;demo&lt;/code&gt; profile doesn’t enable ALS by default. We need to reconfigure it to enable ALS via some configuration.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl  manifest install &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set meshConfig.enableEnvoyAccessLogService&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;true &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set meshConfig.defaultConfig.envoyAccessLogService.address&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;skywalking-oap.istio-system:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The example command &lt;code&gt;--set meshConfig.enableEnvoyAccessLogService=true&lt;/code&gt; enables the Envoy access log service in the mesh. And as we said earlier, ALS is essentially a gRPC service that emits requests logs. The config &lt;code&gt;meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800&lt;/code&gt; tells this gRPC service  where to emit the logs, say &lt;code&gt;skywalking-oap.istio-system:11800&lt;/code&gt;, where we will deploy the SkyWalking ALS receiver later.&lt;/p&gt;
+&lt;p&gt;NOTE:
+You can also enable the ALS when installing Istio so that you don’t need to restart Istio after installation:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install --set profile&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set meshConfig.enableEnvoyAccessLogService&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;true &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set meshConfig.defaultConfig.envoyAccessLogService.address&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;skywalking-oap.istio-system:11800
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;deploying-apache-skywalking&#34;&gt;Deploying Apache SkyWalking&lt;/h3&gt;
+&lt;p&gt;The SkyWalking community provides a &lt;a href=&#34;https://helm.sh&#34;&gt;Helm&lt;/a&gt; Chart to make it easier to deploy SkyWalking and its dependent services in Kubernetes. The Helm Chart can be found at the &lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;GitHub repository&lt;/a&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# Install Helm&lt;/span&gt;
+curl -sSLO https://get.helm.sh/helm-v3.0.0-linux-amd64.tar.gz
+sudo tar xz -C /usr/local/bin --strip-components&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;1&lt;/span&gt; linux-amd64/helm -f helm-v3.0.0-linux-amd64.tar.gz
+&lt;span style=&#34;color:#75715e&#34;&gt;# Clone SkyWalking Helm Chart&lt;/span&gt;
+git clone https://github.com/apache/skywalking-kubernetes
+cd skywalking-kubernetes/chart
+git reset --hard dd749f25913830c47a97430618cefc4167612e75
+&lt;span style=&#34;color:#75715e&#34;&gt;# Update dependencies&lt;/span&gt;
+helm dep up skywalking
+&lt;span style=&#34;color:#75715e&#34;&gt;# Deploy SkyWalking&lt;/span&gt;
+helm -n istio-system install skywalking skywalking &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set oap.storageType&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;h2&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set ui.image.tag&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;8.3.0 &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set oap.image.tag&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;8.3.0-es7 &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set oap.replicas&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;k8s-mesh &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set oap.env.JAVA_OPTS&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;-Dmode=&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set oap.envoy.als.enabled&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;true &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;               --set elasticsearch.enabled&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;false
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;We deploy SkyWalking to the namespace &lt;code&gt;istio-system&lt;/code&gt;, so that SkyWalking OAP service can be accessed by &lt;code&gt;skywalking-oap.istio-system:11800&lt;/code&gt;, to which we told ALS to emit their logs, in the previous step.&lt;/p&gt;
+&lt;p&gt;We also enable the ALS analyzer in the SkyWalking OAP: &lt;code&gt;oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS=k8s-mesh&lt;/code&gt;. The analyzer parses the access logs and maps the IP addresses in the logs to the real service names in the Kubernetes, to build a topology.&lt;/p&gt;
+&lt;p&gt;In order to retrieve the metadata (such as Pod IP and service names) from a Kubernetes cluster for IP mappings, we also set &lt;code&gt;oap.envoy.als.enabled=true&lt;/code&gt;, to apply for a &lt;code&gt;ClusterRole&lt;/code&gt; that has access to the metadata.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;export POD_NAME&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;$(&lt;/span&gt;kubectl get pods -A -l &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;app=skywalking,release=skywalking,component=ui&amp;#34;&lt;/span&gt; -o name&lt;span style=&#34;color:#66d9ef&#34;&gt;)&lt;/span&gt;
+echo $POD_NAME
+kubectl -n istio-system port-forward $POD_NAME 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now navigate your browser to http://localhost:8080 . You should be able to see the SkyWalking dashboard. The dashboard is empty for now, but after we deploy the demo application and generate traffic, it should be filled up later.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-3.01.03-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;deploying-bookinfo-application&#34;&gt;Deploying Bookinfo application&lt;/h3&gt;
+&lt;p&gt;Run:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;export ISTIO_VERSION&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;1.7.1
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/$ISTIO_VERSION/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/$ISTIO_VERSION/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl wait --for&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;condition&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;Ready pods --all --timeout&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;1200s
+minikube tunnel
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then navigate your browser to http://localhost/productpage. You should be able to see the typical bookinfo application. Refresh the webpage several times to generate enough access logs.&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;And you’re all done! Check out the SkyWalking WebUI again. You should see the topology of the bookinfo application, as well the metrics of each individual service of the bookinfo application.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-3.05.24-PM.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;Screen-Shot-2020-12-02-at-3.11.55-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;troubleshooting&#34;&gt;Troubleshooting&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Check all pods status: &lt;code&gt;kubectl get pods -A&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;SkyWalking OAP logs: &lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=oap&amp;quot; -o name)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;SkyWalking WebUI logs: &lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=ui&amp;quot; -o name)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Make sure the time zone at the bottom-right of the WebUI is set to &lt;code&gt;UTC +0&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;customizing-service-names&#34;&gt;Customizing Service Names&lt;/h2&gt;
+&lt;p&gt;The SkyWalking community brought more improvements to the ALS solution in the 8.3.0 version. You can decide how to compose the service names when mapping from the IP addresses, with variables &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;pod&lt;/code&gt;. For instance, configuring &lt;code&gt;K8S_SERVICE_NAME_RULE&lt;/code&gt; to the expression &lt;code&gt;${service.metadata.name}-${pod.metadata.labels.version}&lt;/code&gt; gets service names with version label such as &lt;code&gt;reviews-v1&lt;/code&gt;, &lt;code&gt;reviews-v2&lt;/code&gt;, and &lt;code&gt;reviews-v3&lt;/code&gt;, instead of a single service &lt;code&gt;reviews&lt;/code&gt;, see &lt;a href=&#34;https://github.com/apache/skywalking/pull/5722&#34;&gt;the PR&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;working-als-with-vm&#34;&gt;Working ALS with VM&lt;/h2&gt;
+&lt;p&gt;Kubernetes is popular, but what about VMs? From what we discussed above, in order to map the IPs to services, SkyWalking needs access to the Kubernetes cluster, fetching service metadata and Pod IPs. But in a VM environment, there is no source from which we can fetch those metadata.
+In the next post, we will introduce another ALS analyzer based on the Envoy metadata exchange mechanism. With this analyzer, you are able to observe a service mesh in the VM environment. Stay tuned!
+If you want to  have commercial support for the ALS solution or hybrid mesh observability, &lt;a href=&#34;https://www.tetrate.io/tetrate-service-bridge/&#34;&gt;Tetrate Service Bridge, TSB&lt;/a&gt; is another good option out there.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;KubeCon 2019 Recorded &lt;a href=&#34;https://www.youtube.com/watch?v=tERm39ju9ew&#34;&gt;Video&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Get more SkyWalking updates on &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;the official website&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;Apache SkyWalking founder Sheng Wu, SkyWalking core maintainer Zhenxu Ke are Tetrate engineers, and Tevah Platt is a content writer for Tetrate. Tetrate helps organizations adopt open source service mesh tools, including Istio, Envoy, and Apache SkyWalking, so they can manage microservices, run service mesh on any infrastructure, and modernize their applications.&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 使用 SkyWalking 和 Envoy 访问日志服务对服务网格进行观察</title>
+      <link>/zh/observe-service-mesh-with-skywalking-and-envoy-access-log-service/</link>
+      <pubDate>Thu, 03 Dec 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/observe-service-mesh-with-skywalking-and-envoy-access-log-service/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/canyonhorseshoe.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;如果你正在寻找在 Mixer 方案以外观察服务网格的更优解，本文正符合你的需要。&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache Skywalking&lt;/a&gt;&lt;/strong&gt;︰特别为微服务、云原生和容器化（Docker、Kubernetes、Mesos）架构而设计的 APM（应用性能监控）系统。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/api-v2/service/accesslog/v2/als.proto&#34;&gt;Envoy 访问日志服务&lt;/a&gt;&lt;/strong&gt;︰访问日志服务（ALS）是 Envoy 的扩展组件，会将所有通过 Envoy 的请求的详细访问日志发送出来。&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 一直通过 Istio Mixer 的适配器，支持服务网格的可观察性。不过自从 v1.5 版本，由于 Mixer 在大型集群中差强人意的表现，Istio 开始弃用 Mixer。Mixer 的功能现已迁至 Envoy 代理，并获 Istio 1.7 版本支持。&lt;/p&gt;
+&lt;p&gt;在去年的中国 &lt;a href=&#34;https://kccncosschn19eng.sched.com/event/NroB/observability-in-service-mesh-powered-by-envoy-and-apache-skywalking-sheng-wu-lizan-zhou-tetrate&#34;&gt;KubeCon&lt;/a&gt; 中，&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;吴晟&lt;/a&gt;和&lt;a href=&#34;https://github.com/lizan&#34;&gt;周礼赞&lt;/a&gt;基于 Apache SkyWalking 和 Envoy ALS，发布了新的方案：不再受制于 Mixer  带来的性能影响，也同时保持服务网格中同等的可观察性。这个方案最初是由吴晟、&lt;a href=&#34;https://github.com/hanahmily&#34;&gt;高洪涛&lt;/a&gt;、周礼赞和 &lt;a href=&#34;https://github.com/dio&#34;&gt;Dhi Aurrahman&lt;/a&gt; 在 Tetrate.io 实现的。&lt;/p&gt;
+&lt;p&gt;如果你正在寻找在 Mixer 方案之外，为你的服务网格进行观察的最优解，本文正是你当前所需的。在这个教程中，我们会解释此方案的运作逻辑，并将它实践到 bookinfo 应用上。&lt;/p&gt;
+&lt;h3 id=&#34;运作逻辑&#34;&gt;运作逻辑&lt;/h3&gt;
+&lt;p&gt;从可观察性的角度来说，Envoy 一般有两种部署模式︰Sidecar 和路由模式。 Envoy 代理可以代表多项服务（见下图之 1），或者当它作为 Sidecar 时，一般是代表接收和发送请求的单项服务（下图之 2 和 3）。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.25.17-PM.png&#34; alt=&#34;Envoy 作为前端代理和 Sidecar 的部署实例&#34;&gt;&lt;/p&gt;
+&lt;p&gt;在两种模式中，ALS 发放的日志都会带有一个节点标记符。该标记符在路由模式时，以 &lt;code&gt;router~&lt;/code&gt; （或 &lt;code&gt;ingress~&lt;/code&gt;）开头，而在 Sidecar 代理模式时，则以 &lt;code&gt;sidecar~&lt;/code&gt; 开头。&lt;/p&gt;
+&lt;p&gt;除了节点标记符之外，这个方案［1］所采用的访问日志也有几个值得一提的字段︰&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;downstream_direct_remote_address&lt;/strong&gt;︰此字段是下游的&lt;strong&gt;直接远程地址&lt;/strong&gt;，用作接收来自用户的请求。&lt;strong&gt;注意&lt;/strong&gt;︰它永远是对端实体的地址，即使远程地址是从 &lt;code&gt;x-forwarded-for header&lt;/code&gt;、代理协议等推断出来的。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;downstream_remote_address&lt;/strong&gt;︰远程或原始地址，用作接收来自用户的请求。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;downstream_local_address&lt;/strong&gt;︰本地或目标地址，用作接收来自用户的请求。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;upstream_remote_address&lt;/strong&gt;︰上游的远程或目标地址，用作处理本次交换。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;upstream_local_address&lt;/strong&gt;︰上游的本地或原始地址，用作处理本次交换。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;upstream_cluster&lt;/strong&gt;︰&lt;strong&gt;upstream_remote_address&lt;/strong&gt; 所属的上游集群。&lt;/p&gt;
+&lt;p&gt;我们会在下面详细讲解各个字段。&lt;/p&gt;
+&lt;h3 id=&#34;sidecar&#34;&gt;Sidecar&lt;/h3&gt;
+&lt;p&gt;当 Envoy 作为 Sidecar 的时候，会搭配服务一起部署，并代理来往服务的传入或传出请求。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;代理传入请求&lt;/strong&gt;︰在此情况下，Envoy 会作为服务器端的 Sidecar，以 &lt;code&gt;inbound|portNumber|portName|Hostname[or]SidecarScopeID&lt;/code&gt; 格式设定 &lt;code&gt;upstream_cluster&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.37.49-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;SkyWalking 分析器会检查 &lt;code&gt;downstream_remote_address&lt;/code&gt; 是否能够找到对应的 Kubernetes 服务。&lt;/p&gt;
+&lt;p&gt;如果在此 IP（和端口）中有一个服务（例如服务 B）正在运行，那我们就会建立起服务对服务的关系（即服务 B → 服务 A），帮助建立拓扑。再配合访问日志中的 &lt;code&gt;start_time&lt;/code&gt; 和 &lt;code&gt;duration&lt;/code&gt; 两个字段，我们就可以获得延迟的指标数据了。&lt;/p&gt;
+&lt;p&gt;如果没有任何服务可以和 &lt;code&gt;downstream_remote_address&lt;/code&gt; 相对应，那请求就有可能来自网格以外的服务。由于 SkyWalking 无法识别请求的服务来源，在没有源服务的情况下，它简单地根据&lt;a href=&#34;https://wu-sheng.github.io/STAM/&#34;&gt;拓扑分析方法&lt;/a&gt;生成数据。拓扑依然可以准确地建立，而从服务器端侦测出来的指标数据也依然是正确的。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;代理传出请求&lt;/strong&gt;︰在此情况下，Envoy 会作为客户端的 Sidecar，以 &lt;code&gt;outbound|&amp;lt;port&amp;gt;|&amp;lt;subset&amp;gt;|&amp;lt;serviceFQDN&amp;gt;&lt;/code&gt; 格式设定 &lt;code&gt;upstream_cluster&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;../../blog//2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.43.16-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;客户端的侦测相对来说比代理传入请求容易。如果 &lt;code&gt;upstream_remote_address&lt;/code&gt; 是另一个 Sidecar 或代理的话，我们只需要获得它相应的服务名称，便可生成拓扑和指标数据。否则，我们没有办法理解它，只能把它当作 UNKNOWN 服务。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;代理角色&#34;&gt;代理角色&lt;/h3&gt;
+&lt;p&gt;当 Envoy 被部署为前端代理时，它是独立的服务，并不会像 Sidecar 一样，代表任何其他的服务。所以，我们可以建立客户端以及服务器端的指标数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.46.56-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;演示范例&#34;&gt;演示范例&lt;/h2&gt;
+&lt;p&gt;在本章，我们会使用典型的 bookinfo 应用，来演示 Apache SkyWalking 8.3.0+ （截至 2020 年 11 月 30 日的最新版本）如何与 Envoy ALS 合作，联手观察服务网格。&lt;/p&gt;
+&lt;h3 id=&#34;安装-kubernetes&#34;&gt;安装 Kubernetes&lt;/h3&gt;
+&lt;p&gt;在 Kubernetes 和虚拟机器（VM）的环境下，SkyWalking 8.3.0 均支持 Envoy ALS 的方案。在本教程中，我们只会演示在 Kubernetes 的情境，至于 VM 方案，请耐心期待我们下一篇文章。所以在进行下一步之前，我们需要先安装 Kubernetes。&lt;/p&gt;
+&lt;p&gt;在本教程中，我们会使用 &lt;a href=&#34;https://minikube.sigs.k8s.io/docs/&#34;&gt;Minikube&lt;/a&gt; 工具来快速设立本地的 Kubernetes（v1.17 版本）集群用作测试。要运行所有必要组件，包括 bookinfo 应用、SkyWalking OAP 和 WebUI，集群需要动用至少 4GB 内存和 2 个 CPU 的核心。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+minikube start --memory&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;4096&lt;/span&gt; --cpus&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;2&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后，运行 &lt;code&gt;kubectl get pods --namespace=kube-system --watch&lt;/code&gt;，检查所有 Kubernetes 的组件是否已准备好。如果还没，在进行下一步前，请耐心等待准备就绪。&lt;/p&gt;
+&lt;h3 id=&#34;安装-istio&#34;&gt;安装 Istio&lt;/h3&gt;
+&lt;p&gt;Istio 为配置 Envoy 代理和实现访问日志服务提供了一个非常方便的方案。内建的配置设定档为我们省去了不少手动的操作。所以，考虑到演示的目的，我们会在本教程全程使用 Istio。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+export ISTIO_VERSION&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;1.7.1
+
+curl -L https://istio.io/downloadIstio | sh - 
+
+sudo mv $PWD/istio-$ISTIO_VERSION/bin/istioctl /usr/local/bin/
+
+istioctl  install --set profile&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;demo
+
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后，运行 &lt;code&gt;kubectl get pods --namespace=istio-system --watch&lt;/code&gt;，检查 Istio 的所有组件是否已准备好。如果还没，在进行下一步前，请耐心等待准备就绪。&lt;/p&gt;
+&lt;h3 id=&#34;启动访问日志服务&#34;&gt;启动访问日志服务&lt;/h3&gt;
+&lt;p&gt;演示的设定档没有预设启动 ALS，我们需要重新配置才能够启动 ALS。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+istioctl  manifest install &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set meshConfig.enableEnvoyAccessLogService&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;true &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set meshConfig.defaultConfig.envoyAccessLogService.address&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;skywalking-oap.istio-system:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;范例指令 &lt;code&gt;--set meshConfig.enableEnvoyAccessLogService=true&lt;/code&gt; 会在网格中启动访问日志服务。正如之前提到，ALS 本质上是一个会发放请求日志的 gRPC 服务。配置 &lt;code&gt;meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800&lt;/code&gt; 会告诉这个gRPC 服务往哪里发送日志，这里是往 &lt;code&gt;skywalking-oap.istio-system:11800&lt;/code&gt; 发送，稍后我们会部署 SkyWalking ALS 接收器到这个地址。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;注意&lt;/strong&gt;︰&lt;/p&gt;
+&lt;p&gt;你也可以在安装 Istio 时启动 ALS，那就不需要在安装后重新启动 Istio︰&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+istioctl install --set profile&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+               --set meshConfig.enableEnvoyAccessLogService&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;true &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+               --set meshConfig.defaultConfig.envoyAccessLogService.address&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;skywalking-oap.istio-system:11800
+
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;部署-apache-skywalking&#34;&gt;部署 Apache SkyWalking&lt;/h3&gt;
+&lt;p&gt;SkyWalking 社区提供了 Helm Chart ，让你更轻易地在 Kubernetes 中部署 SkyWalking 以及其依赖服务。 Helm Chart 可以在 &lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;GitHub 仓库&lt;/a&gt;找到。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+&lt;span style=&#34;color:#75715e&#34;&gt;# Install Helm&lt;/span&gt;
+
+curl -sSLO https://get.helm.sh/helm-v3.0.0-linux-amd64.tar.gz
+
+sudo tar xz -C /usr/local/bin --strip-components&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;1&lt;/span&gt; linux-amd64/helm -f helm-v3.0.0-linux-amd64.tar.gz
+
+&lt;span style=&#34;color:#75715e&#34;&gt;# Clone SkyWalking Helm Chart&lt;/span&gt;
+
+git clone https://github.com/apache/skywalking-kubernetes
+
+cd skywalking-kubernetes/chart
+
+git reset --hard dd749f25913830c47a97430618cefc4167612e75
+
+&lt;span style=&#34;color:#75715e&#34;&gt;# Update dependencies&lt;/span&gt;
+
+helm dep up skywalking
+
+&lt;span style=&#34;color:#75715e&#34;&gt;# Deploy SkyWalking&lt;/span&gt;
+
+helm -n istio-system install skywalking skywalking &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set oap.storageType&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;h2&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set ui.image.tag&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;8.3.0 &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set oap.image.tag&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;8.3.0-es7 &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set oap.replicas&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;k8s-mesh &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set oap.env.JAVA_OPTS&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;-Dmode=&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set oap.envoy.als.enabled&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;true &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;
+        --set elasticsearch.enabled&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;false
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;我们在 &lt;code&gt;istio-system&lt;/code&gt; 的命名空间内部署 SkyWalking，使 SkyWalking OAP 服务可以使用地址 &lt;code&gt;skywalking-oap.istio-system:11800&lt;/code&gt; 访问，在上一步中，我们曾告诉过 ALS 应往此处发放它们的日志。&lt;/p&gt;
+&lt;p&gt;我们也在 SkyWalking OAP 中启动 ALS 分析器︰&lt;code&gt;oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS=k8s-mesh&lt;/code&gt;。分析器会对访问日志进行分析，并解析日志中的 IP 地址和 Kubernetes 中的真实服务名称，以建立拓扑。&lt;/p&gt;
+&lt;p&gt;为了从 Kubernetes 集群处获取元数据（例如 Pod IP 和服务名称），以识别相应的 IP 地址，我们还会设定 &lt;code&gt;oap.envoy.als.enabled=true&lt;/code&gt;，用来申请一个对元数据有访问权的 &lt;code&gt;ClusterRole&lt;/code&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+export POD_NAME&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;$(&lt;/span&gt;kubectl get pods -A -l &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;app=skywalking,release=skywalking,component=ui&amp;#34;&lt;/span&gt; -o name&lt;span style=&#34;color:#66d9ef&#34;&gt;)&lt;/span&gt;
+
+echo $POD_NAME
+
+kubectl -n istio-system port-forward $POD_NAME 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;现在到你的浏览器上访问 &lt;a href=&#34;http://localhost:8080/&#34;&gt;http://localhost:8080&lt;/a&gt;。你应该会看到 SkyWalking 的 Dashboard。 Dashboard 现在应该是空的，但稍后部署应用和生成流量后，它就会被填满。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-3.01.03-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;部署-bookinfo-应用&#34;&gt;部署 Bookinfo 应用&lt;/h3&gt;
+&lt;p&gt;运行︰&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+export ISTIO_VERSION&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;1.7.1
+
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/$ISTIO_VERSION/samples/bookinfo/platform/kube/bookinfo.yaml
+
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/$ISTIO_VERSION/samples/bookinfo/networking/bookinfo-gateway.yaml
+
+kubectl wait --for&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;condition&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;Ready pods --all --timeout&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;1200s
+
+minikube tunnel
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;现在到你的浏览器上进入 &lt;a href=&#34;http://localhost/productpage&#34;&gt;http://localhost/productpage&lt;/a&gt;。你应该会看到典型的 bookinfo 应用画面。重新整理该页面几次，以生成足够的访问日志。&lt;/p&gt;
+&lt;h3 id=&#34;完成了&#34;&gt;完成了！&lt;/h3&gt;
+&lt;p&gt;这样做，你就成功完成设置了！再查看 SkyWalking 的 WebUI，你应该会看到 bookinfo 应用的拓扑，以及它每一个单独服务的指标数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-3.05.24-PM.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-3.11.55-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;疑难解答&#34;&gt;疑难解答&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;检查所有 pod 的状态︰&lt;code&gt;kubectl get pods -A&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;SkyWalking OAP 的日志︰&lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=oap&amp;quot; -o name)&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;SkyWalking WebUI 的日志︰&lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=ui&amp;quot; -o name)&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;确保 WebUI 右下方的时区设定在 &lt;code&gt;UTC +0&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;自定义服务器名称&#34;&gt;自定义服务器名称&lt;/h2&gt;
+&lt;p&gt;SkyWalking 社区在 ALS 方案的 8.3.0 版本中，作出了许多改善。你现在可以在映射 IP 地址时，决定如何用 &lt;code&gt;service&lt;/code&gt; 和 &lt;code&gt;pod&lt;/code&gt; 变量去自定义服务器的名称。例如，将 &lt;code&gt;K8S_SERVICE_NAME_RULE&lt;/code&gt; 设置为 &lt;code&gt;${service.metadata.name}-${pod.metadata.labels.version}&lt;/code&gt;，就可以使服务名称带上版本的标签，类似 &lt;code&gt;reviews-v1&lt;/code&gt;、&lt;code&gt;reviews-v2&lt;/code&gt; 和 &lt;code&gt;reviews- v3&lt;/code&gt;，而不再是单个服务 &lt;code&gt;review&lt;/code&gt;［2］。&lt;/p&gt;
+&lt;h2 id=&#34;在-vm-上使用-als&#34;&gt;在 VM 上使用 ALS&lt;/h2&gt;
+&lt;p&gt;Kubernetes 很受欢迎，可是 VM 呢？正如我们之前所说，为了替 IP 找到对应的服务，SkyWalking 需要对 Kubernetes 集群有访问权，以获得服务的元数据和 Pod 的 IP。可是在 VM 环境中，我们并没有来源去收集这些元数据。&lt;/p&gt;
+&lt;p&gt;在下一篇文章，我们会介绍另外一个 ALS 分析器，它是建立于 Envoy 的元数据交换机制。有了这个分析器，你就可以在 VM 环境中观察服务网格了。万勿错过！&lt;/p&gt;
+&lt;p&gt;如果你希望在 ALS 方案或是混合式网格可观察性上获得商业支持，&lt;a href=&#34;https://www.tetrate.io/tetrate-service-bridge/&#34;&gt;TSB&lt;/a&gt; 会是一个好选项。&lt;/p&gt;
+&lt;p&gt;额外资源&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;KubeCon 2019 的录影&lt;a href=&#34;https://www.youtube.com/watch?v=tERm39ju9ew&#34;&gt;视频&lt;/a&gt;。&lt;/li&gt;
+&lt;li&gt;在&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;官方网站&lt;/a&gt;上获得更多有关 SkyWalking 的最新消息吧。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如有任何问题或反馈，发送邮件至 &lt;a href=&#34;mailto:learn@tetrate.io&#34;&gt;learn@tetrate.io&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Apache SkyWalking 创始人吴晟和 SkyWalking 的核心贡献者柯振旭都是 Tetrate 的工程师。 Tetrate 的内容创造者编辑与贡献于本文章。 Tetrate 帮助企业采用开源服务网格工具，包括 Istio、Envoy 和 Apache SkyWalking，让它们轻松管理微服务，在任何架构上运行服务网格，以至现代化他们的应用。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;［1］&lt;a href=&#34;https://github.com/envoyproxy/envoy/blob/549164c42cae84b59154ca4c36009e408aa10b52/generated_api_shadow/envoy/data/accesslog/v2/accesslog.proto&#34;&gt;https://github.com/envoyproxy/envoy/blob/549164c42cae84b59154ca4c36009e408aa10b52/generated_api_shadow/envoy/data/accesslog/v2/accesslog.proto&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;［2］&lt;a href=&#34;https://github.com/apache/skywalking/pull/5722&#34;&gt;https://github.com/apache/skywalking/pull/5722&lt;/a&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: SkyWalking v6 is Service Mesh ready</title>
+      <link>/blog/2018-12-12-skywalking-service-mesh-ready/</link>
+      <pubDate>Wed, 05 Dec 2018 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2018-12-12-skywalking-service-mesh-ready/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Original link, &lt;a href=&#34;https://www.tetrate.io/blog/apache-skywalking-v6/&#34;&gt;Tetrate.io blog&lt;/a&gt;&lt;/p&gt;
+&lt;h1 id=&#34;context&#34;&gt;Context&lt;/h1&gt;
+&lt;p&gt;The integration of SkyWalking and Istio Service Mesh yields an essential open-source tool for resolving the chaos created by the proliferation of siloed, cloud-based services.&lt;/p&gt;
+&lt;p&gt;Apache SkyWalking is an open, modern performance management tool for distributed services, designed especially for microservices, cloud native and container-based (Docker, K8s, Mesos) architectures. We at Tetrate believe it is going to be an important project for understanding the performance of microservices. The recently released v6 integrates with Istio Service Mesh and focuses on metrics and tracing. It natively understands the most common language runtimes (Java, .Net, and NodeJS). With its new core code, SkyWalking v6 also supports Istrio telemetry data formats, providing consistent analysis, persistence, and visualization.&lt;/p&gt;
+&lt;p&gt;SkyWalking has evolved into an Observability Analysis Platform that enables observation and monitoring of hundreds of services all at once. It promises solutions for some of the trickiest problems faced by system administrators using complex arrays of abundant services: Identifying why and where a request is slow, distinguishing normal from deviant system performance, comparing apples-to-apples metrics across apps regardless of programming language, and attaining a complete and meaningful view of performance.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2ctge1g5j31pc0s8h04.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;skywalking-history&#34;&gt;SkyWalking History&lt;/h1&gt;
+&lt;p&gt;Launched in China by Wu Sheng in 2015, SkyWalking started as just a distributed tracing system, like Zipkin, but with auto instrumentation from a Java agent. This enabled JVM users to see distributed traces without any change to their source code. In the last two years, it has been used for research and production by more than &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/powered-by.md&#34;&gt;50 companies&lt;/a&gt;. With its expanded capabilities, we expect to see it adopted more globally.&lt;/p&gt;
+&lt;h1 id=&#34;whats-new&#34;&gt;What&amp;rsquo;s new&lt;/h1&gt;
+&lt;h2 id=&#34;service-mesh-integration&#34;&gt;Service Mesh Integration&lt;/h2&gt;
+&lt;p&gt;Istio has picked up a lot of steam as the framework of choice for distributed services. Based on all the interest in the Istio project, and community feedback, some SkyWalking (P)PMC members decided to integrate with Istio Service Mesh to move SkyWalking to a higher level.&lt;/p&gt;
+&lt;p&gt;So now you can use Skywalking to get metrics and understand the topology of your applications. This works not just for Java, .NET and Node using our language agents, but also for microservices running under the Istio service mesh. You can get a full topology of both kinds of applications.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cjmhi3uj31h80m5jwn.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;observability-analysis-platform&#34;&gt;Observability analysis platform&lt;/h2&gt;
+&lt;p&gt;With its roots in tracing, SkyWalking is now transitioning into an open-standards based &lt;strong&gt;Observability Analysis Platform&lt;/strong&gt;, which means the following:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;It can accept different kinds and formats of telemetry data from mesh like Istio telemetry.&lt;/li&gt;
+&lt;li&gt;Its agents support various popular software technologies and frameworks like Tomcat, Spring, Kafka. The whole supported framework list is &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/en/setup/service-agent/java-agent/Supported-list.md&#34;&gt;here&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;It can accept data from other compliant sources like Zipkin-formatted traces reported from Zipkin, Jaeger, or OpenCensus clients.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cqo4yctj31ok0s07hh.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;SkyWalking is logically split into four parts: Probes, Platform Backend, Storage and UI:&lt;/p&gt;
+&lt;p&gt;There are two kinds of &lt;strong&gt;probes&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Language agents or SDKs following SkyWalking across-thread propagation formats and trace formats, run in the user’s application process.&lt;/li&gt;
+&lt;li&gt;The Istio mixer adaptor, which collects telemetry from the Service Mesh.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The platform &lt;strong&gt;backend&lt;/strong&gt; provides gRPC and RESTful HTTP endpoints for all SkyWalking-supported trace and metric telemetry data. For example, you can stream these metrics into an analysis system.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Storage&lt;/strong&gt; supports multiple implementations such as ElasticSearch, H2 (alpha), MySQL, and Apache ShardingSphere for MySQL Cluster. TiDB will be supported in next release.&lt;/p&gt;
+&lt;p&gt;SkyWalking’s built-in &lt;strong&gt;UI&lt;/strong&gt; with a GraphQL endpoint for data allows intuitive, customizable integration.&lt;/p&gt;
+&lt;p&gt;Some examples of SkyWalking’s UI:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Observe a Spring app using the SkyWalking JVM-agent&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2ckeyyxlj31h70lvdjf.jpg&#34; alt=&#34;Topology&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Observe on Istio without any agent, no matter what langugage the service is written in&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2ckwr65mj31h80m5jwn.jpg&#34; alt=&#34;Topology&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;See fine-grained metrics like request/Call per Minute, P99/95/90/75/50 latency, avg response time, heatmap&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cmxcrdqj31gz0qmdja.jpg&#34; alt=&#34;Dashboard&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Service dependencies and metrics&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cngbu84j31h00oxadw.jpg&#34; alt=&#34;Service&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;service-focused&#34;&gt;Service Focused&lt;/h1&gt;
+&lt;p&gt;At Tetrate, we are focused on discovery, reliability, and security of your running services.
+This is why we are embracing Skywalking, which makes service performance observable.&lt;/p&gt;
+&lt;p&gt;Behind this admittedly cool UI, the aggregation logic is very easy to understand, making it easy to customize SkyWalking in its Observability Analysis Language (OAL) script.&lt;/p&gt;
+&lt;p&gt;We’ll post more about OAL for developers looking to customize SkyWalking, and you can read the official &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/en/concepts-and-designs/oal.md&#34;&gt;OAL introduction&lt;/a&gt; document.&lt;/p&gt;
+&lt;p&gt;Scripts are based on three core concepts:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Service&lt;/strong&gt; represents a group of workloads that provide the same behaviours for incoming requests. You can define the service name whether you are using instrument agents or SDKs. Otherwise, SkyWalking uses the name you defined in the underlying platform, such as Istio.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Service Instance&lt;/strong&gt; Each workload in the Service group is called an instance. Like &lt;em&gt;Pods&lt;/em&gt; in Kubernetes, it doesn&amp;rsquo;t need  to be a single OS process. If you are using an instrument agent, an instance does map to one OS process.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Endpoint&lt;/strong&gt; is a path in a certain service that handles incoming requests, such as HTTP paths or a gRPC service + method. Mesh telemetry and trace data are formatted as source objects (aka scope). These are the input for the aggregation, with the script describing how to aggregate, including input, conditions, and the resulting metric name.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;core-features&#34;&gt;Core Features&lt;/h1&gt;
+&lt;p&gt;The other core features in SkyWalking v6 are:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Service, service instance, endpoint metrics analysis.&lt;/li&gt;
+&lt;li&gt;Consistent visualization in Service Mesh and no mesh.&lt;/li&gt;
+&lt;li&gt;Topology discovery, Service dependency analysis.&lt;/li&gt;
+&lt;li&gt;Distributed tracing.&lt;/li&gt;
+&lt;li&gt;Slow services and endpoints detected.&lt;/li&gt;
+&lt;li&gt;Alarms.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Of course, SkyWalking has some more upgrades from v5, such as:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;ElasticSearch 6 as storage is supported.&lt;/li&gt;
+&lt;li&gt;H2 storage implementor is back.&lt;/li&gt;
+&lt;li&gt;Kubernetes cluster management is provided. You don’t need Zookeeper to keep the backend running in cluster mode.&lt;/li&gt;
+&lt;li&gt;Totally new alarm core. Easier configuration.&lt;/li&gt;
+&lt;li&gt;More cloud native style.&lt;/li&gt;
+&lt;li&gt;MySQL will be supported in the next release.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;please-test-and-provide-feedback&#34;&gt;Please: Test and Provide Feedback!&lt;/h1&gt;
+&lt;p&gt;We would love everyone to try to test our new version. You can find everything you need in our &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;Apache repository&lt;/a&gt;,read the &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/README.md&#34;&gt;document&lt;/a&gt; for further details. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Submit an issue on &lt;a href=&#34;https://github.com/apache/incubator-skywalking/issues/new&#34;&gt;GitHub repository&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt; . Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe the mail list.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;Project twitter&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Oh, and one last thing! If you like our project, don&amp;rsquo;t forget to &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

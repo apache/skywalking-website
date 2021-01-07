@@ -1,0 +1,294 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Tracing</title>
+    <link>/tags/tracing/</link>
+    <description>Recent content in Tracing on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Mon, 13 Apr 2020 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/tracing/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Apache SkyWalking: Use Profiling to Fix the Blind Spot of Distributed Tracing</title>
+      <link>/blog/2020-04-13-apache-skywalking-profiling/</link>
+      <pubDate>Mon, 13 Apr 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2020-04-13-apache-skywalking-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;This post originally appears on &lt;a href=&#34;https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/&#34;&gt;The New Stack&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;This post introduces a way to automatically profile code in production with &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;Apache SkyWalking&lt;/a&gt;. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis.&lt;/p&gt;
+&lt;h3 id=&#34;limitations-of-the-distributed-tracing&#34;&gt;Limitations of the Distributed Tracing&lt;/h3&gt;
+&lt;p&gt;In the early days, metrics and logging systems were the key solutions in monitoring platforms. With the adoption of microservice and distributed system-based architecture, distributed tracing has become more important. Distributed tracing provides relevant service context, such as system topology map and RPC parent-child relationships.&lt;/p&gt;
+&lt;p&gt;Some claim that distributed tracing is the best way to discover the cause of performance issues in a distributed system. It’s good at finding issues at the RPC abstraction, or in the scope of components instrumented with spans. However, it isn’t that perfect.&lt;/p&gt;
+&lt;p&gt;Have you been surprised to find a span duration longer than expected, but no insight into why? What should you do next? Some may think that the next step is to add more instrumentation, more spans into the trace, thinking that you would eventually find the root cause, with more data points. We’ll argue this is not a good option within a production environment. Here’s why:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;There is a risk of application overhead and system overload. Ad-hoc spans measure the performance of specific scopes or methods, but picking the right place can be difficult. To identify the precise cause, you can “instrument” (add spans to) many suspicious places. The additional instrumentation costs more CPU and memory in the production environment. Next, ad-hoc instrumentation that didn’t help is often forgotten, not deleted. This creates a valueless overhead load. In the worst case, excess instrumentation can cause performance problems in the production app or overload the tracing system.&lt;/li&gt;
+&lt;li&gt;The process of ad-hoc (manual) instrumentation usually implies at least a restart. Trace instrumentation libraries, like Zipkin Brave, are integrated into many framework libraries. To instrument a method’s performance typically implies changing code, even if only an annotation. This implies a re-deploy. Even if you have the way to do auto instrumentation, like Apache SkyWalking, you still need to change the configuration and reboot the app. Otherwise, you take the risk of GC caused by hot dynamic instrumentation.&lt;/li&gt;
+&lt;li&gt;Injecting instrumentation into an uninstrumented third party library is hard and complex. It takes more time and many won’t know how to do this.&lt;/li&gt;
+&lt;li&gt;Usually, we don’t have code line numbers in the distributed tracing. Particularly when lambdas are in use, it can be difficult to identify the line of code associated with a span.
+Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/p&gt;
+&lt;h3 id=&#34;profiling-in-production&#34;&gt;Profiling in Production&lt;/h3&gt;
+&lt;h4 id=&#34;introduction&#34;&gt;Introduction&lt;/h4&gt;
+&lt;p&gt;To reuse distributed tracing to achieve method scope precision requires an understanding of the above limitations and a different approach. We called it PROFILE.&lt;/p&gt;
+&lt;p&gt;Most high-level languages build and run on a thread concept. The profile approach takes continuous thread dumps. We merge the thread dumps to estimate the execution time of every method shown in the thread dumps. The key for distributed tracing is the tracing context, identifiers active (or current) for the profiled method. Using this trace context, we can weave data harvested from profiling into existing traces. This allows the system to automate otherwise ad-hoc instrumentation. Let’s dig deeper into how profiling works:&lt;/p&gt;
+&lt;p&gt;We consider a method invocation with the same stack depth and signature (method, line number etc), the same operation. We derive span timestamps from the thread dumps the same operation is in. Let’s put this visually:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-1.png&#34; alt=&#34;span timespaces&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Above, represents 10 successive thread dumps. If this method is in dumps 4-8, we assume it started before dump 4 and finished after dump 8. We can’t tell exactly when the method started and stopped. but the timestamps of thread dumps are close enough.&lt;/p&gt;
+&lt;p&gt;To reduce overhead caused by thread dumps, we only profile methods enclosed by a specific entry point, such as a URI or MVC Controller method. We identify these entry points through the trace context and the APM system.&lt;/p&gt;
+&lt;p&gt;The profile does thread dump analysis and gives us:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The root cause, precise to the line number in the code.&lt;/li&gt;
+&lt;li&gt;Reduced maintenance as ad-hoc instrumentation is obviated.&lt;/li&gt;
+&lt;li&gt;Reduced overload risk caused by ad-hoc instrumentation.&lt;/li&gt;
+&lt;li&gt;Dynamic activation: only when necessary and with a very clear profile target.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;implementing-precise-profiling-with-apache-skywalking-7&#34;&gt;Implementing Precise Profiling with Apache SkyWalking 7&lt;/h3&gt;
+&lt;p&gt;Distributed profiling is built-into Apache SkyWalking application performance monitoring (APM). Let’s demonstrate how the profiling approach locates the root cause of the performance issue.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;final CountDownLatchcountDownLatch= new CountDownLatch(2);
+ 
+threadPool.submit(new Task1(countDownLatch));
+threadPool.submit(new Task2(countDownLatch));
+ 
+try {
+   countDownLatch.await(500, TimeUnit.MILLISECONDS);
+} catch (InterruptedExceptione) {
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Task1 and Task2 have a race condition and unstable execution time: they will impact the performance of each other and anything calling them. While this code looks suspicious, it is representative of real life. People in the OPS/SRE team are not usually aware of all code changes and who did them. They only know something in the new code is causing a problem.&lt;/p&gt;
+&lt;p&gt;To make matters interesting, the above code is not always slow: it only happens when the condition is locked. In SkyWalking APM, we have metrics of endpoint p99/p95 latency, so, we are easy to find out the p99 of this endpoint is far from the avg response time. However, this is not the same as understanding the cause of the latency. To locate the root cause, add a profile condition to this endpoint: duration greater than 500ms. This means faster executions will not add profiling load.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-2.png&#34; alt=&#34;profiled segment&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is a typical profiled trace segment (part of the whole distributed trace) shown on the SkyWalking UI. We now notice the “service/processWithThreadPool” span is slow as we expected, but why? This method is the one we added the faulty code to. As the UI shows that method, we know the profiler is working. Now, let’s see what the profile analysis result say.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-3.png&#34; alt=&#34;profile analysis&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is the profile analysis stack view. We see the stack element names, duration (include/exclude the children) and slowest methods have been highlighted. It shows clearly, “sun.misc.Unsafe.park” costs the most time. If we look for the caller, it is the code we added: &lt;strong&gt;CountDownLatch.await&lt;/strong&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;the-limitations-of-the-profile-method&#34;&gt;The Limitations of the Profile Method&lt;/h3&gt;
+&lt;p&gt;No diagnostic tool can fit all cases, not even the profile method.&lt;/p&gt;
+&lt;p&gt;The first consideration is mistaking a repeatedly called method for a slow method. Thread dumps are periodic. If there is a loop of calling one method, the profile analysis result would say the target method is slow because it is captured every time in the dump process. There could be another reason. A method called many times can also end up captured in each thread dump. Even so, the profile did what it is designed for. It still helps the OPS/SRE team to locate the code having the issue.&lt;/p&gt;
+&lt;p&gt;The second consideration is overhead, the impact of repeated thread dumps is real and can’t be ignored. In SkyWalking, we set the profile dump period to at least 10ms. This means we can’t locate method performance issues if they complete in less than 10ms. SkyWalking has a threshold to control the maximum parallel degree as well.&lt;/p&gt;
+&lt;p&gt;Understanding the above keeps distributed tracing and APM systems useful for your OPS/SRE team.&lt;/p&gt;
+&lt;h3 id=&#34;how-to-try-this&#34;&gt;How to Try This&lt;/h3&gt;
+&lt;p&gt;Everything we discussed, including the Apache SkyWalking Java Agent, profile analysis code, and UI, could be found in our GitHub repository. We hope you enjoyed this new profile method, and love Apache SkyWalking. If so, &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
+&lt;p&gt;SkyWalking 7 has just been released. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt;. Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe to the mail list.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 在线代码级性能剖析，补全分布式追踪的最后一块“短板”</title>
+      <link>/zh/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/</link>
+      <pubDate>Mon, 23 Mar 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/</guid>
+      <description>
+        
+        
+        &lt;ul&gt;
+&lt;li&gt;作者：&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;吴晟&lt;/a&gt;，&lt;a href=&#34;https://github.com/mrproliu&#34;&gt;刘晗&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.infoq.cn/article/CWUOl1JA0EyXw0CxQ4Zm&#34;&gt;原文地址&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在本文中，我们详细介绍了代码级的性能剖析方法，以及我们在 Apache SkyWalking 中的实践。希望能够帮助大家在线定位系统性能短板，缓解系统压力。&lt;/p&gt;
+&lt;h2 id=&#34;分布式链路追踪的局限性&#34;&gt;分布式链路追踪的局限性&lt;/h2&gt;
+&lt;p&gt;在传统的监控系统中，我们如果想要得知系统中的业务是否正常，会采用进程监控、日志收集分析等方式来对系统进行监控。当机器或者服务出现问题时，则会触发告警及时通知负责人。通过这种方式，我们可以得知具体哪些服务出现了问题。但是这时我们并不能得知具体的错误原因出在了哪里，开发人员或者运维人员需要到日志系统里面查看错误日志，甚至需要到真实的业务服务器上查看执行情况来解决问题。&lt;/p&gt;
+&lt;p&gt;如此一来，仅仅是发现问题的阶段，可能就会耗费相当长的时间；另外，发现问题但是并不能追溯到问题产生具体原因的情况，也常有发生。这样反反复复极其耗费时间和精力，为此我们便有了基于分布式追踪的 APM 系统。&lt;/p&gt;
+&lt;p&gt;通过将业务系统接入分布式追踪中，我们就像是给程序增加了一个放大镜功能，可以清晰看到真实业务请求的整体链路，包括请求时间、请求路径，甚至是操作数据库的语句都可以看得一清二楚。通过这种方式，我们结合告警便可以快速追踪到真实用户请求的完整链路信息，并且这些数据信息完全是持久化的，可以随时进行查询，复盘错误的原因。&lt;/p&gt;
+&lt;p&gt;然而随着我们对服务监控理解的加深，我们发现事情并没有那么简单。在分布式链路追踪中我们有这样的两个流派：代码埋点和字节码增强。无论使用哪种方式，底层逻辑一定都逃不过面向切面这个基础逻辑。因为只有这样才可以做到大面积的使用。这也就决定了它只能做到框架级别和 RPC 粒度的监控。这时我们可能依旧会遇到程序执行缓慢或者响应时间不稳定等情况，但无法具体查询到原因。这时候，大家很自然的会考虑到增加埋点粒度，比如对所有的 Spring Bean 方法、甚至主要的业务层方法都加上埋点。但是这种思路会遇到不小的挑战：&lt;/p&gt;
+&lt;p&gt;第一，增加埋点时系统开销大，埋点覆盖不够全面。通过这种方式我们确实可以做到具体业务场景具体分析。但随着业务不断迭代上线，弊端也很明显：大量的埋点无疑会加大系统资源的开销，造成 CPU、内存使用率增加，更有可能拖慢整个链路的执行效率。虽然每个埋点消耗的性能很小，在微秒级别，但是因为数量的增加，甚至因为业务代码重用造成重复埋点或者循环使用，此时的性能开销已经无法忽略。&lt;/p&gt;
+&lt;p&gt;第二，动态埋点作为一项埋点技术，和手动埋点的性能消耗上十分类似，只是减少的代码修改量，但是因为通用技术的特别，上一个挑战中提到的循环埋点和重复使用的场景甚至更为严重。比如选择所有方法或者特定包下的所有方法埋点，很可能造成系统性能彻底崩溃。&lt;/p&gt;
+&lt;p&gt;第三，即使我们通过合理设计和埋点，解决了上述问题，但是 JDK 函数是广泛使用的，我们很难限制对 JDK API 的使用场景。对 JDK 过多方法、特别是非 RPC 方法的监控会造成系统的巨大延迟风险。而且有一些基础类型和底层工具类，是很难通过字节码进行增强的。当我们的 SDK 使用不当或者出现 bug 时，我们无法具体得知真实的错误原因。&lt;/p&gt;
+&lt;h2 id=&#34;代码级性能剖析方法&#34;&gt;代码级性能剖析方法&lt;/h2&gt;
+&lt;h3 id=&#34;方法介绍&#34;&gt;方法介绍&lt;/h3&gt;
+&lt;p&gt;基于以上问题，在系统性能监控方法上，我们提出了&lt;strong&gt;代码级性能剖析&lt;/strong&gt;这种在线诊断方法。这种方法基于一个高级语言编程模型共性，即使再复杂的系统，再复杂的业务逻辑，都是基于线程去进行执行的，而且多数逻辑是在单个线程状态下执行的。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;代码级性能剖析&lt;/strong&gt;就是利用方法栈快照，并对方法执行情况进行分析和汇总。并结合有限的分布式追踪 span 上下文，对代码执行速度进行估算。&lt;/p&gt;
+&lt;p&gt;性能剖析激活时，会对指定线程周期性的进行线程栈快照，并将所有的快照进行汇总分析，如果两个连续的快照含有同样的方法栈，则说明此栈中的方法大概率在这个时间间隔内都处于执行状态。从而，通过这种连续快照的时间间隔累加成为估算的方法执行时间。时间估算方法如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl527tsgwj30us0cwwet.jpg&#34; alt=&#34;Profile Time estimation&#34;&gt;&lt;/p&gt;
+&lt;p&gt;在上图中，d0-d10 代表 10 次连续的内存栈快照，实际方法执行时间在 d3-d4 区间，结束时间在 d8-d9 之间。性能剖析无法告诉你方法的准确执行时间，但是他会估算出方法执行时间为 d4-d8 的 4 个快照采集间隔时间之和，这已经是非常的精确的时间估算了。&lt;/p&gt;
+&lt;p&gt;而这个过程因为不涉及代码埋点，所以自然性能消耗是稳定和可控的，也无需担心是否被埋点，是否是 JDK 方法等问题。同时，由于上层已经在分布式追踪之下，性能剖析方法可以明确地确定分析开始和结束时间，减少不必要的性能开销。&lt;/p&gt;
+&lt;p&gt;性能剖析可以很好的对线程的堆栈信息进行监控，主要有以下几点优势：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;精确的问题定位，直接到代码方法和代码行；&lt;/li&gt;
+&lt;li&gt;无需反复的增删埋点，大大减少了人力开发成本；&lt;/li&gt;
+&lt;li&gt;不用承担过多埋点对目标系统和监控系统的压力和性能风险；&lt;/li&gt;
+&lt;li&gt;按需使用，平时对系统无消耗，使用时的消耗稳定可能。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;skywalking-实践实例&#34;&gt;SkyWalking 实践实例&lt;/h3&gt;
+&lt;p&gt;我们首先在 Apache SkyWalking APM 中实现此技术方法，下面我们就以一个真实的例子来说明此方法的执行效果。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;final&lt;/span&gt; CountDownLatchcountDownLatch&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; CountDownLatch&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;2&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
+threadPool&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;submit&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; Task1&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;countDownLatch&lt;span style=&#34;color:#f92672&#34;&gt;));&lt;/span&gt;
+threadPool&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;submit&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; Task2&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;countDownLatch&lt;span style=&#34;color:#f92672&#34;&gt;));&lt;/span&gt;
+&lt;span style=&#34;color:#66d9ef&#34;&gt;try&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+   countDownLatch&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;await&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;500&lt;span style=&#34;color:#f92672&#34;&gt;,&lt;/span&gt; TimeUnit&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;MILLISECONDS&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
+&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;catch&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;InterruptedExceptione&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这是我们故意加入的问题代码，我们使用 CountDownLanth 设置了两个任务完成后方法执行结束，Task1 和 Task2 是两个执行时间不稳定的任务，所以主任务也会执行速度不稳定。但对于运维和监控团队来说，很难定位到这个方法片段。&lt;/p&gt;
+&lt;p&gt;针对于这种情况，我们看看性能剖析会怎样直接定位此问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl527i9fsj30l403j0tf.jpg&#34; alt=&#34;Profile Trace&#34;&gt;&lt;/p&gt;
+&lt;p&gt;上图所示的就是我们在进行链路追踪时所看到的真实执行情况，其中我们可以看到在 service/processWithThreadPool 执行速度缓慢，这正是我们植入问题代码的方法。此时在这个调用中没有后续链路了，所以并没有更细致的原因，我们也不打算去 review 代码，从而增加新埋点。这时，我们可以对 HelloService 进行性能剖析，并执行只剖析响应速度大于 500 毫秒的请求。&lt;/p&gt;
+&lt;p&gt;注意，指定特定响应时间的剖析是保证剖析有效性的重要特性，如果方法在平均响应时间上已经出现问题，往往通过分布式链路可以快速定位，因为此时链路总时间长，新埋点带来的性能影响相对可控。但是方法性能抖动是不容易用新增埋点来解决的，而且往往只发生在生产环境。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl528dv3cj30u010vdj1.jpg&#34; alt=&#34;Profile Thread Stack&#34;&gt;&lt;/p&gt;
+&lt;p&gt;上图就是我们进行性能剖析后的真实结果图。从左到右分别表示：栈帧名称、该栈帧总计耗时（包含其下面所有自栈帧）、当前栈帧自身耗时和监控次数。我们可以在最后一行看到，线程卡在了 sun.misc.Unsafe.park 中了。如果你熟悉 Java 就可以知道此时进行了锁等待，我们继续按照树的结构向上推，便可以看到线程真正是卡在了 CountDownLatch.await 方法中。&lt;/p&gt;
+&lt;h3 id=&#34;方法局限性&#34;&gt;方法局限性&lt;/h3&gt;
+&lt;p&gt;当然任何的方法都不是万能的，性能剖析也有一些局限性。&lt;/p&gt;
+&lt;p&gt;第一， 对于高频反复执行的方法，如循环调用，可能会误报为缓慢方法。但这并不是大问题，因为如果反复执行的耗时较长，必然是系统需要关注的性能瓶颈。&lt;/p&gt;
+&lt;p&gt;第二， 由于性能栈快照有一定的性能消耗，所以采集周期不宜过密，如 SkyWalking 实践中，不支持小于 10ms 的采集间隔。所以如果问题方法执行时间过小（比如在 10 毫秒内波动），此方法并不适用。我们也再此强调，&lt;strong&gt;方法论和工具的强大，始终不能代替程序员&lt;/strong&gt;。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 更容易理解将要到来的分布式链路追踪 6.0GA (翻译)</title>
+      <link>/zh/2019-01-02-understand-trace-trans2cn/</link>
+      <pubDate>Wed, 02 Jan 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2019-01-02-understand-trace-trans2cn/</guid>
+      <description>
+        
+        
+        &lt;ul&gt;
+&lt;li&gt;作者: Wu Sheng, tetrate, SkyWalking original creator&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;GitHub&lt;/a&gt;, &lt;a href=&#34;https://twitter.com/wusheng1108&#34;&gt;Twitter&lt;/a&gt;, &lt;a href=&#34;https://www.linkedin.com/in/wusheng1108&#34;&gt;Linkedin&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;翻译: jjlu521016&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
+&lt;p&gt;在当前的微服务架构中分布式链路追踪是很有必要的一部分，但是对于一些用户来说如何去理解和使用分布式链路追踪的相关数据是不清楚的。
+这个博客概述了典型的分布式跟踪用例，以及Skywalking的V6版本中新的可视化功能。我们希望新的用户通过这些示例来更好的理解。&lt;/p&gt;
+&lt;h2 id=&#34;指标和拓扑图&#34;&gt;指标和拓扑图&lt;/h2&gt;
+&lt;p&gt;跟踪数据支持两个众所周知的分析特性：&lt;code&gt;指标&lt;/code&gt;和&lt;code&gt;拓扑图&lt;/code&gt;&lt;br&gt;
+&lt;code&gt;指标&lt;/code&gt;: 每个service, service instance, endpoint的指标都是从跟踪中的入口span派生的。指标代表响应时间的性能。所以可以有一个平均响应时间，99%的响应时间，成功率等。它们按service, service instance, endpoint进行分解。&lt;br&gt;
+&lt;code&gt;拓扑图&lt;/code&gt;: 拓扑表示服务之间的链接，是分布式跟踪最有吸引力的特性。拓扑结构允许所有用户理解分布式服务关系和依赖关系，即使它们是不同的或复杂的。这一点很重要，因为它为所有相关方提供了一个单一的视图，无论他们是开发人员、设计者还是操作者。&lt;/p&gt;
+&lt;p&gt;这里有一个拓扑图的例子包含了4个项目，包括kafka和两个外部依赖。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44oveesj31gr0u00u1.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-在skywalking的可选择UI0RocketBot的拓扑图-&lt;/p&gt;
+&lt;h1 id=&#34;trace&#34;&gt;Trace&lt;/h1&gt;
+&lt;p&gt;在分布式链路追踪系统中，我们花费大量资源（CPU、内存、磁盘和网络）来生成、传输和持久跟踪数据。让我们试着回答为什么要这样做？我们可以用跟踪数据回答哪些典型的诊断和系统性能问题？&lt;/p&gt;
+&lt;p&gt;Skywalking v6包含两种追踪视图:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;ol&gt;
+&lt;li&gt;TreeMode: 第一次提供,帮助您更容易识别问题。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;ListMode: 常规的时间线视图，通常也出现在其他跟踪系统中，如Zipkin。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;发生错误&#34;&gt;发生错误&lt;/h1&gt;
+&lt;p&gt;在trace视图，最简单的部分是定位错误，可能是由代码异常或网络故障引起的。通过span详情提供的细节，ListMode和TreeMode都能够找到错误
+&lt;img src=&#34;0081Kckwly1gkl44lh09oj32ha0se42w.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-ListMode 错误span-&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44kwl6nj31q20u0dl0.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-TreeMode 错误span-&lt;/p&gt;
+&lt;h1 id=&#34;慢span&#34;&gt;慢span&lt;/h1&gt;
+&lt;p&gt;一个高优先级的特性是识别跟踪中最慢的span。这将使用应用程序代理捕获的执行持续时间。在旧的ListMode跟踪视图中，由于嵌套，父span几乎总是包括子span的持续时间。换句话说，一个缓慢的span通常会导致它的父节点也变慢，在Skywalking 6中，我们提供了 &lt;code&gt;最慢的前5个span&lt;/code&gt; 过滤器来帮助你您直接定位span。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44odek5j31sd0u0q8f.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-最慢的前5个span-&lt;/p&gt;
+&lt;h1 id=&#34;太多子span&#34;&gt;太多子span&lt;/h1&gt;
+&lt;p&gt;在某些情况下，个别持续时间很快，但跟踪速度仍然很慢，如：
+&lt;img src=&#34;0081Kckwly1gkl44mxmddj310i0lktbp.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-没有慢span的追踪-&lt;/p&gt;
+&lt;p&gt;如果要了解根问题是否与太多操作相关，请使用子范围号的&lt;code&gt;Top 5 of children span number&lt;/code&gt;,筛选器显示每个span的子级数量，突出显示前5个。
+&lt;img src=&#34;0081Kckwly1gkl44nbryhj31fa0tcafl.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-13个数据库访问相关的span-&lt;/p&gt;
+&lt;p&gt;在这个截图中，有一个包含13个子项的span，这些子项都是数据库访问。另外，当您看到跟踪的概述时，这个2000ms跟踪的数据库花费了1380ms。
+&lt;img src=&#34;0081Kckwly1gkl44lzkbwj31040famyy.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-1380ms花费在数据库访问-&lt;/p&gt;
+&lt;p&gt;在本例中，根本原因是数据库访问太多。这在其他场景中也很常见，比如太多的RPC或缓存访问。&lt;/p&gt;
+&lt;h1 id=&#34;链路深度&#34;&gt;链路深度&lt;/h1&gt;
+&lt;p&gt;跟踪深度也与延迟有关。像&lt;a href=&#34;#%E5%A4%AA%E5%A4%9A%E5%AD%90span&#34;&gt;太多子span&lt;/a&gt;的场景一样，每个span延迟看起来不错，但整个链路追踪的过程很慢。
+&lt;img src=&#34;0081Kckwly1gkl44nv4gfj32600u0q7a.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-链路深度-&lt;/p&gt;
+&lt;p&gt;上图所示,最慢的span小鱼500ms,对于2000毫秒的跟踪来说，速度并不太慢。当您看到第一行时，有四种不同的颜色表示这个分布式跟踪中涉及的四个services。每一个都需要100~400ms，这四个都需要近2000ms，从这里我们知道这个缓慢的跟踪是由一个序列中的3个RPC造成的。&lt;/p&gt;
+&lt;h2 id=&#34;结束语&#34;&gt;结束语&lt;/h2&gt;
+&lt;p&gt;分布式链路追踪和APM 工具帮助我们确定造成问题的根源，允许开发和操作团队进行相应的优化。我们希望您喜欢这一点，并且喜欢Apache Skywalking和我们的新链路追踪可视化界面。如果你喜欢的话，在&lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;github上面给我们加start来鼓励我们&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Skywakling 6计划在2019年的1月底完成release。您可以通过以下渠道联系项目团队成员&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;关注 &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;skywalking推特&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;订阅邮件:dev@skywalking.apache.org。发送邮件到 &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; 来订阅.&lt;/li&gt;
+&lt;li&gt;加入&lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt;聊天室&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Understand distributed trace easier in the incoming 6-GA</title>
+      <link>/blog/2019-01-01-understand-trace/</link>
+      <pubDate>Tue, 01 Jan 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2019-01-01-understand-trace/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Distributed tracing is a necessary part of modern microservices architecture, but how to understand or use distributed tracing data is unclear to some end users. This blog overviews typical distributed tracing use cases with new visualization features in SkyWalking v6. We hope new users will understand more through these examples.&lt;/p&gt;
+&lt;h2 id=&#34;metric-and-topology&#34;&gt;Metric and topology&lt;/h2&gt;
+&lt;p&gt;Trace data underpins in two well known analysis features: &lt;strong&gt;metric&lt;/strong&gt; and &lt;strong&gt;topology&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Metric&lt;/strong&gt; of each service, service instance, endpoint are derived from entry spans in trace. Metrics represent response time performance. So, you could have average response time, 99% response time, success rate, etc. These are broken down by service, service instance, endpoint.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Topology&lt;/strong&gt; represents links between services and is distributed tracing&amp;rsquo;s most attractive feature. Topologies allows all users to understand distributed service relationships and dependencies even when they are varied or complex. This is important as it brings a single view to all interested parties, regardless of if they are a developer, designer or operator.&lt;/p&gt;
+&lt;p&gt;Here&amp;rsquo;s an example topology of 4 projects, including Kafka and two outside dependencies.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./demo-spring.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Topology in SkyWalking optional UI, RocketBot&lt;/p&gt;
+&lt;h2 id=&#34;trace&#34;&gt;Trace&lt;/h2&gt;
+&lt;p&gt;In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk and Network) to generate, transport and persistent trace data. Let&amp;rsquo;s try to answer why we do this? What are the typical diagnosis and system performance questions we can answer with trace data?&lt;/p&gt;
+&lt;p&gt;SkyWalking v6 includes two trace views:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;TreeMode: The first time provided. Help you easier to identify issues.&lt;/li&gt;
+&lt;li&gt;ListMode: Traditional view in time line, also usually seen in other tracing system, such as Zipkin.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;error-occurred&#34;&gt;Error occurred&lt;/h3&gt;
+&lt;p&gt;In the trace view, the easiest part is locating the error, possibly caused by a code exception or network fault. Both ListMode and TreeMode can identify errors, while the span detail screen provides details.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;span-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;ListMode error span&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;span-error-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;TreeMode error span&lt;/p&gt;
+&lt;h3 id=&#34;slow-span&#34;&gt;Slow span&lt;/h3&gt;
+&lt;p&gt;A high priority feature is identifying the slowest spans in a trace. This uses execution duration captured by application agents. In the old ListMode trace view, parent span almost always includes the child span&amp;rsquo;s duration, due to nesting. In other words, a slow span usually causes its parent to also become slow. In SkyWalking 6, we provide &lt;code&gt;Top 5 of slow span&lt;/code&gt; filter to help you locate the spans directly.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;top5-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Top 5 slow span&lt;/p&gt;
+&lt;p&gt;The above screenshot highlights the top 5 slow spans, excluding child span duration. Also, this shows all spans&amp;rsquo; execution time, which helps identify the slowest ones.&lt;/p&gt;
+&lt;h3 id=&#34;too-many-child-spans&#34;&gt;Too many child spans&lt;/h3&gt;
+&lt;p&gt;In some cases, individual durations are quick, but the trace is still slow, like this one:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;top5-not-clear.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Trace with no slow span&lt;/p&gt;
+&lt;p&gt;To understand if the root problem is related to too many operations, use &lt;code&gt;Top 5 of children span number&lt;/code&gt;. This filter shows the amount of children each span has, highlighting the top 5.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;too-many-child.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;13 database accesses of a span&lt;/p&gt;
+&lt;p&gt;In this screenshot, there is a span with 13 children, which are all Database accesses. Also, when you see overview of trace, database cost 1380ms of this 2000ms trace.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;database-long-duration.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;1380ms database accesses&lt;/p&gt;
+&lt;p&gt;In this example, the root cause is too many database accesses. This is also typical in other scenarios like too many RPCs or cache accesses.&lt;/p&gt;
+&lt;h3 id=&#34;trace-depth&#34;&gt;Trace depth&lt;/h3&gt;
+&lt;p&gt;Trace depth is also related latency. Like the &lt;a href=&#34;#too-many-child-spans&#34;&gt;too many child spans&lt;/a&gt; scenario, each span latency looks good, but the whole trace is slow.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;deep-trace-1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Trace depth&lt;/p&gt;
+&lt;p&gt;Here, the slowest spans are less than 500ms, which are not too slow for a 2000ms trace. When you see the first line, there are four different colors representing four services involved in this distributed trace. Every one of them costs 100~400ms. For all four, there nearly 2000ms. From here, we know this slow trace is caused by 3 RPCs in a serial sequence.&lt;/p&gt;
+&lt;h2 id=&#34;at-the-end&#34;&gt;At the end&lt;/h2&gt;
+&lt;p&gt;Distributed tracing and APM tools help users identify root causes, allowing development and operation teams to optimize accordingly. We hope you enjoyed this, and love Apache SkyWalking and our new trace visualization. If so, &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
+&lt;p&gt;SkyWalking 6 is scheduled to release at the end of January 2019. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt; . Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe the mail list.&lt;/li&gt;
+&lt;li&gt;Join &lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt; room.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>
