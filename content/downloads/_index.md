@@ -3,11 +3,11 @@ title: "Downloads"
 linkTitle: "Downloads"
 descriptions: "Download the SkyWalking releases."
 ---
-# Download the SkyWalking releases
+# Download the SkyWalking recommended releases
 
 Use the links below to download the Apache SkyWalking from one of our mirrors.
 
-**Only source code releases are official Apache releases: Windows and Linux binary distributions are just for end user convenience.**
+**Only source code releases are official Apache releases, binary distributions are just for end user convenience.**
 
 ## Download the latest versions
 
@@ -15,7 +15,7 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 
 ### All Releases
 
-- Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/)
+- Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/). 
 - [Archive incubating repository](https://archive.apache.org/dist/incubator/skywalking/) hosts older releases when SkyWalking was an incubator project.
 
 ### Docker Images for convenience
@@ -23,10 +23,6 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 **Docker images are not official ASF releases but provided for convenience. Recommended usage is always to build the source**
 
 {{< dockerhub-block >}}
-
-## Changelog
-
-You can also read the [changelogs](https://github.com/apache/skywalking/blob/master/CHANGES.md) for all versions.
 
 # Verify the releases
 
