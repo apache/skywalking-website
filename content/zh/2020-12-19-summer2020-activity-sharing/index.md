@@ -3,7 +3,7 @@ title: 暑期2020活动心得分享
 date: 2020-12-19
 author: 江华禧
 description: 学生通过暑期2020活动参与 Apache SkyWalking 项目的一些感悟
-tags:
+zh_tags:
 - Open Source Promotion Plan 
 - Open Source Contribution
 ---

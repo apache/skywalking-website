@@ -3,7 +3,7 @@ title: "Apache SkyWalking 为.NET Core带来开箱即用的分布式追踪和应
 date: 2018-05-24
 author: 刘浩扬（SkyWalking .NET Core 探针维护者）
 description: "SkyWalking .NET Core SDK 现已可用。"
-tags:
+zh_tags:
 - DotNetCore
 - Agent
 ---

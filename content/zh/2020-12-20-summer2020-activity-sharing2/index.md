@@ -3,7 +3,7 @@ title: 暑期 2020 活动学生（张可）心得分享
 date: 2020-12-20
 author: 张可
 description: 学生（张可）参与暑期 2020 活动中 Apache SkyWalking 项目的感受与收获
-tags:
+zh_tags:
 - Open Source Promotion Plan 
 - Open Source Contribution
 ---

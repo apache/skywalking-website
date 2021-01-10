@@ -3,7 +3,7 @@ title: SkyWalking Java 插件贡献实践
 date: 2019-01-21
 author: 赵禹光
 description: 本文将基于SkyWalking 6.0.0-GA-SNAPSHOT版本，以编写Redis客户端Lettuce的SkyWalking Java Agent 插件为例，与大家分享我贡献PR的过程，希望对大家了解SkyWalking Java Agent插件有所帮助。
-tags:
+zh_tags:
 - User Manual
 - Development
 - Open Source Contribution
