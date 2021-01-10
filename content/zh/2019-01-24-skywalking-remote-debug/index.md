@@ -6,7 +6,8 @@ description: "远程调试的目的是为了解决代码或者说程序包部署
 zh_tags:
 - User Manual
 - Development
-- JavaAgent
+- Java
+- Agent
 ---
 
 ps:本文仅写给菜鸟，以及不知道如何远程调试的程序员，并且仅仅适用skywalking的远程调试
