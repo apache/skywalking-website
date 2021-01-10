@@ -3,7 +3,7 @@ title: APM巅峰对决：SkyWalking P.K. Pinpoint
 date: 2019-02-24
 author: 王振飞
 description: 这应该是目前两款最优秀的开源APM软件：skywalking和Pinpoint，本文基于它们截止2019年2月最新的版本，进行最全方位的对比。看看到底谁能更胜一筹...
-tags:
+zh_tags:
 - Use Case
 ---
 

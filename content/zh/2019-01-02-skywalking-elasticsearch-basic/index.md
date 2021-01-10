@@ -3,7 +3,7 @@ title: 关于 ElastiSsearch 因 basic 认证导致 SkyWalking 无法正常调用
 date: 2019-01-02
 author: 刘离勇
 description: ElasticSearch basic 验证。
-tags:
+zh_tags:
 - User Manual
 - ElasticSearch
 ---

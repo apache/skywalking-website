@@ -3,7 +3,7 @@ title: "[视频] SkyWalking DevCon 2020"
 date: 2020-11-23
 author: "吴晟"
 description: "2020年11月14日Apache SkyWalking 2020 DevCon 线下活动视频"
-tags:
+zh_tags:
 - Conference
 - Video
 ---

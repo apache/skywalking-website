@@ -3,7 +3,7 @@ title: 度量服务网格健康度——Apdex得分
 date: 2020-07-26
 author: Srinivasan Ramaswamy
 description: 在管理Service Mesh的服务时，"你感觉怎么样" 比 "你的症状是什么" 更重要。Apdex帮助了解服务的健康状况。
-tags:
+zh_tags:
 - User Manual
 ---
 

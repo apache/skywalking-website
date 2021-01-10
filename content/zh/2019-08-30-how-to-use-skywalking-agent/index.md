@@ -3,7 +3,7 @@ title: 如何使用 SkyWalking Agent ？
 date: 2019-08-30
 author: innerpeacez
 description: 本文将教你如何在 docker 或者 kubernetes 使用Skywalking Agent。
-tags:
+zh_tags:
 - User Manual
 ---
 

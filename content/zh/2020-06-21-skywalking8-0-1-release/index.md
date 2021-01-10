@@ -3,7 +3,7 @@ title: "Apache SkyWalking 8.0.1 发布"
 date: 2020-06-21
 author: 吴晟
 description: "与 8.0.0 相比，此版本包含一个热修复程序。"
-tags:
+zh_tags:
 - Release Blog
 ---
 

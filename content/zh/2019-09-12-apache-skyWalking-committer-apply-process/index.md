@@ -3,7 +3,7 @@ title: Apache SkyWalking Committer申请流程
 date: 2019-09-12
 author: x22x22
 description: 本文介绍申请Apache SkyWalking Committer流程。
-tags:
+zh_tags:
 - Open Source Contribution
 ---
 
