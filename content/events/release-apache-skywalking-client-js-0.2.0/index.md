@@ -4,7 +4,7 @@ date: 2020-11-17
 author: SkyWalking Team
 ---
 
-SkyWalking Client JS 0.2.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking Client JS 0.2.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Bug Fixes
   - Fixed a bug in `sslTime` calculate.

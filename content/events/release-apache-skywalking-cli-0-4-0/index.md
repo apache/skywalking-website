@@ -4,7 +4,7 @@ date: 2020-10-11
 author: SkyWalking Team
 ---
 
-SkyWalking CLI 0.4.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking CLI 0.4.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Features
   - Add dashboard global command with auto-refresh
