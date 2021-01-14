@@ -4,7 +4,7 @@ date: 2021-01-14
 author: SkyWalking Team
 ---
 
-SkyWalking Client JS 0.3.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking Client JS 0.3.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 1. Support tracing starting at the browser.
 2. Add traceSDKInternal SDK for tracing SDK internal RPC.

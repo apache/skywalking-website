@@ -4,7 +4,7 @@ date: 2020-10-24
 author: SkyWalking Team
 ---
 
-SkyWalking LUA Nginx 0.3.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking LUA Nginx 0.3.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Load the `base64` module in `utils`, different ENV use different library.
 - Add prefix `skywalking`, avoid conflicts with other lua libraries.

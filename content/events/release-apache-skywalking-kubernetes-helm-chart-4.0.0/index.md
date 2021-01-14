@@ -4,7 +4,7 @@ date: 2020-11-03
 author: SkyWalking Team
 ---
 
-SkyWalking Kubernetes Helm Chart 4.0.0 is released. Go to [downloads](https://github.com/apache/skywalking-website/blob/master/downloads) page to find release tars.
+SkyWalking Kubernetes Helm Chart 4.0.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Allow overriding configurations files under /skywalking/config.
 - Unify the usages of different SkyWalking versions.
