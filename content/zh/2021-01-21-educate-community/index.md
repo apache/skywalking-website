@@ -8,5 +8,10 @@ zh_tags:
 - Video
 ---
 
+- 第一节：开篇介绍
+- 第二节：数字游戏（Number Game）
+- 第三节：社区原则（Community “Principles”）
+- 第四节：基金会原则（For public good）
+- 第五节：一些不太好的事情
 
 {{< bilibili BV125411E7GK >}}
