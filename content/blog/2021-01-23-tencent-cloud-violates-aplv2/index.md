@@ -30,7 +30,7 @@ With all above information, we had enough reason to believe, from the tech persp
 
 From the 18th Jan., 2021, we sent mail `[Apache 2.0 License Violation] Tencent Cloud TSW service doesn't follow the Apache 2.0 License` to brief the SkyWalking PMC, and
 took the following actions to connect with Tencent.
-- MaDe direct call to Tencent Open Source Office.
+- Made direct call to Tencent Open Source Office.
 - Connected with Tencent Cloud TVP program committee, as Sheng Wu(Our VP) is a Tencent Cloud TVP.
 - Talked with the Tencent Cloud team lead.
 
