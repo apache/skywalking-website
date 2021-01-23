@@ -24,9 +24,10 @@ Some typically evidences are here
 - [ContextManager](https://github.com/apache/skywalking/blob/v8.3.0/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/context/ContextManager.java ) is copied and ackage-name changed in the TSW's agent.
 ![](copy2.jpeg)
 
-At the same time, we checked their tsw-client-package.zip, it didn't include the SkyWalking's LICENSE and NOTICE, also, they didn't mention TSW agent is the re-ditribution SkyWalking on their website.
+At the same time, we checked their tsw-client-package.zip, it didn't include the SkyWalking's LICENSE and NOTICE. Also, they didn't mention TSW agent is the re-ditribution SkyWalking on their website.
 
-With all above information, we had enough reason to believe, from the tech perspective, they were violating the Apache 2.0 License's requirements. 
+With all above information, we had enough reason to believe, from the tech perspective, **they were violating the Apache 2.0 License.**
+
 From the 18th Jan., 2021, we sent mail `[Apache 2.0 License Violation] Tencent Cloud TSW service doesn't follow the Apache 2.0 License` to brief the SkyWalking PMC, and
 took the following actions to connect with Tencent.
 - MaDe direct call to Tencent Open Source Office.
