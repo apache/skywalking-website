@@ -2,12 +2,12 @@
 title: "[Resolved][License Issue] Tencent Cloud TSW service violates the Apache 2.0 License when using SkyWalking."
 date: 2021-01-22
 author: Apache SkyWalking
-description: "Tencent Cloud Service, Tencent Service Watche - TSW, have been reported as it violates Apache 2.0 License requirements."
+description: "Tencent Cloud Service, Tencent Service Watcher - TSW, have been reported as it violates Apache 2.0 License requirements."
 ---
 
 [Apache SkyWalking](https://skywalking.apache.org) is an open source APM for distributed system, Apache Software Foundation top-level project.
 
-At Jan. 11th, 2021, we noticed the Tencent Cloud Service, [Tencent Service Watche - TSW](https://cloud.tencent.com/product/tsw), for first time. 
+At Jan. 11th, 2021, we noticed the Tencent Cloud Service, [Tencent Service Watcher - TSW](https://cloud.tencent.com/product/tsw), for first time. 
 Due to the similar short name, which SkyWalking is also called SW in the community, we connected with the service team of Tencent Cloud, and kindly asked.
 
 They used to replay, **TSW is purely developed by Tencent team itself, which doesn't have any code dependency on SkyWalking.**. We didn't push harder.
