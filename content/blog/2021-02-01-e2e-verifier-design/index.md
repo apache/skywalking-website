@@ -20,22 +20,34 @@ We will implement the verifier with [Go template](https://golang.org/pkg/text/te
 
 The verifier inherits all the actions from the standard Go template, such as `if`, `with`, `range`, etc. In addition, we also provide some custom actions to satisfy our own needs.
 
-### At Least Once of List Elements Match
+### List Elements Match
 
-`atLeastOnce` checks if there is at least one element of list matches the given template.
+`contains` checks if the actual list contains elements that match the given template.
 
 Examples:
 
 ```yaml
 metrics:
-{{- atLeastOnce .metrics }}
-  name: {{ notEmpty .name }}
-  id: {{ notEmpty .id }}
-  value: {{ gt .value .0 }}
+{{- contains .metrics }}
+  - name: {{ notEmpty .name }}
+    id: {{ notEmpty .id }}
+    value: {{ gt .value 0 }}
 {{- end }}
 ```
 
-Note that between the `{{- atLeastOnce .metrics }}` and `{{- end }}` it is a single object, instead of a list.
+It means that the list `metrics` must contain an element whose `name` and `id` are not empty, and `value` is greater than `0`.
+
+```yaml
+metrics:
+{{- contains .metrics }}
+  - name: p95
+    value: {{ gt .value 0 }}
+  - name: p99
+    value: {{ gt .value 0 }}
+{{- end }}
+```
+
+This means that the list `metrics` must contain an element named `p95` with a `value` greater than 0, and an element named `p95` with a `value` greater than 0. Besides the two element, the list `metrics` may or may not have other random elements.
 
 ## Functions
 
@@ -142,7 +154,7 @@ calls:
 ```yaml
 # expected.data.yaml
 metrics:
-{{- atLeastOnce .metrics }}
+{{- contains .metrics }}
   name: {{ notEmpty .name }}
   id: {{ notEmpty .id }}
   value: {{ gt .value 0 }}
@@ -165,7 +177,7 @@ metrics:
     value: 0
 ```
 
-and will report an error when validating this data:
+and will report an error when validating this data, because there is no element with a value greater than 0:
 
 ```yaml
 # actual.data.yaml
@@ -180,3 +192,16 @@ metrics:
     id: c3lzdGVtOjpsb2FkIGJhbGFuY2VyMg==.1
     value: 0
 ```
+
+The `contains` does an unordered list verification, in order to do list verifications including orders, you can simply use the basic ruls like this:
+
+```yaml
+# expected.data.yaml
+metrics:
+  - name: p99
+    value: {{ gt (index .metrics 0).value 0 }}
+  - name: p95
+    value: {{ gt (index .metrics 1).value 0 }}
+```
+
+which expects the actual `metrics` list to be exactly ordered, with first element named `p99` and `value` greater 0, second element named `p95` and `value` greater 0.
