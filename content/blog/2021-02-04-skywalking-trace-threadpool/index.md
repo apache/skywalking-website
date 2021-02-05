@@ -1,8 +1,8 @@
 ---
-title: "Apache SkyWalking: How to propagate trace between threads when using ThreadPoolExecutor"
+title: "Apache SkyWalking: How to propagate context between threads when using ThreadPoolExecutor"
 date: 2021-02-04
 author: "Binglong Li"
-description: "This post introduces how to propagate trace between threads when using ThreadPoolExecutor, 
+description: "This post introduces how to propagate context between threads when using ThreadPoolExecutor, 
 which skywalking agent can not enhance"
 tags:
 - Java
@@ -11,13 +11,13 @@ tags:
 - thread
 ---
 
-When using skywalking java agent, people usually propagate trace easily. They even do not need to change the business 
-code. However, it becomes harder when you want to propagate trace between threads when using ThreadPoolExecutor. 
+When using skywalking java agent, people usually propagate context easily. They even do not need to change the business 
+code. However, it becomes harder when you want to propagate context between threads when using ThreadPoolExecutor. 
 You can use the RunnableWrapper in the maven artifact org.apache.skywalking:apm-toolkit-trace. This way you must change 
 your code. The developer manager usually don't like this because there may be lots of projects, or lots of runnable code. 
 If they don't use skywalking some day, the code added will be superfluous and inelegant.
 
-Is there a way to propagate trace without changing the business code? Yes. 
+Is there a way to propagate context without changing the business code? Yes. 
 
 Skywalking java agent enhances an instance by add a field and implement an interface. The ThreadPoolExecutor is a special
 class that is used widely. We even don't know when and where it is loaded. Most JVMs do not allow changes in the class
