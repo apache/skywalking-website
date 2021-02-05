@@ -155,9 +155,9 @@ calls:
 # expected.data.yaml
 metrics:
 {{- contains .metrics }}
-  name: {{ notEmpty .name }}
-  id: {{ notEmpty .id }}
-  value: {{ gt .value 0 }}
+  - name: {{ notEmpty .name }}
+    id: {{ notEmpty .id }}
+    value: {{ gt .value 0 }}
 {{- end }}
 ```
 
