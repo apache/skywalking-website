@@ -77,9 +77,9 @@ Note: We only need to install Node Exporter,  rather than Prometheus server.
 If you want to get more information about Prometheus Node Exporter  see: https://prometheus.io/docs/guides/node-exporter/
 
 ### Install OpenTelemetry Collector
-We can quickly install a OpenTelemetry Collector instance by using `docker-compose` with the following steps
-Create a directory to store the configuration files, like `/usr/local/otel`
-Create `docker-compose.yaml` and `otel-collector-config.yaml` in this directory represented below.
+We can quickly install a OpenTelemetry Collector instance by using `docker-compose` with the following steps:
+1. Create a directory to store the configuration files, like `/usr/local/otel`.
+2. Create `docker-compose.yaml` and `otel-collector-config.yaml` in this directory represented below:
 
 `docker-compose.yaml`
 ```yaml
@@ -140,7 +140,7 @@ service:
   extensions: [health_check]
 ```
 
-In this  directory use command `docker-compose` to start up the container:
+3. In this  directory use command `docker-compose` to start up the container:
 
 ```shell
 docker-compose up -d
@@ -200,5 +200,3 @@ Note: Clear the browser local cache if you used it to access deployments of  pre
 ## Additional Resources
 - Read more about the [SkyWalking 8.4 release highlights](https://github.com/apache/skywalking/blob/v8.4.0/changes/changes-8.4.0.md).
 - Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
-
-
