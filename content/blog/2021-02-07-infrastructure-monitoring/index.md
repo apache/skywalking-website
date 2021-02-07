@@ -200,9 +200,5 @@ Note: Clear the browser local cache if you used it to access deployments of  pre
 ## Additional Resources
 - Read more about the [SkyWalking 8.4 release highlights](https://github.com/apache/skywalking/blob/v8.4.0/changes/changes-8.4.0.md).
 - Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
-- Read more about SkyWalking from Tetrate on our [blog](https://www.tetrate.io/blog/category/open-source/apache-skywalking/).
-- Sign up to hear more about SkyWalking and observability from [Tetrate](https://www.tetrate.io/contact-us/).
-- Questions and feedback can be addressed to learn@tetrate.io.
-_Apache SkyWalking contributor Kai Wan and SkyWalking founder Sheng Wu are engineers at Tetrate. Tetrate helps organizations adopt open source service mesh tools, including Istio, Envoy, and Apache SkyWalking, so they can manage microservices, run service mesh on any infrastructure, and modernize their applications._
 
 
