@@ -8,7 +8,6 @@ tags:
 - Java
 - Agent
 - Tracing
-- thread
 ---
 
 When using skywalking java agent, people usually propagate context easily. They even do not need to change the business 
