@@ -43,6 +43,7 @@ function readFile(filePath) {
       if (!/^([\s]*)(---[\s\S]*---)/.test(codeTxt)) {
         let title = codeTxt.trim().split('\n')[0]
         title = title.match(/(?<=([ ])).*/g)[0];
+        title = title.replace(':','：')
 
         codeTxt =
             `---
