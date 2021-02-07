@@ -22,18 +22,18 @@ SkyWalking leverages Prometheus and OpenTelemetry for collecting metrics data as
    
 ## What to monitor
 SkyWalking provides default monitoring metrics including:
-CPU Usage (%)
-Memory RAM Usage (MB)
-Memory Swap Usage (MB)
-CPU Average Used
-CPU Load
-Memory RAM (total/available/used MB)
-Memory Swap (total/free MB)
-File System Mount point Usage (%)
-Disk R/W (KB/s)
-Network Bandwidth Usage (receive/transmit KB/s)
-Network Status (tcp_curr_estab/tcp_tw/tcp_alloc/sockets_used/udp_inuse)
-File fd Allocated
+* CPU Usage (%)
+* Memory RAM Usage (MB)
+* Memory Swap Usage (MB)
+* CPU Average Used
+* CPU Load
+* Memory RAM (total/available/used MB)
+* Memory Swap (total/free MB)
+* File System Mount point Usage (%)
+* Disk R/W (KB/s)
+* Network Bandwidth Usage (receive/transmit KB/s)
+* Network Status (tcp_curr_estab/tcp_tw/tcp_alloc/sockets_used/udp_inuse)
+* File fd Allocated
  
 The following is how it looks when we monitor Linux:
 
