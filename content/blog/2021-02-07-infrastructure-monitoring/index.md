@@ -16,7 +16,7 @@ SkyWalking leverages Prometheus and OpenTelemetry for collecting metrics data as
 ![The monitring work process](how-it-works.png)
 
 1. Prometheus Node Exporter collects metrics data from the VMs.
-2. OpenTelemetry Collector fetches metrics from Node Exporters via Prometheus Receiver,  and pushes metrics to Skywalking OAP Server via the OpenCensus GRPC Exporter.
+2. OpenTelemetry Collector fetches metrics from Node Exporters via Prometheus Receiver,  and pushes metrics to SkyWalking OAP Server via the OpenCensus GRPC Exporter.
 3. The SkyWalking OAP Server parses the expression with [MAL](https://github.com/apache/skywalking/blob/master/docs/en/concepts-and-designs/mal.md) to filter/calculate/aggregate and store the results. The expression rules are in `/config/otel-oc-rules/vm.yaml`.
 4. We can now see the data on the SkyWalking WebUI dashboard.
    
