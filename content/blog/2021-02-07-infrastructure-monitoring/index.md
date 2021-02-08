@@ -13,7 +13,7 @@ Apache SkyWalking-- the APM tool for distributed systems--  has historically foc
 ## How it works
 SkyWalking leverages Prometheus and OpenTelemetry for collecting metrics data as we did for Istio control panel metrics; Prometheus is mature and widely used, and we expect to see increased adoption of the new CNCF project, OpenTelemetry. The SkyWalking OAP Server receives these metrics data of OpenCensus format from OpenTelemetry. The process is as follows:
 
-![The monitring work process](how-it-works.jpg)
+![The monitring work process](how-it-works.png)
 
 1. Prometheus Node Exporter collects metrics data from the VMs.
 2. OpenTelemetry Collector fetches metrics from Node Exporters via Prometheus Receiver,  and pushes metrics to Skywalking OAP Server via the OpenCensus GRPC Exporter.
