@@ -32,7 +32,8 @@ null(bootstrap classloader). So it can not find the @TraceCrossThread class unle
 SkyWalking java agent builder.
 
 In [this project](https://github.com/libinglong/skywalking-threadpool-agent), I write my own wrapper class, 
-and simply add a plugin with a name match condition.
+and simply add a plugin with a name match condition. The next image shows how these two agents work together.
+![process.png](process.png)
 
 Finally, note you should add this agent after the SkyWalking agent since the wrapper class should not be loaded before
 SkyWalking agent instrumentation have finished.
