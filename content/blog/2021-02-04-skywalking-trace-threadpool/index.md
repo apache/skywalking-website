@@ -36,4 +36,6 @@ and simply add a plugin with a name match condition. The next image shows how th
 ![process.png](process.png)
 
 Finally, note you should add this agent after the SkyWalking agent since the wrapper class should not be loaded before
-SkyWalking agent instrumentation have finished.
+SkyWalking agent instrumentation have finished. For example,
+
+> java -javaagent:/path/to/skywalking-agent -javaagent:/path/to/tool-agent ...
