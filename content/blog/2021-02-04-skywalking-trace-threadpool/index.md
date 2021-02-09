@@ -32,10 +32,24 @@ null(bootstrap classloader). So it can not find the @TraceCrossThread class unle
 SkyWalking java agent builder.
 
 In [this project](https://github.com/libinglong/skywalking-threadpool-agent), I write my own wrapper class, 
-and simply add a plugin with a name match condition. The next image shows how these two agents work together.
-![process.png](./process.png)
+and simply add a plugin with a name match condition. 
+Next, Let me show you how these two agents work together.
 
-Finally, note you should add this agent after the SkyWalking agent since the wrapper class should not be loaded before
-SkyWalking agent instrumentation have finished. For example,
+* Move the plugin to the skywalking "plugins" directory.
 
-> java -javaagent:/path/to/skywalking-agent -javaagent:/path/to/tool-agent ...
+  ![plugin](plugin.png)
+  
+  ![plugins directory](sky-plugins.png)
+
+* Add this agent after the SkyWalking agent since the wrapper class should not be loaded before
+  SkyWalking agent instrumentation have finished. For example,
+
+  > java -javaagent:/path/to/skywalking-agent -javaagent:/path/to/tool-agent ...
+
+* When our application runs
+  * SkyWalking java agent adds a transformer by parsing the plugin for enhancing the wrapper class in the tool agent.
+  * The tool agent loads the wrapper class into bootstrap classloader. This triggers the previous transformer.
+  * The tool agent applies an advice to the ThreadPoolExecutor class, wrapping the java.lang.Runnable param of "execute" method with the wrapper class.
+  * Now SkyWalking propagates the context with the wrapper class.
+
+Enjoy tracing with ThreadPoolExecutor in SkyWalking!
