@@ -1,6 +1,6 @@
 ---
 title: "Apache SkyWalking: How to propagate context between threads when using ThreadPoolExecutor"
-date: 2021-02-04
+date: 2021-02-09
 author: "Binglong Li"
 description: "This post introduces how to propagate context between threads when using ThreadPoolExecutor, 
 which SkyWalking agent should not enhance"
