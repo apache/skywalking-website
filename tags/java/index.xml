@@ -4,7 +4,7 @@
     <link>/tags/java/</link>
     <description>Recent content in Java on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
-    <lastBuildDate>Mon, 13 Apr 2020 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 09 Feb 2021 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/java/index.xml" rel="self" type="application/rss+xml" />
     
@@ -13,6 +13,64 @@
         
       
     
+    
+    <item>
+      <title>Blog: Apache SkyWalking: How to propagate context between threads when using ThreadPoolExecutor</title>
+      <link>/blog/2021-02-09-skywalking-trace-threadpool/</link>
+      <pubDate>Tue, 09 Feb 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-02-09-skywalking-trace-threadpool/</guid>
+      <description>
+        
+        
+        &lt;p&gt;When using SkyWalking java agent, people usually propagate context easily. They even do not need to change the business
+code. However, it becomes harder when you want to propagate context between threads when using ThreadPoolExecutor.
+You can use the RunnableWrapper in the maven artifact org.apache.skywalking:apm-toolkit-trace. This way you must change
+your code. The developer manager usually don&amp;rsquo;t like this because there may be lots of projects, or lots of runnable code.
+If they don&amp;rsquo;t use SkyWalking some day, the code added will be superfluous and inelegant.&lt;/p&gt;
+&lt;p&gt;Is there a way to propagate context without changing the business code? Yes.&lt;/p&gt;
+&lt;p&gt;Skywalking java agent enhances a class by add a field and implement an interface. The ThreadPoolExecutor is a special
+class that is used widely. We even don&amp;rsquo;t know when and where it is loaded. Most JVMs do not allow changes in the class
+file format for classes that have been loaded previously. So SkyWalking should not enhance the ThreadPoolExecutor successfully by retransforming when the ThreadPoolExecutor has been loaded.
+However, we can apply advice to the ThreadPoolExecutor#execute method and wrap the Runnable param using our
+own agent, then enhance the wrapper class by SkyWalking java agent. An advice do not change the layout of a class.&lt;/p&gt;
+&lt;p&gt;Now we should decide how to do this. You can use the RunnableWrapper in the maven artifact
+org.apache.skywalking:apm-toolkit-trace to wrap the param, but you need to face another problem. This RunnableWrapper
+has a plugin whose active condition is checking if there is @TraceCrossThread. Agent core uses net.bytebuddy.pool.TypePool.Default.WithLazyResolution.LazyTypeDescription to find the annotations
+of a class. The LazyTypeDescription finds annotations by using a URLClassLoader with no urls if the classloader is
+null(bootstrap classloader). So it can not find the @TraceCrossThread class unless you change the LocationStrategy of
+SkyWalking java agent builder.&lt;/p&gt;
+&lt;p&gt;In &lt;a href=&#34;https://github.com/libinglong/skywalking-threadpool-agent&#34;&gt;this project&lt;/a&gt;, I write my own wrapper class,
+and simply add a plugin with a name match condition.
+Next, Let me show you how these two agents work together.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Move the plugin to the skywalking &amp;ldquo;plugins&amp;rdquo; directory.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;plugin.png&#34; alt=&#34;plugin&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sky-plugins.png&#34; alt=&#34;plugins directory&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add this agent after the SkyWalking agent since the wrapper class should not be loaded before
+SkyWalking agent instrumentation have finished. For example,&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;java -javaagent:/path/to/skywalking-agent.jar -javaagent:/path/to/skywalking-tool-agent-v1.0.0.jar &amp;hellip;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;agent.png&#34; alt=&#34;agent.png&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;When our application runs&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;SkyWalking java agent adds a transformer by parsing the plugin for enhancing the wrapper class in the tool agent.&lt;/li&gt;
+&lt;li&gt;The tool agent loads the wrapper class into bootstrap classloader. This triggers the previous transformer.&lt;/li&gt;
+&lt;li&gt;The tool agent applies an advice to the ThreadPoolExecutor class, wrapping the java.lang.Runnable param of &amp;ldquo;execute&amp;rdquo; method with the wrapper class.&lt;/li&gt;
+&lt;li&gt;Now SkyWalking propagates the context with the wrapper class.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Enjoy tracing with ThreadPoolExecutor in SkyWalking!&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: Apache SkyWalking: Use Profiling to Fix the Blind Spot of Distributed Tracing</title>
