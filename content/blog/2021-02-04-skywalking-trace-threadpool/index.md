@@ -44,7 +44,9 @@ Next, Let me show you how these two agents work together.
 * Add this agent after the SkyWalking agent since the wrapper class should not be loaded before
   SkyWalking agent instrumentation have finished. For example,
 
-  > java -javaagent:/path/to/skywalking-agent -javaagent:/path/to/tool-agent ...
+  > java -javaagent:/path/to/skywalking-agent.jar -javaagent:/path/to/skywalking-tool-agent-v1.0.0.jar ...
+  
+  ![agent.png](agent.png)
 
 * When our application runs
   * SkyWalking java agent adds a transformer by parsing the plugin for enhancing the wrapper class in the tool agent.
