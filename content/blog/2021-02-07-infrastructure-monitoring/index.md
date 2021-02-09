@@ -1,11 +1,15 @@
 ---
 title: "SkyWalking 8.4 provides infrastructure monitoring"
-date: 2021-02-07
+date: 2021-02-08
 author: Kai Wan, Sheng Wu. tetrate.io
 description: In this tutorial, learn how to use Apache SkyWalking for infrastructure monitoring 
 tags:
 - Infrastructure Monitoring
 ---
+
+![](apache-skywalking.jpeg)
+
+> Origin: [Tetrate.io blog](https://www.tetrate.io/blog/skywalking-8-4-provides-infrastucture-monitoring-for-vms/)
 
 ## Background
 Apache SkyWalking-- the APM tool for distributed systems--  has historically focused on providing observability around tracing and metrics, but service performance is often affected by the host. The newest release, SkyWalking 8.4.0, introduces a new  feature for monitoring  virtual machines. Users can easily detect possible problems from the dashboard-- for example, when CPU usage is overloaded, when there’s not enough memory or disk space, or when the network status is unhealthy, etc. 
