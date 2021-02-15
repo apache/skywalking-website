@@ -13,15 +13,16 @@ if [ ! -d "./tmp" ]; then
 fi
 cd ./tmp
 
-if [ ! -d "./${repo}" ]; then
-  git clone ${repoUrl}
-  cd ./${repo}
-  else
-  cd ./${repo}
-  git pull origin master
+if [ -d "./${repo}" ]; then
+  rm -rf ./${repo}
 fi
 
-git reset --hard ${commitId}
+mkdir ./${repo}
+cd ./${repo}
+git init
+git remote add origin ${repoUrl}
+git fetch origin ${commitId}
+git reset --hard FETCH_HEAD
 
 if [ -d "../../${localPath}" ]; then
   rm -rf ../../${localPath}
