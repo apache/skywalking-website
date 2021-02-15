@@ -5,40 +5,44 @@ const {execSync} = require("child_process");
 const {promises} = fs;
 const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
+const docDirList = ['concepts-and-designs', 'FAQ', 'guides', 'protocols', 'setup', 'ui']
 
 traverseDocsConfig()
 
-function readDirSync(path, handleCodeTxt) {
+function readDirSync(path, handleCodeTxt, docInfo) {
   const pa = fs.readdirSync(path);
   pa.forEach(function (ele, index) {
     const info = fs.statSync(path + "/" + ele);
     if (info.isDirectory()) {
-      readDirSync(path + "/" + ele, handleCodeTxt);
+      readDirSync(path + "/" + ele, handleCodeTxt, docInfo);
     } else {
       const filePath = path + "/" + ele;
       const fileNameReg = /\.md/g;
       let shouldFormat = fileNameReg.test(filePath);
       if (shouldFormat) {
-        readFile(filePath, handleCodeTxt);
+        readFile(filePath, handleCodeTxt, docInfo);
       }
     }
   });
 }
 
-function readFile(filePath, handleCodeTxt) {
+function readFile(filePath, handleCodeTxt, docInfo) {
   fs.readFile(filePath, function (err, data) {
     if (err) {
       console.log("happen an error when read file , error is " + err);
     } else {
       let codeTxt = data.toString();
-      codeTxt = handleCodeTxt(codeTxt)
+      codeTxt = handleCodeTxt(codeTxt, docInfo)
       writeFile(filePath, codeTxt);
     }
   });
 }
 
-function replaceMarkdownText(codeTxt) {
+function replaceMarkdownText(codeTxt, docInfo) {
   if (!/^([\s]*)(---[\s\S]*---)/.test(codeTxt)) {
+    const {repoUrl, commitId} = docInfo;
+    const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`
+
     let title = codeTxt.trim().split('\n')[0]
     title = title.match(/(?<=([ ])).*/g)[0];
     title = title.replace(/:/g, '：')
@@ -64,6 +68,15 @@ layout: baseof
           if (str.startsWith('./')) {
             return `${p1}(./../${str})`
           }
+          if (str.includes('../changes')) {
+            return `${p1}(${prefix}/changes)`
+          }
+          if (str.includes('../../../')) {
+            const url = str.replace(/\.\.\//g, '')
+            if (!docDirList.some(dir => url.includes(dir))) {
+              return `${p1}(${prefix}/${url})`
+            }
+          }
           return `${p1}(../${str})`
         })
   }
@@ -81,7 +94,7 @@ function writeFile(filePath, codeTxt) {
 
 async function traverseDocsConfig() {
   let tpl = '';
-  const docsLocalPath = []
+  const docsInfo = []
   const targetPath = path.join(__dirname, layoutTemplateFile)
   const result = await loadYaml(docConfig)
   result.forEach(data => {
@@ -92,7 +105,7 @@ async function traverseDocsConfig() {
           const docName = repo === 'skywalking' ? 'main' : repo;
           const localPath = `/content/docs/${docName}/${version}`;
           const menuFileName = `${docName}${version}`.replace(/v|\./g, '_');
-          docsLocalPath.push({localPath})
+          docsInfo.push({localPath, repoUrl, commitId})
 
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                     <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
@@ -108,7 +121,7 @@ async function traverseDocsConfig() {
 
   })
   await generateLayoutTemplate(targetPath, tpl)
-  handleDocsFiles(docsLocalPath)
+  handleDocsFiles(docsInfo)
 
 }
 
@@ -121,10 +134,12 @@ async function generateLayoutTemplate(targetPath, tpl) {
   await promises.writeFile(targetPath, codeTxt, 'utf8');
 }
 
-function handleDocsFiles(docsLocalPath) {
-  docsLocalPath.forEach(({localPath}) => {
+function handleDocsFiles(docsInfo) {
+  docsInfo.forEach((docInfo) => {
+
+    const {localPath} = docInfo
     const root = path.join(__dirname, localPath);
-    readDirSync(root, replaceMarkdownText);
+    readDirSync(root, replaceMarkdownText, docInfo);
   })
 }
 
