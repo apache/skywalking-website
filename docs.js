@@ -70,48 +70,45 @@ layout: baseof
   return codeTxt
 }
 
-function writeFile(_path, _txt) {
-  fs.writeFile(_path, _txt, function (err) {
+function writeFile(filePath, codeTxt) {
+  fs.writeFile(filePath, codeTxt, function (err) {
     if (err) {
       console.log("happen an error when write file , error is " + err);
-    } else {
-      // console.log("format file success :", _path);
     }
   });
 }
 
 
-function traverseDocsConfig() {
+async function traverseDocsConfig() {
   let tpl = '';
   const docsLocalPath = []
   const targetPath = path.join(__dirname, layoutTemplateFile)
-  YAML.load(docConfig, async function (result) {
-    result.forEach(data => {
-      data.list.forEach(item => {
-        item.docs && item.docs.forEach(({version, commitId}) => {
-          if (commitId) {
-            const {repo, repoUrl} = item;
-            const docName = repo === 'skywalking' ? 'main' : repo;
-            const localPath = `/content/docs/${docName}/${version}`;
-            const sidebarConfigFile = `${docName}${version}`.replace(/v|\./g,'_');
-            docsLocalPath.push({localPath})
+  const result = await loadYaml(docConfig)
+  result.forEach(data => {
+    data.list.forEach(item => {
+      item.docs && item.docs.forEach(({version, commitId}) => {
+        if (commitId) {
+          const {repo, repoUrl} = item;
+          const docName = repo === 'skywalking' ? 'main' : repo;
+          const localPath = `/content/docs/${docName}/${version}`;
+          const menuFileName = `${docName}${version}`.replace(/v|\./g, '_');
+          docsLocalPath.push({localPath})
 
-            tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
-                    <h5>Documentation: {{.Site.Data.docSidebar.${sidebarConfigFile}.version}}</h5>
-                    {{ partial "sidebar-recurse.html" .Site.Data.docSidebar.${sidebarConfigFile} }}
+          tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
+                    <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
+                    {{ partial "sidebar-recurse.html" .Site.Data.docSidebar.${menuFileName} }}
                     {{ end }}\n`
 
-            execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${sidebarConfigFile}`);
+          execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
 
-          }
-        })
+          handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, version, `/docs/${docName}/${version}`)
+        }
       })
-
     })
 
-    await generateLayoutTemplate(targetPath, tpl)
-    handleDocsFiles(docsLocalPath)
-  });
+  })
+  await generateLayoutTemplate(targetPath, tpl)
+  handleDocsFiles(docsLocalPath)
 
 }
 
@@ -131,3 +128,31 @@ function handleDocsFiles(docsLocalPath) {
   })
 }
 
+async function handleMenuFiles(menuFilePath, version, localPath) {
+  const nativeObject = await loadYaml(menuFilePath)
+  nativeObject.version = version;
+
+  handleMenuPath(nativeObject.catalog, localPath)
+  const yamlString = YAML.stringify(nativeObject, 2);
+  await promises.writeFile(menuFilePath, yamlString, 'utf8');
+}
+
+function handleMenuPath(list, localPath) {
+  list.forEach(item => {
+    const pagePath = item.path;
+    if (pagePath) {
+      item.path = pagePath.startsWith('http') ? pagePath : localPath + pagePath;
+    }
+    if (item.catalog) {
+      handleMenuPath(item.catalog, localPath)
+    }
+  })
+}
+
+function loadYaml(filePath) {
+  return new Promise((resolve) => {
+    YAML.load(filePath, function (result) {
+      resolve(result)
+    });
+  })
+}

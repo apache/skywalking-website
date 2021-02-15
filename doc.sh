@@ -5,7 +5,7 @@ repo=$1
 repoUrl=$2
 commitId=$3
 localPath=$4
-sidebarConfigFile=$5
+menuFileName=$5
 
 
 if [ ! -d "./tmp" ]; then
@@ -28,5 +28,5 @@ if [ -d "../../${localPath}" ]; then
 fi
 mkdir -p ../../${localPath}
 cp -rf ./docs/* ../../${localPath}
-#cp ./docs/menu.yml ../../data/docSidebar/${sidebarConfigFile}.yml
+cp ./docs/menu.yml ../../data/docSidebar/${menuFileName}.yml
 
