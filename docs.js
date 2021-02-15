@@ -75,7 +75,7 @@ function writeFile(_path, _txt) {
     if (err) {
       console.log("happen an error when write file , error is " + err);
     } else {
-      console.log("format file success :", _path);
+      // console.log("format file success :", _path);
     }
   });
 }
@@ -88,15 +88,20 @@ function traverseDocsConfig() {
   YAML.load(docConfig, async function (result) {
     result.forEach(data => {
       data.list.forEach(item => {
-        item.docs && item.docs.forEach(({localPath, sidebarConfigFile, commitId}) => {
-          if (localPath && sidebarConfigFile) {
-            docsLocalPath.push({localPath, sidebarConfigFile})
+        item.docs && item.docs.forEach(({version, commitId}) => {
+          if (commitId) {
+            const {repo, repoUrl} = item;
+            const docName = repo === 'skywalking' ? 'main' : repo;
+            const localPath = `/content/docs/${docName}/${version}`;
+            const sidebarConfigFile = `${docName}${version}`.replace(/v|\./g,'_');
+            docsLocalPath.push({localPath})
 
             tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
+                    <h5>Documentation: {{.Site.Data.docSidebar.${sidebarConfigFile}.version}}</h5>
                     {{ partial "sidebar-recurse.html" .Site.Data.docSidebar.${sidebarConfigFile} }}
                     {{ end }}\n`
 
-            execSync(`"./doc.sh" ${item.repo} ${item.gitUrl} ${commitId} ${localPath}`);
+            execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${sidebarConfigFile}`);
 
           }
         })

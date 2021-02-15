@@ -2,7 +2,7 @@
 
 
 repo=$1
-gitUrl=$2
+repoUrl=$2
 commitId=$3
 localPath=$4
 sidebarConfigFile=$5
@@ -14,7 +14,7 @@ fi
 cd ./tmp
 
 if [ ! -d "./${repo}" ]; then
-  git clone ${gitUrl}
+  git clone ${repoUrl}
   cd ./${repo}
   else
   cd ./${repo}
@@ -28,5 +28,5 @@ if [ -d "../../${localPath}" ]; then
 fi
 mkdir -p ../../${localPath}
 cp -rf ./docs/* ../../${localPath}
-#cp ./docs/${sidebarConfigFile} ../../data/docSidebar/
+#cp ./docs/menu.yml ../../data/docSidebar/${sidebarConfigFile}.yml
 
