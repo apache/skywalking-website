@@ -5,43 +5,44 @@ const {execSync} = require("child_process");
 const {promises} = fs;
 const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
-const docDirList = ['concepts-and-designs', 'FAQ', 'guides', 'protocols', 'setup', 'ui']
+
 
 traverseDocsConfig()
 
-function readDirSync(path, handleCodeTxt, docInfo) {
+function readDirSync(path, docInfo, replaceMarkdownText) {
   const pa = fs.readdirSync(path);
-  pa.forEach(function (ele, index) {
+  pa.forEach(function (ele) {
     const info = fs.statSync(path + "/" + ele);
     if (info.isDirectory()) {
-      readDirSync(path + "/" + ele, handleCodeTxt, docInfo);
+      readDirSync(path + "/" + ele, docInfo, replaceMarkdownText);
     } else {
       const filePath = path + "/" + ele;
       const fileNameReg = /\.md/g;
       let shouldFormat = fileNameReg.test(filePath);
       if (shouldFormat) {
-        readFile(filePath, handleCodeTxt, docInfo);
+        readFile(filePath, docInfo, replaceMarkdownText);
       }
     }
   });
 }
 
-function readFile(filePath, handleCodeTxt, docInfo) {
+function readFile(filePath, docInfo, replaceMarkdownText) {
   fs.readFile(filePath, function (err, data) {
     if (err) {
       console.log("happen an error when read file , error is " + err);
     } else {
       let codeTxt = data.toString();
-      codeTxt = handleCodeTxt(codeTxt, docInfo)
+      codeTxt = replaceMarkdownText(codeTxt, docInfo, filePath)
       writeFile(filePath, codeTxt);
     }
   });
 }
 
-function replaceMarkdownText(codeTxt, docInfo) {
+function replaceMarkdownText(codeTxt, docInfo, filePath) {
   if (!/^([\s]*)(---[\s\S]*---)/.test(codeTxt)) {
     const {repoUrl, commitId} = docInfo;
-    const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`
+    const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`;
+    const depth = filePath.split('/docs')[1].match(/\//g).length - 2;
 
     let title = codeTxt.trim().split('\n')[0]
     title = title.match(/(?<=([ ])).*/g)[0];
@@ -68,12 +69,10 @@ layout: baseof
           if (str.startsWith('./')) {
             return `${p1}(./../${str})`
           }
-          if (str.includes('../changes')) {
-            return `${p1}(${prefix}/changes)`
-          }
-          if (str.includes('../../../')) {
-            const url = str.replace(/\.\.\//g, '')
-            if (!docDirList.some(dir => url.includes(dir))) {
+          if (str.startsWith('../')) {
+            const parentDepth = str.match(/\.\.\//g).length;
+            if (parentDepth >= depth) {
+              const url = str.replace(/\.\.\//g, '')
               return `${p1}(${prefix}/${url})`
             }
           }
@@ -139,7 +138,7 @@ function handleDocsFiles(docsInfo) {
 
     const {localPath} = docInfo
     const root = path.join(__dirname, localPath);
-    readDirSync(root, replaceMarkdownText, docInfo);
+    readDirSync(root, docInfo, replaceMarkdownText);
   })
 }
 
