@@ -109,11 +109,12 @@ async function traverseDocsConfig() {
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                     <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
                     {{ partial "sidebar-recurse.html" .Site.Data.docSidebar.${menuFileName} }}
+                    <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
                     {{ end }}\n`
 
           execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
 
-          handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, version, `/docs/${docName}/${version}`)
+          handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {version, commitId}, `/docs/${docName}/${version}`)
         }
       })
     })
@@ -142,9 +143,11 @@ function handleDocsFiles(docsInfo) {
   })
 }
 
-async function handleMenuFiles(menuFilePath, version, localPath) {
-  const nativeObject = await loadYaml(menuFilePath)
+async function handleMenuFiles(menuFilePath, docInfo, localPath) {
+  const nativeObject = await loadYaml(menuFilePath);
+  const {version, commitId} = docInfo
   nativeObject.version = version;
+  nativeObject.commitId = commitId.slice(0, 7);
 
   handleMenuPath(nativeObject.catalog, localPath)
   const yamlString = YAML.stringify(nativeObject, 2);
