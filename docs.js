@@ -158,7 +158,7 @@ function handleMenuPath(list, localPath) {
   list.forEach(item => {
     const pagePath = item.path;
     if (pagePath) {
-      item.path = pagePath.startsWith('http') ? pagePath : localPath + pagePath;
+      item.path = pagePath.startsWith('http') ? pagePath : (localPath + pagePath).toLowerCase();
     }
     if (item.catalog) {
       handleMenuPath(item.catalog, localPath)
