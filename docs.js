@@ -1,13 +1,21 @@
 const fs = require("fs");
 const path = require("path");
 const YAML = require('yamljs');
+const axios = require('axios');
 const {execSync} = require("child_process");
 const {promises} = fs;
 const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
 
+init();
 
-traverseDocsConfig()
+async function init() {
+  const targetPath = path.join(__dirname, layoutTemplateFile)
+  const result = await loadYaml(docConfig)
+  const {tpl, docsInfo} = await traverseDocsList(result)
+  await generateLayoutTemplate(targetPath, tpl)
+  handleDocsFiles(docsInfo)
+}
 
 function readDirSync(path, docInfo, replaceMarkdownText) {
   const pa = fs.readdirSync(path);
@@ -91,16 +99,26 @@ function writeFile(filePath, codeTxt) {
 }
 
 
-async function traverseDocsConfig() {
+async function traverseDocsList(result) {
   let tpl = '';
   const docsInfo = []
-  const targetPath = path.join(__dirname, layoutTemplateFile)
-  const result = await loadYaml(docConfig)
-  result.forEach(data => {
-    data.list.forEach(item => {
-      item.docs && item.docs.forEach(({version, commitId}) => {
+  for (const data of result) {
+    for (const item of data.list) {
+      if (!item.docs) {
+        continue;
+      }
+      for (const doc of item.docs) {
+        const {repo, repoUrl} = item;
+        let {version, commitId} = doc;
+        if (version === 'latest') {
+          try {
+            const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits?page=1&per_page=1`)
+            commitId = res.data[0].sha;
+          } catch (err) {
+            console.log(err);
+          }
+        }
         if (commitId) {
-          const {repo, repoUrl} = item;
           const docName = repo === 'skywalking' ? 'main' : repo;
           const localPath = `/content/docs/${docName}/${version}`;
           const menuFileName = `${docName}${version}`.replace(/v|\./g, '_');
@@ -111,18 +129,18 @@ async function traverseDocsConfig() {
                     {{ partial "sidebar-recurse.html" .Site.Data.docSidebar.${menuFileName} }}
                     <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
                     {{ end }}\n`
-
           execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
 
-          handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {version, commitId}, `/docs/${docName}/${version}`)
+          await handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {
+            version,
+            commitId
+          }, `/docs/${docName}/${version}`)
         }
-      })
-    })
+      }
 
-  })
-  await generateLayoutTemplate(targetPath, tpl)
-  handleDocsFiles(docsInfo)
-
+    }
+  }
+  return {tpl, docsInfo}
 }
 
 async function generateLayoutTemplate(targetPath, tpl) {
