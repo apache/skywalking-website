@@ -34,7 +34,7 @@ took the following actions to connect with Tencent.
 - Connected with Tencent Cloud TVP program committee, as Sheng Wu(Our VP) is a Tencent Cloud TVP.
 - Talked with the Tencent Cloud team lead.
 
-**In all above channels, we provided the evidences of coyp-redistribution hebaviors, requested them to revaluate their statements on the website, and follow the License's requirements.**
+**In all above channels, we provided the evidences of copy-redistribution hebaviors, requested them to revaluate their statements on the website, and follow the License's requirements.**
 
 ## Resolution
 At Jan. 19th night, UTC+8, 2021. We received response from the Tencent cloud team. They admited their violation behaviors, and did following changes
