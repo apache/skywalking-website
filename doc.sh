@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -o errexit
 
 repo=$1
 repoUrl=$2
