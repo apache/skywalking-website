@@ -1,4 +1,5 @@
 const fs = require("fs");
+const process = require("process");
 const path = require("path");
 const YAML = require('yamljs');
 const axios = require('axios');
@@ -10,11 +11,17 @@ const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
 init();
 
 async function init() {
-  const targetPath = path.join(__dirname, layoutTemplateFile)
-  const result = await loadYaml(docConfig)
-  const {tpl, docsInfo} = await traverseDocsList(result)
-  await generateLayoutTemplate(targetPath, tpl)
-  handleDocsFiles(docsInfo)
+  try{
+    const targetPath = path.join(__dirname, layoutTemplateFile)
+    const result = await loadYaml(docConfig)
+    const {tpl, docsInfo} = await traverseDocsList(result)
+    await generateLayoutTemplate(targetPath, tpl)
+    handleDocsFiles(docsInfo)
+  }catch (err){
+    console.log(err);
+    process.exit(1)
+  }
+
 }
 
 function readDirSync(path, docInfo, replaceMarkdownText) {
@@ -37,7 +44,7 @@ function readDirSync(path, docInfo, replaceMarkdownText) {
 function readFile(filePath, docInfo, replaceMarkdownText) {
   fs.readFile(filePath, function (err, data) {
     if (err) {
-      console.log("happen an error when read file , error is " + err);
+      throw err
     } else {
       let codeTxt = data.toString();
       codeTxt = replaceMarkdownText(codeTxt, docInfo, filePath)
@@ -93,7 +100,7 @@ layout: baseof
 function writeFile(filePath, codeTxt) {
   fs.writeFile(filePath, codeTxt, function (err) {
     if (err) {
-      console.log("happen an error when write file , error is " + err);
+      throw err
     }
   });
 }
@@ -115,7 +122,7 @@ async function traverseDocsList(result) {
             const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits?page=1&per_page=1`)
             commitId = res.data[0].sha;
           } catch (err) {
-            console.log(err);
+            throw err
           }
         }
         if (commitId) {
