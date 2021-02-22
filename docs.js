@@ -74,6 +74,13 @@ layout: baseof
           if (p2 && p2.startsWith('http')) {
             return match
           }
+          if (p2.startsWith('../')) {
+            const parentDepth = p2.match(/\.\.\//g).length;
+            if (parentDepth >= depth) {
+              const url = p2.replace(/\.\.\//g, '')
+              return `${p1}(${prefix}/${url})`
+            }
+          }
           const str = p2
               .toLowerCase()
               .replace(/\.md/g, '')
@@ -83,13 +90,6 @@ layout: baseof
           }
           if (str.startsWith('./')) {
             return `${p1}(./../${str})`
-          }
-          if (str.startsWith('../')) {
-            const parentDepth = str.match(/\.\.\//g).length;
-            if (parentDepth >= depth) {
-              const url = str.replace(/\.\.\//g, '')
-              return `${p1}(${prefix}/${url})`
-            }
           }
           return `${p1}(../${str})`
         })
