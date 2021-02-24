@@ -133,7 +133,7 @@ async function traverseDocsList(result) {
 
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                     <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
-                    {{ partial "sidebar-recurse.html" .Site.Data.docSidebar.${menuFileName} }}
+                    {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
                     <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
                     {{ end }}\n`
           execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
