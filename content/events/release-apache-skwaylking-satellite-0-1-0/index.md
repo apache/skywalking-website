@@ -5,7 +5,7 @@ author: SkyWalking Team
 description: "Release Apache SkyWalking Satellite 0.1.0"
 ---
 
-SkyWalking Satellite 0.1.0 is released. Go to [downloads](https://skywalking.apache.org/download) page to find release tars.
+SkyWalking Satellite 0.1.0 is released. Go to [downloads](https://skywalking.apache.org/downloads) page to find release tars.
 
 #### Features
   * Build the Satellite core structure.
