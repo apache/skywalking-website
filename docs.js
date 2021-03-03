@@ -11,13 +11,13 @@ const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
 init();
 
 async function init() {
-  try{
+  try {
     const targetPath = path.join(__dirname, layoutTemplateFile)
     const result = await loadYaml(docConfig)
     const {tpl, docsInfo} = await traverseDocsList(result)
     await generateLayoutTemplate(targetPath, tpl)
     handleDocsFiles(docsInfo)
-  }catch (err){
+  } catch (err) {
     console.log(err);
     process.exit(1)
   }
@@ -55,7 +55,7 @@ function readFile(filePath, docInfo, replaceMarkdownText) {
 
 function replaceMarkdownText(codeTxt, docInfo, filePath) {
   if (!/^([\s]*)(---[\s\S]*---)/.test(codeTxt)) {
-    const {repoUrl, commitId} = docInfo;
+    const {repoUrl, commitId, date} = docInfo;
     const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`;
     const depth = filePath.split('/docs')[1].match(/\//g).length - 2;
 
@@ -66,6 +66,7 @@ function replaceMarkdownText(codeTxt, docInfo, filePath) {
     codeTxt =
         `---
 title: ${title}
+date: ${date}
 type: projectDoc
 layout: baseof
 ---\n` + codeTxt;
@@ -117,19 +118,21 @@ async function traverseDocsList(result) {
       for (const doc of item.docs) {
         const {repo, repoUrl} = item;
         let {version, commitId} = doc;
+        let date;
         if (version === 'latest') {
-          try {
-            const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits?page=1&per_page=1`)
-            commitId = res.data[0].sha;
-          } catch (err) {
-            throw err
-          }
+          const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits?page=1&per_page=1`)
+          commitId = res.data[0].sha;
+          date = res.data[0].commit.author.date;
         }
         if (commitId) {
+          if (!date) {
+            const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits/${commitId}`)
+            date = res.data.commit.author.date;
+          }
           const docName = repo === 'skywalking' ? 'main' : repo;
           const localPath = `/content/docs/${docName}/${version}`;
           const menuFileName = `${docName}${version}`.replace(/\-|v|\./g, '_');
-          docsInfo.push({localPath, repoUrl, commitId})
+          docsInfo.push({localPath, repoUrl, commitId, date})
 
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                     <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
