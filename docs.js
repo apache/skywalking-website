@@ -27,11 +27,20 @@ async function init() {
 function readDirSync(path, docInfo, replaceMarkdownText) {
   const pa = fs.readdirSync(path);
   pa.forEach(function (ele) {
-    const info = fs.statSync(path + "/" + ele);
+    const filePath = path + "/" + ele
+    const info = fs.statSync(filePath);
+    if (isImage(ele)) {
+      const {docName, version} = docInfo;
+      const imgName = `${docName}_${version}_${ele}`;
+      fs.copyFile(filePath, './static/images/' + imgName, function (err) {
+        if (err) {
+          throw err
+        }
+      });
+    }
     if (info.isDirectory()) {
-      readDirSync(path + "/" + ele, docInfo, replaceMarkdownText);
+      readDirSync(filePath, docInfo, replaceMarkdownText);
     } else {
-      const filePath = path + "/" + ele;
       const fileNameReg = /\.md/g;
       let shouldFormat = fileNameReg.test(filePath);
       if (shouldFormat) {
@@ -53,9 +62,15 @@ function readFile(filePath, docInfo, replaceMarkdownText) {
   });
 }
 
+function isImage(filePath) {
+  var index = filePath.lastIndexOf(".");
+  var ext = filePath.substr(index + 1);
+  return ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp', 'svg', 'tiff'].indexOf(ext.toLowerCase()) > -1;
+}
+
 function replaceMarkdownText(codeTxt, docInfo, filePath) {
   if (!/^([\s]*)(---[\s\S]*---)/.test(codeTxt)) {
-    const {repoUrl, commitId, date} = docInfo;
+    const {repoUrl, commitId, date, docName, version} = docInfo;
     const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`;
     const depth = filePath.split('/docs')[1].match(/\//g).length - 2;
 
@@ -94,6 +109,20 @@ layout: baseof
           }
           return `${p1}(../${str})`
         })
+        .replace(/<img(.*?)src="(.*?)"(.*?)>/g, function (match, p1, p2, p3) {
+          if (p2 && p2.startsWith('http')) {
+            return match
+          }
+          const imgName = `${docName}_${version}_` + p2.split('/').pop();
+          return `<img${p1}src="/images/${imgName}"${p3}>`
+        })
+    /*.replace(/(\!\[[\s\S]*?\])\((.*?)\)/g, function (match, p1, p2,) {
+      if (p2 && p2.startsWith('http')) {
+        return match
+      }
+      const imgName = `${docName}_${version}_` + p2.split('/').pop();
+      return `${p1}(/images/${imgName})`
+    })*/
   }
   return codeTxt
 }
@@ -132,7 +161,7 @@ async function traverseDocsList(result) {
           const docName = repo === 'skywalking' ? 'main' : repo;
           const localPath = `/content/docs/${docName}/${version}`;
           const menuFileName = `${docName}${version}`.replace(/\-|v|\./g, '_');
-          docsInfo.push({localPath, repoUrl, commitId, date})
+          docsInfo.push({localPath, repoUrl, commitId, date, docName, version})
 
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                     <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
