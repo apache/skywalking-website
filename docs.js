@@ -13,8 +13,8 @@ init();
 async function init() {
   try {
     const targetPath = path.join(__dirname, layoutTemplateFile)
-    const result = await loadYaml(docConfig)
-    const {tpl, docsInfo} = await traverseDocsList(result)
+    const docsList = await loadYaml(docConfig)
+    const {tpl, docsInfo} = await traverseDocsList(docsList)
     await generateLayoutTemplate(targetPath, tpl)
     handleDocsFiles(docsInfo)
   } catch (err) {
@@ -29,6 +29,10 @@ function readDirSync(path, docInfo, replaceMarkdownText) {
   pa.forEach(function (ele) {
     const filePath = path + "/" + ele
     const info = fs.statSync(filePath);
+    if (info.isDirectory()) {
+      readDirSync(filePath, docInfo, replaceMarkdownText);
+      return;
+    }
     if (isImage(ele)) {
       const {docName, version} = docInfo;
       const imgName = `${docName}_${version}_${ele}`;
@@ -37,15 +41,12 @@ function readDirSync(path, docInfo, replaceMarkdownText) {
           throw err
         }
       });
+      return;
     }
-    if (info.isDirectory()) {
-      readDirSync(filePath, docInfo, replaceMarkdownText);
-    } else {
-      const fileNameReg = /\.md/g;
-      let shouldFormat = fileNameReg.test(filePath);
-      if (shouldFormat) {
-        readFile(filePath, docInfo, replaceMarkdownText);
-      }
+    const reg = /\.md/gi;
+    const shouldFormat = reg.test(filePath);
+    if (shouldFormat) {
+      readFile(filePath, docInfo, replaceMarkdownText);
     }
   });
 }
@@ -62,10 +63,9 @@ function readFile(filePath, docInfo, replaceMarkdownText) {
   });
 }
 
-function isImage(filePath) {
-  var index = filePath.lastIndexOf(".");
-  var ext = filePath.substr(index + 1);
-  return ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp', 'svg', 'tiff'].indexOf(ext.toLowerCase()) > -1;
+function isImage(file) {
+  var reg = /(.*)\.(jpg|jpeg|png|bmp|gif|ico|pcx|tif|tiff|raw|tga|webp|svg)$/;
+  return reg.test(file)
 }
 
 function replaceMarkdownText(codeTxt, docInfo, filePath) {
@@ -87,7 +87,7 @@ layout: baseof
 ---\n` + codeTxt;
     codeTxt = codeTxt
         .replace(/(\[[\s\S]*?\])\(([\s\S]*?)\)/g, function (match, p1, p2) {
-          if (p2 && p2.startsWith('http')) {
+          if (p2 && p2.startsWith('http') || isImage(p2)) {
             return match
           }
           if (p2.startsWith('../')) {
@@ -105,7 +105,7 @@ layout: baseof
             return `${p1}(${str})`
           }
           if (str.startsWith('./')) {
-            return `${p1}(./../${str})`
+            return `${p1}(./../${str.slice(2)})`
           }
           return `${p1}(../${str})`
         })
@@ -116,13 +116,13 @@ layout: baseof
           const imgName = `${docName}_${version}_` + p2.split('/').pop();
           return `<img${p1}src="/images/${imgName}"${p3}>`
         })
-    /*.replace(/(\!\[[\s\S]*?\])\((.*?)\)/g, function (match, p1, p2,) {
-      if (p2 && p2.startsWith('http')) {
-        return match
-      }
-      const imgName = `${docName}_${version}_` + p2.split('/').pop();
-      return `${p1}(/images/${imgName})`
-    })*/
+        .replace(/(\!\[[\s\S]*?\])\((.*?)\)/g, function (match, p1, p2,) {
+          if (p2 && p2.startsWith('http')) {
+            return match
+          }
+          const imgName = `${docName}_${version}_` + p2.split('/').pop();
+          return `${p1}(/images/${imgName})`
+        })
   }
   return codeTxt
 }
