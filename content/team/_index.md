@@ -66,25 +66,10 @@ Members include Project Management Committee members and committers. The list is
 | Zhusheng Xu       | aderm       |                                                  |
 
 
-## Contributors
 
-SkyWalking have hundreds of contributors, you could find them in our repositories' contribution list.
+{{< contributors >}}
 
-- [SkyWalking main repository](https://github.com/apache/skywalking/graphs/contributors)
-- [SkyWalking Nginx LUA](https://github.com/apache/skywalking-nginx-lua/graphs/contributors)
-- [SkyWalking RocketBot UI](https://github.com/apache/skywalking-rocketbot-ui/graphs/contributors)
-- [SkyWalking data collect protocol](https://github.com/apache/skywalking-data-collect-protocol/graphs/contributors)
-- [SkyWalking query protocol](https://github.com/apache/skywalking-query-protocol/graphs/contributors)
-- [SkyWalking website](https://github.com/apache/skywalking-website/graphs/contributors)
-- [SkyWalking docker](https://github.com/apache/skywalking-docker/graphs/contributors)
-- [SkyWalking kubernetes](https://github.com/apache/skywalking-kubernetes/graphs/contributors)
-- [SkyWalking K8s Operator - SkyWalking Cloud on Kubernetes](https://github.com/apache/skywalking-swck/graphs/contributors)
-- [SkyWalking Python Agent](https://github.com/apache/skywalking-python/graphs/contributors)
-- [SkyWalking CLI](https://github.com/apache/skywalking-cli/graphs/contributors)
-- [SkyWalking Client JS](https://github.com/apache/skywalking-client-js/graphs/contributors)
-- [SkyWalking satellite](https://github.com/apache/skywalking-satellite/graphs/contributors)
-- [SkyWalking agent test tool](https://github.com/apache/skywalking-agent-test-tool/graphs/contributors)
-- [SkyWalking NodeJS Agent](https://github.com/apache/skywalking-nodejs/graphs/contributors)
+
 
 Archived
 
