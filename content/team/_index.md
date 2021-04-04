@@ -76,6 +76,10 @@ Archived
 - [SkyWalking UI](https://github.com/apache/skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
 - [SkyWalking OAL tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
 
+## Contributor Over Time
+
+![image](https://user-images.githubusercontent.com/2106987/113481423-0bf86700-94cc-11eb-97e9-239deb0ae9f5.png)
+
 ## Becoming a Committer
 
 SkyWalking follows the Apache way to build the community. Anyone can become a committer once they have contributed sufficiently to the project and earned the trust. Read [Contributing Guides](https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md) to take part in the community.
