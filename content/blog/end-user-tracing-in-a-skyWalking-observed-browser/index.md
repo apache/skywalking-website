@@ -4,7 +4,7 @@ date: 2021-03-25
 author: "[Qiuxia Fan](https://github.com/Fine0830). tetrate.io"
 description: This article describes how the skywalking-client-js extends its monitoring to include the browser, providing performance metrics and error collection to the SkyWalking backend.
 tags:
-- Observability, APM, Skywalking, Web-performance
+- Observability, APM, Web-performance
 ---
 
 ![](aircraft.jpg)
@@ -127,7 +127,7 @@ Let’s see how the SkyWalking browser monitoring intercepts HTTP requests:
 
 After this, use `window.addEventListener('xhrReadyStateChange', callback)` and set the readyState value to`sw8 = xxxx` in the request header. At the same time, reporting requests information to the back-end side. Finally, we can view trace data on the trace page. The following graphic is from the trace page:
 
-![](trace.png)
+![](trace.jpg)
 
 To see how we listen for fetch requests, let’s see the source code of [fetch](https://github.com/github/fetch/blob/90fb680c1f50181782f276122c1b1115535b1603/fetch.js#L506)
 
@@ -144,10 +144,4 @@ In this way, we can intercept the fetch request through the above method.
 
 ## Additional Resources
 
-- Get more SkyWalking updates on [the official website](https://skywalking.apache.org).
-
-- Read more about SkyWalking from Tetrate on our [blog](https://www.tetrate.io/blog/category/open-source/apache-skywalking/).
-
-- Sign up to hear more about SkyWalking and observability from [Tetrate](https://www.tetrate.io/contact-us/).
-
-> Questions and feedback can be addressed to learn@tetrate.io.
+- [End-User Tracing in a SkyWalking-Observed Browser](/blog/end-user-tracing-in-a-skywalking-observed-browser).
