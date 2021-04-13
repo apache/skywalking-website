@@ -13,20 +13,20 @@ if [ ! -d "./tmp" ]; then
 fi
 cd ./tmp
 
-#if [ -d "./${repo}" ]; then
-#  rm -rf ./${repo}
-#fi
-#
-#mkdir ./${repo}
+if [ -d "./${repo}" ]; then
+  rm -rf ./${repo}
+fi
+
+mkdir ./${repo}
 cd ./${repo}
-#git init
-#git remote add origin ${repoUrl}
-#git fetch origin ${commitId}
-#git reset --hard FETCH_HEAD
-#
-#if [ -d "../../${localPath}" ]; then
-#  rm -rf ../../${localPath}
-#fi
+git init
+git remote add origin ${repoUrl}
+git fetch origin ${commitId}
+git reset --hard FETCH_HEAD
+
+if [ -d "../../${localPath}" ]; then
+  rm -rf ../../${localPath}
+fi
 mkdir -p ../../${localPath}
 cp -rf ./docs/* ../../${localPath}
 cp ./docs/menu.yml ../../data/docSidebar/${menuFileName}.yml
