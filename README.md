@@ -25,6 +25,8 @@ Located at `content/_index.html`。
 
 The data of documentation link is located in `data/docs.yml` and formated as `YAML`.
 
+Update the [config file](https://github.com/algolia/docsearch-configs/blob/master/configs/skywalking.json) everytime in order that a new documentation version will be available searched by [algolia](https://www.algolia.com/).
+
 ### Event
 
 Located at `content/blog`. If you don't want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.
