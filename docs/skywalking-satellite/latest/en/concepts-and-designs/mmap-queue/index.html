@@ -55,8 +55,8 @@ if (!doNotTrack) {
 
 
 
-<link rel="preload" href="/scss/main.min.645d7c803996630728b3b2f9dc5531d41533954f42564f9a71be68be616c461d.css" as="style">
-<link href="/scss/main.min.645d7c803996630728b3b2f9dc5531d41533954f42564f9a71be68be616c461d.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.77876f2bf3651f82dc039990e50ffb5e7cccb59065f914bc4dec2988bdaabc60.css" as="style">
+<link href="/scss/main.min.77876f2bf3651f82dc039990e50ffb5e7cccb59065f914bc4dec2988bdaabc60.css" rel="stylesheet" integrity="">
 
 
 
@@ -176,7 +176,19 @@ if (!doNotTrack) {
 
 
 
-                    <h5>Documentation: latest</h5>
+                    
+                    <h5>Documentation: 
+                    <select class="version-select">
+                    
+                    
+                    <option selected value="latest">latest</option>
+                    
+                    
+                    <option ZgotmplZ value="v0.1.0">v0.1.0</option>
+                    
+                    </select>
+                    </h5>
+                    
                     
 <ul class="sidebar-menu">
     
@@ -707,10 +719,84 @@ if (!doNotTrack) {
   })()
 </script>
                     <div class="commit-id">Commit Id: 43867a4</div>
-                    
+                  
 
 
 </div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+                <i class="fa fa-bars doc-menu-button"></i>
+                
+<div class="td-content">
+
+
+
+
+
+
+
+
+
+
+
+	<h1 id="design">Design</h1>
+<p>The mmap-queue is a big, fast, and persistent queue based on the memory-mapped files. One mmap-queue has a directory to store the whole data. The queue directory is made up of many segments and 1 metafile. This is originally implemented by <a href="https://github.com/grandecola/bigqueue">bigqueue</a> project, we changed it a little for fitting the Satellite project requirements.</p>
+<ul>
+<li>Segment: Segment is the real data store center, that provides large-space storage and does not reduce read and write performance as much as possible by using mmap. And we will avoid deleting files by reusing them.</li>
+<li>Meta: The purpose of meta is to find the data that the consumer needs.</li>
+</ul>
+<h2 id="meta">Meta</h2>
+<p>Metadata only needs 80B to store the Metadata for the pipe. But for memory alignment, it takes at least one memory page size, which is generally 4K.</p>
+<pre><code>[    8Bit   ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit  ]
+[metaVersion][  ID   ][ offset][  ID   ][ offset][  ID   ][ offset][  ID   ][ offset][capacity]
+[metaVersion][writing   offset][watermark offset][committed offset][reading   offset][capacity]
+
+</code></pre><h3 id="transforming">Transforming</h3>
+<p><img src="https://skywalking.apache.org/blog/2020-11-25-skywalking-satellite-0.1.0-design/offset-convert.jpg" alt=""></p>
+<h2 id="benchmarktest">BenchmarkTest</h2>
+<p>Test machine: <strong>macbook pro 2018</strong></p>
+<pre><code>Model Name:	MacBook Pro
+Model Identifier:	MacBookPro15,1
+Processor Name:	6-Core Intel Core i7
+Processor Speed:	2.2 GHz
+Number of Processors:	1
+Total Number of Cores:	6
+L2 Cache (per Core):	256 KB
+L3 Cache:	9 MB
+Hyper-Threading Technology:	Enabled
+Memory:	16 GB
+System Firmware Version:	1554.60.15.0.0 (iBridge: 18.16.13030.0.0,0
+</code></pre><h3 id="push-operation">push operation</h3>
+<pre><code>goos: darwin
+goarch: amd64
+pkg: github.com/apache/skywalking-satellite/plugins/queue/mmap
+BenchmarkEnqueue
+BenchmarkEnqueue/segmentSize:_128KB_maxInMemSegments:18_message:8KB_queueCapacity:10000         	   27585	     43559 ns/op	    9889 B/op	       9 allocs/op
+BenchmarkEnqueue/segmentSize:_256KB_maxInMemSegments:10_message:8KB_queueCapacity:10000         	   39326	     31773 ns/op	    9840 B/op	       9 allocs/op
+BenchmarkEnqueue/segmentSize:_512KB_maxInMemSegments:6_message:8KB_queueCapacity:10000          	   56770	     22990 ns/op	    9816 B/op	       9 allocs/op
+BenchmarkEnqueue/segmentSize:_256KB_maxInMemSegments:20_message:8KB_queueCapacity:10000         	   43803	     29778 ns/op	    9840 B/op	       9 allocs/op
+BenchmarkEnqueue/segmentSize:_128KB_maxInMemSegments:10_message:16KB_queueCapacity:10000        	   16870	     80576 ns/op	   18944 B/op	      10 allocs/op
+BenchmarkEnqueue/segmentSize:_128KB_maxInMemSegments:10_message:8KB_queueCapacity:100000        	   36922	     39085 ns/op	    9889 B/op	       9 allocs/op
+PASS
+</code></pre><h3 id="push-and-pop-operation">push and pop operation</h3>
+<pre><code>goos: darwin
+goarch: amd64
+pkg: github.com/apache/skywalking-satellite/plugins/queue/mmap
+BenchmarkEnqueueAndDequeue
+BenchmarkEnqueueAndDequeue/segmentSize:_128KB_maxInMemSegments:18_message:8KB_queueCapacity:10000         	   21030	     60728 ns/op	   28774 B/op	      42 allocs/op
+BenchmarkEnqueueAndDequeue/segmentSize:_256KB_maxInMemSegments:10_message:8KB_queueCapacity:10000         	   30327	     41274 ns/op	   28726 B/op	      42 allocs/op
+BenchmarkEnqueueAndDequeue/segmentSize:_512KB_maxInMemSegments:6_message:8KB_queueCapacity:10000          	   32738	     37923 ns/op	   28700 B/op	      42 allocs/op
+BenchmarkEnqueueAndDequeue/segmentSize:_256KB_maxInMemSegments:20_message:8KB_queueCapacity:10000         	   28209	     41169 ns/op	   28726 B/op	      42 allocs/op
+BenchmarkEnqueueAndDequeue/segmentSize:_128KB_maxInMemSegments:10_message:16KB_queueCapacity:10000        	   14677	     89637 ns/op	   54981 B/op	      43 allocs/op
+BenchmarkEnqueueAndDequeue/segmentSize:_128KB_maxInMemSegments:10_message:8KB_queueCapacity:100000        	   22228	     54963 ns/op	   28774 B/op	      42 allocs/op
+PASS
+</code></pre>
+
+
+
+</div>
+
+
+            </main>
           <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
             
 
@@ -807,80 +893,7 @@ if (!doNotTrack) {
 </script>
 
           </div>
-          <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
-              <i class="fa fa-bars doc-menu-button"></i>
-              
-<div class="td-content">
 
-
-
-
-
-
-
-
-
-
-
-	<h1 id="design">Design</h1>
-<p>The mmap-queue is a big, fast, and persistent queue based on the memory-mapped files. One mmap-queue has a directory to store the whole data. The queue directory is made up of many segments and 1 metafile. This is originally implemented by <a href="https://github.com/grandecola/bigqueue">bigqueue</a> project, we changed it a little for fitting the Satellite project requirements.</p>
-<ul>
-<li>Segment: Segment is the real data store center, that provides large-space storage and does not reduce read and write performance as much as possible by using mmap. And we will avoid deleting files by reusing them.</li>
-<li>Meta: The purpose of meta is to find the data that the consumer needs.</li>
-</ul>
-<h2 id="meta">Meta</h2>
-<p>Metadata only needs 80B to store the Metadata for the pipe. But for memory alignment, it takes at least one memory page size, which is generally 4K.</p>
-<pre><code>[    8Bit   ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit ][  8Bit  ]
-[metaVersion][  ID   ][ offset][  ID   ][ offset][  ID   ][ offset][  ID   ][ offset][capacity]
-[metaVersion][writing   offset][watermark offset][committed offset][reading   offset][capacity]
-
-</code></pre><h3 id="transforming">Transforming</h3>
-<p><img src="https://skywalking.apache.org/blog/2020-11-25-skywalking-satellite-0.1.0-design/offset-convert.jpg" alt=""></p>
-<h2 id="benchmarktest">BenchmarkTest</h2>
-<p>Test machine: <strong>macbook pro 2018</strong></p>
-<pre><code>Model Name:	MacBook Pro
-Model Identifier:	MacBookPro15,1
-Processor Name:	6-Core Intel Core i7
-Processor Speed:	2.2 GHz
-Number of Processors:	1
-Total Number of Cores:	6
-L2 Cache (per Core):	256 KB
-L3 Cache:	9 MB
-Hyper-Threading Technology:	Enabled
-Memory:	16 GB
-System Firmware Version:	1554.60.15.0.0 (iBridge: 18.16.13030.0.0,0
-</code></pre><h3 id="push-operation">push operation</h3>
-<pre><code>goos: darwin
-goarch: amd64
-pkg: github.com/apache/skywalking-satellite/plugins/queue/mmap
-BenchmarkEnqueue
-BenchmarkEnqueue/segmentSize:_128KB_maxInMemSegments:18_message:8KB_queueCapacity:10000         	   27585	     43559 ns/op	    9889 B/op	       9 allocs/op
-BenchmarkEnqueue/segmentSize:_256KB_maxInMemSegments:10_message:8KB_queueCapacity:10000         	   39326	     31773 ns/op	    9840 B/op	       9 allocs/op
-BenchmarkEnqueue/segmentSize:_512KB_maxInMemSegments:6_message:8KB_queueCapacity:10000          	   56770	     22990 ns/op	    9816 B/op	       9 allocs/op
-BenchmarkEnqueue/segmentSize:_256KB_maxInMemSegments:20_message:8KB_queueCapacity:10000         	   43803	     29778 ns/op	    9840 B/op	       9 allocs/op
-BenchmarkEnqueue/segmentSize:_128KB_maxInMemSegments:10_message:16KB_queueCapacity:10000        	   16870	     80576 ns/op	   18944 B/op	      10 allocs/op
-BenchmarkEnqueue/segmentSize:_128KB_maxInMemSegments:10_message:8KB_queueCapacity:100000        	   36922	     39085 ns/op	    9889 B/op	       9 allocs/op
-PASS
-</code></pre><h3 id="push-and-pop-operation">push and pop operation</h3>
-<pre><code>goos: darwin
-goarch: amd64
-pkg: github.com/apache/skywalking-satellite/plugins/queue/mmap
-BenchmarkEnqueueAndDequeue
-BenchmarkEnqueueAndDequeue/segmentSize:_128KB_maxInMemSegments:18_message:8KB_queueCapacity:10000         	   21030	     60728 ns/op	   28774 B/op	      42 allocs/op
-BenchmarkEnqueueAndDequeue/segmentSize:_256KB_maxInMemSegments:10_message:8KB_queueCapacity:10000         	   30327	     41274 ns/op	   28726 B/op	      42 allocs/op
-BenchmarkEnqueueAndDequeue/segmentSize:_512KB_maxInMemSegments:6_message:8KB_queueCapacity:10000          	   32738	     37923 ns/op	   28700 B/op	      42 allocs/op
-BenchmarkEnqueueAndDequeue/segmentSize:_256KB_maxInMemSegments:20_message:8KB_queueCapacity:10000         	   28209	     41169 ns/op	   28726 B/op	      42 allocs/op
-BenchmarkEnqueueAndDequeue/segmentSize:_128KB_maxInMemSegments:10_message:16KB_queueCapacity:10000        	   14677	     89637 ns/op	   54981 B/op	      43 allocs/op
-BenchmarkEnqueueAndDequeue/segmentSize:_128KB_maxInMemSegments:10_message:8KB_queueCapacity:100000        	   22228	     54963 ns/op	   28774 B/op	      42 allocs/op
-PASS
-</code></pre>
-
-
-
-</div>
-
-
-          </main>
         </div>
       </div>
 
@@ -1038,8 +1051,34 @@ PASS
 
   </body>
   <script>
-    $('.doc-menu-button').on('click',function (){
-      $('.td-sidebar').toggleClass('active')
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
     })
   </script>
 </html>

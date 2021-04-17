@@ -52,8 +52,8 @@ if (!doNotTrack) {
 
 
 
-<link rel="preload" href="/scss/main.min.645d7c803996630728b3b2f9dc5531d41533954f42564f9a71be68be616c461d.css" as="style">
-<link href="/scss/main.min.645d7c803996630728b3b2f9dc5531d41533954f42564f9a71be68be616c461d.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.77876f2bf3651f82dc039990e50ffb5e7cccb59065f914bc4dec2988bdaabc60.css" as="style">
+<link href="/scss/main.min.77876f2bf3651f82dc039990e50ffb5e7cccb59065f914bc4dec2988bdaabc60.css" rel="stylesheet" integrity="">
 
 
 
@@ -170,7 +170,28 @@ if (!doNotTrack) {
 
 
 
-                    <h5>Documentation: v8.4.0</h5>
+                    
+                    <h5>Documentation: 
+                    <select class="version-select">
+                    
+                    
+                    <option ZgotmplZ value="latest">latest</option>
+                    
+                    
+                    <option ZgotmplZ value="v8.5.0">v8.5.0</option>
+                    
+                    
+                    <option selected value="v8.4.0">v8.4.0</option>
+                    
+                    
+                    <option ZgotmplZ value="v8.3.0">v8.3.0</option>
+                    
+                    
+                    <option ZgotmplZ value="v8.2.0">v8.2.0</option>
+                    
+                    </select>
+                    </h5>
+                    
                     
 <ul class="sidebar-menu">
     
@@ -897,13 +918,95 @@ if (!doNotTrack) {
   })()
 </script>
                     <div class="commit-id">Commit Id: 9dce6d4</div>
-                    
+                  
 
 
 
 
 
 </div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+                <i class="fa fa-bars doc-menu-button"></i>
+                
+<div class="td-content">
+
+
+
+
+
+
+
+
+
+
+
+	<h1 id="thread-dump-merging-mechanism">Thread dump merging mechanism</h1>
+<p>The performance profile is an enhancement feature in the APM system. We are using the thread dump to estimate the method execution time, rather than adding many local spans. In this way, the resource cost would be much less than using distributed tracing to locate slow method. This feature is suitable in the production environment. This document introduces how thread dumps are merged into the final report as a stack tree(s).</p>
+<h2 id="thread-analyst">Thread analyst</h2>
+<h3 id="read-data-and-transform">Read data and transform</h3>
+<p>Read data from the database and convert it to a data structure in gRPC.</p>
+<pre><code>st=&gt;start: Start
+e=&gt;end: End
+op1=&gt;operation: Load data using paging
+op2=&gt;operation: Transform data using parallel
+
+st(right)-&gt;op1(right)-&gt;op2
+op2(right)-&gt;e
+</code></pre><p>Copy code and paste it into this <a href="http://flowchart.js.org/">link</a> to generate flow chart.</p>
+<ol>
+<li>Use the stream to read data by page (50 records per page).</li>
+<li>Convert data into gRPC data structures in the form of parallel streams.</li>
+<li>Merge into a list of data.</li>
+</ol>
+<h3 id="data-analyze">Data analyze</h3>
+<p>Use the group by and collector modes in the Java parallel stream to group according to the first stack element in the database records,
+and use the collector to perform data aggregation. Generate a multi-root tree.</p>
+<pre><code>st=&gt;start: Start
+e=&gt;end: End
+op1=&gt;operation: Group by first stack element
+sup=&gt;operation: Generate empty stack tree
+acc=&gt;operation: Accumulator data to stack tree
+com=&gt;operation: Combine stack trees
+fin=&gt;operation: Calculate durations and build result
+
+st(right)-&gt;op1-&gt;sup(right)-&gt;acc
+acc(right)-&gt;com(right)-&gt;fin-&gt;e
+</code></pre><p>Copy code and paste it into this <a href="http://flowchart.js.org/">link</a> to generate flow chart.</p>
+<ul>
+<li><strong>Group by first stack element</strong>: Use the first level element in each stack to group, ensuring that the stacks have the same root node.</li>
+<li><strong>Generate empty stack tree</strong>: Generate multiple top-level empty trees for preparation of the following steps,
+The reason for generating multiple top-level trees is that original data can be add in parallel without generating locks.</li>
+<li><strong>Accumulator data to stack tree</strong>: Add every thread dump into the generated trees.
+<ol>
+<li>Iterate through each element in the thread dump to find if there is any child element with the same code signature and same stack depth in the parent element.
+If not, then add this element.</li>
+<li>Keep the dump sequences and timestamps in each nodes from the source.</li>
+</ol>
+</li>
+<li><strong>Combine stack trees</strong>: Combine all trees structures into one by using the rules as same as <code>Accumulator</code>.
+<ol>
+<li>Use LDR to traversal tree node. Use the <code>Stack</code> data structure to avoid recursive calls, each stack element represents the node that needs to be merged.</li>
+<li>The task of merging two nodes is to merge the list of children nodes. If they have the same code signature and same parents, save the dump sequences and timestamps in this node. Otherwise, the node needs to be added into the target node as a new child.</li>
+</ol>
+</li>
+<li><strong>Calculate durations and build result</strong>: Calculate relevant statistics and generate response.
+<ol>
+<li>Use the same traversal node logic as in the <code>Combine stack trees</code> step. Convert to a GraphQL data structure, and put all nodes into a list for subsequent duration calculations.</li>
+<li>Calculate each node&rsquo;s duration in parallel. For each node, sort the sequences, if there are two continuous sequences, the duration should add the duration of these two seq&rsquo;s timestamp.</li>
+<li>Calculate each node execution in parallel. For each node, the duration of the current node should minus the time consumed by all children.</li>
+</ol>
+</li>
+</ul>
+<h2 id="profile-data-debug">Profile data debug</h2>
+<p>Please follow the <a href="../backend-profile-export#export-command-line-usage">exporter tool</a> to package profile data. Unzip the profile data and using <a href="https://github.com/apache/skywalking/tree/9dce6d408cd1f36ad1a996ba1f48fb81d27e3b53/oap-server/server-tools/profile-exporter/tool-profile-snapshot-bootstrap/src/test/java/org/apache/skywalking/oap/server/tool/profile/exporter/ProfileExportedAnalyze.java">analyzer main function</a> to run it.</p>
+
+
+
+
+</div>
+
+
+            </main>
           <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
             
 
@@ -996,88 +1099,7 @@ if (!doNotTrack) {
 </script>
 
           </div>
-          <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
-              <i class="fa fa-bars doc-menu-button"></i>
-              
-<div class="td-content">
 
-
-
-
-
-
-
-
-
-
-
-	<h1 id="thread-dump-merging-mechanism">Thread dump merging mechanism</h1>
-<p>The performance profile is an enhancement feature in the APM system. We are using the thread dump to estimate the method execution time, rather than adding many local spans. In this way, the resource cost would be much less than using distributed tracing to locate slow method. This feature is suitable in the production environment. This document introduces how thread dumps are merged into the final report as a stack tree(s).</p>
-<h2 id="thread-analyst">Thread analyst</h2>
-<h3 id="read-data-and-transform">Read data and transform</h3>
-<p>Read data from the database and convert it to a data structure in gRPC.</p>
-<pre><code>st=&gt;start: Start
-e=&gt;end: End
-op1=&gt;operation: Load data using paging
-op2=&gt;operation: Transform data using parallel
-
-st(right)-&gt;op1(right)-&gt;op2
-op2(right)-&gt;e
-</code></pre><p>Copy code and paste it into this <a href="http://flowchart.js.org/">link</a> to generate flow chart.</p>
-<ol>
-<li>Use the stream to read data by page (50 records per page).</li>
-<li>Convert data into gRPC data structures in the form of parallel streams.</li>
-<li>Merge into a list of data.</li>
-</ol>
-<h3 id="data-analyze">Data analyze</h3>
-<p>Use the group by and collector modes in the Java parallel stream to group according to the first stack element in the database records,
-and use the collector to perform data aggregation. Generate a multi-root tree.</p>
-<pre><code>st=&gt;start: Start
-e=&gt;end: End
-op1=&gt;operation: Group by first stack element
-sup=&gt;operation: Generate empty stack tree
-acc=&gt;operation: Accumulator data to stack tree
-com=&gt;operation: Combine stack trees
-fin=&gt;operation: Calculate durations and build result
-
-st(right)-&gt;op1-&gt;sup(right)-&gt;acc
-acc(right)-&gt;com(right)-&gt;fin-&gt;e
-</code></pre><p>Copy code and paste it into this <a href="http://flowchart.js.org/">link</a> to generate flow chart.</p>
-<ul>
-<li><strong>Group by first stack element</strong>: Use the first level element in each stack to group, ensuring that the stacks have the same root node.</li>
-<li><strong>Generate empty stack tree</strong>: Generate multiple top-level empty trees for preparation of the following steps,
-The reason for generating multiple top-level trees is that original data can be add in parallel without generating locks.</li>
-<li><strong>Accumulator data to stack tree</strong>: Add every thread dump into the generated trees.
-<ol>
-<li>Iterate through each element in the thread dump to find if there is any child element with the same code signature and same stack depth in the parent element.
-If not, then add this element.</li>
-<li>Keep the dump sequences and timestamps in each nodes from the source.</li>
-</ol>
-</li>
-<li><strong>Combine stack trees</strong>: Combine all trees structures into one by using the rules as same as <code>Accumulator</code>.
-<ol>
-<li>Use LDR to traversal tree node. Use the <code>Stack</code> data structure to avoid recursive calls, each stack element represents the node that needs to be merged.</li>
-<li>The task of merging two nodes is to merge the list of children nodes. If they have the same code signature and same parents, save the dump sequences and timestamps in this node. Otherwise, the node needs to be added into the target node as a new child.</li>
-</ol>
-</li>
-<li><strong>Calculate durations and build result</strong>: Calculate relevant statistics and generate response.
-<ol>
-<li>Use the same traversal node logic as in the <code>Combine stack trees</code> step. Convert to a GraphQL data structure, and put all nodes into a list for subsequent duration calculations.</li>
-<li>Calculate each node&rsquo;s duration in parallel. For each node, sort the sequences, if there are two continuous sequences, the duration should add the duration of these two seq&rsquo;s timestamp.</li>
-<li>Calculate each node execution in parallel. For each node, the duration of the current node should minus the time consumed by all children.</li>
-</ol>
-</li>
-</ul>
-<h2 id="profile-data-debug">Profile data debug</h2>
-<p>Please follow the <a href="../backend-profile-export#export-command-line-usage">exporter tool</a> to package profile data. Unzip the profile data and using <a href="https://github.com/apache/skywalking/tree/9dce6d408cd1f36ad1a996ba1f48fb81d27e3b53/oap-server/server-tools/profile-exporter/tool-profile-snapshot-bootstrap/src/test/java/org/apache/skywalking/oap/server/tool/profile/exporter/ProfileExportedAnalyze.java">analyzer main function</a> to run it.</p>
-
-
-
-
-</div>
-
-
-          </main>
         </div>
       </div>
 
@@ -1235,8 +1257,34 @@ If not, then add this element.</li>
 
   </body>
   <script>
-    $('.doc-menu-button').on('click',function (){
-      $('.td-sidebar').toggleClass('active')
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
     })
   </script>
 </html>

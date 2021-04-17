@@ -55,8 +55,8 @@ if (!doNotTrack) {
 
 
 
-<link rel="preload" href="/scss/main.min.645d7c803996630728b3b2f9dc5531d41533954f42564f9a71be68be616c461d.css" as="style">
-<link href="/scss/main.min.645d7c803996630728b3b2f9dc5531d41533954f42564f9a71be68be616c461d.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.77876f2bf3651f82dc039990e50ffb5e7cccb59065f914bc4dec2988bdaabc60.css" as="style">
+<link href="/scss/main.min.77876f2bf3651f82dc039990e50ffb5e7cccb59065f914bc4dec2988bdaabc60.css" rel="stylesheet" integrity="">
 
 
 
@@ -173,7 +173,28 @@ if (!doNotTrack) {
 
 
 
-                    <h5>Documentation: v8.4.0</h5>
+                    
+                    <h5>Documentation: 
+                    <select class="version-select">
+                    
+                    
+                    <option ZgotmplZ value="latest">latest</option>
+                    
+                    
+                    <option ZgotmplZ value="v8.5.0">v8.5.0</option>
+                    
+                    
+                    <option selected value="v8.4.0">v8.4.0</option>
+                    
+                    
+                    <option ZgotmplZ value="v8.3.0">v8.3.0</option>
+                    
+                    
+                    <option ZgotmplZ value="v8.2.0">v8.2.0</option>
+                    
+                    </select>
+                    </h5>
+                    
                     
 <ul class="sidebar-menu">
     
@@ -900,13 +921,97 @@ if (!doNotTrack) {
   })()
 </script>
                     <div class="commit-id">Commit Id: 9dce6d4</div>
-                    
+                  
 
 
 
 
 
 </div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+                <i class="fa fa-bars doc-menu-button"></i>
+                
+<div class="td-content">
+
+
+
+
+
+
+
+
+
+
+
+	<h1 id="send-envoy-metrics-to-skywalking-with--without-istio">Send Envoy metrics to SkyWalking with / without Istio</h1>
+<p>Envoy defines a gRPC service to emit the metrics, whatever implements this protocol can be used to receive the metrics.
+SkyWalking has a built-in receiver that implements this protocol so that you can configure Envoy to emit its metrics to SkyWalking.</p>
+<p>As an APM system, SkyWalking does not only receive and store the metrics emitted by Envoy, it also analyzes the topology of services and service instances.</p>
+<p><strong>Attention:</strong> There are two versions of Envoy metrics service protocol up to date,
+<a href="https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/grpc_service.proto#envoy-api-msg-core-grpcservice">v2</a> and
+<a href="https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/metrics_service.proto">v3</a>, SkyWalking (8.3.0+) supports both of them.</p>
+<h2 id="configure-envoy-to-send-metrics-to-skywalking-without-istio">Configure Envoy to send metrics to SkyWalking without Istio</h2>
+<p>Envoy can be used with / without Istio&rsquo;s control. This section introduces how to configure the standalone Envoy to send the metrics to SkyWalking.</p>
+<p>In order to let Envoy send metrics to SkyWalking, we need to feed Envoy with a configuration which contains <code>stats_sinks</code> that includes <code>envoy.metrics_service</code>.
+This <code>envoy.metrics_service</code> should be configured as a <a href="https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/grpc_service.proto#envoy-api-msg-core-grpcservice"><code>config.grpc_service</code></a> entry.</p>
+<p>The interesting parts of the config is shown in the config below:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">stats_sinks</span>:
+  - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">envoy.metrics_service</span>
+    <span style="color:#f92672">config</span>:
+      <span style="color:#f92672">grpc_service</span>:
+        <span style="color:#75715e"># Note: we can use google_grpc implementation as well.</span>
+        <span style="color:#f92672">envoy_grpc</span>:
+          <span style="color:#f92672">cluster_name</span>: <span style="color:#ae81ff">service_skywalking</span>
+
+<span style="color:#f92672">static_resources</span>:
+  <span style="color:#ae81ff">...</span>
+  <span style="color:#f92672">clusters</span>:
+  - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">service_skywalking</span>
+    <span style="color:#f92672">connect_timeout</span>: <span style="color:#ae81ff">5s</span>
+    <span style="color:#f92672">type</span>: <span style="color:#ae81ff">LOGICAL_DNS</span>
+    <span style="color:#f92672">http2_protocol_options</span>: {}
+    <span style="color:#f92672">dns_lookup_family</span>: <span style="color:#ae81ff">V4_ONLY</span>
+    <span style="color:#f92672">lb_policy</span>: <span style="color:#ae81ff">ROUND_ROBIN</span>
+    <span style="color:#f92672">load_assignment</span>:
+      <span style="color:#f92672">cluster_name</span>: <span style="color:#ae81ff">service_skywalking</span>
+      <span style="color:#f92672">endpoints</span>:
+      - <span style="color:#f92672">lb_endpoints</span>:
+        - <span style="color:#f92672">endpoint</span>:
+            <span style="color:#f92672">address</span>:
+              <span style="color:#f92672">socket_address</span>:
+                <span style="color:#f92672">address</span>: <span style="color:#ae81ff">skywalking</span>
+                <span style="color:#75715e"># This is the port where SkyWalking serving the Envoy Metrics Service gRPC stream.</span>
+                <span style="color:#f92672">port_value</span>: <span style="color:#ae81ff">11800</span>
+</code></pre></div><p>A more complete static configuration, can be observed <a href="../config.yaml">here</a>.</p>
+<p>Note that Envoy can also be configured dynamically through <a href="https://github.com/envoyproxy/data-plane-api/blob/master/XDS_PROTOCOL.md">xDS Protocol</a>.</p>
+<p>As mentioned above, SkyWalking also builds the topology of services from the metrics, this is because Envoy also carries the service metadata along with the metrics, to feed the Envoy such metadata, another configuration part is as follows:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">node</span>:
+  <span style="color:#75715e"># ... other configs</span>
+  <span style="color:#f92672">metadata</span>:
+    <span style="color:#f92672">LABELS</span>:
+      <span style="color:#f92672">app</span>: <span style="color:#ae81ff">test-app</span>
+    <span style="color:#f92672">NAME</span>: <span style="color:#ae81ff">service-instance-name</span>
+</code></pre></div><h2 id="configure-envoy-to-send-metrics-to-skywalking-with-istio">Configure Envoy to send metrics to SkyWalking with Istio</h2>
+<p>Typically, Envoy can be also used under Istio&rsquo;s control, where the configurations are much more simple because Istio composes the configurations for you and sends them to Envoy via <a href="https://github.com/envoyproxy/data-plane-api/blob/master/XDS_PROTOCOL.md">xDS Protocol</a>.
+Istio also automatically injects the metadata such as service name and instance name into the bootstrap configurations.</p>
+<p>Under this circumstance, emitting the metrics to SyWalking is as simple as adding the option <code>--set meshConfig.defaultConfig.envoyMetricsService.address=&lt;skywalking.address.port.11800&gt;</code> to Istio install command, for example:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">istioctl install -y <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --set profile<span style="color:#f92672">=</span>demo <span style="color:#e6db74">`</span><span style="color:#75715e"># replace the profile as per your need` \</span>
+  --set meshConfig.defaultConfig.envoyMetricsService.address<span style="color:#f92672">=</span>&lt;skywalking.address.port.11800&gt; <span style="color:#75715e"># replace &lt;skywalking.address.port.11800&gt; with your actual SkyWalking OAP address</span>
+</code></pre></div><p>If you already have Istio installed, you can use the following command to apply the config without re-installing Istio:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">istioctl manifest install -y <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --set profile<span style="color:#f92672">=</span>demo <span style="color:#e6db74">`</span><span style="color:#75715e"># replace the profile as per your need` \</span>
+  --set meshConfig.defaultConfig.envoyMetricsService.address<span style="color:#f92672">=</span>&lt;skywalking.address.port.11800&gt; <span style="color:#75715e"># replace &lt;skywalking.address.port.11800&gt; with your actual SkyWalking OAP address</span>
+</code></pre></div><h1 id="metrics-data">Metrics data</h1>
+<p>Some Envoy statistics are listed in this <a href="https://www.envoyproxy.io/docs/envoy/latest/configuration/statistics">list</a>. A sample data that contains identifier can be found <a href="../identify.json">here</a>, while the metrics only can be observed <a href="../metrics.json">here</a>.</p>
+
+
+
+
+</div>
+
+
+            </main>
           <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
             
 
@@ -994,90 +1099,7 @@ if (!doNotTrack) {
 </script>
 
           </div>
-          <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
-              <i class="fa fa-bars doc-menu-button"></i>
-              
-<div class="td-content">
 
-
-
-
-
-
-
-
-
-
-
-	<h1 id="send-envoy-metrics-to-skywalking-with--without-istio">Send Envoy metrics to SkyWalking with / without Istio</h1>
-<p>Envoy defines a gRPC service to emit the metrics, whatever implements this protocol can be used to receive the metrics.
-SkyWalking has a built-in receiver that implements this protocol so that you can configure Envoy to emit its metrics to SkyWalking.</p>
-<p>As an APM system, SkyWalking does not only receive and store the metrics emitted by Envoy, it also analyzes the topology of services and service instances.</p>
-<p><strong>Attention:</strong> There are two versions of Envoy metrics service protocol up to date,
-<a href="https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/grpc_service.proto#envoy-api-msg-core-grpcservice">v2</a> and
-<a href="https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/metrics/v3/metrics_service.proto">v3</a>, SkyWalking (8.3.0+) supports both of them.</p>
-<h2 id="configure-envoy-to-send-metrics-to-skywalking-without-istio">Configure Envoy to send metrics to SkyWalking without Istio</h2>
-<p>Envoy can be used with / without Istio&rsquo;s control. This section introduces how to configure the standalone Envoy to send the metrics to SkyWalking.</p>
-<p>In order to let Envoy send metrics to SkyWalking, we need to feed Envoy with a configuration which contains <code>stats_sinks</code> that includes <code>envoy.metrics_service</code>.
-This <code>envoy.metrics_service</code> should be configured as a <a href="https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/grpc_service.proto#envoy-api-msg-core-grpcservice"><code>config.grpc_service</code></a> entry.</p>
-<p>The interesting parts of the config is shown in the config below:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">stats_sinks</span>:
-  - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">envoy.metrics_service</span>
-    <span style="color:#f92672">config</span>:
-      <span style="color:#f92672">grpc_service</span>:
-        <span style="color:#75715e"># Note: we can use google_grpc implementation as well.</span>
-        <span style="color:#f92672">envoy_grpc</span>:
-          <span style="color:#f92672">cluster_name</span>: <span style="color:#ae81ff">service_skywalking</span>
-
-<span style="color:#f92672">static_resources</span>:
-  <span style="color:#ae81ff">...</span>
-  <span style="color:#f92672">clusters</span>:
-  - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">service_skywalking</span>
-    <span style="color:#f92672">connect_timeout</span>: <span style="color:#ae81ff">5s</span>
-    <span style="color:#f92672">type</span>: <span style="color:#ae81ff">LOGICAL_DNS</span>
-    <span style="color:#f92672">http2_protocol_options</span>: {}
-    <span style="color:#f92672">dns_lookup_family</span>: <span style="color:#ae81ff">V4_ONLY</span>
-    <span style="color:#f92672">lb_policy</span>: <span style="color:#ae81ff">ROUND_ROBIN</span>
-    <span style="color:#f92672">load_assignment</span>:
-      <span style="color:#f92672">cluster_name</span>: <span style="color:#ae81ff">service_skywalking</span>
-      <span style="color:#f92672">endpoints</span>:
-      - <span style="color:#f92672">lb_endpoints</span>:
-        - <span style="color:#f92672">endpoint</span>:
-            <span style="color:#f92672">address</span>:
-              <span style="color:#f92672">socket_address</span>:
-                <span style="color:#f92672">address</span>: <span style="color:#ae81ff">skywalking</span>
-                <span style="color:#75715e"># This is the port where SkyWalking serving the Envoy Metrics Service gRPC stream.</span>
-                <span style="color:#f92672">port_value</span>: <span style="color:#ae81ff">11800</span>
-</code></pre></div><p>A more complete static configuration, can be observed <a href="../config.yaml">here</a>.</p>
-<p>Note that Envoy can also be configured dynamically through <a href="https://github.com/envoyproxy/data-plane-api/blob/master/XDS_PROTOCOL.md">xDS Protocol</a>.</p>
-<p>As mentioned above, SkyWalking also builds the topology of services from the metrics, this is because Envoy also carries the service metadata along with the metrics, to feed the Envoy such metadata, another configuration part is as follows:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">node</span>:
-  <span style="color:#75715e"># ... other configs</span>
-  <span style="color:#f92672">metadata</span>:
-    <span style="color:#f92672">LABELS</span>:
-      <span style="color:#f92672">app</span>: <span style="color:#ae81ff">test-app</span>
-    <span style="color:#f92672">NAME</span>: <span style="color:#ae81ff">service-instance-name</span>
-</code></pre></div><h2 id="configure-envoy-to-send-metrics-to-skywalking-with-istio">Configure Envoy to send metrics to SkyWalking with Istio</h2>
-<p>Typically, Envoy can be also used under Istio&rsquo;s control, where the configurations are much more simple because Istio composes the configurations for you and sends them to Envoy via <a href="https://github.com/envoyproxy/data-plane-api/blob/master/XDS_PROTOCOL.md">xDS Protocol</a>.
-Istio also automatically injects the metadata such as service name and instance name into the bootstrap configurations.</p>
-<p>Under this circumstance, emitting the metrics to SyWalking is as simple as adding the option <code>--set meshConfig.defaultConfig.envoyMetricsService.address=&lt;skywalking.address.port.11800&gt;</code> to Istio install command, for example:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">istioctl install -y <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --set profile<span style="color:#f92672">=</span>demo <span style="color:#e6db74">`</span><span style="color:#75715e"># replace the profile as per your need` \</span>
-  --set meshConfig.defaultConfig.envoyMetricsService.address<span style="color:#f92672">=</span>&lt;skywalking.address.port.11800&gt; <span style="color:#75715e"># replace &lt;skywalking.address.port.11800&gt; with your actual SkyWalking OAP address</span>
-</code></pre></div><p>If you already have Istio installed, you can use the following command to apply the config without re-installing Istio:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">istioctl manifest install -y <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --set profile<span style="color:#f92672">=</span>demo <span style="color:#e6db74">`</span><span style="color:#75715e"># replace the profile as per your need` \</span>
-  --set meshConfig.defaultConfig.envoyMetricsService.address<span style="color:#f92672">=</span>&lt;skywalking.address.port.11800&gt; <span style="color:#75715e"># replace &lt;skywalking.address.port.11800&gt; with your actual SkyWalking OAP address</span>
-</code></pre></div><h1 id="metrics-data">Metrics data</h1>
-<p>Some Envoy statistics are listed in this <a href="https://www.envoyproxy.io/docs/envoy/latest/configuration/statistics">list</a>. A sample data that contains identifier can be found <a href="../identify.json">here</a>, while the metrics only can be observed <a href="../metrics.json">here</a>.</p>
-
-
-
-
-</div>
-
-
-          </main>
         </div>
       </div>
 
@@ -1235,8 +1257,34 @@ Istio also automatically injects the metadata such as service name and instance 
 
   </body>
   <script>
-    $('.doc-menu-button').on('click',function (){
-      $('.td-sidebar').toggleClass('active')
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
     })
   </script>
 </html>
