@@ -145,7 +145,7 @@ async function traverseDocsList(result) {
         continue;
       }
       for (const doc of item.docs) {
-        const {repo, repoUrl} = item;
+        const {repo, repoUrl, docs} = item;
         let {version, commitId} = doc;
         let date;
         if (version === 'latest') {
@@ -164,15 +164,26 @@ async function traverseDocsList(result) {
           docsInfo.push({localPath, repoUrl, commitId, date, docName, version})
 
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
-                    <h5>Documentation: {{.Site.Data.docSidebar.${menuFileName}.version}}</h5>
+                    {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
+                    <h5>Documentation: 
+                    <select class="version-select">
+                    {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
+                    {{$version := .version}}
+                    <option {{ cond (eq $currentVersion $version) "selected" "" }} value="{{$version}}">{{$version}}</option>
+                    {{end}}
+                    </select>
+                    </h5>
+                    
                     {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
                     <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
-                    {{ end }}\n`
+                  {{ end }}\n`;
+
           execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
 
           await handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {
             version,
-            commitId
+            commitId,
+            docs,
           }, `/docs/${docName}/${version}`)
         }
       }
@@ -185,7 +196,7 @@ async function traverseDocsList(result) {
 async function generateLayoutTemplate(targetPath, tpl) {
   let codeTxt = await promises.readFile(targetPath, 'utf8');
   codeTxt = codeTxt.toString()
-  codeTxt = codeTxt.replace(/(td-sidebar">)([\s\S]*)(<\/div>[\s\S]*<div id="toc")/, function (match, p1, p2, p3) {
+  codeTxt = codeTxt.replace(/(td-sidebar">)([\s\S]*)(<\/div>[\s\S]*<main)/, function (match, p1, p2, p3) {
     return `${p1}\n${tpl}\n${p3}`
   })
   await promises.writeFile(targetPath, codeTxt, 'utf8');
@@ -202,9 +213,10 @@ function handleDocsFiles(docsInfo) {
 
 async function handleMenuFiles(menuFilePath, docInfo, localPath) {
   const nativeObject = await loadYaml(menuFilePath);
-  const {version, commitId} = docInfo
+  const {version, commitId, docs} = docInfo
   nativeObject.version = version;
   nativeObject.commitId = commitId.slice(0, 7);
+  nativeObject.repoDocs = docs;
 
   handleMenuPath(nativeObject.catalog, localPath)
   const yamlString = YAML.stringify(nativeObject, 2);

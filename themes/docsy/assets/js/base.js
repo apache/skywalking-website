@@ -61,23 +61,4 @@ limitations under the License.
         });
     });
 
-    $(function () {
-        if (!$('.icon-copy').length) {
-            return
-        }
-        $('.icon-copy').on('click', function () {
-            const input = document.createElement('input');
-            document.body.appendChild(input);
-            input.setAttribute('value', 'skywalking');
-            input.setAttribute('style', 'opacity:0');
-            input.select();
-            if (document.execCommand('copy')) {
-                document.execCommand('copy');
-                alert('copied');
-                window.open('http://demo.skywalking.apache.org/')
-            }
-            document.body.removeChild(input);
-        })
-    })
-
 }(jQuery));
