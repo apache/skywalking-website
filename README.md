@@ -29,7 +29,7 @@ Update the [config file](https://github.com/algolia/docsearch-configs/blob/maste
 
 ### Event
 
-Located at `content/blog`. If you don't want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.
+Located at `content/events`. If you don't want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample event below.
 
 ```yaml
 ---
@@ -37,10 +37,23 @@ title: This is a title
 date: 2020-04-28
 author: Author
 description: This is description.
+# endDate: 2021-04-24T23:59:59
+# startDate: 2021-04-22T00:00:00
+# buttonText: Go
+# img: /images/popup_default.png
 ---
 
 Content
 ```
+
+If you want to display the event in the bottom right popover, you can configure the parameter `endDate`. The parameters are as follows.
+
+|Parameter|Description|Required|Default|
+|----|----|----|----|
+|endDate|End date|true|-|
+|startDate|Start date|false|Current time|
+|buttonText|Button text|false|Read more|
+|img|The illustration|false|/images/popup_default.png|
 
 ### Blog
 
