@@ -8,4 +8,11 @@ $('.td-main img').on('click',function(event){if($(this).data('nolightbox')){retu
 event=event||window.event;var target=document.elementFromPoint(event.clientX,event.clientY);showBig(target.src);});$popup.on('click',function(){$(this).hide()});function showBig(src){$popup.find('img').attr('src',src);$popup.show()}});$(function(){$('.dropdown-title').on('click',function(){$(this).next('.nav-dropdown').toggle()})
 $('.sidebar-button').on('click',function(){$('.sidebar').toggle()
 $('.sidebar-mask').toggle()})
-$('.sidebar-mask').on('click',function(){$('.sidebar-button').trigger('click')})});(function(){var reg=/\/docs\/[a-zA-Z\-]+\/([\w|\.]+)\//;var res=reg.exec(location.href);var version=res&&res[1]||"latest";docsearch({apiKey:'a0589fc2fb9cc4876b9443b2911221bc',indexName:'skywalking',inputSelector:'#algolia-search-input',algoliaOptions:{'facetFilters':["version:"+version],hitsPerPage:8},debug:false});})()
+$('.sidebar-mask').on('click',function(){$('.sidebar-button').trigger('click')})});(function(){var reg=/\/docs\/[a-zA-Z\-]+\/([\w|\.]+)\//;var res=reg.exec(location.href);var version=res&&res[1]||"latest";docsearch({apiKey:'a0589fc2fb9cc4876b9443b2911221bc',indexName:'skywalking',inputSelector:'#algolia-search-input',algoliaOptions:{'facetFilters':["version:"+version],hitsPerPage:8},debug:false});})();$(function(){var $popup=$('.sky-event-popup')
+if(!$popup){return;}
+var key='SkyWalkingPopupClosedTime';var startDate=$popup.data('startdate');var endDate=$popup.data('enddate');if(!isShowed(key)&&isDuringDate(startDate,endDate)){$popup.show()}
+$popup.find('.fa-window-close').on('click',function(){localStorage.setItem(key,new Date());$popup.hide()})
+function isShowed(key){var storageTime=formatDate(localStorage.getItem(key));var now=formatDate(new Date());return storageTime===now;}
+function formatDate(strTime){const date=new Date(strTime);return(date.getFullYear()+'-'+(date.getMonth()+1)+'-'+date.getDate());}
+function isDuringDate(startDateStr,endDateStr){var currDate=new Date();var startDate=new Date(startDateStr);var endDate=new Date(endDateStr);if(currDate<=endDate&&(currDate>=startDate||!startDateStr)){return true;}
+return false;}})
