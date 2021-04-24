@@ -40,7 +40,7 @@ description: This is description.
 # endDate: 2021-04-24T23:59:59
 # startDate: 2021-04-22T00:00:00
 # buttonText: Go
-# img: /images/popup_default.png
+# img: /images/skywalking_200x200.png
 ---
 
 Content
@@ -53,7 +53,7 @@ If you want to display the event in the bottom right popover, you can configure 
 |endDate|End date|true|-|
 |startDate|Start date|false|Current time|
 |buttonText|Button text|false|Read more|
-|img|The illustration|false|/images/popup_default.png|
+|img|The illustration|false|/images/skywalking_200x200.png|
 
 ### Blog
 
