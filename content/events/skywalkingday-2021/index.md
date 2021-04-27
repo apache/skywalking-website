@@ -59,6 +59,16 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 2. 了解 “开源≠自由≠非商业” 的来龙去脉。
 3. 一名普通工程师，如何高效地向开源社区做贡献？
 
+#### 如何利用 Apache APISIX 提升 Nginx 的可观测性
+- 金卫 Wei Jin, API7 Engineer Apache SkyWalking committer. Apache apisix-ingress-controller Founder. Apache APISIX PMC.
+
+Apache APISIX 是基于 Nginx 实现的高性能云原生网关，在实际使用中不仅性能不输 Nginx ，而且表现出更高的易用性。本次分享会介绍 Apache APISIX 在可观测性上给 Nginx 带来的提升。
+
+通过本次分享，观众可以：
+1.通过 Apache APISIX 实现观测性的几种手段.
+2.了解 Apache APISIX 高效且易用的秘诀.
+3.结合 Apache skywalking 进一步提升可观测性.
+
 #### Other speakers
 - 柯振旭 Zhenxu Ke，Tetrate SRE, SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
 - 温铭 Ming Wen. API7 Co-Founder / CEO. Apache SkyWalking committer. Apache Member. Apache APISIX PMC. 
