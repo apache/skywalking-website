@@ -49,10 +49,19 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 2. 了解前端如何做错误日志收集
 3. 如何对页面请求进行跟踪以及跟踪的好处
 
+#### 一名普通工程师，该如何正确的理解开源精神？
+- 王晔倞 Yeliang Wang. API7 Partner / Product VP. 
+
+开源精神，那也许是一种给于和获取的平衡，有给于才能有获取，有获取才会有给于的动力。无需指责别人只会获取，我们应该懂得开源是一种创造方式，一个没有创造欲和创造力的人加入开源也是无用的。
+
+通过本次分享，观众可以：
+1. 为什么国内一些程序员会对开源产生误解？
+2. 了解 “开源≠自由≠非商业” 的来龙去脉。
+3. 一名普通工程师，如何高效地向开源社区做贡献？
+
 #### Other speakers
 - 柯振旭 Zhenxu Ke，Tetrate SRE, SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
 - 温铭 Ming Wen. API7 Co-Founder / CEO. Apache SkyWalking committer. Apache Member. Apache APISIX PMC. 
-- 王晔倞 Yeliang Wang. API7 Partner / Product VP. 
 
 More speaks will be announced shortly.
 
