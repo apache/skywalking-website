@@ -71,7 +71,6 @@ Apache APISIX 是基于 Nginx 实现的高性能云原生网关，在实际使�
 
 #### Other speakers
 - 柯振旭 Zhenxu Ke，Tetrate SRE, SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
-- 温铭 Ming Wen. API7 Co-Founder / CEO. Apache SkyWalking committer. Apache Member. Apache APISIX PMC. 
 
 More speaks will be announced shortly.
 
