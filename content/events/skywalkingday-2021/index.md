@@ -65,9 +65,9 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 Apache APISIX 是基于 Nginx 实现的高性能云原生网关，在实际使用中不仅性能不输 Nginx ，而且表现出更高的易用性。本次分享会介绍 Apache APISIX 在可观测性上给 Nginx 带来的提升。
 
 通过本次分享，观众可以：
-1.通过 Apache APISIX 实现观测性的几种手段.
-2.了解 Apache APISIX 高效且易用的秘诀.
-3.结合 Apache skywalking 进一步提升可观测性.
+1. 通过 Apache APISIX 实现观测性的几种手段.
+2. 了解 Apache APISIX 高效且易用的秘诀.
+3. 结合 Apache skywalking 进一步提升可观测性.
 
 #### Other speakers
 - 柯振旭 Zhenxu Ke，Tetrate SRE, SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
