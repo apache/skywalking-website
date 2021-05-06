@@ -1,5 +1,5 @@
 ---
-title: Release Apache SkyWalking LUA Nginx 0.1.0
+title: Release Apache SkyWalking Kong 0.1.0
 date: 2021-05-06
 author: SkyWalking Team
 ---
