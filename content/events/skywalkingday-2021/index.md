@@ -69,8 +69,13 @@ Apache APISIX 是基于 Nginx 实现的高性能云原生网关，在实际使�
 2. 了解 Apache APISIX 高效且易用的秘诀.
 3. 结合 Apache skywalking 进一步提升可观测性.
 
-#### Other speakers
-- 柯振旭 Zhenxu Ke，Tetrate SRE, SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
+#### 利用 Apache SkyWalking 事件采集系统更快定位故障
+- 柯振旭 Zhenxu Ke，Tetrate SRE, Apache SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
+
+通过本次分享，听众可以：
+1. 了解 SkyWalking 的事件采集系统；
+2. 了解上报事件至 SkyWalking 的多种方式；
+3. 学习如何利用 SkyWalking 采集的事件结合 metrics，分析目标系统的性能问题；
 
 More speaks will be announced shortly.
 
