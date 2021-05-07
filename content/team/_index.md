@@ -51,6 +51,7 @@ Members include Project Management Committee members and committers. The list is
 | ----------------- | ----------- | ------------------------------------------------ |
 | Brandon Fergerson | bfergerson  |                                                  |
 | Gui Cao           | zifeihan    | [zifeihan007](https://twitter.com/zifeihan007)   |
+| Hailin Wang       | wanghailin  |                                                  |
 | Huaxi Jiang       | hoshea      | [Zerone___01](https://twitter.com/Zerone___01)   |
 | Jiapeng Liu       | liujiapeng  |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
