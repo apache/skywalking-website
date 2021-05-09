@@ -9,14 +9,14 @@ tags:
 
 We posted [**Response to Elastic 2021 License Change**](/blog/2021-01-17-elastic-change-license/) blog 4 months ago. It doesn't have a big impact in 
 short term, but because of the incompatibility between SSPL and Apache 2.0, we lost the chance of upgrading the storage server, 
-which makes the community and our users concern. So, we have to keep looking for new option as a replacement.
+which makes the community and our users concern. So, we have to keep looking for a new option as a replacement.
 
-There was an open source project, Open Distro for Elasticsearch, maintained by AWS team. It is an Apache 2.0-licensed distribution of Elasticsearch enhanced with enterprise security, alerting, SQL, and more. After Elastic relicensed its projects, we talked with their team, and they have an agenda
-to take over the community leadship, and keep maintaining the ElasticSearch, as it was licensed by Apache 2.0. So, they are good to fork and continue.
+There was an open source project, Open Distro for Elasticsearch, maintained by the AWS team. It is an Apache 2.0-licensed distribution of Elasticsearch enhanced with enterprise security, alerting, SQL, and more. After Elastic relicensed its projects, we talked with their team, and they have an agenda
+to take over the community leadship and keep maintaining the ElasticSearch, as it was licensed by Apache 2.0. So, they are good to fork and continue.
 
-At April 12th, 2021, AWS announced the new project, OpenSearch, driven by the community, which is initialized from people of AWS, Red Hat, SAP, Capital One, and Logz.io. Read this [Introducing OpenSearch](https://aws.amazon.com/cn/blogs/opensource/introducing-opensearch/) blog for more detail.
+On April 12th, 2021, AWS announced the new project, OpenSearch, driven by the community, which is initialized from people of AWS, Red Hat, SAP, Capital One, and Logz.io. Read this [Introducing OpenSearch](https://aws.amazon.com/cn/blogs/opensource/introducing-opensearch/) blog for more detail.
 
-Once we had this news in public, we begin to plan the process about evaluating and testing OpenSearch as SkyWalking's storage option. 
+Once we had this news in public, we begin to plan the process of evaluating and testing OpenSearch as SkyWalking's storage option. 
 Read our [issue](https://github.com/apache/skywalking/issues/6745).
 
 **Today, we are glad to ANNOUNCE, OpenSearch could replace ElastcSearch as the storage, and it is still licensed under Apache 2.0.**
