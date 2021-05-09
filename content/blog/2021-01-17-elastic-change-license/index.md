@@ -3,6 +3,8 @@ title: "Response to Elastic 2021 License Change"
 date: 2021-01-17
 author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github.com/wu-sheng) [Twitter](https://twitter.com/wusheng1108) [Linkedin](https://www.linkedin.com/in/wusheng1108)
 description: "Elastic Search server doesn't release under Apache 2.0 anymore. What is the impact to the SkyWalking project?"
+tags:
+- License
 ---
 
 [Elastic](https://elastic.co) announced their license change, [**Upcoming licensing changes to Elasticsearch and Kibana**.](https://www.elastic.co/blog/licensing-change)
