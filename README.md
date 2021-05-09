@@ -37,8 +37,8 @@ title: This is a title
 date: 2020-04-28
 author: Author
 description: This is description.
-# endDate: 2021-04-24T23:59:59
-# startDate: 2021-04-22T00:00:00
+# endTime: 2021-04-24T23:59:59Z
+# startTime: 2021-04-22T00:00:00Z
 # buttonText: Go
 # img: /images/skywalking_200x200.png
 ---
@@ -46,12 +46,12 @@ description: This is description.
 Content
 ```
 
-If you want to display the event in the bottom right popover, you can configure the parameter `endDate`. The parameters are as follows.
+If you want to display the event in the bottom right popover, you can configure the parameter `endTime`. The parameters are as follows.
 
 |Parameter|Description|Required|Default|
 |----|----|----|----|
-|endDate|End date|true|-|
-|startDate|Start date|false|Current time|
+|endTime|End time|true|-|
+|startTime|Start time|false|Current time|
 |buttonText|Button text|false|Read more|
 |img|The illustration|false|/images/skywalking_200x200.png|
 
