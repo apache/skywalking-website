@@ -4,7 +4,9 @@ date: 2021-03-25
 author: "[Qiuxia Fan](https://github.com/Fine0830). tetrate.io"
 description: This article describes how the skywalking-client-js extends its monitoring to include the browser, providing performance metrics and error collection to the SkyWalking backend.
 tags:
-- Observability, APM, Web-performance
+- Observability
+- APM
+- Web-performance
 ---
 
 ![](aircraft.jpg)
