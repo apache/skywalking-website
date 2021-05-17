@@ -80,6 +80,7 @@ class GenerateTeamYaml {
       await this.getRepoContributors({user, repo, page, per_page, list, item})
     } else {
       item.contributors = list;
+      item.contributorCount = [...new Set(list.map(item => item.id || item.email))].length;
     }
   }
 }
