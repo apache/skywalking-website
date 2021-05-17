@@ -28,8 +28,16 @@ June 12th
 
 SkyWalking 2020-2021年发展和后续计划
 
-#### 10:20 - 10:50 赞助商（腾讯）分享
-待定
+#### 10:20 - 10:50 微服务可观测性分析平台的探索与实践
+- 凌若川 腾讯高级工程师
+
+可观测性分析平台作为云原生时代微服务系统基础组件，开放性与性能是决定平台价值的核心要素。
+复杂微服务应用场景与海量多维链路数据，对可观测性分析平台在开放性设计和各环节高性能实现带来诸多挑战。
+本次分享中将重点梳理腾讯云微服务团队在构建云原生可观测性分析平台过程中遇到的挑战，介绍我们在架构设计与实现方面的探索与实践。
+
+1. 云原生时代微服务可观测性平台面临的性能与可用性挑战
+2. 腾讯云在构建高性能微服务可观测性分析平台的探索与实践
+3. 微服务可观测性分析平台架构的下一阶段演进方向展望
 
 #### 10:50 - 11:20 BanyanDB数据模型背后的逻辑
 - 高洪涛 Hongtao Gao. Tetrate SRE, SkyWalking PMC, Apache ShardingSphere PMC.
@@ -75,18 +83,26 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 3. OpenTelemetry原理
 4. OpenTelemetry在腾讯的应用及实践
 
-#### 14:30 - 15:10 赞助商（腾讯）分享
-待定
-
-#### 15:10 - 15:30 茶歇
-
-#### 15:30 - 16:00 利用 Apache SkyWalking 事件采集系统更快定位故障
+#### 14:30 - 15:10 利用 Apache SkyWalking 事件采集系统更快定位故障
 - 柯振旭 Zhenxu Ke，Tetrate SRE, Apache SkyWalking PMC. Apache Incubator PMC. Apache Dubbo committer.
 
 通过本次分享，听众可以：
 1. 了解 SkyWalking 的事件采集系统；
 2. 了解上报事件至 SkyWalking 的多种方式；
 3. 学习如何利用 SkyWalking 采集的事件结合 metrics，分析目标系统的性能问题；
+
+#### 15:10 - 15:30 茶歇
+
+#### 15:30 - 16:00 可观测性自动注入技术原理探索与实践
+- 詹启新 Tencnet OpenTelemetry Oteam PMC
+
+在可观测领域中自动注入已经成为重要的组成部分之一，其优异简便的使用方式并且可同时覆盖到链路、指标、日志，大大降低了接入成本及运维成本，属于友好的一种接入方式；
+本次分享将介绍Java中的字节码注入技术原理，及在可观测领域的应用实践
+
+1. 常用的自动注入技术原理简介
+2. 介绍可观测性在Java落地的要点
+3. opentelemetry-java-instrumentation的核心原理及实现
+4. opentelemetry自动注入的应用实践
 
 #### 16:00 - 16:30 如何利用 Apache APISIX 提升 Nginx 的可观测性
 - 金卫 Wei Jin, API7 Engineer Apache SkyWalking committer. Apache apisix-ingress-controller Founder. Apache APISIX PMC.
@@ -98,10 +114,7 @@ Apache APISIX 是基于 Nginx 实现的高性能云原生网关，在实际使�
 2. 了解 Apache APISIX 高效且易用的秘诀.
 3. 结合 Apache skywalking 进一步提升可观测性.
 
-#### 16:35 - 17:15 Severless可观察性（圆桌讨论）
-参与人，待定
-
-#### 17:20 - 17:30 抽奖，结束
+#### 16:35 抽奖，结束
 
 ## Sponsors
 - Tencent
