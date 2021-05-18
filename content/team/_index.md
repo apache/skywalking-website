@@ -78,7 +78,7 @@ Archived
 
 ## Contributor over time
 
-![Contributor over time](https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true)
+<div><img style="width:100%;max-width:unset" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/></div>
 
 ## Becoming a Committer
 
