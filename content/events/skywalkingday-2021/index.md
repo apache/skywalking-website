@@ -19,7 +19,7 @@ Addr. Function Hall, 2nd floor, Tencent Builder, Shenzhen, China
 地址, 中国广东省深圳市腾讯大厦2楼多功能厅
 
 ## Date
-June 12th
+June 20th.
 
 ## Sessions
 
