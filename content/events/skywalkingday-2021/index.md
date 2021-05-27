@@ -7,7 +7,7 @@ endTime: 2021-06-12T10:00:00Z
 ---
 
 ## Abstract
-Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 12th, jointly with Tencent and Tetrate.
+Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 20th, jointly with Tencent and Tetrate.
 
 We are going to share SkyWalking's roadmap, features, product experiences and open source culture.
 
