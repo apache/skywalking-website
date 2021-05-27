@@ -21,6 +21,9 @@ Addr. Function Hall, 2nd floor, Tencent Builder, Shenzhen, China
 ## Date
 June 20th.
 
+## Registration For Free
+[Register for onsite or online](https://cloud.tencent.com/developer/salon/salon-1447)
+
 ## Sessions
 
 #### 10:00 - 10:20 Apache SkyWalking Landscape
