@@ -112,7 +112,7 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 #### 16:00 - 16:30 如何利用 Apache APISIX 提升 Nginx 的可观测性
 - 金卫 Wei Jin, API7 Engineer Apache SkyWalking committer. Apache apisix-ingress-controller Founder. Apache APISIX PMC.
 
-Apache APISIX 是基于 Nginx 实现的高性能云原生网关，在实际使用中不仅性能不输 Nginx ，而且表现出更高的易用性。本次分享会介绍 Apache APISIX 在可观测性上给 Nginx 带来的提升。
+在云原生时代，动态和可观测性是 API 网关的标准特性。Apache APISIX 不仅覆盖了 Nginx 的传统功能，在可观测性上也和 SkyWalking 深度合作，大大提升了服务治理能力。本次分享会介绍如何无痛的提升 Nginx 的可观测性和 APISIX 在未来可观测性方面的规划。
 
 通过本次分享，观众可以：
 1. 通过 Apache APISIX 实现观测性的几种手段.
