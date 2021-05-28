@@ -54,6 +54,7 @@ If you want to display the event in the bottom right popover, you can configure 
 |startTime|Start time|false|Current time|
 |buttonText|Button text|false|Read more|
 |img|The illustration|false|/images/skywalking_200x200.png|
+|poster|The poster|false|-|
 
 ### Blog
 

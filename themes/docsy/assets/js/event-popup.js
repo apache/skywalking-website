@@ -34,9 +34,14 @@ $(function () {
 
     function showPopover(count) {
         var src;
+        var posterSrc;
+        var link;
+        var $contentBox = $popup.find('.content-box');
         if (count === 1) {
-            $('.sky-event-popup .content-box').addClass('one')
+            $contentBox.addClass('one')
             src = $items.eq(0).data('img')
+            posterSrc = $items.eq(0).data('poster')
+            link = $items.eq(0).data('link')
         } else {
             $items.sort(function (a, b) {
                 var aDate = new Date($(a).data('endtime'))
@@ -45,18 +50,35 @@ $(function () {
             })
             $.each($items, function (index, item) {
                 var img = $(item).data('img')
+                var poster = $(item).data('poster')
+                if (poster) {
+                    posterSrc = poster;
+                    link = $(item).data('link');
+                    return false
+                }
                 if (img) {
                     src = img;
                     return false
                 }
             })
-            $('.content-box').html($items)
+            $contentBox.html($items)
         }
-        if (!src) {
-            src = $pic.data('img')
-            $pic.css('height', 'auto')
+        if (posterSrc && document.body.clientWidth >= 440) {
+            $pic.attr('src', posterSrc);
+            $pic.on('click', function () {
+                window.location.href = link;
+                $popup.find('.fa-window-close').trigger('click')
+            })
+            $('.pic-wrapper').addClass('poster')
+            $('.fa-window-close').css('color', '#8797ac')
+            $contentBox.hide()
+        } else {
+            if (!src) {
+                src = $pic.data('img')
+                $pic.css('height', 'auto')
+            }
+            $pic.attr('src', src)
         }
-        $pic.attr('src', src)
 
         setTimeout(function () {
             $popup.show()
