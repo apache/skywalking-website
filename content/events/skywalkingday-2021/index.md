@@ -124,7 +124,8 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 
 ## Sponsors
 - Tencent
-- Tetrate
+- [Tetrate](https://tetrate.io)
+- [SegmentFault 思否](https://segmentfault.com)
 
 ## Contact Us
 Send mail to dev@skywalking.apache.org.
