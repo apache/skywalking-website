@@ -58,6 +58,7 @@ Members include Project Management Committee members and committers. The list is
 | Ke Zhang          | zhangke     | [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
 | Sheng Wang        | wangsheng   |                                                  |
+| Tomasz Pytel      | tompytel    |                                                  |
 | Wei Hua           | alonelaval  |                                                  |
 | Wei Jin           | kvn         |                                                  |
 | Weijie Zou        | kdump       | [RootShellExp](https://twitter.com/RootShellExp) |
