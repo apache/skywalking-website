@@ -1,16 +1,19 @@
 ---
-title: "SkyWalkingDay Conference 2021"
-date: 2021-04-20
+title: "[Postponing] SkyWalkingDay Conference 2021"
+date: 2021-06-07
 author: SkyWalking Team
-description: Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 20th, jointly with Tencent and Tetrate.
-endTime: 2021-06-12T10:00:00Z
-poster: /events/skywalkingday-2021/skywalkingday.png
+description: Considering recent COVID19 status of Shenzhen, we are postponing this event. We will announce the new date later!
+#description: Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 20th, jointly with Tencent and Tetrate.
+endTime: 2021-06-20T10:00:00Z
+#poster: /events/skywalkingday-2021/skywalkingday.png
 ---
+
+### Considering recent COVID19 status of Shenzhen, we are postponing this event. We will announce the new date later!
 
 <img src="skywalkingday.png">
 
 ## Abstract
-Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 20th, jointly with Tencent and Tetrate.
+Apache SkyWalking hosts SkyWalkingDay Conference 2021 in ~~June 20th~~, jointly with Tencent and Tetrate.
 
 We are going to share SkyWalking's roadmap, features, product experiences and open source culture.
 
