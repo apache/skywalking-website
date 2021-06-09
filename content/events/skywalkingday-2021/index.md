@@ -1,31 +1,27 @@
 ---
-title: "[Postponing] SkyWalkingDay Conference 2021"
+title: "SkyWalkingDay Conference 2021, relocating at Beijing"
 date: 2021-06-07
 author: SkyWalking Team
-description: Considering recent COVID19 status of Shenzhen, we are postponing this event. We will announce the new date later!
-#description: Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 20th, jointly with Tencent and Tetrate.
+description: Considering recent COVID19 status of Shenzhen, we have cancelled the Shenzhen event, and NOW we hold it at Beijing.
+description: Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 26th, jointly with Tencent and Tetrate.
 endTime: 2021-06-20T10:00:00Z
-#poster: /events/skywalkingday-2021/skywalkingday.png
+poster: /events/skywalkingday-2021/skywalkingday.png
 ---
-
-### Considering recent COVID19 status of Shenzhen, we are postponing this event. We will announce the new date later!
 
 <img src="skywalkingday.png">
 
 ## Abstract
-Apache SkyWalking hosts SkyWalkingDay Conference 2021 in ~~June 20th~~, jointly with Tencent and Tetrate.
+Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 26th, jointly with Tencent and Tetrate.
 
 We are going to share SkyWalking's roadmap, features, product experiences and open source culture.
 
 Welcome to join us.
 
 ## Venue
-Addr. Function Hall, 2nd floor, Tencent Builder, Shenzhen, China
-
-地址, 中国广东省深圳市腾讯大厦2楼多功能厅
+Addr./地址  北京市海淀区西格玛大厦B1多功能厅
 
 ## Date
-June 20th.
+June 26th.
 
 ## Registration For Free
 [Register for onsite or online](https://cloud.tencent.com/developer/salon/salon-1447)
@@ -129,6 +125,9 @@ Apache SkyWalking对前端进行了监控与跟踪，分别有Metric, Log, Trace
 - Tencent
 - [Tetrate](https://tetrate.io)
 - [SegmentFault 思否](https://segmentfault.com)
+
+## Anti-harassment policy
+SkyWalkingDay is dedicated to providing a harassment-free experience for everyone. We do not tolerate harassment of participants in any form. Sexual language and imagery will also not be tolerated in any event venue. Participants violating these rules may be sanctioned or expelled without a refund, at the discretion of the event organizers. Our anti-harassment policy can be found at [Apache website](https://www.apache.org/foundation/policies/anti-harassment.html).
 
 ## Contact Us
 Send mail to dev@skywalking.apache.org.
