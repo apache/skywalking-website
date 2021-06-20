@@ -24,11 +24,11 @@
 <meta property="og:type" content="article" />
 <meta property="og:url" content="/zh/observe-service-mesh-with-skywalking-and-envoy-access-log-service/" />
 <meta property="article:published_time" content="2020-12-03T00:00:00+00:00" />
-<meta property="article:modified_time" content="2021-06-18T21:16:15+08:00" />
+<meta property="article:modified_time" content="2021-06-20T03:57:25-05:00" />
 <meta itemprop="name" content="使用 SkyWalking 和 Envoy 访问日志服务对服务网格进行观察">
 <meta itemprop="description" content="本文将详细介绍如何摆脱 Istio Mixer 使用 Apache SkyWalking 来观测 service mesh">
 <meta itemprop="datePublished" content="2020-12-03T00:00:00+00:00" />
-<meta itemprop="dateModified" content="2021-06-18T21:16:15+08:00" />
+<meta itemprop="dateModified" content="2021-06-20T03:57:25-05:00" />
 <meta itemprop="wordCount" content="572">
 
 
@@ -53,8 +53,8 @@ if (!doNotTrack) {
 
 
 
-<link rel="preload" href="/scss/main.min.66a960a64ec7676a6fd5cefba49c8aa2b142485874a87acb87369c5698face6b.css" as="style">
-<link href="/scss/main.min.66a960a64ec7676a6fd5cefba49c8aa2b142485874a87acb87369c5698face6b.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.183547de3e7337ab8639ed4b1e14334ce5038fdec7dd30707617ff0837722518.css" as="style">
+<link href="/scss/main.min.183547de3e7337ab8639ed4b1e14334ce5038fdec7dd30707617ff0837722518.css" rel="stylesheet" integrity="">
 
 
 
@@ -229,102 +229,102 @@ if (!doNotTrack) {
 <h3 id="安装-kubernetes">安装 Kubernetes</h3>
 <p>在 Kubernetes 和虚拟机器（VM）的环境下，SkyWalking 8.3.0 均支持 Envoy ALS 的方案。在本教程中，我们只会演示在 Kubernetes 的情境，至于 VM 方案，请耐心期待我们下一篇文章。所以在进行下一步之前，我们需要先安装 Kubernetes。</p>
 <p>在本教程中，我们会使用 <a href="https://minikube.sigs.k8s.io/docs/">Minikube</a> 工具来快速设立本地的 Kubernetes（v1.17 版本）集群用作测试。要运行所有必要组件，包括 bookinfo 应用、SkyWalking OAP 和 WebUI，集群需要动用至少 4GB 内存和 2 个 CPU 的核心。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-minikube start --memory<span style="color:#f92672">=</span><span style="color:#ae81ff">4096</span> --cpus<span style="color:#f92672">=</span><span style="color:#ae81ff">2</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+minikube start --memory<span style="color:#000;font-weight:bold">=</span><span style="color:#099">4096</span> --cpus<span style="color:#000;font-weight:bold">=</span><span style="color:#099">2</span>
 </code></pre></div><p>然后，运行 <code>kubectl get pods --namespace=kube-system --watch</code>，检查所有 Kubernetes 的组件是否已准备好。如果还没，在进行下一步前，请耐心等待准备就绪。</p>
 <h3 id="安装-istio">安装 Istio</h3>
 <p>Istio 为配置 Envoy 代理和实现访问日志服务提供了一个非常方便的方案。内建的配置设定档为我们省去了不少手动的操作。所以，考虑到演示的目的，我们会在本教程全程使用 Istio。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-export ISTIO_VERSION<span style="color:#f92672">=</span>1.7.1
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+<span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.7.1
 
 curl -L https://istio.io/downloadIstio | sh - 
 
-sudo mv $PWD/istio-$ISTIO_VERSION/bin/istioctl /usr/local/bin/
+sudo mv <span style="color:#008080">$PWD</span>/istio-<span style="color:#008080">$ISTIO_VERSION</span>/bin/istioctl /usr/local/bin/
 
-istioctl  install --set profile<span style="color:#f92672">=</span>demo
+istioctl  install --set <span style="color:#008080">profile</span><span style="color:#000;font-weight:bold">=</span>demo
 
-kubectl label namespace default istio-injection<span style="color:#f92672">=</span>enabled
+kubectl label namespace default istio-injection<span style="color:#000;font-weight:bold">=</span>enabled
 </code></pre></div><p>然后，运行 <code>kubectl get pods --namespace=istio-system --watch</code>，检查 Istio 的所有组件是否已准备好。如果还没，在进行下一步前，请耐心等待准备就绪。</p>
 <h3 id="启动访问日志服务">启动访问日志服务</h3>
 <p>演示的设定档没有预设启动 ALS，我们需要重新配置才能够启动 ALS。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-istioctl  manifest install <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set meshConfig.enableEnvoyAccessLogService<span style="color:#f92672">=</span>true <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set meshConfig.defaultConfig.envoyAccessLogService.address<span style="color:#f92672">=</span>skywalking-oap.istio-system:11800
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+istioctl  manifest install <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set meshConfig.enableEnvoyAccessLogService<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set meshConfig.defaultConfig.envoyAccessLogService.address<span style="color:#000;font-weight:bold">=</span>skywalking-oap.istio-system:11800
 </code></pre></div><p>范例指令 <code>--set meshConfig.enableEnvoyAccessLogService=true</code> 会在网格中启动访问日志服务。正如之前提到，ALS 本质上是一个会发放请求日志的 gRPC 服务。配置 <code>meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800</code> 会告诉这个gRPC 服务往哪里发送日志，这里是往 <code>skywalking-oap.istio-system:11800</code> 发送，稍后我们会部署 SkyWalking ALS 接收器到这个地址。</p>
 <p><strong>注意</strong>︰</p>
 <p>你也可以在安装 Istio 时启动 ALS，那就不需要在安装后重新启动 Istio︰</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-istioctl install --set profile<span style="color:#f92672">=</span>demo <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-               --set meshConfig.enableEnvoyAccessLogService<span style="color:#f92672">=</span>true <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-               --set meshConfig.defaultConfig.envoyAccessLogService.address<span style="color:#f92672">=</span>skywalking-oap.istio-system:11800
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+istioctl install --set <span style="color:#008080">profile</span><span style="color:#000;font-weight:bold">=</span>demo <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+               --set meshConfig.enableEnvoyAccessLogService<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+               --set meshConfig.defaultConfig.envoyAccessLogService.address<span style="color:#000;font-weight:bold">=</span>skywalking-oap.istio-system:11800
 
-kubectl label namespace default istio-injection<span style="color:#f92672">=</span>enabled
+kubectl label namespace default istio-injection<span style="color:#000;font-weight:bold">=</span>enabled
 </code></pre></div><h3 id="部署-apache-skywalking">部署 Apache SkyWalking</h3>
 <p>SkyWalking 社区提供了 Helm Chart ，让你更轻易地在 Kubernetes 中部署 SkyWalking 以及其依赖服务。 Helm Chart 可以在 <a href="https://github.com/apache/skywalking-kubernetes">GitHub 仓库</a>找到。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-<span style="color:#75715e"># Install Helm</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+<span style="color:#998;font-style:italic"># Install Helm</span>
 
 curl -sSLO https://get.helm.sh/helm-v3.0.0-linux-amd64.tar.gz
 
-sudo tar xz -C /usr/local/bin --strip-components<span style="color:#f92672">=</span><span style="color:#ae81ff">1</span> linux-amd64/helm -f helm-v3.0.0-linux-amd64.tar.gz
+sudo tar xz -C /usr/local/bin --strip-components<span style="color:#000;font-weight:bold">=</span><span style="color:#099">1</span> linux-amd64/helm -f helm-v3.0.0-linux-amd64.tar.gz
 
-<span style="color:#75715e"># Clone SkyWalking Helm Chart</span>
+<span style="color:#998;font-style:italic"># Clone SkyWalking Helm Chart</span>
 
 git clone https://github.com/apache/skywalking-kubernetes
 
-cd skywalking-kubernetes/chart
+<span style="color:#0086b3">cd</span> skywalking-kubernetes/chart
 
 git reset --hard dd749f25913830c47a97430618cefc4167612e75
 
-<span style="color:#75715e"># Update dependencies</span>
+<span style="color:#998;font-style:italic"># Update dependencies</span>
 
 helm dep up skywalking
 
-<span style="color:#75715e"># Deploy SkyWalking</span>
+<span style="color:#998;font-style:italic"># Deploy SkyWalking</span>
 
-helm -n istio-system install skywalking skywalking <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set oap.storageType<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;h2&#39;</span><span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set ui.image.tag<span style="color:#f92672">=</span>8.3.0 <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set oap.image.tag<span style="color:#f92672">=</span>8.3.0-es7 <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set oap.replicas<span style="color:#f92672">=</span><span style="color:#ae81ff">1</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS<span style="color:#f92672">=</span>k8s-mesh <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set oap.env.JAVA_OPTS<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;-Dmode=&#39;</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set oap.envoy.als.enabled<span style="color:#f92672">=</span>true <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>
-        --set elasticsearch.enabled<span style="color:#f92672">=</span>false
+helm -n istio-system install skywalking skywalking <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set oap.storageType<span style="color:#000;font-weight:bold">=</span><span style="color:#d14">&#39;h2&#39;</span><span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set ui.image.tag<span style="color:#000;font-weight:bold">=</span>8.3.0 <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set oap.image.tag<span style="color:#000;font-weight:bold">=</span>8.3.0-es7 <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set oap.replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">1</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS<span style="color:#000;font-weight:bold">=</span>k8s-mesh <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set oap.env.JAVA_OPTS<span style="color:#000;font-weight:bold">=</span><span style="color:#d14">&#39;-Dmode=&#39;</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set oap.envoy.als.enabled<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>
+        --set elasticsearch.enabled<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">false</span>
 </code></pre></div><p>我们在 <code>istio-system</code> 的命名空间内部署 SkyWalking，使 SkyWalking OAP 服务可以使用地址 <code>skywalking-oap.istio-system:11800</code> 访问，在上一步中，我们曾告诉过 ALS 应往此处发放它们的日志。</p>
 <p>我们也在 SkyWalking OAP 中启动 ALS 分析器︰<code>oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS=k8s-mesh</code>。分析器会对访问日志进行分析，并解析日志中的 IP 地址和 Kubernetes 中的真实服务名称，以建立拓扑。</p>
 <p>为了从 Kubernetes 集群处获取元数据（例如 Pod IP 和服务名称），以识别相应的 IP 地址，我们还会设定 <code>oap.envoy.als.enabled=true</code>，用来申请一个对元数据有访问权的 <code>ClusterRole</code>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-export POD_NAME<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>kubectl get pods -A -l <span style="color:#e6db74">&#34;app=skywalking,release=skywalking,component=ui&#34;</span> -o name<span style="color:#66d9ef">)</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+<span style="color:#0086b3">export</span> <span style="color:#008080">POD_NAME</span><span style="color:#000;font-weight:bold">=</span><span style="color:#000;font-weight:bold">$(</span>kubectl get pods -A -l <span style="color:#d14">&#34;app=skywalking,release=skywalking,component=ui&#34;</span> -o name<span style="color:#000;font-weight:bold">)</span>
 
-echo $POD_NAME
+<span style="color:#0086b3">echo</span> <span style="color:#008080">$POD_NAME</span>
 
-kubectl -n istio-system port-forward $POD_NAME 8080:8080
+kubectl -n istio-system port-forward <span style="color:#008080">$POD_NAME</span> 8080:8080
 </code></pre></div><p>现在到你的浏览器上访问 <a href="http://localhost:8080/">http://localhost:8080</a>。你应该会看到 SkyWalking 的 Dashboard。 Dashboard 现在应该是空的，但稍后部署应用和生成流量后，它就会被填满。</p>
 <p><img src="../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-3.01.03-PM.png" alt=""></p>
 <h3 id="部署-bookinfo-应用">部署 Bookinfo 应用</h3>
 <p>运行︰</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
-export ISTIO_VERSION<span style="color:#f92672">=</span>1.7.1
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">
+<span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.7.1
 
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/$ISTIO_VERSION/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/platform/kube/bookinfo.yaml
 
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/$ISTIO_VERSION/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/bookinfo-gateway.yaml
 
-kubectl wait --for<span style="color:#f92672">=</span>condition<span style="color:#f92672">=</span>Ready pods --all --timeout<span style="color:#f92672">=</span>1200s
+kubectl <span style="color:#0086b3">wait</span> --for<span style="color:#000;font-weight:bold">=</span><span style="color:#008080">condition</span><span style="color:#000;font-weight:bold">=</span>Ready pods --all --timeout<span style="color:#000;font-weight:bold">=</span>1200s
 
 minikube tunnel
 </code></pre></div><p>现在到你的浏览器上进入 <a href="http://localhost/productpage">http://localhost/productpage</a>。你应该会看到典型的 bookinfo 应用画面。重新整理该页面几次，以生成足够的访问日志。</p>
