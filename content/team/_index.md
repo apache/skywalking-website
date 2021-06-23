@@ -32,7 +32,7 @@ Members include Project Management Committee members and committers. The list is
 | Lang Li                          | lilang       |                                                |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
-| Ruixian Wang                     | Sheng Wu (V.P. and Chair of PMC) | wusheng      | [wusheng1108](https://twitter.com/wusheng1108) |
+| Sheng Wu (V.P. and Chair of PMC) | wusheng      | [wusheng1108](https://twitter.com/wusheng1108) |
 | Shinn Zhang                      | zhangxin     | [ascrutae](https://twitter.com/ascrutae)       |
 | Wei Zhang                        | zhangwei24   |                                                |
 | Wenbing Wang                     | wangwenbin   |                                                |
