@@ -5,6 +5,7 @@ author: "SKyWalking"
 description: "SkyWalking Day 2021 讲师视频，请到 B 站观看。"
 zh_tags:
 - Video
+- Conference
 ---
 
 时间：2021 年 6 月 26 日
