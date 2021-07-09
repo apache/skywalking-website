@@ -72,7 +72,8 @@ class GenerateTeamYaml {
   }
 
   async getRepoContributors({user, repo, page = 1, per_page = 100, list = [], item}) {
-    const {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true`)
+    let {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true`)
+    data = data.filter(item => item.type !== 'Bot')
     list.push(...data)
     this.getUniqueId(data)
     if (data.length === per_page) {
