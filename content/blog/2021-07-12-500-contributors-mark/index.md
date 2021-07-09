@@ -14,7 +14,7 @@ SkyWalking is an open source APM(application performance monitor) system, especi
 
 From 2020, it has dominated the open source APM market in China, and expanded aggressively in North American, Euro and Asia's other countries.
 
-With over 6 years(2015-2021) development, driven the globale open source community, SkyWalking now provide full stack observability covering metrics, tracing and logging, plus event detector, which are built based on various native and ecosystem solution.
+With over 6 years(2015-2021) development, driven by the global open source community, SkyWalking now provides full stack observability covering metrics, tracing and logging, plus event detector, which are built based on various native and ecosystem solution.
 
 1. Language agents(Java, Dot Net, Golang, PHP, NodeJS, Python, C++, LUA) based in-process monitoring, are as powerful as commercial APM vendors' agents. Mostly auto-instrumentation, and good interactivity.
 2. Provide Service Mesh Observability, working closely with Envoy and Istio teams.
@@ -39,6 +39,5 @@ We nearly double the number of contributors in the last year, from ~300 to over 
 **This is a hard-won and impressive achievement. We wouldn't stop here, the trend is there, the ground is solid, we are going to build the top level APM system relying on our open-source community.**
 
 ### Contributors List
-
 
 
