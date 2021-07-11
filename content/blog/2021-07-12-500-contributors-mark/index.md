@@ -5,7 +5,7 @@ author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github
 description: "SkyWalking has over 500 contributors based on GitHub repository statistics. This is a remarkable achievement for the whole diverse community."
 startTime: 2021-07-01T00:00:00Z
 endTime: 2021-08-01T10:00:00Z
-img: /images/500-mark.png
+poster: /images/500-mark.png
 ---
 
 ![](500-mark.png)

@@ -46,7 +46,7 @@ description: This is description.
 Content
 ```
 
-If you want to display the event in the bottom right popover, you can configure the parameter `endTime`. The parameters are as follows.
+If you want to display the summary in the popover in the lower right corner, you need to configure a parameter `endTime`. The parameters are as follows.
 
 |Parameter|Description|Required|Default|
 |----|----|----|----|
