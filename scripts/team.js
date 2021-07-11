@@ -11,13 +11,13 @@ class GenerateTeamYaml {
   constructor(docsFile, teamFile) {
     this.docsFile = docsFile;
     this.teamFile = teamFile;
+    this.nativeObject = [];
+    this.logins = {};
   }
-
-  nativeObject = []
-  ids = {}
 
   async init() {
     try{
+      console.log('start...');
       this.nativeObject = await this.loadYaml(docsFile);
       await this.getAllRepoContributors()
       await this.writeFile()
@@ -44,22 +44,12 @@ class GenerateTeamYaml {
 
   async writeFile() {
     const data = {
-      totalCount: Object.keys(this.ids).length,
+      totalCount: Object.keys(this.logins).length,
       projects: this.nativeObject
     }
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
     console.log('team.yml success!');
-  }
-
-  getUniqueId(list) {
-    list.forEach(item => {
-      const {id, email,} = item;
-      const key = id || email
-      if (!this.ids[key]) {
-        this.ids[key] = key
-      }
-    })
   }
 
   async loadYaml() {
@@ -71,11 +61,23 @@ class GenerateTeamYaml {
     return data
   }
 
+  handleData(data) {
+    return data
+        .filter((item) => item.type !== 'Bot')
+        .map((item) => {
+          const { type, email } = item;
+          if (type === 'Anonymous') {
+            item.login = email.replace(/(.+)@.+/, '$1**');
+          }
+          this.logins[item.login] = item.login;
+          return item;
+        });
+  }
+
   async getRepoContributors({user, repo, page = 1, per_page = 100, list = [], item}) {
-    let {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true`)
-    data = data.filter(item => item.type !== 'Bot')
+    let {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
+    data = this.handleData(data);
     list.push(...data)
-    this.getUniqueId(data)
     if (data.length === per_page) {
       page++;
       await this.getRepoContributors({user, repo, page, per_page, list, item})
