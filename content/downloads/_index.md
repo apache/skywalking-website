@@ -28,7 +28,7 @@ Use the links below to download the Apache SkyWalking from one of our mirrors.
 
 It is essential that you verify the integrity of the downloaded files using the PGP or SHA signatures. The PGP signatures can be verified using GPG or PGP. Please download the KEYS as well as the asc signature files for relevant distribution. It is recommended to get these files from the main distribution directory and not from the mirrors.
 
-```bash
+```
 gpg -i KEYS
 
 or
@@ -42,7 +42,7 @@ pgp -ka KEYS
 
 To verify the binaries/sources you can download the relevant asc files for it from main distribution directory and follow the below guide.
 
-```bash
+```
 gpg --verify apache-skywalking-apm-********.asc apache-skywalking-apm-*********
 
 or
