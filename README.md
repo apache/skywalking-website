@@ -58,7 +58,7 @@ If you want to display the summary in the popover in the lower right corner, you
 
 ### Blog
 
-Located at `content/blog`. If you don't want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.
+Located at `content/blog`. If you want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.
 
 ```yaml
 ---
@@ -82,7 +82,7 @@ This is a single page located at `content/team/_index.md`.
 
 ### 中文博客
 
-Located at `content/zh`. If you don't want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.
+Located at `content/zh`. If you want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.
 
 ```yaml
 ---
