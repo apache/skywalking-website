@@ -160,7 +160,7 @@ async function traverseDocsList(result) {
           }
           const docName = repo === 'skywalking' ? 'main' : repo;
           const localPath = `/content/docs/${docName}/${version}`;
-          const menuFileName = `${docName}${version}`.replace(/\-|v|\./g, '_');
+          const menuFileName = `${docName.replace(/\-|\./g, '_')}${version.replace(/\-|v|\./g, '_')}`;
           docsInfo.push({localPath, repoUrl, commitId, date, docName, version})
 
           tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
