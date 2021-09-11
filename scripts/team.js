@@ -33,7 +33,9 @@ class GenerateTeamYaml {
       for (const item of k.list) {
         const {user, repo} = item
         const list = []
-        promiseList.push(this.getRepoContributors({user, repo, list, item}))
+        if(user && repo){
+          promiseList.push(this.getRepoContributors({user, repo, list, item}))
+        }
 
       }
 
