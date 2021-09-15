@@ -97,7 +97,7 @@ description: 博客摘要
 
 ### User Wall
 
-All user information are in `/data/homepage.yml`. Users are encouraged to add themselves to this page.
+All user information are in `/data/users.yml`. Users are encouraged to add themselves to this page.
 
 ### Links
 
