@@ -75,9 +75,6 @@ Members include Project Management Committee members and committers. The list is
 
 
 
-- [SkyWalking UI](https://github.com/apache/skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
-- [SkyWalking OAL tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
-
 ## Contributor over time
 
 <div><img style="width:100%;max-width:unset" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/></div>
