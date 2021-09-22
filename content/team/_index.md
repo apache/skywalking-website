@@ -75,20 +75,15 @@ Members include Project Management Committee members and committers. The list is
 
 
 
-Archived
-
-- [SkyWalking UI](https://github.com/apache/skywalking-ui/graphs/contributors). Replaced by RocketBot UI.
-- [SkyWalking OAL tool](https://github.com/apache/skywalking-oal-tool/graphs/contributors)
-
 ## Contributor over time
 
 <div><img style="width:100%;max-width:unset" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/></div>
 
 ## Becoming a Committer
 
-SkyWalking follows the Apache way to build the community. Anyone can become a committer once they have contributed sufficiently to the project and earned the trust. Read [Contributing Guides](https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md) to take part in the community.
+SkyWalking follows the Apache way to build the community. Anyone can become a committer once they have contributed sufficiently to the project and earned the trust. Read [Contributing Guides](https://skywalking.apache.org/docs/main/latest/en/guides/readme/) to take part in the community.
 
-The SkyWalking community follows the [Apache Community’s process](http://community.apache.org/newcommitter.html) on accepting a new committer.
+The SkyWalking community follows the [Apache SkyWalking committer process](https://skywalking.apache.org/docs/main/latest/en/guides/asf/committer/) on accepting a new committer.
 
 1. Start the discussion and vote in @private. Only current PMC member could nominate.
 1. If the vote passes, send an offer to become a committer with @private CC’ed.
