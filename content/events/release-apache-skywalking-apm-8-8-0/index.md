@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking APM 8.8.0
-date: 2021-09-28
+date: 2021-09-27
 author: SkyWalking Team
 description: "Release Apache SkyWalking 8.8.0."
 endTime: 2021-07-01T10:00:00Z
