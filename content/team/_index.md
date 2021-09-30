@@ -28,6 +28,7 @@ Members include Project Management Committee members and committers. The list is
 | Jiaqi Lin                        | linjiaqi     |                                                |
 | Jinlin Fu                        | withlin      |                                                |
 | Juntao Zhang                     | zhangjuntao  |                                                |
+| Kai Wan                          | wankai       | [wankai123](https://twitter.com/wankai123)     |
 | Kai Wang                         | wangkai      |                                                |
 | Lang Li                          | lilang       |                                                |
 | Michael Semb Wever               | mck          |                                                |
@@ -55,7 +56,6 @@ Members include Project Management Committee members and committers. The list is
 | Huaxi Jiang       | hoshea      | [Zerone___01](https://twitter.com/Zerone___01)   |
 | Jiapeng Liu       | liujiapeng  |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
-| Kai Wan           | wankai      | [wankai123](https://twitter.com/wankai123)       |
 | Ke Zhang          | zhangke     | [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
 | Ruixian Wang      | ax1an       | [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
