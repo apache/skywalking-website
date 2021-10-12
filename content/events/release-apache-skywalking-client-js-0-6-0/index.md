@@ -4,7 +4,7 @@ date: 2021-07-11
 author: SkyWalking Team
 ---
 
-SkyWalking Client JS 0.5.1 is released. Go to [downloads](/downloads) page to find release tars.
+SkyWalking Client JS 0.6.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 1. Separate production and development environments when building.
 2. Upgrade packages to fix vulnerabilities.
