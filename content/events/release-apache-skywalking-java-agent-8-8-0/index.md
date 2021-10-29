@@ -3,7 +3,6 @@ title: Release Apache SkyWalking Java Agent 8.8.0
 date: 2021-10-29
 author: SkyWalking Team
 description: "Release Apache SkyWalking Java Agent 8.8.0."
-endTime: 2021-07-01T10:00:00Z
 ---
 
 SkyWalking Java Agent 8.8.0 is released. Go to [downloads](/downloads) page to find release tars.
