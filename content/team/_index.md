@@ -66,6 +66,7 @@ Members include Project Management Committee members and committers. The list is
 | Weijie Zou        | kdump       | [RootShellExp](https://twitter.com/RootShellExp) |
 | Weiyi Liu         | wayilau     |                                                  |
 | Yanlong He        | heyanlong   | [YanlongHe](https://twitter.com/YanlongHe)       |
+| Yihao Chen        | yihaochen   | [Superskyyy](https://twitter.com/Superskyyyyy)   |
 | Yuntao Li         | liyuntao    |                                                  |
 | Zhusheng Xu       | aderm       |                                                  |
 
