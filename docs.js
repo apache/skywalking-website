@@ -70,7 +70,7 @@ function isImage(file) {
 
 function replaceMarkdownText(codeTxt, docInfo, filePath) {
   if (!/^([\s]*)(---[\s\S]*---)/.test(codeTxt)) {
-    const {repoUrl, commitId, date, docName, version} = docInfo;
+    const {repoUrl, commitId, docName, version} = docInfo;
     const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`;
     const depth = filePath.split('/docs')[1].match(/\//g).length - 2;
 
@@ -81,7 +81,6 @@ function replaceMarkdownText(codeTxt, docInfo, filePath) {
     codeTxt =
         `---
 title: ${title}
-date: ${date}
 type: projectDoc
 layout: baseof
 ---\n` + codeTxt;
@@ -146,46 +145,36 @@ async function traverseDocsList(result) {
       }
       for (const doc of item.docs) {
         const {repo, repoUrl, docs} = item;
+        if (!repoUrl) continue;
         let {version, commitId} = doc;
-        let date;
-        if (version === 'latest') {
-          const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits?page=1&per_page=1`)
-          commitId = res.data[0].sha;
-          date = res.data[0].commit.author.date;
-        }
-        if (commitId) {
-          if (!date) {
-            const res = await axios.get(`https://api.github.com/repos/apache/${repo}/commits/${commitId}`)
-            date = res.data.commit.author.date;
-          }
-          const docName = repo === 'skywalking' ? 'main' : repo;
-          const localPath = `/content/docs/${docName}/${version}`;
-          const menuFileName = `${docName.replace(/\-|\./g, '_')}${version.replace(/\-|v|\./g, '_')}`;
-          docsInfo.push({localPath, repoUrl, commitId, date, docName, version})
+        commitId = commitId || version;
+        const docName = repo === 'skywalking' ? 'main' : repo;
+        const localPath = `/content/docs/${docName}/${version}`;
+        const menuFileName = `${docName.replace(/\-|\./g, '_')}${version.replace(/\-|v|\./g, '_')}`;
+        docsInfo.push({localPath, repoUrl, commitId, docName, version})
 
-          tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
-                    {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
-                    <h5>Documentation: 
-                    <select class="version-select">
-                    {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
-                    {{$version := .version}}
-                    <option {{ cond (eq $currentVersion $version) "selected" "" }} value="{{$version}}">{{$version}}</option>
-                    {{end}}
-                    </select>
-                    </h5>
-                    
-                    {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
-                    <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
-                  {{ end }}\n`;
+        tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
+                  {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
+                  <h5>Documentation: 
+                  <select class="version-select">
+                  {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
+                  {{$version := .version}}
+                  <option {{ cond (eq $currentVersion $version) "selected" "" }} value="{{$version}}">{{$version}}</option>
+                  {{end}}
+                  </select>
+                  </h5>
+                  
+                  {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
+                  <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
+                {{ end }}\n`;
 
-          execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
+        execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
 
-          await handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {
-            version,
-            commitId,
-            docs,
-          }, `/docs/${docName}/${version}`)
-        }
+        await handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {
+          version,
+          commitId,
+          docs,
+        }, `/docs/${docName}/${version}`)
       }
 
     }

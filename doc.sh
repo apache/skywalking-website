@@ -1,5 +1,6 @@
 #!/bin/bash
 set -o errexit
+set -x
 
 repo=$1
 repoUrl=$2
@@ -19,10 +20,14 @@ fi
 
 mkdir ./${repo}
 cd ./${repo}
-git init
-git remote add origin ${repoUrl}
-git fetch origin ${commitId}
-git reset --hard FETCH_HEAD
+if [ "$commitId" = "latest" ]; then
+  git clone --depth=1 ${repoUrl} .
+else
+  git init
+  git remote add origin ${repoUrl}
+  git fetch origin "$commitId"
+  git reset --hard FETCH_HEAD
+fi
 
 if [ -d "../../${localPath}" ]; then
   rm -rf ../../${localPath}
