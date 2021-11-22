@@ -1,12 +1,13 @@
-const fs = require("fs");
-const process = require("process");
-const path = require("path");
+const fs = require('fs');
+const process = require('process');
+const path = require('path');
 const YAML = require('yamljs');
-const axios = require('axios');
-const {execSync} = require("child_process");
+const {execSync} = require('child_process');
+
 const {promises} = fs;
 const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
+const LATEST = 'latest';
 
 init();
 
@@ -151,7 +152,6 @@ async function traverseDocsList(result) {
         const docName = repo === 'skywalking' ? 'main' : repo;
         const localPath = `/content/docs/${docName}/${version}`;
         const menuFileName = `${docName.replace(/\-|\./g, '_')}${version.replace(/\-|v|\./g, '_')}`;
-        docsInfo.push({localPath, repoUrl, commitId, docName, version})
 
         tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                   {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
@@ -169,6 +169,11 @@ async function traverseDocsList(result) {
                 {{ end }}\n`;
 
         execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
+        const sha = execSync(`git -C ./tmp/${repo} rev-parse HEAD`);
+        if(version === LATEST && sha){
+          commitId = sha.toString().replace('\n', '');
+        }
+        docsInfo.push({localPath, repoUrl, commitId, docName, version})
 
         await handleMenuFiles(`./data/docSidebar/${menuFileName}.yml`, {
           version,
