@@ -19,7 +19,7 @@ $(function () {
     $(this).next('.nav-dropdown').toggle()
   })
   $('.sidebar-button').on('click', function () {
-    $('.sidebar').toggle()
+    $('.sidebar').toggleClass('show')
     $('.sidebar-mask').toggle()
   })
   $('.sidebar-mask').on('click', function () {
