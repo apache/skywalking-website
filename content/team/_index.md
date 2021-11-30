@@ -32,7 +32,6 @@ Members include Project Management Committee members and committers. The list is
 | Kai Wang                         | wangkai      |                                                |
 | Lang Li                          | lilang       |                                                |
 | Michael Semb Wever               | mck          |                                                |
-| Qiang Li                         | liqiang      |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
 | Sheng Wu (V.P. and Chair of PMC) | wusheng      | [wusheng1108](https://twitter.com/wusheng1108) |
 | Shinn Zhang                      | zhangxin     | [ascrutae](https://twitter.com/ascrutae)       |
@@ -59,6 +58,7 @@ Members include Project Management Committee members and committers. The list is
 | JunXu Chen        | chenjunxu   |                                                  |
 | Ke Zhang          | zhangke     | [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
+| Qiang Li          | liqiang     |                                                  |
 | Ruixian Wang      | ax1an       | [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
 | Sheng Wang        | wangsheng   |                                                  |
 | Tomasz Pytel      | tompytel    |                                                  |
