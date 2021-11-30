@@ -3,8 +3,8 @@ title: "Chaos Mesh X SkyWalking: 可观测的混沌工程"
 date: 2021-11-29
 author: 王宁暄
 description: 本教程将分享如何通过将 SkyWalking 和 Chaos Mesh 结合，运用 Event 信息监控，实时了解混沌实验对应用服务性能造成的影响。
- zh_tags:
- - User Manual                                          
+zh_tags:
+- User Manual                                          
 ---
 [Chaos Mesh](https://github.com/chaos-mesh/chaos-mesh) 是**一个开源的云原生混沌工程**平台，借助 Chaos Mesh，用户可以很方便地对服务注入异常故障，并配合 Chaos Dashboard 实现对整个混沌实验运行状况的监测 。然而，对混沌实验运行情况的监控并不能告诉我们应用服务性能的变化。从系统可观测性的角度来说，我们可能无法单纯通过混沌实验的动态了解故障的全貌，这也阻碍了我们对系统和故障的进一步了解，调试。
 
