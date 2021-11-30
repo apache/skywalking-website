@@ -58,6 +58,7 @@ Members include Project Management Committee members and committers. The list is
 | JunXu Chen        | chenjunxu   |                                                  |
 | Ke Zhang          | zhangke     | [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
+| Qiang Li          | liqiang     |                                                  |
 | Ruixian Wang      | ax1an       | [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
 | Sheng Wang        | wangsheng   |                                                  |
 | Tomasz Pytel      | tompytel    |                                                  |
