@@ -1,4 +1,11 @@
-## Extending Apache SkyWalking with non-breaking breakpoints
+---
+title: "Extending Apache SkyWalking with non-breaking breakpoints"
+date: 2021-12-16
+author: "Brandon Fergerson"
+description: "SkyWalking is designed for easy customization, and with the latest release of Source++, it is now easier than ever to extend existing SkyWalking installations with non-breaking breakpoints."
+tags:
+- Observability
+---
 
 Non-breaking breakpoints are breakpoints specifically designed for live production environments. With non-breaking breakpoints, reproducing production bugs locally or in staging is conveniently replaced with capturing them directly in production.
 
