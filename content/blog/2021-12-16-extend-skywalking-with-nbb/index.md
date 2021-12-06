@@ -2,7 +2,7 @@
 title: "Extending Apache SkyWalking with non-breaking breakpoints"
 date: 2021-12-16
 author: "Brandon Fergerson"
-description: "SkyWalking is designed for easy customization, and with the latest release of Source++, it is now easier than ever to extend existing SkyWalking installations with non-breaking breakpoints."
+description: "SkyWalking is designed for easy customization, and with the latest release of Source++, it is now easier than ever to add non-breaking breakpoints to existing SkyWalking installations."
 tags:
 - Observability
 ---
