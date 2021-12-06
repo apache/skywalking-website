@@ -62,7 +62,7 @@ With the [Live Instrument Processor](https://github.com/sourceplusplus/processor
 
 ![](./ide_breakpoint.png)
 
-The above should be a sight far more familiar to software developers. Beyond the fact that you can't step through execution, non-breaking breakpoints are designed to look and feel just like regular breakpoints.
+The above should be a sight far more familiar to software developers. Beyond the fact that you can't step through execution, non-breaking breakpoints look and feel just like regular breakpoints.
 
 ---
 
