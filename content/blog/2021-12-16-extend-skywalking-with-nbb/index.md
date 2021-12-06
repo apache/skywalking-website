@@ -1,6 +1,5 @@
 ---
 title: "Extending Apache SkyWalking with non-breaking breakpoints"
-date: 2021-12-16
 author: "Brandon Fergerson"
 description: "SkyWalking is designed for easy customization, and with the latest release of Source++, it is now easier than ever to add non-breaking breakpoints to existing SkyWalking installations."
 tags:
@@ -62,6 +61,8 @@ Finally, with all the previous parts installed, we're now at the component softw
 With the [Live Instrument Processor](https://github.com/sourceplusplus/processor-live-instrument) enabled, and the [JetBrains Plugin](https://github.com/sourceplusplus/interface-jetbrains) installed, non-breaking breakpoints appear as such:
 
 ![](./ide_breakpoint.png)
+
+The above should be a sight far more familiar to software developers. Beyond the fact that you can't step through execution, non-breaking breakpoints are designed to look and feel just like regular breakpoints.
 
 ---
 
