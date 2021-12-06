@@ -33,7 +33,7 @@ For a better idea of how Source++ works, take a look at the following diagram:
 
 ![](./enhanced_sw_setup.svg)
 
-In this diagram, the blue components represent existing SkyWalking architecture, and the black components represent Source++ architecture. Source++ can be broken down into the following components: platform, probe, processors, and interfaces. It is the combination of these components that enable developers to create live production breakpoints, logs, metrics, and traces.
+In this diagram, the blue components represent existing SkyWalking architecture, and the black components represent Source++ architecture. Source++ can be broken down into the following components: platform, probe, processors, and interfaces. It is the combination of these components that enable developers to capture production bugs.
 
 #### Live Probe
 
