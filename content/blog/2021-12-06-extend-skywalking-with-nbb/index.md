@@ -55,7 +55,7 @@ The [Live Platform](https://github.com/sourceplusplus/live-platform) is the core
 
 #### Live Interface
 
-Finally, with all the previous parts installed, we're now at the component software developers will find the most useful. A Live interface is what developers use to create, manage, and view non-breaking breakpoints, and so on. There are a few live interfaces available:
+Finally, with all the previous parts installed, we're now at the component software developers will find the most useful. A Live Interface is what developers use to create, manage, and view non-breaking breakpoints, and so on. There are a few live interfaces available:
 - [JetBrains Plugin](https://github.com/sourceplusplus/interface-jetbrains)
 - [CLI](https://github.com/sourceplusplus/interface-cli)
 
