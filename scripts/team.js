@@ -49,14 +49,15 @@ class GenerateTeamYaml {
   }
 
   async getMergedData({user, repo}) {
-    const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`)
-    console.log(res);
-    this.mergedData.push(res.data)
+    const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
+      headers: {'accept': 'application/json'},
+    });
+    this.mergedData.push(res.data);
   }
 
   buildMergedData(sources) {
     const maxSource = this.getMaxData(sources);
-    const maxWeekLen = maxSource[0].weeks.length
+    const maxWeekLen = maxSource[0].weeks.length;
     const data = [];
     const date = [];
 
@@ -77,7 +78,6 @@ class GenerateTeamYaml {
             }
           }
         }
-
       })
       const now = new Date(+(week + '000'));
       date.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
