@@ -66,7 +66,7 @@ class GenerateTeamYaml {
       const {w: week} = maxSource[0].weeks[i];
 
       sources.forEach(source => {
-        const len = source[0].weeks.length;
+        const len = source[0]?.weeks?.length || 0;
 
         for (let k = 0; k < len; k++) {
           const usersCount = source.length;
