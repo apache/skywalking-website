@@ -50,7 +50,10 @@ class GenerateTeamYaml {
 
   async getMergedData({user, repo}) {
     const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
-      headers: {'accept': 'application/json'},
+      headers: {
+        'accept': 'application/json',
+        'User-Agent': '',
+      },
     });
     this.mergedData.push(res.data);
   }
@@ -65,7 +68,7 @@ class GenerateTeamYaml {
       let num = 0;
       const {w: week} = maxSource[0].weeks[i];
 
-      sources.forEach(source => {
+      sources.forEach((source = []) => {
         const len = source[0]?.weeks?.length || 0;
 
         for (let k = 0; k < len; k++) {
