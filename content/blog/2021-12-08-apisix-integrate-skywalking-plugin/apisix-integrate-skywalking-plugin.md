@@ -1,20 +1,12 @@
 ---
 title: "Apache APISIX Integrates with SkyWalking to Create a Full Fange of Log Processing"
-author: "Haochao Zhuang"
-authorURL: "https://github.com/dmsolr"
-authorImageURL: "https://avatars.githubusercontent.com/u/29735230?v=4"
-keywords: 
-- Apache APISIX
-- Apache SkyWalking
-- Log Process
-- Plugin
-description: This paper mainly introduces two Apache APISIX integrated SkyWalking log plug-ins to provide a more convenient operation and environment for log processing in Apache APISIX.
-tags: [Technology]
+author: "[Haochao Zhuang](https://github.com/dmsolr)"
+date: 2021-12-08
+description: "This paper mainly introduces two Apache APISIX integrated SkyWalking log plug-ins to provide a more convenient operation and environment for log processing in Apache APISIX."
+tags:
+- Observability
+- APISIX
 ---
-
-> This paper mainly introduces two Apache APISIX integrated SkyWalking log plug-ins to provide a more convenient operation and environment for log processing in Apache APISIX.
-
-<!--truncate-->
 
 In the field of observability, the three main directions of data collection and analysis, Metrics, Logger and Tracing, are usually used to achieve insight into the operational status of applications.
 
@@ -38,7 +30,7 @@ The SkyWalking Logger plugin parses the SkyWalking Tracing Context Header and pr
 
 By using this plug-in, Apache APISIX can get the SkyWalking Tracing Context and associate it with Tracing even if the SkyWalking Tracing plug-in is not turned on, if Apache SkyWalking is already integrated downstream.
 
-![Log content](https://static.apiseven.com/202108/1638781626018-da50a39d-da16-4914-b4f5-8ac9b4312e19.png)
+![](./log_content.png)
 
 The above Content is the log content, where the Apache APISIX metadata configuration is used to collect request-related information. You can later modify the Log Format to customize the log content by Plugin Metadata, please refer to the [official documentation.](https://apisix.apache.org/docs/apisix/plugins/skywalking-logger#metadata)
 
@@ -112,11 +104,11 @@ rules:
 
 After configuring the above LAL script in SkyWalking OAP Server the following log will be displayed.
 
-![LALscript details](https://static.apiseven.com/202108/1638781696137-6ba3a486-08c0-49e1-bc57-e144f95918a2.png)
+![](./LALscript_details.png)
 
 Details of the expanded log are as follows.
 
-![Expanded log](https://static.apiseven.com/202108/1638781751540-d597ace7-1de1-4baf-b361-1c136dfe5e05.png)
+![](./expanded_log.png)
 
 As you can see from the above, displaying `routeId`, `upstream` and `clientIp` as key-value pairs is much easier than searching directly in the log body. This is because the Tag format not only supports log display format and search, but also generates information such as Metrics using MAL statistics.
 
@@ -126,7 +118,7 @@ The error-log-logger plug-in now supports the SkyWalking log format, and you can
 
 The main reason for the error log to be integrated into SkyWalking is to centralize the Apache APISIX log data and to make it easier to view all observable data within SkyWalking.
 
-![SkyWalking dashboard](https://static.apiseven.com/202108/1638781827612-f7d88e0e-0159-44ba-bc1e-b718695bc3b8.png)
+![](./skywalking_dashboard.png)
 
 #### How to Use
 
