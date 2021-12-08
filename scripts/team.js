@@ -56,7 +56,7 @@ class GenerateTeamYaml {
           'User-Agent': '',
         },
       });
-      this.mergedData.push(res?.data || []);
+      this.mergedData.push(res && res.data || []);
     } catch (e) {
     }
   }
@@ -72,14 +72,17 @@ class GenerateTeamYaml {
       const {w: week} = maxSource[0].weeks[i];
 
       sources.forEach((source = []) => {
-        const len = source[0] && source[0].weeks?.length || 0;
+        if (!source[0] || !source[0].weeks) {
+          return;
+        }
+        const len = source[0].weeks.length;
 
         for (let k = 0; k < len; k++) {
           const usersCount = source.length;
-          const curWeek = source[0]?.weeks[k]?.w;
+          const curWeek = source[0].weeks[k] && source[0].weeks[k].w;
           if (curWeek === week) {
             for (let j = 0; j < usersCount; j++) {
-              const {c} = source[j]?.weeks[k]
+              const {c} = source[j] && source[j].weeks[k]
               num += c
             }
           }
