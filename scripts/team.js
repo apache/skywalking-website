@@ -49,14 +49,16 @@ class GenerateTeamYaml {
   }
 
   async getMergedData({user, repo}) {
-    const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
-      headers: {
-        'accept': 'application/json',
-        'User-Agent': '',
-      },
-    });
-    console.log('res.data', res.data)
-    this.mergedData.push(res.data);
+    try {
+      const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
+        headers: {
+          'accept': 'application/json',
+          'User-Agent': '',
+        },
+      });
+      this.mergedData.push(res?.data || []);
+    } catch (e) {
+    }
   }
 
   buildMergedData(sources) {
@@ -70,7 +72,7 @@ class GenerateTeamYaml {
       const {w: week} = maxSource[0].weeks[i];
 
       sources.forEach((source = []) => {
-        const len = source[0]?.weeks?.length || 0;
+        const len = source[0] && source[0].weeks?.length || 0;
 
         for (let k = 0; k < len; k++) {
           const usersCount = source.length;
@@ -110,7 +112,6 @@ class GenerateTeamYaml {
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
 
-    console.log('this.mergedData', this.mergedData);
     const mergedGraphData = this.buildMergedData(this.mergedData)
     await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
     console.log('team.yml & mergedData.js success!');
