@@ -55,6 +55,7 @@ class GenerateTeamYaml {
         'User-Agent': '',
       },
     });
+    console.log('res.data', res.data)
     this.mergedData.push(res.data);
   }
 
@@ -109,6 +110,7 @@ class GenerateTeamYaml {
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
 
+    console.log('this.mergedData', this.mergedData);
     const mergedGraphData = this.buildMergedData(this.mergedData)
     await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
     console.log('team.yml & mergedData.js success!');
