@@ -97,12 +97,14 @@ Before giving any example, we set time display type as long (CLI: `set time_disp
 In our design, we choose `id`, `entity_id`, `node_type`, `service_id`, `service_group`, `trace_id` as indexes and fix their appearance order. The value of these indexed fields store in the path with double quotation mark wrapping, just like `"value"`.
 
 There is a model named `service_traffic` with fields `id`, `time_bucket`, `name`, `node_type`, `service_group`. In order to see its data, we could use a query SQL: `select * from root.skywalking.service_traffic align by device`. `root.skywalking` is the default storage group and `align by device` could return a more friendly result. The query result is following:
+
 | Time          | Device                                                                      | name                   |
 | ------------- | --------------------------------------------------------------------------- | ---------------------- |
 | 1637919540000 | root.skywalking.service_traffic."YXBwbGljYXRpb24tZGVtbw==.1"."0".""         | application-demo       |
 | 1637919600000 | root.skywalking.service_traffic."YXBwbGljYXRpb24tZGVtby1teXNxbA==.1"."0"."" | application-demo-mysql |
 
 Another example model is `service_cpm` which has fields `id`, `service_id`, `total`, `value`. Query its data with `select * from root.skywalking.service_cpm align by device`. The result is following:
+
 | Time          | Device                                                                                                             | total | value |
 | ------------- | ------------------------------------------------------------------------------------------------------------------ | ----- | ----- |
 | 1637919540000 | root.skywalking.service_cpm."202111261739_YXBwbGljYXRpb24tZGVtbw==.1"."YXBwbGljYXRpb24tZGVtbw==.1"                 | 2     | 2     |
@@ -110,6 +112,7 @@ Another example model is `service_cpm` which has fields `id`, `service_id`, `tot
 | 1637917200000 | root.skywalking.service_cpm."2021112617_YXBwbGljYXRpb24tZGVtbw==.1"."YXBwbGljYXRpb24tZGVtbw==.1"                   | 2     | 0     |
 
 For the first data of `service_traffic`, the mapping between fields and values is following. Notice, all `time_bucket` are converted to `timestamp`(also named `time` in IoTDB) and the value of all indexed fields are stored in the Device path.
+
 | Field                            | Value                      |
 | -------------------------------- | -------------------------- |
 | id(indexed)                      | YXBwbGljYXRpb24tZGVtbw==.1 |
