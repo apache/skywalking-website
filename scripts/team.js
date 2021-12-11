@@ -67,9 +67,15 @@ class GenerateTeamYaml {
     const data = [];
     const date = [];
 
+    const x = new Date();
+    const timepoint = x.setFullYear(2021,7,25);
+
     for (let i = 0; i < maxWeekLen; i++) {
       let num = 0;
       const {w: week} = maxSource[0].weeks[i];
+
+      const now = new Date(+(week + '000'));
+      date.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
 
       sources.forEach((source = []) => {
         if (!source[0] || !source[0].weeks) {
@@ -82,14 +88,15 @@ class GenerateTeamYaml {
           const curWeek = source[0].weeks[k] && source[0].weeks[k].w;
           if (curWeek === week) {
             for (let j = 0; j < usersCount; j++) {
-              const {c} = source[j] && source[j].weeks[k]
-              num += c
+              const {c} = source[j] && source[j].weeks[k];
+              if (source.repo !== 'skywalking-java' || now > timepoint) {
+                num += c
+              }
             }
           }
         }
       })
-      const now = new Date(+(week + '000'));
-      date.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+
       data.push(num)
     }
     return {data, date}
