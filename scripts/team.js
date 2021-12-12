@@ -56,8 +56,11 @@ class GenerateTeamYaml {
           'User-Agent': '',
         },
       });
-      this.mergedData.push(res && res.data || []);
+      const source = res && res.data || [];
+      source.repo = repo;
+      this.mergedData.push(source);
     } catch (e) {
+      throw Error(e)
     }
   }
 
