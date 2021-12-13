@@ -185,5 +185,5 @@ here is successful configuration:
 }
 ```
 
-reference：https://www.cnblogs.com/kebibuluan/p/14440228.html
+Original post：https://www.cnblogs.com/kebibuluan/p/14440228.html
 
