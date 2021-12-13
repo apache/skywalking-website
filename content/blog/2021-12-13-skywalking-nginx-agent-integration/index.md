@@ -16,7 +16,7 @@ tags:
 
 We Can integrate Skywalking to Java Application by Java Agent TEC.， In typical application, the system runs Java Web applications at the backend of the load balancer, and the most commonly used load balancer is nginx. What should we do if we want to bring it under surveillance? Fortunately, skywalking has provided nginx's probe collector. Official website address:[ https://github.com/apache/skywalking-nginx-lua ]( https://github.com/apache/skywalking-nginx-lua )。 During the integration process, it is found that the examples on the official website only support openresty. For openresty, common modules such as luajit and Lua nginx module have been integrated. Adding skywalking related configurations according to the examples on the official website can take effect. However, when configured for nginx startup, many errors will be reported. We may not want to change a load balancer (nginx to openresty) in order to access skywalking. Therefore, we must solve the integration problem between skywalking and nginx.
 
-Note: openrest is a high-performance web development platform based on nginx + Lua, which solves the short board that is not easy to program in nginx.
+Note: openresty is a high-performance web development platform based on nginx + Lua, which solves the short board that is not easy to program in nginx.
 
 
 Based on Skywalking-8.7.0和Nginx-1.20.1
