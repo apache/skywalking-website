@@ -14,7 +14,7 @@ We Can integrate Skywalking to Java Application by Java Agent TEC.， In typical
 Note: openresty is a high-performance web development platform based on nginx + Lua, which solves the short board that is not easy to program in nginx.
 
 
-Based on Skywalking-8.7.0和Nginx-1.20.1
+Based on Skywalking-8.7.0 and Nginx-1.20.1
 
 ### Upgrade of nginx:
 
