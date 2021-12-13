@@ -1,0 +1,143 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Nginx</title>
+    <link>/tags/nginx/</link>
+    <description>Recent content in Nginx on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Mon, 13 Dec 2021 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/nginx/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: How to integrate skywalking-nginx-lua to Nginx?</title>
+      <link>/blog/2021-12-13-skywalking-nginx-agent-integration/</link>
+      <pubDate>Mon, 13 Dec 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-12-13-skywalking-nginx-agent-integration/</guid>
+      <description>
+        
+        
+        &lt;p&gt;We Can integrate Skywalking to Java Application by Java Agent TEC.， In typical application, the system runs Java Web applications at the backend of the load balancer, and the most commonly used load balancer is nginx. What should we do if we want to bring it under surveillance? Fortunately, skywalking has provided &lt;a href=&#34;https://github.com/apache/skywalking-nginx-lua&#34;&gt;Nginx agent&lt;/a&gt;。 During the integration process, it is found that the examples on the official website only support openresty. For openresty, common modules such as luajit and Lua nginx module have been integrated. Adding skywalking related configurations according to the examples on the official website can take effect. However, when configured for nginx startup, many errors will be reported. We may not want to change a load balancer (nginx to openresty) in order to use skywalking. Therefore, we must solve the integration problem between skywalking and nginx.&lt;/p&gt;
+&lt;p&gt;Note: openresty is a high-performance web development platform based on nginx + Lua, which solves the short board that is not easy to program in nginx.&lt;/p&gt;
+&lt;p&gt;Based on Skywalking-8.7.0 and Nginx-1.20.1&lt;/p&gt;
+&lt;h3 id=&#34;upgrade-of-nginx&#34;&gt;Upgrade of nginx:&lt;/h3&gt;
+&lt;p&gt;The agent plug-in of nginx is written based on Lua, so nginx needs to add support for Lua, &lt;a href=&#34;https://github.com/openresty/lua-nginx-module&#34;&gt;Lua nginx module&lt;/a&gt; It just provides this function. The Lua nginx module depends on &lt;a href=&#34;https://luajit.org/download.html&#34;&gt;luajit&lt;/a&gt; Therefore, first we need to install luajit. In the environment, it is best to choose version 2.1.&lt;/p&gt;
+&lt;p&gt;For nginx, you need to compile the necessary modules yourself. It depends on the following two modules:&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/openresty/lua-nginx-module&#34;&gt;lua-nginx-module&lt;/a&gt; The version is lua-nginx-module-0.10.21rc1&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;http://openresty.org/cn/nginx-devel-kit.html&#34;&gt;ngx_devel_kit&lt;/a&gt; The version using ngx_devel_kit-0.3.1&lt;/p&gt;
+&lt;p&gt;Compile nginx parameters&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+configure arguments: --add-module&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;/path/to/ngx_devel_kit-0.3.1 --add-module&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;/path/to/lua-nginx-module-0.10.21rc1 --with-ld-opt&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;-Wl,-rpath,/usr/local/LuaJIT/lib
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The following is for skywalking-nginx-lua-0.3.0 and 0.3.0+ are described separately.&lt;/p&gt;
+&lt;h3 id=&#34;skywalking-nginx-lua-030&#34;&gt;skywalking-nginx-lua-0.3.0&lt;/h3&gt;
+&lt;p&gt;After testing, skywalking-nginx-lua-0.3.0 requires the following Lua related modules&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+lua-resty-core https://github.com/openresty/lua-resty-core
+
+lua-resty-lrucache https://github.com/openresty/lua-resty-lrucache
+
+lua-cjson https://github.com/openresty/lua-cjson
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The dependent Lua modules are as follows:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+lua_package_path &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/lua-resty-core/lua-resty-core-master/lib/?.lua;/path/to/lua-resty-lrucache-0.11/lib/?.lua;/path/to/skywalking-nginx-lua-0.3.0/lib/?.lua;;&amp;#34;&lt;/span&gt;;
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In the process of make &amp;amp; &amp;amp; make install, Lua cjson needs to pay attention to:&lt;/p&gt;
+&lt;p&gt;Modify a path in makefile&lt;/p&gt;
+&lt;p&gt;LUA_INCLUDE_DIR ?= /usr/local/LuaJIT/include/luajit-2.0&lt;/p&gt;
+&lt;p&gt;Reference:&lt;a href=&#34;https://blog.csdn.net/ymeputer/article/details/50146143&#34;&gt; https://blog.csdn.net/ymeputer/article/details/50146143 &lt;/a&gt;&lt;/p&gt;
+&lt;h3 id=&#34;skywalking-nginx-lua-030-1&#34;&gt;skywalking-nginx-lua-0.3.0+&lt;/h3&gt;
+&lt;p&gt;For skywalking-nginx-lua-0.3.0+, tablepool support needs to be added, but it seems that cjson is not required&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+lua-resty-core https://github.com/openresty/lua-resty-core
+
+lua-resty-lrucache https://github.com/openresty/lua-resty-lrucache
+
+lua-tablepool https://github.com/openresty/lua-tablepool
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+lua_ package_ path &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/lua-resty-core/lua-resty-core-master/lib/?.lua;/path/to/lua-resty-lrucache-0.11/lib/?.lua;/path/to/lua-tablepool-master/lib/?.lua;/path/to/skywalking-nginx-lua-master/lib/?.lua;;&amp;#34;&lt;/span&gt;;
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;tablepool introduces two APIs according to its official documents &lt;code&gt;table new and table. Clear&lt;/code&gt; requires luajit2.1, there is a paragraph in the skywalking-nginx-lua document that says you can use &amp;lsquo;require (&amp;ldquo;skywalking. Util&amp;rdquo;) disable_ Tablepool() ` disable tablepool&lt;/p&gt;
+&lt;p&gt;When you start nginx, you will be prompted to install openresty&amp;rsquo;s own [luajit version]（ &lt;a href=&#34;https://github.com/openresty/luajit2&#34;&gt;https://github.com/openresty/luajit2&lt;/a&gt; )&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;
+detected a LuaJIT version which is not OpenResty&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;s; many optimizations will be disabled and performance will be compromised (see https://github.com/openresty/luajit2 for OpenResty&amp;#39;&lt;/span&gt;s LuaJIT or, even better, consider using the OpenResty releases from https://openresty.org/en/download.html &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;here is successful configuration:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-lua&#34; data-lang=&#34;lua&#34;&gt;     http {
+    lua_package_path &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/lua-resty-core/lua-resty-core-master/lib/?.lua;/path/to/lua-resty-lrucache-0.11/lib/?.lua;/path/to/lua-tablepool-master/lib/?.lua;/path/to/skywalking-nginx-lua-master/lib/?.lua;;&amp;#34;&lt;/span&gt;;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;#&lt;/span&gt; Buffer represents the register inform &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;and&lt;/span&gt; the queue of the finished segment
+    lua_shared_dict tracing_buffer &lt;span style=&#34;color:#099&#34;&gt;100&lt;/span&gt;m;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;#&lt;/span&gt; Init is the timer setter &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;and&lt;/span&gt; keeper
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;#&lt;/span&gt; Setup an infinite loop timer to &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;do&lt;/span&gt; register &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;and&lt;/span&gt; trace report.
+    init_worker_by_lua_block {
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;local&lt;/span&gt; metadata_buffer &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; ngx.shared.tracing_buffer
+
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- Set service name&lt;/span&gt;
+        metadata_buffer:set(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;serviceName&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;User Service Name&amp;#39;&lt;/span&gt;)
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- Instance means the number of Nginx deployment, does not mean the worker instances&lt;/span&gt;
+        metadata_buffer:set(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;serviceInstanceName&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;User Service Instance Name&amp;#39;&lt;/span&gt;)
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- type &amp;#39;boolean&amp;#39;, mark the entrySpan include host/domain&lt;/span&gt;
+        metadata_buffer:set(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;includeHostInEntrySpan&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;)
+
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- set random seed&lt;/span&gt;
+        require(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;skywalking.util&amp;#34;&lt;/span&gt;).set_randomseed()
+        require(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;skywalking.client&amp;#34;&lt;/span&gt;):startBackendTimer(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;http://127.0.0.1:12800&amp;#34;&lt;/span&gt;)
+
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- If there is a bug of this `tablepool` implementation, we can&lt;/span&gt;
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- disable it in this way&lt;/span&gt;
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- require(&amp;#34;skywalking.util&amp;#34;).disable_tablepool()&lt;/span&gt;
+
+        skywalking_tracer &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; require(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;skywalking.tracer&amp;#34;&lt;/span&gt;)
+    }
+
+    server {
+        listen &lt;span style=&#34;color:#099&#34;&gt;8090&lt;/span&gt;;
+        
+        location &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;/&lt;/span&gt;ingress {
+            default_type text&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;/&lt;/span&gt;html;
+
+            rewrite_by_lua_block {
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;------------------------------------------------------&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- NOTICE, this should be changed manually&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- This variable represents the upstream logic address&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- Please set them as service logic name or DNS name&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;--&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- Currently, we can not have the upstream real network address&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;------------------------------------------------------&lt;/span&gt;
+                skywalking_tracer:start(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;upstream service&amp;#34;&lt;/span&gt;)
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- If you want correlation custom data to the downstream service&lt;/span&gt;
+                &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- skywalking_tracer:start(&amp;#34;upstream service&amp;#34;, {custom = &amp;#34;custom_value&amp;#34;})&lt;/span&gt;
+            }
+
+            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;-- Target upstream service&lt;/span&gt;
+            proxy_pass http:&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;//&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;127.0.0.1&lt;/span&gt;:&lt;span style=&#34;color:#099&#34;&gt;8080&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;/&lt;/span&gt;backend;
+
+            body_filter_by_lua_block {
+                &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; ngx.arg[&lt;span style=&#34;color:#099&#34;&gt;2&lt;/span&gt;] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;then&lt;/span&gt;
+                    skywalking_tracer:finish()
+                &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;end&lt;/span&gt;
+            }
+
+            log_by_lua_block {
+                skywalking_tracer:prepareForReport()
+            }
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Original post：https://www.cnblogs.com/kebibuluan/p/14440228.html&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>
