@@ -1,6 +1,6 @@
 ---
 title: "How to integrate skywalking-nginx-lua to nginx?"
-date: 2012-12-13
+date: 2021-12-13
 author: shiyan.xiong, the user of skywalking
 description: "provide a path to integrate skywalking-nginx-lua to nginx and avoid you falling pit"
 tags:
