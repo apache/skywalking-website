@@ -1,5 +1,5 @@
 ---
-title: "How to integrate skywalking-nginx-lua to nginx?"
+title: "How to integrate skywalking-nginx-lua to Nginx?"
 date: 2021-12-13
 author: shiyan.xiong, the user of skywalking
 description: "provide a path to integrate skywalking-nginx-lua to nginx and avoid you falling pit"
@@ -9,7 +9,7 @@ tags:
 
 
 
-We Can integrate Skywalking to Java Application by Java Agent TEC.， In typical application, the system runs Java Web applications at the backend of the load balancer, and the most commonly used load balancer is nginx. What should we do if we want to bring it under surveillance? Fortunately, skywalking has provided nginx's probe collector. Official website address:[ https://github.com/apache/skywalking-nginx-lua ]( https://github.com/apache/skywalking-nginx-lua )。 During the integration process, it is found that the examples on the official website only support openresty. For openresty, common modules such as luajit and Lua nginx module have been integrated. Adding skywalking related configurations according to the examples on the official website can take effect. However, when configured for nginx startup, many errors will be reported. We may not want to change a load balancer (nginx to openresty) in order to access skywalking. Therefore, we must solve the integration problem between skywalking and nginx.
+We Can integrate Skywalking to Java Application by Java Agent TEC.， In typical application, the system runs Java Web applications at the backend of the load balancer, and the most commonly used load balancer is nginx. What should we do if we want to bring it under surveillance? Fortunately, skywalking has provided [Nginx agent](https://github.com/apache/skywalking-nginx-lua)。 During the integration process, it is found that the examples on the official website only support openresty. For openresty, common modules such as luajit and Lua nginx module have been integrated. Adding skywalking related configurations according to the examples on the official website can take effect. However, when configured for nginx startup, many errors will be reported. We may not want to change a load balancer (nginx to openresty) in order to use skywalking. Therefore, we must solve the integration problem between skywalking and nginx.
 
 Note: openresty is a high-performance web development platform based on nginx + Lua, which solves the short board that is not easy to program in nginx.
 
@@ -20,15 +20,15 @@ Based on Skywalking-8.7.0 and Nginx-1.20.1
 
 
 
-The agent plug-in of nginx is written based on Lua, so nginx needs to add support for Lua, [Lua nginx module]（ https://github.com/openresty/lua-nginx-module ）It just provides this function. The Lua nginx module depends on [luajit]（ https://luajit.org/download.html ）Therefore, first we need to install luajit. In the environment, it is best to choose version 2.1.
+The agent plug-in of nginx is written based on Lua, so nginx needs to add support for Lua, [Lua nginx module](https://github.com/openresty/lua-nginx-module) It just provides this function. The Lua nginx module depends on [luajit](https://luajit.org/download.html) Therefore, first we need to install luajit. In the environment, it is best to choose version 2.1.
 
 
 
 For nginx, you need to compile the necessary modules yourself. It depends on the following two modules:
 
-[lua-nginx-module]( https://github.com/openresty/lua-nginx-module ）The version is lua-nginx-module-0.10.21rc1
+[lua-nginx-module](https://github.com/openresty/lua-nginx-module) The version is lua-nginx-module-0.10.21rc1
 
-[ngx_devel_kit]( http://openresty.org/cn/nginx-devel-kit.html ）, version using ngx_devel_kit-0.3.1
+[ngx_devel_kit](http://openresty.org/cn/nginx-devel-kit.html) The version using ngx_devel_kit-0.3.1
 
 Compile nginx parameters
 
