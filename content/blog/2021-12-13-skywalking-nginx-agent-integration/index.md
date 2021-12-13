@@ -5,11 +5,6 @@ author: shiyan.xiong, the user of skywalking
 description: "provide a path to integrate skywalking-nginx-lua to nginx and avoid you falling pit"
 tags:
 - Nginx
-- LuaJIT
-- lua-nginx-module
-- lua-resty-core
-- lua-resty-lrucache
-- lua-tablepool
 ---
 
 
