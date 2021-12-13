@@ -34,7 +34,7 @@ Compile nginx parameters
 
 
 
-```powershell
+```shell
 
 configure arguments: --add-module=/path/to/ngx_devel_kit-0.3.1 --add-module=/path/to/lua-nginx-module-0.10.21rc1 --with-ld-opt=-Wl,-rpath,/usr/local/LuaJIT/lib
 
@@ -52,7 +52,7 @@ The following is for skywalking-nginx-lua-0.3.0 and 0.3.0+ are described separat
 
 After testing, skywalking-nginx-lua-0.3.0 requires the following Lua related modules
 
-```powershell
+```shell
 
 lua-resty-core https://github.com/openresty/lua-resty-core
 
@@ -64,7 +64,7 @@ lua-cjson https://github.com/openresty/lua-cjson
 
 The dependent Lua modules are as follows:
 
-```powershell
+```shell
 
 lua_package_path "/path/to/lua-resty-core/lua-resty-core-master/lib/?.lua;/path/to/lua-resty-lrucache-0.11/lib/?.lua;/path/to/skywalking-nginx-lua-0.3.0/lib/?.lua;;";
 
@@ -84,7 +84,7 @@ Reference:[ https://blog.csdn.net/ymeputer/article/details/50146143 ]( https://b
 
 For skywalking-nginx-lua-0.3.0+, tablepool support needs to be added, but it seems that cjson is not required
 
-```powershell
+```shell
 
 lua-resty-core https://github.com/openresty/lua-resty-core
 
@@ -96,7 +96,7 @@ lua-tablepool https://github.com/openresty/lua-tablepool
 
 
 
-```powershell
+```shell
 
 lua_ package_ path "/path/to/lua-resty-core/lua-resty-core-master/lib/?.lua;/path/to/lua-resty-lrucache-0.11/lib/?.lua;/path/to/lua-tablepool-master/lib/?.lua;/path/to/skywalking-nginx-lua-master/lib/?.lua;;";
 
@@ -110,7 +110,7 @@ When you start nginx, you will be prompted to install openresty's own [luajit ve
 
 
 
-```powershell
+```shell
 
 detected a LuaJIT version which is not OpenResty's; many optimizations will be disabled and performance will be compromised (see https://github.com/openresty/luajit2 for OpenResty's LuaJIT or, even better, consider using the OpenResty releases from https://openresty.org/en/download.html )
 
@@ -119,7 +119,7 @@ detected a LuaJIT version which is not OpenResty's; many optimizations will be d
 here is successful configuration:
 
 
-```powershell
+```lua
      http {
     lua_package_path "/path/to/lua-resty-core/lua-resty-core-master/lib/?.lua;/path/to/lua-resty-lrucache-0.11/lib/?.lua;/path/to/lua-tablepool-master/lib/?.lua;/path/to/skywalking-nginx-lua-master/lib/?.lua;;";
 
