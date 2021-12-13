@@ -9,7 +9,7 @@ tags:
 - lua-nginx-module
 - lua-resty-core
 - lua-resty-lrucache
-- lua-resty-tablepool
+- lua-tablepool
 ---
 
 
