@@ -9,7 +9,7 @@ SkyWalking Cloud on Kubernetes 0.5.0 is released. Go to [downloads](/downloads) 
 - Features
   - Add E2E test cases to verify OAPServer, UI, Java agent and Storage components.
 - Bugs
-  - CFix operator role patch issues
+  - Fix operator role patch issues
   - Fix invalid CSR signername
   - Fix bug in the configmap controller
 - Chores
