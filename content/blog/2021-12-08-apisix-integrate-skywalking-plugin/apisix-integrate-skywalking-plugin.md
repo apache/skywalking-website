@@ -1,5 +1,5 @@
 ---
-title: "Apache APISIX Integrates with SkyWalking to Create a Full Fange of Log Processing"
+title: "Apache APISIX Integrates with SkyWalking to Create a Full Range of Log Processing"
 author: "[Haochao Zhuang](https://github.com/dmsolr)"
 date: 2021-12-08
 description: "This paper mainly introduces two Apache APISIX integrated SkyWalking log plug-ins to provide a more convenient operation and environment for log processing in Apache APISIX."
