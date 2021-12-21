@@ -1,11 +1,7 @@
 ---
-slug: /better-observability-for-chaos-engineering
 title: 'Chaos Mesh + SkyWalking: Better Observability for Chaos Engineering'
+date: 2021-11-29
 author: Ningxuan Wang
-author_title: Chaos Mesh Contributor
-author_url: https://github.com/FingerLeader
-author_image_url: https://avatars.githubusercontent.com/u/43462394?v=4
-image: /img/chaos-mesh-skywalking-banner.png
 tags: [Chaos Mesh, Chaos Engineering, Tutorial]
 ---
 
