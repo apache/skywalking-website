@@ -1,11 +1,11 @@
 ---
 title: 'Chaos Mesh + SkyWalking: Better Observability for Chaos Engineering'
-date: 2021-11-29
+date: 2021-12-21
 author: Ningxuan Wang
 tags: [Chaos Mesh, Chaos Engineering, Tutorial]
 ---
 
-![Chaos Mesh + SkyWalking: Better Observability for Chaos Engineering](/chaos-mesh-skywalking-banner.png)
+![Chaos Mesh + SkyWalking: Better Observability for Chaos Engineering](chaos-mesh-skywalking-banner.png)
 
 [Chaos Mesh](https://github.com/chaos-mesh/chaos-mesh) is an open-source cloud-native [chaos engineering](https://en.wikipedia.org/wiki/Chaos_engineering) platform. You can use Chaos Mesh to conveniently inject failures and simulate abnormalities that might occur in reality, so you can identify potential problems in your system. Chaos Mesh also offers a Chaos Dashboard which allows you to monitor the status of a chaos experiment. However, this dashboard cannot let you observe how the failures in the experiment impact the service performance of applications. This hinders us from further testing our systems and finding potential problems. 
 
@@ -53,20 +53,20 @@ To better observe the change in service performance, you need to increase the se
 
 Perform a stress test on `localhost:8079` using JMeter and add five threads to continuously increase the service loads. 
 
-![JMeter Dashboard 1](/jmeter-1.png)
+![JMeter Dashboard 1](jmeter-1.png)
 
 
-![JMeter Dashboard 2](/jmeter-2.png)
+![JMeter Dashboard 2](jmeter-2.png)
 
 Open the SkyWalking Dashboard. You can see that the access rate is 100%, and that the service loads reach about 5,300 calls per minute (CPM). 
 
-![SkyWalking Dashboard](/skywalking-dashboard.png)
+![SkyWalking Dashboard](skywalking-dashboard.png)
 
 ## Step 4: Inject failures via Chaos Mesh and observe results 
 
 After you finish the three steps above, you can use the Chaos Dashboard to simulate stress scenarios and observe the change in service performance during chaos experiments. 
 
-![StressChaos on Chaos Dashboard](/chaos-dashboard-stresschaos.png)
+![StressChaos on Chaos Dashboard](chaos-dashboard-stresschaos.png)
 
 The following sections describe how service performance varies under the stress of three chaos conditions:
 
@@ -76,19 +76,19 @@ The following sections describe how service performance varies under the stress 
     
     During the time period between the two short, green lines, the service load decreases to 4,929 CPM, but returns to normal after the chaos experiment ends. 
     
-    ![Test 1](/cpuload-1.png)
+    ![Test 1](cpuload-1.png)
 
 * CPU load: 50%; memory load: 128 MB
     
     When the application’s CPU load increases to 50%,  the service load decreases to 4,307 CPM.
     
-    ![Test 2](/cpuload-2.png)
+    ![Test 2](cpuload-2.png)
 
 * CPU load: 100%; memory load: 128 MB
 
     When the CPU usage is at 100%, the service load decreases to only 40% of what it would be if no chaos experiments were taking place. 
     
-    ![Test 3](/cpuload-3.png)
+    ![Test 3](cpuload-3.png)
     
     Because the process scheduling under the Linux system does not allow a process to occupy the CPU all the time, the deployed Spring Boot Demo can still handle 40% of the access requests even in the extreme case of a full CPU load.
 
