@@ -79,7 +79,7 @@ Members include Project Management Committee members and committers. The list is
 
 ## Contributor over time
 
-<div><img style="width:100%;max-width:unset" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/></div>
+<div><img style="max-width:100%" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/></div>
 
 ## Becoming a Committer
 

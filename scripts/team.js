@@ -1,47 +1,120 @@
-const process = require("process");
-const path = require("path");
+const process = require('process');
+const path = require('path');
+const fs = require('fs');
 const YAML = require('yamljs');
 const axios = require('axios');
-const fs = require("fs");
+
 const {promises} = fs;
 const docsFile = path.join(__dirname, '../data/docs.yml')
 const teamFile = path.join(__dirname, '../data/team.yml')
+const mergedDataFile = path.join(__dirname, '../themes/docsy/static/js/mergedData.js')
 
 class GenerateTeamYaml {
   constructor(docsFile, teamFile) {
     this.docsFile = docsFile;
     this.teamFile = teamFile;
+    this.mergedDataFile = mergedDataFile;
     this.nativeObject = [];
     this.logins = {};
+    this.mergedData = [];
   }
 
   async init() {
-    try{
+    try {
       console.log('start...');
       this.nativeObject = await this.loadYaml(docsFile);
-      await this.getAllRepoContributors()
+      await this.getAllRepoData()
       await this.writeFile()
-    }catch (err){
+    } catch (err) {
       console.log(err);
       process.exit(1)
     }
   }
 
-  async getAllRepoContributors() {
+  async getAllRepoData() {
     const promiseList = [];
+    const mergedPromiseList = [];
     for (const k of this.nativeObject) {
       for (const item of k.list) {
-        const {user, repo} = item
-        const list = []
-        if(user && repo){
-          promiseList.push(this.getRepoContributors({user, repo, list, item}))
+        const {user, repo} = item;
+        const list = [];
+        if (user && repo) {
+          promiseList.push(this.getRepoContributors({user, repo, list, item}));
+          mergedPromiseList.push(this.getMergedData({user, repo}));
         }
-
       }
-
     }
     await Promise.all(promiseList)
+    await Promise.all(mergedPromiseList)
+  }
 
+  async getMergedData({user, repo}) {
+    try {
+      const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
+        headers: {
+          'accept': 'application/json',
+          'User-Agent': '',
+        },
+      });
+      const source = res && res.data || [];
+      source.repo = repo;
+      this.mergedData.push(source);
+    } catch (e) {
+      throw Error(e)
+    }
+  }
+
+  buildMergedData(sources) {
+    const maxSource = this.getMaxData(sources);
+    const maxWeekLen = maxSource[0].weeks.length;
+    const data = [];
+    const date = [];
+
+    const x = new Date();
+    const timepoint = x.setFullYear(2021,7,25);
+
+    for (let i = 0; i < maxWeekLen; i++) {
+      let num = 0;
+      const {w: week} = maxSource[0].weeks[i];
+
+      const now = new Date(+(week + '000'));
+      date.push([now.getFullYear(), now.getMonth() + 1, now.getDate()].join('/'));
+
+      sources.forEach((source = []) => {
+        if (!source[0] || !source[0].weeks) {
+          return;
+        }
+        const len = source[0].weeks.length;
+
+        for (let k = 0; k < len; k++) {
+          const usersCount = source.length;
+          const curWeek = source[0].weeks[k] && source[0].weeks[k].w;
+          if (curWeek === week) {
+            for (let j = 0; j < usersCount; j++) {
+              const {c} = source[j] && source[j].weeks[k];
+              if (source.repo !== 'skywalking-java' || now > timepoint) {
+                num += c
+              }
+            }
+          }
+        }
+      })
+
+      data.push(num)
+    }
+    return {data, date}
+  }
+
+  getMaxData(sources) {
+    let maxWeekLen = 0;
+    let maxSource;
+    sources.forEach(item => {
+      if (item.length > maxWeekLen) {
+        maxWeekLen = item.length
+        maxSource = item
+      }
+    })
+    return maxSource
   }
 
   async writeFile() {
@@ -51,7 +124,10 @@ class GenerateTeamYaml {
     }
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
-    console.log('team.yml success!');
+
+    const mergedGraphData = this.buildMergedData(this.mergedData)
+    await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
+    console.log('team.yml & mergedData.js success!');
   }
 
   async loadYaml() {
@@ -67,7 +143,7 @@ class GenerateTeamYaml {
     return data
         .filter((item) => item.type !== 'Bot')
         .map((item) => {
-          const { type, email } = item;
+          const {type, email} = item;
           if (type === 'Anonymous') {
             item.login = email.replace(/(.+)@.+/, '$1**');
           }

@@ -28,10 +28,10 @@ $(function () {
     showBig(target.src);
   });
   $popup.on('click', function () {
-    $(this).hide()
+    $(this).fadeOut()
   });
   function showBig(src) {
     $popup.find('img').attr('src', src);
-    $popup.show()
+    $popup.fadeIn()
   }
 })
