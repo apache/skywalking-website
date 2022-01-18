@@ -107,4 +107,4 @@ Database Shadow 作为 Proxy 在业务程序与数据库中间完成数据交互
 ## 总结
 
 在本文中，我们详细介绍了Cyborg Flow中的各个组件的功能、原理，最终搭配快速上手来快速将该系统与自己的业务系统结合。
-欢迎大家来尝鲜！
+如果在使用中有任何问题，欢迎来[共同讨论](https://github.com/SphereEx/CyborgFlow/discussions)。
