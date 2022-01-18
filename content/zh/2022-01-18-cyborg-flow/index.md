@@ -1,19 +1,19 @@
 ---
-title: "Cyborg Flow X SkyWalking: 生产环境压力测试"
+title: "Cyborg Flow X SkyWalking: 生产环境全链路压测"
 date: 2022-01-18
 author: 刘晗，吴晟
-description: 如何将SkyWalking与Cyborg Flow相结合来完成生产环境中的压力测试。
+description: 如何将SkyWalking与Cyborg Flow相结合来完成生产环境中的全链路压测。
 zh_tags:
 - User Manual
 ---
 
 随着业务与用户量的持续发展，系统的瓶颈也逐渐出现。尤其在一些节假日、突发的营销活动中，访问量激增可能会导致系统性能下降，甚至造成系统瘫痪。
-压力测试可以很好的帮助我们预先演练高峰流量，从而提前模拟出系统的执行情况，帮助我们预估系统容量。当流量真正来临时，也可以更从容面对。
-Apache SkyWalking 联合 Apache APISIX 及 Apache ShardingSphere，三大顶级开源社区通力合作，共同打造生产级可用的压力测试解决方案，CyborgFlow。
+全链路压测可以很好的帮助我们预先演练高峰流量，从而提前模拟出系统的执行情况，帮助我们预估系统容量。当流量真正来临时，也可以更从容面对。
+Apache SkyWalking 联合 Apache APISIX 及 Apache ShardingSphere，三大顶级开源社区通力合作，共同打造生产级可用的全链路压测解决方案，CyborgFlow。
 
 ## 介绍
 
-CyborgFlow 是一款面向生产级可用的压力测试解决方案。总共由三个组件组成，如下图所示。
+CyborgFlow 是一款面向生产级可用的全链路压测解决方案。总共由三个组件组成，如下图所示。
 
 ![components](components.png)
 
@@ -25,9 +25,9 @@ CyborgFlow 是一款面向生产级可用的压力测试解决方案。总共由
 
 ## 原理
 
-依托于三大社区合作，让这一切变得简单易用。下图为压测系统的运行原理，橙色和蓝色分别代表正常流量和压测流量。
+依托于三大社区合作，让这一切变得简单易用。下图为全链路压测系统的运行原理，橙色和蓝色分别代表正常流量和压测流量。
 
-![img.png](img.png)
+![theory](theory.png)
 
 ### Flow Gateway
 
