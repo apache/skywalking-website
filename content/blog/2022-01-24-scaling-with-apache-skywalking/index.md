@@ -108,7 +108,7 @@ Proxy still needs to deal with the load balancing problem from client to itself,
 
 There are three ways to solve this problem:
 
-1. **Connection management**: Use the `max_connection*` config on the client-side to specify the maximum connection duration of each connection. For more information, please read the proposal.
+1. **Connection management**: Use the `max_connection` config on the client-side to specify the maximum connection duration of each connection. For more information, please read the [proposal](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md).
 2. **Cluster awareness**: The proxy has cluster awareness, and actively disconnects the connection when the load is unbalanced to allow the client to re-pick up the proxy.
 3. **Resource limit+HPA**: Restrict the connection resource situation of each proxy, and no longer accept new connections when the resource limit is reached. And use the HPA mechanism of Kubernetes to dynamically scale out the number of the proxy.
 
@@ -155,7 +155,7 @@ NOTE: All commands could be accessed through [GitHub](https://github.com/mrproli
 
 ### SkyWalking Scaling
 
-We will use the [bookinfo application](https://istio.io/latest/docs/examples/bookinfo/) to demonstrate how to integrate Apache SkyWalking 8.9.1 with Apache SkyWalking-Satellite 0.5.0+, and observe the service mesh through the Envoy ALS protocol.
+We will use the [bookinfo application](https://istio.io/latest/docs/examples/bookinfo/) to demonstrate how to integrate Apache SkyWalking 8.9.1 with Apache SkyWalking-Satellite 0.5.0, and observe the service mesh through the Envoy ALS protocol.
 
 Before starting, please make sure that you already have a Kubernetes environment.
 
