@@ -1,0 +1,3579 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="twitter:site" content="skywalking.apache.org">
+<meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+<meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+<meta name="generator" content="Hugo 0.80.0" />
+<META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
+
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png">
+<link rel="manifest" href="/favicons/site.webmanifest">
+<link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+
+<title>SkyWalking 针对gRPC 的负载均衡和自动扩容实践 | Apache SkyWalking</title><meta property="og:title" content="SkyWalking 针对gRPC 的负载均衡和自动扩容实践" />
+<meta property="og:description" content="本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="/zh/2022-01-24-scaling-with-apache-skywalking/" />
+<meta property="article:published_time" content="2022-01-24T00:00:00+00:00" />
+<meta property="article:modified_time" content="2022-01-25T11:59:42+08:00" />
+<meta itemprop="name" content="SkyWalking 针对gRPC 的负载均衡和自动扩容实践">
+<meta itemprop="description" content="本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。">
+<meta itemprop="datePublished" content="2022-01-24T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2022-01-25T11:59:42+08:00" />
+<meta itemprop="wordCount" content="658">
+
+
+
+<meta itemprop="keywords" content="" />
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="SkyWalking 针对gRPC 的负载均衡和自动扩容实践"/>
+<meta name="twitter:description" content="本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。"/>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-178891182-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+<link rel="preload" href="/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="/webfonts/fa-brands-400.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+
+
+
+<link rel="preload" href="/scss/main.min.885c391cdebcf622844f99ca0bb70bf355b491d5608699a1eeee73d49f1f768a.css" as="style">
+<link href="/scss/main.min.885c391cdebcf622844f99ca0bb70bf355b491d5608699a1eeee73d49f1f768a.css" rel="stylesheet" integrity="">
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.css" />
+
+<script src="/js/jquery-3.6.0.min.js"></script>
+
+
+
+
+
+    <title>SkyWalking 针对gRPC 的负载均衡和自动扩容实践 | Apache SkyWalking</title>
+  </head>
+  <body class="td-page td-blog">
+    <header>
+      
+<nav class="js-navbar-scroll navbar navbar-expand  flex-column flex-md-row td-navbar">
+    <div class="sidebar-button"><svg width="40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div>
+    <a class="navbar-brand" href="/">
+        <span class="navbar-logo"><img width="130" src="/images/logo.svg" alt="SkyWalking"></span> 
+    </a>
+    <div class="td-navbar-nav-scroll navbar-nav-wrapper" id="navigation">
+        <ul class="navbar-nav mt-lg-0">
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/docs" ><span>Projects and Docs</span></a>
+			</li>
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/events" ><span>Events</span></a>
+			</li>
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/blog" ><span>Blogs</span></a>
+			</li>
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/downloads" ><span>Downloads</span></a>
+			</li>
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/team" ><span>Team</span></a>
+			</li>
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/users" ><span>Users</span></a>
+			</li>
+             
+            
+            
+            <li class="nav-item mr-3 mb-2 mb-lg-0">
+				
+				
+				
+				
+				<a class="nav-link" href="/zh" ><span>中文博客</span></a>
+			</li>
+             
+            
+             
+            
+			
+        </ul>
+    </div>
+    <div class="navbar-nav d-none d-lg-block search-input-box">
+         
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <span class="link dropdown">
+                <a class="link-name dropdown-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Links
+                </a>
+                <div class="dropdown-menu">
+                    
+                    <a class="dropdown-item" href="http://www.apache.org/">Apache Software Foundation</a> 
+                    <a class="dropdown-item" href="https://github.com/apache/skywalking/issues">GitHub Issue Tracker</a> 
+                    <a class="dropdown-item" href="https://github.com/apache/skywalking/discussions">Discussion</a> 
+                    <a class="dropdown-item" href="https://lists.apache.org/list.html?dev@skywalking.apache.org">Dev Mailing List</a> 
+                    <a class="dropdown-item" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home">WIKI</a> 
+                    <a class="dropdown-item" href="http://www.apache.org/licenses/">License</a> 
+                    <a class="dropdown-item" href="http://www.apache.org/events/current-event">Apache Events</a> 
+                    <a class="dropdown-item" href="http://www.apache.org/security/">Security</a> 
+                    <a class="dropdown-item" href="http://www.apache.org/foundation/sponsorship.html">Sponsor and Donate</a> 
+                    <a class="dropdown-item" href="http://www.apache.org/foundation/thanks.html">Thanks</a> 
+                </div>
+            </span>
+            
+        
+        
+<input id="algolia-search-input" type="search" class="form-control td-search-input" placeholder="&#xf002 Search…" aria-label="Search…" autocomplete="off">
+
+    </div>
+</nav>
+
+    </header>
+    <div class="container-fluid td-outer">
+      <div class="td-main">
+        <div class="row container container-center">
+          <main class="col-12 col-md-12 col-xl-10 pl-md-4 pr-md-4" role="main">
+            
+<div class="td-content">
+	<h1>SkyWalking 针对gRPC 的负载均衡和自动扩容实践</h1>
+	<div class="lead">本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。</div>
+	<div class="td-byline mb-4">
+		By <b>刘晗，吴晟</b> |
+		<time datetime="2022-01-24" class="text-muted">Monday, January 24, 2022</time>
+
+	    
+		<p class="mt-1 tags-box">
+			<i class="fas fa-tags" aria-hidden="true"></i>Tags |
+			
+			<span> <a href="/zh_tags/%E6%80%A7%E8%83%BD">性能</a></span>
+			
+		</p>
+		
+
+	</div>
+	<h2 id="背景介绍">背景介绍</h2>
+<p>在 Apache SkyWalking 生态系统中，OAP 通过 SkyWalking Agent、Envoy 或其他数据源获得度量、追踪、日志和事件数据。在 gRPC 协议下，它通过与单个服务器节点进行通信来传输数据。只有当连接中断时，才会使用基于 DNS 轮流模式的重新连接策略。当新的服务在运行时被添加，或者由于观察到的服务的流量增加而使 OAP 负载保持高位时，OAP 集群需要为增加的流量进行扩容。由于所有现有的代理已经连接到以前的节点，新的 OAP 节点的负载会比较小。即使没有扩展，OAP 节点的负载也会不平衡，因为代理会由于启动阶段的随机策略而保持连接。在这些情况下，保持所有节点的健康状态，还能在需要时进行扩展，将成为一个挑战。</p>
+<p>在这篇文章中，我们主要讨论如何解决 SkyWalking 中的这一挑战。</p>
+<h2 id="如何实现负载均衡">如何实现负载均衡</h2>
+<p>SkyWalking 主要使用 gRPC 协议进行数据传输，所以本文主要介绍 gRPC 协议中的负载均衡。</p>
+<h3 id="代理人或客户端">代理人或客户端</h3>
+<p>根据 <a href="https://grpc.io/blog/grpc-load-balancing/">gRPC 官方负载均衡博客</a>，有两种负载均衡的方法。</p>
+<ol>
+<li><strong>客户端</strong>。客户端感知到多个后端服务，并使用负载均衡算法为每个 RPC 选择一个后端服务。</li>
+<li><strong>代理</strong>。客户端将信息发送到代理服务器，代理服务器将信息负载均衡到后端服务。</li>
+</ol>
+<p>从可观察性系统结构的角度来看。</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>客户端</td>
+<td>由于消除了额外的跳跃，所以性能很高</td>
+<td>复杂的客户端（集群感知、负载均衡、健康检查等）确保每个要连接的数据源提供复杂的客户端功能</td>
+</tr>
+<tr>
+<td>代理</td>
+<td>客户端简单</td>
+<td>高延迟</td>
+</tr>
+</tbody>
+</table>
+<p>我们选择代理模式是出于以下原因：</p>
+<ol>
+<li>可观察的数据对时间不是很敏感，传输造成的一点延迟是可以接受的。多跳一点是可以接受的，对客户端没有影响。</li>
+<li>作为一个观察性平台，我们不能 / 不应该要求改变客户端。他们做出自己的技术决定，并可能有自己的商业考虑。</li>
+</ol>
+<h3 id="传输政策">传输政策</h3>
+<p>在代理模式下，我们应该确定下行和上行之间的传输路径。</p>
+<p>不同的数据协议需要不同的处理策略。有两种传输政策：</p>
+<ol>
+<li><strong>同步</strong>：适用于需要在客户端交换数据的协议，如 SkyWalking 动态配置服务。这种类型的协议提供实时结果。</li>
+<li><strong>异步批处理</strong>：当客户端不关心上游的处理结果，而只关心传输的数据（如追踪报告、日志报告等）时使用。</li>
+</ol>
+<p>同步策略要求代理在收到客户端消息时向上游服务器发送消息，并同步返回响应数据给下游客户端。通常情况下，只有少数协议需要使用同步策略。</p>
+<p>如下图所示，在客户端向代理发送请求后，代理将同步向服务器发送消息。当代理机构收到结果后，会返回给客户端。</p>
+<p><img src="./transmission-policy-synchronous.png" alt=""></p>
+<p>异步批处理策略意味着数据被异步地分批发送到上游服务器。这种策略比较常见，因为 SkyWalking 中的大多数协议主要是基于数据报告的。我们认为将队列作为一个缓冲区可以起到很好的效果。异步批处理策略是按照以下步骤执行的：</p>
+<ol>
+<li>代理接收数据并将其包装成一个事件对象。</li>
+<li>一个事件被添加到队列中。</li>
+<li>当达到循环时间或队列元素达到固定数量时，队列中的元素将被并行消耗并发送至 OAP。</li>
+</ol>
+<p>使用队列的好处是：</p>
+<ol>
+<li>将数据接收和发送分开，以减少相互影响。</li>
+<li>区间量化机制可用于组合事件，这有助于加快向 OAP 发送事件的速度。</li>
+<li>使用多线程的消费队列事件可以更充分地利用网络 IO。</li>
+</ol>
+<p>如下图所示，在代理收到消息后，代理将把消息包装成一个事件并推送到队列中。消息发送者将从队列中获取批量事件，并将其发送给上游的 OAP。</p>
+<p><img src="./transmission-policy-asynchronous.png" alt=""></p>
+<h3 id="路由">路由</h3>
+<p>路由算法被用来将消息路由到单一的上游服务器节点。</p>
+<p>Round-Robin 算法从上游服务节点的列表中按顺序选择节点。这种算法的优点是，每个节点被选择的次数是平均的。当数据的大小接近时，每个上游节点可以处理相同数量的数据内容。</p>
+<p><img src="./routing-round-robin.png" alt=""></p>
+<p>在 Weight Round-Robin 中，每个上游服务器节点都有一个相应的路由权重比。与Round-Robin 不同的是，每个上游节点根据其权重有更多机会被路由。这种算法更适合在上游服务器节点机器配置不同时使用。</p>
+<p><img src="./routing-weight-round-robin.png" alt=""></p>
+<p>Fixed 算法是一种混合算法。它可以保证相同的数据被路由到同一个上游服务器节点，当上游服务器规模缩小时，它仍然保持对同一节点的路由；除非上游节点不存在，否则它将重新路由。这种算法主要用于 SkyWalking Meter 协议，因为该协议需要确保同一服务实例的指标被发送到同一 OAP 节点。路由步骤如下：</p>
+<ol>
+<li>根据数据内容生成一个独特的识别字符串，越短越好。数据量是可控的。</li>
+<li>从 LRU Cache 中获取身份的上游节点，如果存在就使用它。</li>
+<li>根据识别结果，生成相应的哈希值，并从上游列表中找到上游服务器节点。</li>
+<li>将上游服务器节点和标识之间的映射关系保存到 LRU Cache。</li>
+</ol>
+<p>这种算法的优点是尽可能地将数据与上游服务器节点绑定，因此上游服务器可以更好地处理连续数据。缺点是需要占用一定的内存空间来保存相应的关系。</p>
+<p>如下图所示，图片被分为两部分：</p>
+<ol>
+<li>左边表示相同的数据内容总是被路由到同一个服务器节点。</li>
+<li>右侧代表数据路由算法。从数据中获得数字，并使用余数算法获得位置。</li>
+</ol>
+<p><img src="./routing-fixed.png" alt=""></p>
+<p>我们选择使用 Round-Robin 和 Fixed 算法的组合进行路由。</p>
+<ol>
+<li>Fixed 路由算法适用于特定的协议，主要在向 SkyWalking Meter 协议传递度量数据时使用。</li>
+<li>默认使用 Round-Robin 算法。当 SkyWalking OAP 集群被部署时，节点的配置需要尽可能的相同，所以就没有必要使用 Weight Round-Robin 算法。</li>
+</ol>
+<h2 id="如何平衡负载均衡器本身">如何平衡负载均衡器本身？</h2>
+<p>Proxy 仍然需要处理从客户端到自身的负载均衡问题，特别是在生产环境中部署 Proxy 集群时。</p>
+<p>有三种方法来解决这个问题：</p>
+<ol>
+<li><strong>连接管理</strong>：在客户端使用 max_connection * 配置来指定每个连接的最大连接时间。欲了解更多信息，请阅读提案。</li>
+<li><strong>集群感知</strong>：代理有集群感知，当负载不均衡时，主动断开连接，让客户端重新接上代理。</li>
+<li><strong>资源限制 + HPA</strong>：限制每个代理的连接资源情况，达到资源限制时不再接受新连接。并利用 Kubernetes 的 HPA 机制来动态扩展代理的数量。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>连接管理</th>
+<th>集群感知</th>
+<th>资源限制 + HPA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>优点</td>
+<td>使用简单</td>
+<td>确保每个代理中的连接数是相对的</td>
+<td>使用简单</td>
+</tr>
+<tr>
+<td>缺点</td>
+<td>每个客户端需要确保数据不丢失；客户端需要接受 GOWAY 的响应</td>
+<td>可能导致某些节点上的流量突然增加；每个客户端需要确保数据不丢失</td>
+<td>流量不会在每个实例中特别均衡</td>
+</tr>
+</tbody>
+</table>
+<p>我们选择 Limit+HPA 是出于这些原因：</p>
+<ol>
+<li>易于配置和使用代理，根据基本的数据指标，容易理解。</li>
+<li>没有因连接中断而导致的数据丢失。客户端不需要实施任何其他协议来防止数据丢失，特别是当客户端是一个商业产品时。</li>
+<li>代理集群中每个节点的连接不需要特别平衡，只要代理节点本身是高性能的。</li>
+</ol>
+<h2 id="skywalking-satellite">SkyWalking-Satellite</h2>
+<p>我们已经在 <a href="https://github.com/apache/skywalking-satellite">SkyWalking-Satellite</a> 项目中实现了这个代理。它被用于客户端和 SkyWalking OAP 之间，有效地解决了负载均衡问题。</p>
+<p>系统部署后，Satellite 会接受来自客户端的流量，Satellite 会通过 Kubernetes 标签选择器或手动配置感知 OAP 的所有节点，并将流量负载均衡到上游的 OAP 节点。</p>
+<p>如下图所示，单个客户仍与单个 Satellite 保持连接，Satellite 将与每个 OAP 建立连接，并向 OAP 节点发送负载均衡信息。</p>
+<p><img src="./skywalking-satellites.png" alt=""></p>
+<p>在扩展 Satellite 时，我们需要在 Kubernetes 中部署 <a href="https://github.com/apache/skywalking-swck">SWCK</a> 适配器并配置 HPA。SWCK 是 SkyWalking 用户的平台，提供、升级、维护 SkyWalking 的相关组件，并使其在 Kubernetes 上原生工作。</p>
+<p>部署完成后，将进行以下步骤：</p>
+<ol>
+<li>从 OAP 中读取度量。HPA 要求 SWCK 指标适配器动态地读取 OAP 中的指标。</li>
+<li>扩大 Satellite 的规模。Kubernetes HPA 感觉到指标值符合预期，所以 Satellite 会自动进行扩展。</li>
+</ol>
+<p>如下图所示，用虚线来划分这两部分。HPA 使用 SWCK 适配器来读取 OAP 中的度量。当达到阈值时，HPA 将对 Satellite 部署进行扩展。</p>
+<p><img src="swck-hpa.png" alt=""></p>
+<h2 id="例子">例子</h2>
+<p>在本节中，我们将展示两种情况。</p>
+<ol>
+<li>SkyWalking 扩展：在 SkyWalking OAP 扩展之后，流量将通过 Satellite 自动实现负载均衡。</li>
+<li>Satellite 扩展：Satellite 自身的流量负载均衡。</li>
+</ol>
+<p>注意：所有命令都可以通过 <a href="https://github.com/mrproliu/sw-satellite-demo-scripts/tree/1180c23e8f3bb36778307f9ae15395274ca039b3">GitHub</a> 访问。</p>
+<h3 id="skywalking-扩展">SkyWalking 扩展</h3>
+<p>我们将使用 <a href="https://istio.io/latest/docs/examples/bookinfo/">bookinfo 应用程序</a>演示如何将 Apache SkyWalking 8.9.1 与 Apache SkyWalking-Satellite 0.5.0 + 集成，并通过 Envoy ALS 协议观察服务网格。</p>
+<p>在开始之前，请确保你已经有一个 Kubernetes 环境。</p>
+<h4 id="安装-istio"><strong>安装 Istio</strong></h4>
+<p>Istio 提供了一个非常方便的方法来配置 Envoy 代理并启用访问日志服务。下面的步骤：</p>
+<ol>
+<li>在本地安装 istioctl 以帮助管理 Istio 服务网格。</li>
+<li>将 Istio 安装到 Kubernetes 环境中，使用演示配置配置文件，并启用 Envoy ALS。将 ALS 消息传输到 Satellite 上。我们稍后将部署的 Satellite。</li>
+<li>将标签添加到默认命名空间中，这样 Istio 就可以在你以后部署应用程序时自动注入 Envoy 挎包代理。</li>
+</ol>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># install istioctl</span>
+<span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.12.0
+curl -L https://istio.io/downloadIstio | sh - 
+sudo mv <span style="color:#008080">$PWD</span>/istio-<span style="color:#008080">$ISTIO_VERSION</span>/bin/istioctl /usr/local/bin/
+
+<span style="color:#998;font-style:italic"># install istio</span>
+istioctl install -y --set <span style="color:#008080">profile</span><span style="color:#000;font-weight:bold">=</span>demo <span style="color:#d14">\
+</span><span style="color:#d14"></span>	--set meshConfig.enableEnvoyAccessLogService<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>	--set meshConfig.defaultConfig.envoyAccessLogService.address<span style="color:#000;font-weight:bold">=</span>skywalking-system-satellite.skywalking-system:11800
+
+<span style="color:#998;font-style:italic"># enbale envoy proxy in default namespace</span>
+kubectl label namespace default istio-injection<span style="color:#000;font-weight:bold">=</span>enabled
+</code></pre></div><h4 id="安装-swck"><strong>安装 SWCK</strong></h4>
+<p>SWCK 为用户部署和升级基于 Kubernetes 的 SkyWalking 相关组件提供了便利。Satellite 的自动扩展功能也主要依赖于 SWCK。更多信息，你可以参考<a href="https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#guides-of-operator-deployment">官方文档</a>。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># Install cert-manager</span>
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.1/cert-manager.yaml
+
+<span style="color:#998;font-style:italic"># Deploy SWCK</span>
+mkdir -p skywalking-swck <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#0086b3">cd</span> skywalking-swck
+wget https://dlcdn.apache.org/skywalking/swck/0.6.1/skywalking-swck-0.6.1-bin.tgz
+tar -zxvf skywalking-swck-0.6.1-bin.tgz
+<span style="color:#0086b3">cd</span> config
+kubectl apply -f operator-bundle.yaml
+</code></pre></div><h4 id="部署-apache-skywalking-和-apache-skywalking-satellite"><strong>部署 Apache SkyWalking 和 Apache SkyWalking-Satellite</strong></h4>
+<p>我们提供了一个简单的脚本来部署 SkyWalking 的 OAP、用户界面和 Satellite。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># Create the skywalking components namespace</span>
+kubectl create namespace skywalking-system
+kubectl label namespace skywalking-system swck-injection<span style="color:#000;font-weight:bold">=</span>enabled
+<span style="color:#998;font-style:italic"># Deploy components</span>
+kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/sw-components.yaml
+</code></pre></div><h4 id="部署-bookinfo-应用程序"><strong>部署 Bookinfo 应用程序</strong></h4>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.12.0
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl <span style="color:#0086b3">wait</span> --for<span style="color:#000;font-weight:bold">=</span><span style="color:#008080">condition</span><span style="color:#000;font-weight:bold">=</span>Ready pods --all --timeout<span style="color:#000;font-weight:bold">=</span>1200s
+kubectl port-forward service/productpage <span style="color:#099">9080</span>
+</code></pre></div><p>接下来，请打开你的浏览器并访问 http://localhost:9080。你应该能够看到 Bookinfo 应用程序。多次刷新网页以产生足够的访问日志。</p>
+<p>然后，你可以在 SkyWalking WebUI 上看到 Bookinfo 应用程序的拓扑结构和指标。这时，你可以看到，Satellite 正在工作。</p>
+<h4 id="部署监控器"><strong>部署监控器</strong></h4>
+<p>我们需要安装 OpenTelemetry Collector 来收集 OAP 中的指标并对其进行分析。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># Add OTEL collector</span>
+kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/otel-collector-oap.yaml
+
+kubectl port-forward -n skywalking-system  service/skywalking-system-ui 8080:80
+</code></pre></div><p>接下来，请打开浏览器，访问 http://localhost:8080/，并在仪表板上创建一个新项目。下图中的 SkyWalking Web UI 显示了数据内容的应用方式。</p>
+<p><img src="./mesh-count-conf.png" alt=""></p>
+<h4 id="扩容-oap">扩容 OAP</h4>
+<p>通过部署扩容 OAP 的数量。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl scale --replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">3</span> -n skywalking-system deployment/skywalking-system-oap
+</code></pre></div><h4 id="完成">完成</h4>
+<p>一段时间后，你会看到 OAP 的数量变成了 3 个，而且 ALS 的流量被平衡到每个 OAP。</p>
+<p><img src="./mesh-count-list.png" alt=""></p>
+<h3 id="扩容-satellite">扩容 Satellite</h3>
+<p>在我们完成了 SkyWalking Scaling 之后，我们将进行 Satellite Scaling 演示。</p>
+<h4 id="部署-swck-hpa"><strong>部署 SWCK HPA</strong></h4>
+<p>SWCK 提供了一个适配器来实现 Kubernetes 外部指标，通过读取 SkyWalking OAP 中的指标来适应 HPA。我们将 Satellite 中的度量服务暴露给 OAP，并配置 HPA 资源来自动扩展 Satellite。</p>
+<p>将 SWCK 适配器安装到 Kubernetes 环境中。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl apply -f skywalking-swck/config/adapter-bundle.yaml
+</code></pre></div><p>创建 HPA 资源，并限制每个 Satellite 最多可处理 10 个连接。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/satellite-hpa.yaml
+</code></pre></div><p>然后，你可以看到我们在一个 Satellite 上有 9 个连接。一个特使代理可能建立多个连接到 Satellite。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">$ kubectl get HorizontalPodAutoscaler -n skywalking-system
+NAME       REFERENCE                                TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/skywalking-system-satellite   9/10      <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">1</span>          5m18s
+</code></pre></div><h4 id="扩容应用">扩容应用</h4>
+<p>扩容应用程序可以建立更多与 Satellite 的连接，以验证 HPA 是否生效。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl scale --replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">3</span> deployment/productpage-v1 deployment/details-v1
+</code></pre></div><h4 id="完成-1">完成</h4>
+<p>默认情况下，Satellite 将部署一个实例，一个实例只能接受 11 个连接。HPA 资源限制一个 Satellite 处理 10 个连接，并使用一个稳定窗口使 Satellite 稳定扩展。在这种情况下，我们在扩展后将 Bookinfo 应用程序部署在 10 多个实例中，这意味着将有 10 多个连接建立到 Satellite 上。</p>
+<p>所以在 HPA 资源运行后，Satellite 会自动扩展到 2 个实例。你可以通过<a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details">官方文档</a>了解复制的计算算法。运行下面的命令来查看运行状态。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">$ kubectl get HorizontalPodAutoscaler -n skywalking-system --watch
+NAME       REFERENCE                                TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">1</span>          3m31s
+hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">1</span>          4m20s
+hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">2</span>          4m38s
+hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">2</span>          5m8s
+hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">2</span>          5m23s
+</code></pre></div><p>通过观察 “连接数 “指标，我们将能够看到，当每个 gRPC 的连接数超过 10 个连接时，那么 Satellite 就会通过 HPA 规则自动进行扩展。结果是，连接数下降到正常状态（在这个例子中，小于 10 个）</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">swctl metrics linear --name satellite_service_grpc_connect_count --service-name satellite::satellite-service
+</code></pre></div><p><img src="satellite-connection-metrics.png" alt=""></p>
+
+	
+
+	<ul class="list-unstyled d-flex justify-content-between align-items-center mb-0 pt-5">
+  <li>
+    <a href="/zh/2022-01-18-cyborg-flow/" class="btn btn-primary "><span class="mr-1">←</span> Previous</a>
+  </li>
+    <a  class="btn btn-primary  disabled">Next <span class="ml-1">→</span></a>
+  </li>
+</ul>
+
+</div>
+
+
+          </main>
+          <div class="toc d-none d-xl-block d-md-none col-xl-2 td-toc d-print-none">
+            <div class="tags-wrapper">
+    <div class="font-weight-bold post-meta ">
+        <i class="fas fa-tags pr-1" aria-hidden="true"></i>
+        Tags
+    </div>
+    <ul class="tags-box">
+        
+        <li>
+            <a href="/zh_tags/agent/" class="tag-link">Agent</a>
+            <span class="count">3</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/conference/" class="tag-link">Conference</a>
+            <span class="count">6</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/development/" class="tag-link">Development</a>
+            <span class="count">3</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/dotnetcore/" class="tag-link">DotNetCore</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/elasticsearch/" class="tag-link">ElasticSearch</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/java/" class="tag-link">Java</a>
+            <span class="count">2</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/open-source-contribution/" class="tag-link">Open Source Contribution</a>
+            <span class="count">4</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/open-source-promotion-plan/" class="tag-link">Open Source Promotion Plan</a>
+            <span class="count">2</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/profiling/" class="tag-link">Profiling</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/release-blog/" class="tag-link">Release Blog</a>
+            <span class="count">3</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/service-mesh/" class="tag-link">Service Mesh</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/source-code/" class="tag-link">Source Code</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/tracing/" class="tag-link">Tracing</a>
+            <span class="count">2</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/use-case/" class="tag-link">Use Case</a>
+            <span class="count">3</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/user-manual/" class="tag-link">User Manual</a>
+            <span class="count">15</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/video/" class="tag-link">Video</a>
+            <span class="count">7</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/web-ui/" class="tag-link">Web UI</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/%E6%80%A7%E8%83%BD/" class="tag-link">性能</a>
+            <span class="count">1</span>
+        </li>
+        
+    </ul>
+</div>
+
+
+            
+
+
+
+
+<div class="td-page-meta ml-2 pb-1 pt-2 mb-0">
+
+
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+
+
+
+<nav id="TableOfContents">
+  <ul>
+    <li>
+      <ul>
+        <li><a href="#背景介绍">背景介绍</a></li>
+        <li><a href="#如何实现负载均衡">如何实现负载均衡</a>
+          <ul>
+            <li><a href="#代理人或客户端">代理人或客户端</a></li>
+            <li><a href="#传输政策">传输政策</a></li>
+            <li><a href="#路由">路由</a></li>
+          </ul>
+        </li>
+        <li><a href="#如何平衡负载均衡器本身">如何平衡负载均衡器本身？</a></li>
+        <li><a href="#skywalking-satellite">SkyWalking-Satellite</a></li>
+        <li><a href="#例子">例子</a>
+          <ul>
+            <li><a href="#skywalking-扩展">SkyWalking 扩展</a></li>
+            <li><a href="#扩容-satellite">扩容 Satellite</a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+
+
+
+
+<script>
+  $(function () {
+    var $toc = $("#TableOfContents");
+    if (!$toc || !$toc.length) {
+      return;
+    }
+    var top = $toc.offset().top;
+    $(window).on("scroll", debounce(setTop, 100))
+    $(window).on("scroll", debounce(addActive, 30))
+
+    function addActive() {
+      var scrollValue = $(window).scrollTop();
+      var topEle = null;
+      $.each($('main h1, main h2, main h3'), function (index, item) {
+        if ($(item).offset().top - 70 > scrollValue) {
+          return
+        }
+        if (!topEle) {
+          topEle = item
+        } else if ($(item).offset().top >= $(topEle).offset().top) {
+          topEle = item
+        }
+        if (topEle) {
+          var id = $(item).attr('id');
+          $toc.find('a').removeClass("active").end().find('a[href="' + '#' + id + '"]').addClass("active")
+        }
+      })
+    }
+
+    function setTop() {
+      var scrollValue = $(window).scrollTop();
+      if (scrollValue >= top - 70) {
+        $toc.addClass('fixed')
+      } else {
+        $toc.removeClass('fixed')
+      }
+    }
+
+    function debounce(fn, wait) {
+      var timeout = null;
+      return function () {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fn.apply(this, arguments);
+        }, wait);
+      };
+    }
+  })
+
+</script>
+
+
+          </div>
+        </div>
+      </div>
+      
+<footer class="py-5 sky-row">
+  <div class="container-fluid text-center">
+    <div class="">
+        
+        
+        
+<ul class="list-inline mb-0">
+  
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Twitter" aria-label="Twitter">
+    <a class="text-color" target="_blank" href="https://twitter.com/asfskywalking">
+      <i class="fab fa-twitter"></i>
+    </a>
+  </li>
+  
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Slack" aria-label="Slack">
+    <a class="text-color" target="_blank" href="http://s.apache.org/slack-invite">
+      <i class="fab fa-slack"></i>
+    </a>
+  </li>
+  
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Mailing list" aria-label="Mailing list">
+    <a class="text-color" target="_blank" href="https://lists.apache.org/list.html?dev@skywalking.apache.org">
+      <i class="fa fa-envelope"></i>
+    </a>
+  </li>
+  
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="GitHub" aria-label="GitHub">
+    <a class="text-color" target="_blank" href="https://github.com/apache/skywalking">
+      <i class="fab fa-github"></i>
+    </a>
+  </li>
+  
+</ul>
+
+        
+        
+    </div>
+    <div class="">
+
+        <small class="text-color">&copy; 2017 - 2022 The Apache Software Foundation All Rights Reserved</small>
+        
+	
+    </div>
+    <div class="">
+      <small class="text-color mt-4">Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</small>
+    </div>
+  </div>
+</footer>
+
+
+    </div>
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<div id="popup">
+    <div class="mask">
+        <img src=""/>
+    </div>
+</div>
+
+    <div class="sidebar-mask"></div>
+<div class="sidebar">
+    <nav class="nav-links">
+        <div class="nav-item"><a href="/docs/" class="nav-link">Projects and Documentation</a></div>
+        <div class="nav-item"><a href="/events/" class="nav-link">Events</a></div>
+        <div class="nav-item"><a href="/blog/" class="nav-link router-link-exact-active router-link-active">Blog</a>
+        </div>
+        <div class="nav-item"><a href="/downloads/" class="nav-link">Downloads</a></div>
+        <div class="nav-item"><a href="/team/" class="nav-link">Team</a></div>
+        <div class="nav-item"><a href="/users/" class="nav-link">Users</a></div>
+        <div class="nav-item"><a href="/zh/" class="nav-link">中文博客</a></div>
+        <div class="nav-item">
+            <div class="dropdown-wrapper open"><a class="dropdown-title"><span>Links</span> <span
+                    class="arrow down"></span></a>
+                <ul class="nav-dropdown" style="">
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Apache Software Foundation
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="https://github.com/apache/skywalking/issues"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            GitHub Issue Tracker
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Dev Mailing List
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/licenses/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            License
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/events/current-event"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Apache Events
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/security/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Security
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/foundation/sponsorship.html"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Sponsorship and Donate
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/foundation/thanks.html"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Thanks
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+</div>
+
+    
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+<script src="/js/bootstrap.bundle.min.js"></script>
+
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+<script src="/js/main.min.e51dc6fd750f0b866b398da311228bbd3bfdc1d53afbb02d4f52df1680f5f17f.js" integrity="sha256-5R3G/XUPC4ZrOY2jESKLvTv9wdU6&#43;7AtT1LfFoD18X8=" crossorigin="anonymous"></script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+    window.onload = () => mermaid.init(undefined, ".language-mermaid");
+</script>
+
+
+
+
+
+  </body>
+</html>
