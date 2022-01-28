@@ -18,7 +18,7 @@ We downloaded it at 23:15 Jan. 28th UTC+8(Beijing), and archived it at [here](ht
 
 **We have confirmed this is a distribution of SkyWalking Java agent.**
 
-We listed several pieces of evidence to prove this here, any readers could compare with the official [SkyWalking source codes](https://github.com/apache/skywalking-java)
+We listed several pieces of evidence to prove this here, every reader could compare with the official [SkyWalking source codes](https://github.com/apache/skywalking-java)
 
 1. The first and the easiest one is `agent.config` file, which is using the same config keys, and the same config format.
 
@@ -31,7 +31,7 @@ The **ComponentsDefine** class is unchanged, even with component ID and name. Th
 
 ![](components.png)
 
-The whole code names, package names, and hierarchy structure are all as same as SkyWalking 6.x version.
+3. The whole code names, package names, and hierarchy structure are all as same as SkyWalking 6.x version.
 
 This is the Volcengine package hierarchy structure, and check the [SkyWalking's version](https://github.com/apache/skywalking-java/tree/v6.6.0/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/context)
 
