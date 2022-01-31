@@ -65,4 +65,20 @@ On Jan. 29th night, UTC+8, 2022. We received a response from Volcengine's APMPlu
 
 We have updated the status to the PMC mail list. This license violation issue has been resolved for now.
 
+___
+## Appendix
+###  Inquiries of committers
 
+**Q**: I hope Volcengine Inc. can give a reason for this license issue, not just an afterthought PR. This will not only let us know where the issue is but also avoid similar problems in the future.
+
+**A(apmplus <apmplus@volcengine.com>)**: 
+
+```
+The developers neglected this repository during submitting compliance
+assessment.
+Currently, APMPlus team had introduced advanced tools provided by the
+company for compliance assessment, and we also strengthened training for
+our developers.
+In the future, the compliance assessment process will be further improved
+from tool assessment and manual assessment.
+```
