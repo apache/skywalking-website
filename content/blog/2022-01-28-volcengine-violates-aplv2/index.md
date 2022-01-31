@@ -49,7 +49,7 @@ We have contacted their legal team, and wait for their official response.
 
 ## Resolution
 
-On Jan. 29th night, UTC+8, 2022. We received a response from Volcengine's APMPlus team. They admitted their violation behaviors, and made the following changes.
+On Jan. 30th night, UTC+8, 2022. We received a response from Volcengine's APMPlus team. They admitted their violation behaviors, and made the following changes.
 
 1. Volcengine's APMPlus service page was updated on January 30th and stated that the agent is a fork version(re-distribution) of Apache SkyWalking agent. Below is the screenshot of Volcengine's APMPlus product page.
 
