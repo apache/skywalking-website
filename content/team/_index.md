@@ -4,15 +4,27 @@ linkTitle: Team
 description: About SkyWalking Team.
 ---
 
-# SkyWalking Team
+<div class="skywalking-team">
 
-The SkyWalking team is comprised of Members and Contributors. Members have direct access to the source of SkyWalking project and actively evolve the code-base. Contributors improve the project through submission of patches and suggestions to the Members. The number of Contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards. More details see [here](https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md).
+<h1>SkyWalking Team</h1>
+<p class="text-box">
+The SkyWalking team is comprised of Members and Contributors, and the growth has never stopped. Members have direct access to the source of SkyWalking project and actively evolve the code-base. Contributors improve the project through submission of patches and suggestions to the Members.
+</p>
+
+<div class="appreciate"> 
+<h4>All contributions to SkyWalking are appreciated</h4>
+<p>The number of contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards.</p>
+<a href="https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md">Get started</a>
+<img class="deco-img" src="/images/team/team.png" >
+</div>
+
+</div>
 
 ## Members
 
-Members include Project Management Committee members and committers. The list is in alphabet order.
+##### Project Management Committee
 
-### Project Management Committee
+<div class="table-wrapper"> 
 
 | Name                             | Apache ID    | Twitter                                        |
 | -------------------------------- | ------------ | ---------------------------------------------- |
@@ -31,6 +43,9 @@ Members include Project Management Committee members and committers. The list is
 | Kai Wan                          | wankai       | [wankai123](https://twitter.com/wankai123)     |
 | Kai Wang                         | wangkai      |                                                |
 | Lang Li                          | lilang       |                                                |
+
+| Name                             | Apache ID    | Twitter                                        |
+| -------------------------------- | ------------ | ---------------------------------------------- |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
 | Sheng Wu (V.P. and Chair of PMC) | wusheng      | [wusheng1108](https://twitter.com/wusheng1108) |
@@ -46,7 +61,9 @@ Members include Project Management Committee members and committers. The list is
 | Zhang Kewei                      | zhangkewei   |                                                |
 | Zhenxu Ke                        | kezhenxu94   | [kezhenxu94](https://twitter.com/kezhenxu94)   |
 
-### Committer
+</div>
+
+##### Committer
 
 | Name              | Apache ID   | Twitter                                          |
 | ----------------- | ----------- | ------------------------------------------------ |
