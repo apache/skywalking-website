@@ -1,5 +1,5 @@
 ---
-title: "[License Issue] Volcengine Inc.(火山引擎) violates the Apache 2.0 License when using SkyWalking."
+title: "[Resolved][License Issue] Volcengine Inc.(火山引擎) violates the Apache 2.0 License when using SkyWalking."
 date: 2022-01-28
 author: Apache SkyWalking
 description: "Volcengine Inc.(火山引擎) Application Performance Monitoring - Distributed Tracing (应用性能监控全链路版) redistributed Apache SkyWalking illegally. They don't follow the Apache 2.0 License requirements"
@@ -46,3 +46,39 @@ Also, we can't find anything on their website to declare they are distributing S
 **All above have proved they are violating the Apache 2.0 License, and don't respect Apache Software Foundation and Apache SkyWalking's IP and Branding**.
 
 We have contacted their legal team, and wait for their official response.
+
+## Resolution
+
+On Jan. 30th night, UTC+8, 2022. We received a response from Volcengine's APMPlus team. They admitted their violation behaviors, and made the following changes.
+
+1. Volcengine's APMPlus service page was updated on January 30th and stated that the agent is a fork version(re-distribution) of Apache SkyWalking agent. Below is the screenshot of Volcengine's APMPlus product page.
+
+![](service-page.png)
+
+2. Volcengine's APMPlus agent distributions were also updated and include SkyWalking's License and NOTICE now. Below is the screenshot of Volcengine's APMPlus latest agent, you could download from the product page. We keep a copy of their Jan. 30th 2022 at [here](https://drive.google.com/file/d/1tDWEO5mIGKPzYVtPvQijzvHS7ZFDdAwx/view).
+
+![](agent-hierarchy.png)
+
+3. Volcengine's APMPlus team had restored all license headers of SkyWalking in the agent, and the modifications of the project files are also listed in "SkyWalking-NOTICE", which you could download from the product page.
+
+![](modify-list.png)
+
+We have updated the status to the PMC mail list. This license violation issue has been resolved for now.
+
+___
+## Appendix
+###  Inquiries of committers
+
+**Q**: I hope Volcengine Inc. can give a reason for this license issue, not just an afterthought PR. This will not only let us know where the issue is but also avoid similar problems in the future.
+
+**A(apmplus <apmplus@volcengine.com>)**: 
+
+```
+The developers neglected this repository during submitting compliance
+assessment.
+Currently, APMPlus team had introduced advanced tools provided by the
+company for compliance assessment, and we also strengthened training for
+our developers.
+In the future, the compliance assessment process will be further improved
+from tool assessment and manual assessment.
+```
