@@ -4,12 +4,6 @@ linkTitle: "Downloads"
 descriptions: "Download the SkyWalking releases."
 ---
 
-# Download the SkyWalking recommended releases
-
-Use the links below to download the Apache SkyWalking from one of our mirrors.
-
-**Only source code releases are official Apache releases, binary distributions are just for end user convenience.**
-
 {{< downloads-block >}}
 
 ### All Releases
