@@ -13,10 +13,6 @@ $(function () {
       $('.card-wrapper .card').removeClass('active');
       $(hash).parents('.card').addClass('active');
     });
-    $('.more-btn').on('click', function () {
-      var hash = $(this).data('link')
-      scrollTop(hash, 270);
-    });
     $('.link-type').on('click', function () {
       var hash = $(this).attr('href')
       scrollTop(hash, 120);
