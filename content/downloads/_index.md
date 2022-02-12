@@ -6,16 +6,6 @@ descriptions: "Download the SkyWalking releases."
 
 {{< downloads-block >}}
 
-### All Releases
-
-- Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/). 
-- [Archive incubating repository](https://archive.apache.org/dist/incubator/skywalking/) hosts older releases when SkyWalking was an incubator project.
-
-### Docker Images for convenience
-
-**Docker images are not official ASF releases but provided for convenience. Recommended usage is always to build the source**
-
-{{< dockerhub-block >}}
 
 # Verify the releases
 
