@@ -158,7 +158,7 @@ class GenerateTeamYaml {
     list.push(...data);
     if (data.length === per_page) {
       page++;
-      await this.getRepoContributors({user, repo, extraContributors: [], page, per_page, list, item})
+      await this.getRepoContributors({user, repo, extraContributors, page, per_page, list, item})
     } else {
       if (extraContributors && extraContributors.length) {
         extraContributors.forEach(item => this.logins[item.login] = item.login);
