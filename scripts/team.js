@@ -153,10 +153,9 @@ class GenerateTeamYaml {
   }
 
   async getRepoContributors({user, repo, extraContributors = [], page = 1, per_page = 100, list = [], item}) {
-    let {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
-    data = this.handleData(data);
+    let {data = []} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
+    data = this.handleData([...data, ...extraContributors]);
     list.push(...data);
-    list.push(...extraContributors);
     if (data.length === per_page) {
       page++;
       await this.getRepoContributors({user, repo, extraContributors: [], page, per_page, list, item})
