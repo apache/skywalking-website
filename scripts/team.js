@@ -36,10 +36,10 @@ class GenerateTeamYaml {
     const mergedPromiseList = [];
     for (const k of this.nativeObject) {
       for (const item of k.list) {
-        const {user, repo} = item;
+        const {user, repo, extraContributors} = item;
         const list = [];
         if (user && repo) {
-          promiseList.push(this.getRepoContributors({user, repo, list, item}));
+          promiseList.push(this.getRepoContributors({user, repo, extraContributors, list, item}));
           mergedPromiseList.push(this.getMergedData({user, repo}));
         }
       }
@@ -71,7 +71,7 @@ class GenerateTeamYaml {
     const date = [];
 
     const x = new Date();
-    const timepoint = x.setFullYear(2021,7,25);
+    const timepoint = x.setFullYear(2021, 7, 25);
 
     for (let i = 0; i < maxWeekLen; i++) {
       let num = 0;
@@ -152,16 +152,20 @@ class GenerateTeamYaml {
         });
   }
 
-  async getRepoContributors({user, repo, page = 1, per_page = 100, list = [], item}) {
-    let {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
+  async getRepoContributors({user, repo, extraContributors = [], page = 1, per_page = 100, list = [], item}) {
+    let {data = []} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
     data = this.handleData(data);
-    list.push(...data)
+    list.push(...data);
     if (data.length === per_page) {
       page++;
-      await this.getRepoContributors({user, repo, page, per_page, list, item})
+      await this.getRepoContributors({user, repo, extraContributors, page, per_page, list, item})
     } else {
-      item.contributors = list;
-      item.contributorCount = [...new Set(list.map(item => item.id || item.email))].length;
+      if (extraContributors && extraContributors.length) {
+        extraContributors.forEach(item => this.logins[item.login] = item.login);
+      }
+      const repoContributors = [...list, ...extraContributors];
+      item.contributors = repoContributors;
+      item.contributorCount = [...new Set(repoContributors.map(item => item.id || item.login))].length;
     }
   }
 }
