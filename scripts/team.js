@@ -40,12 +40,12 @@ class GenerateTeamYaml {
         const list = [];
         if (user && repo) {
           promiseList.push(this.getRepoContributors({user, repo, extraContributors, list, item}));
-          mergedPromiseList.push(this.getMergedData({user, repo}));
+          // mergedPromiseList.push(this.getMergedData({user, repo}));
         }
       }
     }
     await Promise.all(promiseList)
-    await Promise.all(mergedPromiseList)
+    // await Promise.all(mergedPromiseList)
   }
 
   async getMergedData({user, repo}) {
@@ -71,7 +71,7 @@ class GenerateTeamYaml {
     const date = [];
 
     const x = new Date();
-    const timepoint = x.setFullYear(2021,7,25);
+    const timepoint = x.setFullYear(2021, 7, 25);
 
     for (let i = 0; i < maxWeekLen; i++) {
       let num = 0;
@@ -125,8 +125,8 @@ class GenerateTeamYaml {
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
 
-    const mergedGraphData = this.buildMergedData(this.mergedData)
-    await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
+    // const mergedGraphData = this.buildMergedData(this.mergedData)
+    // await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
     console.log('team.yml & mergedData.js success!');
   }
 
@@ -152,9 +152,12 @@ class GenerateTeamYaml {
         });
   }
 
-  async getRepoContributors({user, repo, extraContributors = [], page = 1, per_page = 100, list = [], item}) {
+  async getRepoContributors({user, repo, extraContributors, page = 1, per_page = 100, list = [], item}) {
     let {data = []} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
-    data = this.handleData([...data, ...extraContributors]);
+    if (extraContributors && extraContributors.length) {
+      data.push(...extraContributors);
+    }
+    data = this.handleData(data);
     list.push(...data);
     if (data.length === per_page) {
       page++;
