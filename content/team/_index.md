@@ -29,9 +29,9 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 
 | Name                             | Apache ID    |                                                |
 | -------------------------------- | ------------ | ---------------------------------------------- |
-| Can Li                           | lican        | <i class="fab fa-twitter"></i> [Candy198088](https://twitter.com/Candy198088) |
+| Can Li                           | lican        | <i class="iconfont icon-twitter"></i> [Candy198088](https://twitter.com/Candy198088) |
 | DongXue Si                       | ilucky       |                                                |
-| Han Liu                          | liuhan       | <i class="fab fa-twitter"></i> [dalek_zero](https://twitter.com/dalek_zero)   |
+| Han Liu                          | liuhan       | <i class="iconfont icon-twitter"></i> [dalek_zero](https://twitter.com/dalek_zero)   |
 | Haochao Zhuang                   | daming       |                                                |
 | Haoyang Liu                      | liuhaoyangzz |                                                |
 | Hongtao Gao                      | hanahmily    |                                                |
@@ -41,7 +41,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Jiaqi Lin                        | linjiaqi     |                                                |
 | Jinlin Fu                        | withlin      |                                                |
 | Juntao Zhang                     | zhangjuntao  |                                                |
-| Kai Wan                          | wankai       | <i class="fab fa-twitter"></i> [wankai123](https://twitter.com/wankai123)     |
+| Kai Wan                          | wankai       | <i class="iconfont icon-twitter"></i> [wankai123](https://twitter.com/wankai123)     |
 | Kai Wang                         | wangkai      |                                                |
 | Lang Li                          | lilang       |                                                |
 
@@ -52,8 +52,8 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | -------------------------------- | ------------ | ---------------------------------------------- |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
-| Sheng Wu (V.P. and Chair of PMC) | wusheng      | <i class="fab fa-twitter"></i> [wusheng1108](https://twitter.com/wusheng1108) |
-| Shinn Zhang                      | zhangxin     | <i class="fab fa-twitter"></i> [ascrutae](https://twitter.com/ascrutae)       |
+| Sheng Wu (V.P. and Chair of PMC) | wusheng      | <i class="iconfont icon-twitter"></i> [wusheng1108](https://twitter.com/wusheng1108) |
+| Shinn Zhang                      | zhangxin     | <i class="iconfont icon-twitter"></i> [ascrutae](https://twitter.com/ascrutae)       |
 | Wei Zhang                        | zhangwei24   |                                                |
 | Wenbing Wang                     | wangwenbin   |                                                |
 | Willem Ning Jiang                | ningjiang    |                                                |
@@ -63,7 +63,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Yongsheng Peng                   | pengys       |                                                |
 | Yuguang Zhao                     | zhaoyuguang  |                                                |
 | Zhang Kewei                      | zhangkewei   |                                                |
-| Zhenxu Ke                        | kezhenxu94   | <i class="fab fa-twitter"></i> [kezhenxu94](https://twitter.com/kezhenxu94)   |
+| Zhenxu Ke                        | kezhenxu94   | <i class="iconfont icon-twitter"></i> [kezhenxu94](https://twitter.com/kezhenxu94)   |
 
 </div>
 </div>
@@ -76,16 +76,16 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
 | Brandon Fergerson | bfergerson  |                                                  |
-| Gui Cao           | zifeihan    | <i class="fab fa-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
+| Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
-| Huaxi Jiang       | hoshea      | <i class="fab fa-twitter"></i> [Zerone___01](https://twitter.com/Zerone___01)   |
+| Huaxi Jiang       | hoshea      | <i class="iconfont icon-twitter"></i> [Zerone___01](https://twitter.com/Zerone___01)   |
 | Jiajing Lu        | lujiajing   |                                                  |
 | Jiapeng Liu       | liujiapeng  |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
-| Ke Zhang          | zhangke     | <i class="fab fa-twitter"></i> [Humbertttttt](https://twitter.com/Humbertttttt) |
+| Ke Zhang          | zhangke     | <i class="iconfont icon-twitter"></i> [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
 | Qiang Li          | liqiang     |                                                  |
-| Ruixian Wang      | ax1an       | <i class="fab fa-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
+| Ruixian Wang      | ax1an       | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
 
 </div>
 <div class="table-box">
@@ -96,11 +96,11 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Tomasz Pytel      | tompytel    |                                                  |
 | Wei Hua           | alonelaval  |                                                  |
 | Wei Jin           | kvn         |                                                  |
-| Weijie Zou        | kdump       | <i class="fab fa-twitter"></i> [RootShellExp](https://twitter.com/RootShellExp) |
+| Weijie Zou        | kdump       | <i class="iconfont icon-twitter"></i> [RootShellExp](https://twitter.com/RootShellExp) |
 | Weiyi Liu         | wayilau     |                                                  |
-| Yanlong He        | heyanlong   | <i class="fab fa-twitter"></i> [YanlongHe](https://twitter.com/YanlongHe)       |
+| Yanlong He        | heyanlong   | <i class="iconfont icon-twitter"></i> [YanlongHe](https://twitter.com/YanlongHe)       |
 | Ye Cao            | dashanji    |                                                  |
-| Yihao Chen        | yihaochen   | <i class="fab fa-twitter"></i> [Superskyyy](https://twitter.com/Superskyyyyy)   |
+| Yihao Chen        | yihaochen   | <i class="iconfont icon-twitter"></i> [Superskyyy](https://twitter.com/Superskyyyyy)   |
 | Yuntao Li         | liyuntao    |                                                  |
 | Zhusheng Xu       | aderm       |                                                  |
 
