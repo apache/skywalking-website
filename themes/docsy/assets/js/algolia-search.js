@@ -1,4 +1,4 @@
-(function () {
+$(function () {
   var reg = /\/docs\/[a-zA-Z\-]+\/([\w|\.]+)\//;
   var res = reg.exec(location.href);
   var version = res && res[1] || "latest";
@@ -12,4 +12,4 @@
     },
     debug: false
   });
-})()
+})
