@@ -15,7 +15,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 <h4>All contributions to SkyWalking are appreciated</h4>
 <p>The number of contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards.</p>
 <a href="https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md">Get started</a>
-<img class="deco-img" data-nolightbox="true" src="/images/team/team.png" >
+<img class="deco-img" data-nolightbox="true" src="/images/team/team.svg" >
 </div>
 
 </div>
