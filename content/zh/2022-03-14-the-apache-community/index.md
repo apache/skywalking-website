@@ -1,5 +1,5 @@
 ---
-title: The Apache Community
+title: 我眼中的 The Apache Way
 date: 2022-03-13
 author: tison
 description: Apache Community 当中以人为本，极致宽容和着眼技术的理念非常有吸引力。我做得很开心，期待你也加入。
