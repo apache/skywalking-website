@@ -23,19 +23,19 @@ The Live Command Palette (LCP) is a contextual command prompt, included in the [
 
 The `view` commands display contextual popups with live operational data of the current source code. These commands allow developers to view traditional SkyWalking operational data filtered down to the relevant metrics.
 
-![](https://user-images.githubusercontent.com/3278877/159803045-9b92dbe1-df08-4275-9ec8-1cbfed6e542d.gif)
+![](view_command.gif)
 
 #### Command: watch log
 
 The `watch log` command allows developers to follow individual log statements of a running application in real-time. This command allows developers to negate the need to manually scroll through the logs to find instances of a specific log statement.
 
-![](https://user-images.githubusercontent.com/3278877/158381411-214285ba-7291-4c70-8e1f-8489140fa239.gif)
+![](watch_log_command.gif)
 
 #### Command: (show/hide) quick stats
 
 The `show quick stats` command displays live endpoint metrics for a quick idea of an endpoint's activity. Using this command, developers can quickly assess the status of an endpoint and determine if the endpoint is performing as expected.
 
-![](https://user-images.githubusercontent.com/3278877/159804991-9882aa60-abd4-43d9-8a3f-db7f1f5f38d5.gif)
+![](show_quick_stats_command.gif)
 
 ## Future Work
 
