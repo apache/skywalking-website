@@ -1,7 +1,7 @@
 ## Introduction
 > The most profound technologies are those that disappear. They weave themselves into the fabric of everyday life until they are indistinguishable from it. - Mark Weiser
 
-Mark Weiser prophetically argued in the late 1980s, that the most far-reaching technologies are those which vanish into thin air. According to Weiser, "Whenever people learn something sufficiently well, they cease to be aware of it." This disappearing act, as Weiser claimed, is not limited to technology but rather human psychology. It is this very experience that allows us to escape lower-level thinking into higher-level thinking. For once we are no longer impeded by mundane details are we free to focus on new goals.
+Mark Weiser prophetically argued in the late 1980s, that the most far-reaching technologies are those which vanish into thin air. According to Weiser, "Whenever people learn something sufficiently well, they cease to be aware of it." This disappearing act, as Weiser claimed, is not limited to technology but rather human psychology. It is this very experience that allows us to escape lower-level thinking into higher-level thinking. For once we are no longer impeded by mundane details, we are then free to focus on new goals.
 
 This realization becomes more relevant as APMs become increasingly popular. As more applications are deployed with APMs, the number of abstract representations of the underlying source code also increases. While this provides great value to many non-development roles within an organization, it does pose additional challenges to those in development roles who must translate these representations into concepts they can work with (i.e. source code). Weiser sums this difficultly up rather succinctly when he states that "Programmers should no more be asked to work without access to source code than auto-mechanics should be asked to work without looking at the engine."
 
@@ -27,7 +27,7 @@ The `view` commands display contextual popups with live operational data of the 
 
 #### Command: watch log
 
-The `watch log` command allows developers to follow individual log statements of a running application in real-time. This command allows developers to negate the need to manually scroll through the logs to find instances of a specific log statement.
+The `watch log` command allows developers to follow individual log statements of a running application in real-time. This command allows developers to negate the need for manually scrolling through the logs to find instances of a specific log statement.
 
 ![](watch_log_command.gif)
 
