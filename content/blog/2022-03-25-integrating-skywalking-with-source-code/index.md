@@ -1,4 +1,5 @@
 ## Introduction
+
 > The most profound technologies are those that disappear. They weave themselves into the fabric of everyday life until they are indistinguishable from it. - Mark Weiser
 
 Mark Weiser prophetically argued in the late 1980s, that the most far-reaching technologies are those which vanish into thin air. According to Weiser, "Whenever people learn something sufficiently well, they cease to be aware of it." This disappearing act, as Weiser claimed, is not limited to technology but rather human psychology. It is this very experience that allows us to escape lower-level thinking into higher-level thinking. For once we are no longer impeded by mundane details, we are then free to focus on new goals.
@@ -43,4 +44,4 @@ The `show quick stats` command displays live endpoint metrics for a quick idea o
 
 Source++ aims to extend SkyWalking in such a way that SkyWalking itself becomes invisible. To accomplish this, we plan to support custom developer commands. Developers will be able to build customized commands for themselves, as well as commands to share with their team. These commands will recognize context, types, and conditions allowing for a wide possibility of operations. As more commands are added, developers will be able to expose everything SkyWalking has to offer while focusing on what matters most, the source code.
 
-If you find these features useful, please consider giving Source++ a try. You can install the plugin directly from your JetBrains IDE, or through the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/12033-source-). If you have any issues or questions, please [open an issue](https://github.com/sourceplusplus/interface-jetbrains/issues).  Feedback is always welcome!
+If you find these features useful, please consider giving Source++ a try. You can install the plugin directly from your JetBrains IDE, or through the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/12033-source-). If you have any issues or questions, please [open an issue](https://github.com/sourceplusplus/interface-jetbrains/issues). Feedback is always welcome!
