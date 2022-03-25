@@ -7,6 +7,8 @@ tags:
 - Observability
 ---
 
+<sub>Read this post in original language: [English](https://skywalking.apache.org/blog/2022-03-25-integrating-skywalking-with-source-code/)</sub>
+
 ## 介绍
 
 > 最具影响力技术是那些消失的技术。他们交织在日常生活中，直到二者完全相融。 - 马克韦瑟
