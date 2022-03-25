@@ -1,3 +1,12 @@
+---
+title: "将 Apache SkyWalking 与源代码集成"
+author: "Brandon Fergerson"
+date: 2022-03-25
+description: "在本文中，我们将介绍开源实时编码平台 Source++ 中的一个新概念，旨在让开发人员更直观地监控生产应用程序。"
+tags:
+- Observability
+---
+
 ## 介绍
 
 > 最具影响力技术是那些消失的技术。他们交织在日常生活中，直到二者完全相融。 - 马克韦瑟
