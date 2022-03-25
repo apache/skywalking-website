@@ -27,7 +27,7 @@ tags:
 
 ### 实时命令板
 
-Live Command Palette (LCP) 是一个上下文命令提示符，包含在 [Source++ JetBrains 插件中](https://github.com/sourceplusplus/interface-jetbrains)，允许开发人员从他们的 IDE（电子集成驱动器）控制和查询实时应用程序。 LCP 通过键盘快捷键 (Ctrl+Shift+S) 打开，允许开发人员轻松查看与他们当前正在查看的源代码相关的指标。 目前支持以下实时视图命令：
+Live Command Palette (LCP) 是一个上下文命令提示符，包含在 [Source++ JetBrains 插件中](https://github.com/sourceplusplus/interface-jetbrains)，允许开发人员从他们的 IDE（电子集成驱动器）控制和查询实时应用程序。 LCP 通过键盘快捷键 (`Ctrl+Shift+S`) 打开，允许开发人员轻松查看与他们当前正在查看的源代码相关的指标。 目前支持以下实时视图命令：
 
 #### 命令：查看（概览/活动/跟踪/日志）
 
