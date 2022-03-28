@@ -60,7 +60,8 @@ class GenerateTeamYaml {
       source.repo = repo;
       this.mergedData.push(source);
     } catch (e) {
-      throw Error(e)
+      console.log(e);
+      process.exit(1)
     }
   }
 
