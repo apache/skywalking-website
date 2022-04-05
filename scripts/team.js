@@ -46,7 +46,7 @@ class GenerateTeamYaml {
           promiseList.push(this.getRepoContributors({user, repo, extraContributors, list, item}));
           mergedPromiseList.push(this.getMergedData({user, repo}));
         }
-        await sleep(600)
+        await sleep(1500)
       }
     }
     await Promise.all(promiseList)
