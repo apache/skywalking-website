@@ -9,6 +9,10 @@ const docsFile = path.join(__dirname, '../data/docs.yml')
 const teamFile = path.join(__dirname, '../data/team.yml')
 const mergedDataFile = path.join(__dirname, '../themes/docsy/static/js/mergedData.js')
 
+const sleep = (ms) => {
+  return new Promise(resolve => setTimeout(() => resolve(), ms));
+}
+
 class GenerateTeamYaml {
   constructor(docsFile, teamFile) {
     this.docsFile = docsFile;
@@ -42,6 +46,7 @@ class GenerateTeamYaml {
           promiseList.push(this.getRepoContributors({user, repo, extraContributors, list, item}));
           mergedPromiseList.push(this.getMergedData({user, repo}));
         }
+        await sleep(1500)
       }
     }
     await Promise.all(promiseList)
@@ -59,8 +64,9 @@ class GenerateTeamYaml {
       const source = res && res.data || [];
       source.repo = repo;
       this.mergedData.push(source);
+      console.log(`${user}/${repo}/graphs success!`);
     } catch (e) {
-      console.log(e);
+      console.log(`${user}/${repo}/graphs failed!`);
       process.exit(1)
     }
   }
