@@ -4,7 +4,7 @@ $('.td-main img').on('click',function(event){if($(this).data('nolightbox')){retu
 event=event||window.event;var target=document.elementFromPoint(event.clientX,event.clientY);showBig(target.src);});$popup.on('click',function(){$(this).fadeOut()});function showBig(src){$popup.find('img').attr('src',src);$popup.fadeIn()}});$(function(){$('.dropdown-title').on('click',function(){$(this).next('.nav-dropdown').toggle()})
 $('.sidebar-button').on('click',function(){$('.sidebar').toggleClass('show')
 $('.sidebar-mask').toggle()})
-$('.sidebar-mask').on('click',function(){$('.sidebar-button').trigger('click')})});$(function(){var reg=/\/docs\/[a-zA-Z\-]+\/([\w|\.]+)\//;var res=reg.exec(location.href);var version=res&&res[1]||"latest";docsearch({apiKey:'a0589fc2fb9cc4876b9443b2911221bc',indexName:'skywalking',inputSelector:'#algolia-search-input',algoliaOptions:{'facetFilters':["version:"+version],hitsPerPage:8},debug:false});});$(function(){var $popup=$('.sky-event-popup')
+$('.sidebar-mask').on('click',function(){$('.sidebar-button').trigger('click')})});$(function(){var reg=/\/docs\/[a-zA-Z\-]+\/([\w|\.]+)\//;var res=reg.exec(location.href);var version=res&&res[1]||"latest";docsearch({container:'#docsearch',appId:'X3PCA2KVGM',indexName:'skywalking',apiKey:'061374998460e79f66774b9b6905a0dd',searchParameters:{facetFilters:["version:"+version],},});});$(function(){var $popup=$('.sky-event-popup')
 var key='SkyWalkingPopupClosedTime';if(!$popup||isShowed(key)){return;}
 var $items=$popup.find('.item');var $pic=$popup.find('.pic');init()
 function init(){var count=getActiveCount()
