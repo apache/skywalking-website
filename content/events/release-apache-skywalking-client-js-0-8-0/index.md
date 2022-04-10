@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking Client JS 0.8.0
-date: 2022-4-10
+date: 2022-04-10
 author: SkyWalking Team
 ---
 
