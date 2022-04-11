@@ -14,6 +14,7 @@ Apache SkyWalking has been accepted in OSPP 2022
 
 | Project | Description | Difficulty | Mentor / E-mail | Expectation | Tech. Requirements | Repository | 
 |---------|-------------|------------|-----------------|-------------|--------------------|------------|
+| SkyAPM-PHP | Add switches for monitoring items | Advanced Level | Yanlong He / heyanlong@apache.org | Complete project development work | C++, GO, PHP | https://github.com/SkyAPM/SkyAPM-php-sdk | 
 
 
 Mentors could submit pull requests to update the above list.
