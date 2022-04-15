@@ -15,6 +15,7 @@ Apache SkyWalking has been accepted in OSPP 2022
 | Project | Description | Difficulty | Mentor / E-mail | Expectation | Tech. Requirements | Repository | 
 |---------|-------------|------------|-----------------|-------------|--------------------|------------|
 | SkyAPM-PHP | Add switches for monitoring items | Advanced Level | Yanlong He / heyanlong@apache.org | Complete project development work | C++, GO, PHP | https://github.com/SkyAPM/SkyAPM-php-sdk | 
+| SkyWalking-Infra-E2E | Optimize verifier                 | Normal Level   | Huaxi Jiang / hoshea@apache.org   | 1. Continue to verify cases when other cases fail <br/> 2. Merge retry outputs <br/> 3. Prettify verify results' output | Go                 | https://github.com/apache/skywalking-infra-e2e |
 
 
 Mentors could submit pull requests to update the above list.
