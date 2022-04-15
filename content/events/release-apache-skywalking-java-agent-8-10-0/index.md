@@ -5,7 +5,7 @@ author: SkyWalking Team
 description: "Release Apache SkyWalking Java Agent 8.10.0."
 ---
 
-SkyWalking Java Agent 8.9.0 is released. Go to [downloads](/downloads) page to find release tars.
+SkyWalking Java Agent 8.10.0 is released. Go to [downloads](/downloads) page to find release tars.
 Changes by Version
 
 8.10.0
