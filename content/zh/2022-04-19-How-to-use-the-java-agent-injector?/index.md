@@ -248,23 +248,23 @@ $ kubectl label namespace springboot-system swck-injection=enabled
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demo
+  name: demo-springboot
   namespace: springboot-system
 spec:
   selector:
     matchLabels:
-      app: demo
+      app: demo-springboot
   template:
     metadata:
       labels:
         swck-java-agent-injected: "true"  # enable the java agent injector
-        app: demo
+        app: demo-springboot
       annotations:
         strategy.skywalking.apache.org/agent.Overlay: "true"  # enable the agent overlay
         agent.skywalking.apache.org/agent.service_name: "backend-service"
     spec:
       containers:
-      - name: demo1
+      - name: springboot
         imagePullPolicy: IfNotPresent
         image: app:v0.0.1
         command: ["java"]
@@ -283,7 +283,7 @@ spec:
     protocol: TCP
     targetPort: 8085
   selector:
-    app: demo
+    app: demo-springboot
 ```
 
 4. 在 `springboot-system` 命名空间中部署 `spring boot` 应用。
@@ -296,16 +296,16 @@ $ kubectl apply -f springboot.yaml
 
 ```sh
 $ kubectl get pod -n springboot-system
-NAME                    READY   STATUS    RESTARTS   AGE
-demo-7db4f9bc45-m767s   1/1     Running   0          8s
+NAME                               READY   STATUS    RESTARTS   AGE
+demo-springboot-7c89f79885-dvk8m   1/1     Running   0          11s
 ```
 
 6. 通过 `JavaAgent` 查看最终注入的 java 探针配置。
 
 ```sh
 $ kubectl get javaagent -n springboot-system
-NAME                 PODSELECTOR   SERVICENAME       BACKENDSERVICE
-app-demo-javaagent   app=demo      backend-service   default-oap.default:11800
+NAME                            PODSELECTOR           SERVICENAME       BACKENDSERVICE
+app-demo-springboot-javaagent   app=demo-springboot   backend-service   127.0.0.1:11800
 ```
 
 
