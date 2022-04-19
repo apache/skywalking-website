@@ -14,6 +14,384 @@
     
     
     <item>
+      <title>Zh: 如何使用java探针注入器?</title>
+      <link>/zh/2022-04-19-how-to-use-the-java-agent-injector/</link>
+      <pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2022-04-19-how-to-use-the-java-agent-injector/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;目录&#34;&gt;目录&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-%E4%BB%8B%E7%BB%8D&#34;&gt;介绍&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-%E4%B8%BB%E8%A6%81%E7%89%B9%E7%82%B9&#34;&gt;主要特点&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-%E5%AE%89%E8%A3%85SWCK&#34;&gt;安装SWCK&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-%E9%83%A8%E7%BD%B2demo%E5%BA%94%E7%94%A8&#34;&gt;部署demo应用&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-%E9%AA%8C%E8%AF%81%E6%B3%A8%E5%85%A5%E5%99%A8&#34;&gt;验证注入器&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#6.-%E7%BB%93%E6%9D%9F%E8%AF%AD&#34;&gt;结束语&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1-介绍&#34;&gt;1. 介绍&lt;/h2&gt;
+&lt;h3 id=&#34;11-swck-是什么&#34;&gt;1.1 SWCK 是什么？&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck&#34;&gt;SWCK&lt;/a&gt;是部署在 Kubernetes 环境中，为 Skywalking 用户提供服务的平台，用户可以基于该平台使用、升级和维护 SkyWalking 相关组件。&lt;/p&gt;
+&lt;p&gt;实际上，SWCK 是基于 &lt;a href=&#34;https://book.kubebuilder.io/&#34;&gt;kubebuilder&lt;/a&gt; 开发的Operator，为用户提供自定义资源（ CR ）以及管理资源的控制器（ Controller ），所有的自定义资源定义（CRD）如下所示：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#javaagent&#34;&gt;JavaAgent&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#oap&#34;&gt;OAP&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#ui&#34;&gt;UI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#storage&#34;&gt;Storage&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#satellite&#34;&gt;Satellite&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#fetcher&#34;&gt;Fetcher&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;12-java-探针注入器是什么&#34;&gt;1.2 java 探针注入器是什么？&lt;/h3&gt;
+&lt;p&gt;对于 java 应用来说，用户需要将 java 探针注入到应用程序中获取元数据并发送到 Skywalking 后端。为了让用户在 Kubernetes 平台上更原生地使用 java 探针，我们提供了 java 探针注入器，该注入器能够将 java 探针通过 sidecar 方式注入到应用程序所在的 pod 中。 java 探针注入器实际上是一个&lt;a href=&#34;https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/&#34;&gt;Kubernetes Mutation Webhook控制器&lt;/a&gt;，如果请求中存在 &lt;a href=&#34;https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/&#34;&gt;annotations&lt;/a&gt; ，控制器会拦截 pod 事件并将其应用于 pod 上。&lt;/p&gt;
+&lt;h2 id=&#34;2-主要特点&#34;&gt;2. 主要特点&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;透明性&lt;/strong&gt;。用户应用一般运行在普通容器中而 java 探针则运行在初始化容器中，且两者都属于同一个 pod 。该 pod 中的每个容器都会挂载一个共享内存卷，为 java 探针提供存储路径。在 pod 启动时，初始化容器中的 java 探针会先于应用容器运行，由注入器将其中的探针文件存放在共享内存卷中。在应用容器启动时，注入器通过设置 JVM 参数将探针文件注入到应用程序中。用户可以通过这种方式实现 java 探针的注入，而无需重新构建包含 java 探针的容器镜像。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可配置性&lt;/strong&gt;。注入器提供两种方式配置 java 探针：全局配置和自定义配置。默认的全局配置存放在 &lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/configmap/&#34;&gt;configmap&lt;/a&gt; 中，用户可以根据需求修改全局配置，比如修改 &lt;code&gt;backend_service&lt;/code&gt; 的地址。此外，用户也能通过 annotation 为特定应用设置自定义的一些配置，比如不同服务的 &lt;code&gt;service_name&lt;/code&gt; 名称。详情可见  &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/java-agent-injector.md&#34;&gt;java探针说明书&lt;/a&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可观察性&lt;/strong&gt;。每个 java 探针在被注入时，用户可以查看名为 &lt;code&gt;JavaAgent&lt;/code&gt; 的 CRD 资源，用于观测注入后的 java 探针配置。详情可见 &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/javaagent.md&#34;&gt;JavaAgent说明&lt;/a&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;3-安装swck&#34;&gt;3. 安装SWCK&lt;/h2&gt;
+&lt;p&gt;在接下来的几个步骤中，我们将演示如何从0开始搭建单机版的 Kubernetes 集群，并在该平台部署0.6.1版本的 SWCK。&lt;/p&gt;
+&lt;h3 id=&#34;31-工具准备&#34;&gt;3.1 工具准备&lt;/h3&gt;
+&lt;p&gt;首先，你需要安装一些必要的工具，如下所示：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;http://kind.sigs.k8s.io&#34;&gt;kind&lt;/a&gt;，用于创建单机版 Kubernetes集群。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/&#34;&gt;kubectl&lt;/a&gt;，用于和Kubernetes 集群交互。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;32-搭建单机版-kubernetes集群&#34;&gt;3.2 搭建单机版 Kubernetes集群&lt;/h3&gt;
+&lt;p&gt;在安装完 &lt;a href=&#34;http://kind.sigs.k8s.io&#34;&gt;kind&lt;/a&gt; 工具后，可通过如下命令创建一个单机集群。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;注意！如果你的终端配置了代理，在运行以下命令之前最好先关闭代理，防止一些意外错误的发生。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kind create cluster --image&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;kindest/node:v1.19.1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在集群创建完毕后，可获得如下的pod信息。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -A                          
+NAMESPACE            NAME                                         READY   STATUS    RESTARTS   AGE
+kube-system          coredns-f9fd979d6-57xpc                      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          coredns-f9fd979d6-8zj8h                      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          etcd-kind-control-plane                      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+kube-system          kindnet-gc9gt                                1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          kube-apiserver-kind-control-plane            1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+kube-system          kube-controller-manager-kind-control-plane   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+kube-system          kube-proxy-6zbtb                             1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          kube-scheduler-kind-control-plane            1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+local-path-storage   local-path-provisioner-78776bfc44-jwwcs      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;33-安装证书管理器cert-manger&#34;&gt;3.3 安装证书管理器(cert-manger)&lt;/h3&gt;
+&lt;p&gt;SWCK 的证书都是由证书管理器分发和验证，需要先通过如下命令安装&lt;a href=&#34;https://cert-manager.io/docs/&#34;&gt;证书管理器cert-manger&lt;/a&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.1/cert-manager.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;验证 cert-manger 是否安装成功。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n cert-manager
+NAME                                       READY   STATUS    RESTARTS   AGE
+cert-manager-7dd5854bb4-slcmd              1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          73s
+cert-manager-cainjector-64c949654c-tfmt2   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          73s
+cert-manager-webhook-6bdffc7c9d-h8cfv      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          73s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;34-安装swck&#34;&gt;3.4 安装SWCK&lt;/h3&gt;
+&lt;p&gt;java 探针注入器是 SWCK 中的一个组件，首先需要按照如下步骤安装 SWCK：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;输入如下命令获取 SWCK 的 yaml 文件并部署在 Kubernetes 集群中。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ curl -Ls https://archive.apache.org/dist/skywalking/swck/0.6.1/skywalking-swck-0.6.1-bin.tgz | tar -zxf - -O ./config/operator-bundle.yaml | kubectl apply -f -
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;检查 SWCK 是否正常运行。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n skywalking-swck-system
+NAME                                                  READY   STATUS    RESTARTS   AGE
+skywalking-swck-controller-manager-7f64f996fc-qh8s9   2/2     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          94s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;35-安装-skywalking-组件--oapserver-和-ui&#34;&gt;3.5 安装 Skywalking 组件 — OAPServer 和 UI&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;在 &lt;code&gt;default&lt;/code&gt; 命名空间中部署 OAPServer 组件和 UI 组件。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f https://raw.githubusercontent.com/apache/skywalking-swck/master/operator/config/samples/default.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;查看 OAPServer 组件部署情况。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get oapserver
+NAME      INSTANCES   RUNNING   ADDRESS
+default   &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;         default-oap.default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;查看 UI 组件部署情况。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get ui
+NAME      INSTANCES   RUNNING   INTERNALADDRESS      EXTERNALIPS   PORTS
+default   &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;         default-ui.default                 &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;80&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;4-部署demo应用&#34;&gt;4. 部署demo应用&lt;/h2&gt;
+&lt;p&gt;在第3个步骤中，我们已经安装好 SWCK 以及相关的 Skywalking 组件，接下来按照全局配置以及自定义配置两种方式，通过两个 java 应用实例，分别演示如何使用 SWCK 中的 java 探针注入器。&lt;/p&gt;
+&lt;h3 id=&#34;41-设置全局配置&#34;&gt;4.1 设置全局配置&lt;/h3&gt;
+&lt;p&gt;当 SWCK 安装完成后，默认的全局配置就会以 configmap 的形式存储在系统命令空间中，可通过如下命令查看。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$  kubectl get configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system -oyaml
+apiVersion: v1
+data:
+  agent.config: |-
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# The service name in UI&lt;/span&gt;
+    agent.service_name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;Your_ApplicationName&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Backend service addresses.&lt;/span&gt;
+    collector.backend_service&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_COLLECTOR_BACKEND_SERVICES&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;127&lt;/span&gt;.0.0.1:&lt;span style=&#34;color:#008080&#34;&gt;11800&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Please refer to https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/configurations/#table-of-agent-configuration-properties to get more details.&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在 &lt;code&gt;kind&lt;/code&gt; 创建的 Kubernetes 集群中， SkyWalking 后端地址和 configmap 中指定的地址可能不同，我们需要使用真正的 OAPServer 组件的地址 &lt;code&gt;default-oap.default&lt;/code&gt; 来代替默认的 &lt;code&gt;127.0.0.1&lt;/code&gt; ，可通过修改 configmap 实现。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl edit configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system
+configmap/skywalking-swck-java-agent-configmap edited
+
+$ kubectl get configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system -oyaml
+apiVersion: v1
+data:
+  agent.config: |-
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# The service name in UI&lt;/span&gt;
+    agent.service_name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;Your_ApplicationName&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Backend service addresses.&lt;/span&gt;
+    collector.backend_service&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_COLLECTOR_BACKEND_SERVICES&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;default&lt;/span&gt;-oap.default:&lt;span style=&#34;color:#008080&#34;&gt;11800&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Please refer to https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/configurations/#table-of-agent-configuration-properties to get more details.&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;42-设置自定义配置&#34;&gt;4.2 设置自定义配置&lt;/h3&gt;
+&lt;p&gt;在实际使用场景中，我们需要使用 Skywalking 组件监控不同的 java 应用，因此不同应用的探针配置可能有所不同，比如应用的名称、应用需要使用的插件等。为了支持自定义配置，注入器提供 annotation 来覆盖默认的全局配置。接下来我们将分别以基于 &lt;code&gt;spring boot&lt;/code&gt; 以及 &lt;code&gt;spring cloud gateway&lt;/code&gt; 开发的两个简单java应用为例进行详细说明，你可以使用这两个应用的&lt;a href=&#34;https://github.com/dashanji/swck-spring-cloud-k8s-demo&#34;&gt;源代码&lt;/a&gt;构建镜像。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# build the springboot and springcloudgateway image &lt;/span&gt;
+$ git clone https://github.com/dashanji/swck-spring-cloud-k8s-demo 
+$ &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; swck-spring-cloud-k8s-demo &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; make
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# check the image&lt;/span&gt;
+$ docker images
+REPOSITORY     TAG       IMAGE ID       CREATED          SIZE
+gateway        v0.0.1    51d16251c1d5   &lt;span style=&#34;color:#099&#34;&gt;48&lt;/span&gt; minutes ago   723MB
+app            v0.0.1    62f4dbcde2ed   &lt;span style=&#34;color:#099&#34;&gt;48&lt;/span&gt; minutes ago   561MB
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# load the image into the cluster&lt;/span&gt;
+$ kind load docker-image app:v0.0.1 &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; kind load docker-image gateway:v0.0.1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;43-部署-spring-boot-应用&#34;&gt;4.3 部署 spring boot 应用&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;创建 &lt;code&gt;springboot-system&lt;/code&gt; 命名空间。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl create namespace springboot-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;给 &lt;code&gt;springboot-system&lt;/code&gt; 命名空间打上标签使能 java 探针注入器。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl label namespace springboot-system swck-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;接下来为 spring boot 应用对应的部署文件 &lt;code&gt;springboot.yaml&lt;/code&gt; ，其中使用了 annotation 覆盖默认的探针配置，比如 &lt;code&gt;service_name&lt;/code&gt; ，将其覆盖为 &lt;code&gt;backend-service&lt;/code&gt; 。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;需要注意的是，在使用 annotation 覆盖探针配置之前，需要增加 &lt;code&gt;strategy.skywalking.apache.org/agent.Overlay: &amp;quot;true&amp;quot;&lt;/code&gt; 来使覆盖生效。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;apps/v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Deployment&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;springboot-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;matchLabels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;template&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;swck-java-agent-injected&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# enable the java agent injector&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;annotations&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;strategy.skywalking.apache.org/agent.Overlay&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# enable the agent overlay&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;agent.skywalking.apache.org/agent.service_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;backend-service&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;containers&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;imagePullPolicy&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;IfNotPresent&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;app:v0.0.1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;args&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;-jar&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/app.jar&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#555&#34;&gt;---&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Service&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;springboot-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ClusterIP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;8085&lt;/span&gt;-tcp&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;port&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;8085&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;protocol&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;TCP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;targetPort&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;8085&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;在 &lt;code&gt;springboot-system&lt;/code&gt; 命名空间中部署 &lt;code&gt;spring boot&lt;/code&gt; 应用。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f springboot.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;查看部署情况。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n springboot-system
+NAME                               READY   STATUS    RESTARTS   AGE
+demo-springboot-7c89f79885-dvk8m   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          11s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;6&#34;&gt;
+&lt;li&gt;通过 &lt;code&gt;JavaAgent&lt;/code&gt; 查看最终注入的 java 探针配置。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get javaagent -n springboot-system
+NAME                            PODSELECTOR           SERVICENAME       BACKENDSERVICE
+app-demo-springboot-javaagent   &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-springboot   backend-service   default-oap.default:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;44-部署-spring-cloud-gateway-应用&#34;&gt;4.4 部署 spring cloud gateway 应用&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;创建 &lt;code&gt;gateway-system&lt;/code&gt; 命名空间。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl create namespace gateway-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;给 &lt;code&gt;gateway-system&lt;/code&gt; 命名空间打上标签使能 java 探针注入器。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl label namespace gateway-system swck-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;接下来为 spring cloud gateway 应用对应的部署文件 &lt;code&gt;springgateway.yaml&lt;/code&gt; ，其中使用了 annotation 覆盖默认的探针配置，比如 &lt;code&gt;service_name&lt;/code&gt; ，将其覆盖为 &lt;code&gt;gateway-service&lt;/code&gt; 。此外，在使用 &lt;code&gt;spring cloud gateway&lt;/code&gt; 时，我们需要在探针配置中添加 &lt;code&gt;spring cloud gateway&lt;/code&gt; 插件。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;需要注意的是，在使用 annotation 覆盖探针配置之前，需要增加 &lt;code&gt;strategy.skywalking.apache.org/agent.Overlay: &amp;quot;true&amp;quot;&lt;/code&gt; 来使覆盖生效。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;apps/v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Deployment&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;matchLabels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;template&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;swck-java-agent-injected&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;annotations&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;strategy.skywalking.apache.org/agent.Overlay&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;agent.skywalking.apache.org/agent.service_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;gateway-service&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;optional.skywalking.apache.org&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;cloud-gateway-3.x&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# add spring cloud gateway plugin&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;containers&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway:v0.0.1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;args&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;-jar&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/gateway.jar&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#555&#34;&gt;---&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Service&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;service-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ClusterIP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;-tcp&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;port&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;protocol&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;TCP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;targetPort&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;在 &lt;code&gt;gateway-system&lt;/code&gt; 命名空间中部署 &lt;code&gt;spring cloud gateway&lt;/code&gt; 应用。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f springgateway.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;查看部署情况。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n gateway-system
+NAME                           READY   STATUS    RESTARTS   AGE
+demo-gateway-758899c99-6872s   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          15s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;6&#34;&gt;
+&lt;li&gt;通过 &lt;code&gt;JavaAgent&lt;/code&gt; 获取最终注入的java探针配置。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get javaagent -n gateway-system
+NAME                         PODSELECTOR        SERVICENAME       BACKENDSERVICE
+app-demo-gateway-javaagent   &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-gateway   gateway-service   default-oap.default:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;5-验证注入器&#34;&gt;5. 验证注入器&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;当完成上述步骤后，我们可以查看被注入pod的详细状态，比如被注入的&lt;code&gt;agent&lt;/code&gt;容器。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# get all injected pod&lt;/span&gt;
+$ kubectl get pod -A -lswck-java-agent-injected&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt;
+NAMESPACE           NAME                               READY   STATUS    RESTARTS   AGE
+gateway-system      demo-gateway-5bb77f6d85-lt4z7      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          69s
+springboot-system   demo-springboot-7c89f79885-lkb5j   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          75s
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# view detailed state of the injected pod [demo-springboot]&lt;/span&gt;
+$ kubectl describe pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-springboot -n springboot-system
+...
+Events:
+  Type   Reason   Age                From                           Message
+  ----   ------  ----                ----                           -------
+  ...
+  Normal Created  91s  kubelet,kind-control-plane Created  container inject-skywalking-agent
+  Normal Started  91s  kubelet,kind-control-plane Started  container inject-skywalking-agent
+  ...
+  Normal Created  90s  kubelet,kind-control-plane Created  container springboot
+  Normal Started  90s  kubelet,kind-control-plane Started  container springboot
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# view detailed state of the injected pod [demo-gateway] &lt;/span&gt;
+$ kubectl describe pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-gateway -n gateway-system
+...
+Events:
+  Type   Reason   Age            From                         Message
+  ----   ------  ----            ----                         -------
+  ...
+  Normal Created 2m20s kubelet,kind-control-plane Created container inject-skywalking-agent
+  Normal Started 2m20s kubelet,kind-control-plane Started container inject-skywalking-agent
+  ...
+  Normal Created 2m20s kubelet,kind-control-plane Created container gateway
+  Normal Started 2m20s kubelet,kind-control-plane Started container gateway
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;现在我们可以将服务绑定在某个端口上并通过 web 浏览器查看采样数据。首先，我们需要通过以下命令获取&lt;code&gt;gateway&lt;/code&gt;服务和&lt;code&gt;ui&lt;/code&gt;服务的信息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get service service-gateway -n gateway-system
+NAME              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;S&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;    AGE
+service-gateway   ClusterIP   10.99.181.145   &amp;lt;none&amp;gt;        9999/TCP   9m19s
+
+$ kubectl get service default-ui
+NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;S&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;   AGE
+default-ui   ClusterIP   10.111.39.250   &amp;lt;none&amp;gt;        80/TCP    82m
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;接下来分别启动2个终端将&lt;code&gt;service-gateway&lt;/code&gt; 以及 &lt;code&gt;default-ui&lt;/code&gt; 绑定到本地端口上，如下所示：&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl port-forward service/service-gateway -n gateway-system 9999:9999
+Forwarding from 127.0.0.1:9999 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;
+Forwarding from &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;::1&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt;:9999 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl port-forward service/default-ui 8090:80                     
+Forwarding from 127.0.0.1:8090 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;8080&lt;/span&gt;
+Forwarding from &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;::1&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt;:8090 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;8080&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;使用以下命令通过&lt;code&gt;spring cloud gateway&lt;/code&gt; 网关服务暴露的端口来访问 &lt;code&gt;spring boot&lt;/code&gt; 应用服务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; i in &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;1..10&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;do&lt;/span&gt; curl http://127.0.0.1:9999/gateway/hello &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;done&lt;/span&gt;
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;我们可以在 web 浏览器中输入 &lt;code&gt;http://127.0.0.1:8090&lt;/code&gt; 来访问探针采集到的数据。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;6&#34;&gt;
+&lt;li&gt;所有服务的拓扑图如下所示。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;7&#34;&gt;
+&lt;li&gt;查看 &lt;code&gt;gateway-service&lt;/code&gt; 网关服务的 trace 信息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;https://lh3.googleusercontent.com/KAJruPRGjzjmX3S0xOu_3CoWetbcTwMQZIcCLtpkOKy1Z3CQFnz_hO6o4pheLiWwNGAr-xfM71NtsgxWo1nHfkGoYRfUF6fY6yHsYI4aAfEJ0y09Gm_tysQir1tn0SNxuVciCjl4&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;8&#34;&gt;
+&lt;li&gt;查看 &lt;code&gt;backend-service&lt;/code&gt; 应用服务的 trace 信息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;https://lh5.googleusercontent.com/zani4DhZmsrKN0N2GLgcjyFg6NBteduWwTNuwXvh7OOONjBhBwnCEuOLNpWa3iaZiPIeG36p-vlk2Fex2lvXJxv4YgBYmvl480U7_FBbtXjduJhsMdTBdvaBN_C2HRpZbdwWzerJ&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;6-结束语&#34;&gt;6. 结束语&lt;/h2&gt;
+&lt;p&gt;如果你的应用部署在 Kubernetes 平台中，且需要 Skywalking 提供监控服务， SWCK 能够帮助你部署、升级和维护 Kubernetes 集群中的 Skywalking 组件。除了本篇博客外，你还可以查看 &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#operator-usage-guide&#34;&gt;SWCK文档&lt;/a&gt; 以及 &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/java-agent-injector.md&#34;&gt;java探针注入器文档&lt;/a&gt; 获取更多的信息。如果你觉得这个项目好用，请给 &lt;a href=&#34;https://github.com/apache/skywalking-swck&#34;&gt;SWCK&lt;/a&gt; 一个star! 如果你有任何疑问，欢迎在&lt;a href=&#34;https://github.com/apache/skywalking/issues&#34;&gt;Issues&lt;/a&gt;或者&lt;a href=&#34;https://github.com/apache/skywalking/discussions&#34;&gt;Discussions&lt;/a&gt;中提出。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Zh: Apache SkyWalking 2022 峰会</title>
       <link>/zh/2022-04-18-meeting/</link>
       <pubDate>Mon, 18 Apr 2022 00:00:00 +0000</pubDate>
