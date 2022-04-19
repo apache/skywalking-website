@@ -305,7 +305,7 @@ demo-springboot-7c89f79885-dvk8m   1/1     Running   0          11s
 ```sh
 $ kubectl get javaagent -n springboot-system
 NAME                            PODSELECTOR           SERVICENAME       BACKENDSERVICE
-app-demo-springboot-javaagent   app=demo-springboot   backend-service   127.0.0.1:11800
+app-demo-springboot-javaagent   app=demo-springboot   backend-service   default-oap.default:11800
 ```
 
 

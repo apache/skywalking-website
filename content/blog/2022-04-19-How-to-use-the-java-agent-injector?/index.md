@@ -187,7 +187,7 @@ data:
     # Please refer to https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/configurations/#table-of-agent-configuration-properties to get more details.
 ```
 
-In the cluster created by `kind`, the `backend_service` may not be correct, we need to use the real OAPServer's address `default-oap.default` to replace the default `backend_service`, so we can edit the configmap as follow.
+In the cluster created by `kind`, the `backend_service` may not be correct, we need to use the real OAPServer's address `default-oap.default` to replace the default `127.0.0.1`, so we can edit the configmap as follow.
 
 ```sh
 $ kubectl edit configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system
@@ -308,7 +308,7 @@ demo-springboot-7c89f79885-dvk8m   1/1     Running   0          11s
 ```sh
 $ kubectl get javaagent -n springboot-system
 NAME                            PODSELECTOR           SERVICENAME       BACKENDSERVICE
-app-demo-springboot-javaagent   app=demo-springboot   backend-service   127.0.0.1:11800
+app-demo-springboot-javaagent   app=demo-springboot   backend-service   default-oap.default:11800
 ```
 
 
