@@ -17,7 +17,7 @@ Apache SkyWalking has been accepted in OSPP 2022
 | SkyWalking | Metrics anomaly detection with machine learning  | Advanced Level | Yihao Chen / yihaochen@apache.org | An MVP version of ML-powered metrics anomaly detection using dynamic baselines and thresholds | Python, Java | https://github.com/apache/skywalking |
 | SkyWalking Python | Collect PVM metrics and send the metrics to OAP backend, configure dashboard in UI | Normal Level | Zhenxu Ke / kezhenxu94@apache.org | Core Python VM metrics should be collected and displayed in SkyWalking. | Python | https://github.com/apache/skywalking-python [issue](https://github.com/apache/skywalking/issues/5944) |
 | SkyWalking BanyanDB| Command line tools for BanyanDB| Normal Level|Hongtao Gao/hanahmily@apache.org| Command line tools should access relevant APIs to manage resources and online data.|Go|https://github.com/apache/skywalking-banyandb |
-| SkyWalking SWCK|CRD and controller for BanyanDB| Advance Level|Hongtao Gao/hanahmily@apache.org| CRD and controller provision BanyanDB as the native Storage resource.|Go|https://github.com/apache/skywalking-swck |
+| SkyWalking SWCK|CRD and controller for BanyanDB| Advance Level| Ye Cao/dashanji@@apache.org| CRD and controller provision BanyanDB as the native Storage resource.|Go|https://github.com/apache/skywalking-swck |
 | SkyAPM-Go2sky | Collect golang metrics such as gc, goroutines and threads, and send the the metrics to OAP backend, configure dashboard in UI | Normal Level | Wei Zhang / zhangwei24@apache.org | Core golang metrics should be collected and displayed in SkyWalking. | Go | https://github.com/SkyAPM/go2sky |
 
 Mentors could submit pull requests to update the above list.
