@@ -19,7 +19,7 @@ Apache SkyWalking has been accepted in OSPP 2022
 | SkyWalking BanyanDB| Command line tools for BanyanDB| Normal Level|Hongtao Gao/hanahmily@apache.org| Command line tools should access relevant APIs to manage resources and online data.|Go|https://github.com/apache/skywalking-banyandb |
 | SkyWalking SWCK|CRD and controller for BanyanDB| Advance Level|Hongtao Gao/hanahmily@apache.org| CRD and controller provision BanyanDB as the native Storage resource.|Go|https://github.com/apache/skywalking-swck |
 | SkyAPM-Go2sky | Collect golang metrics such as gc, goroutines and threads, and send the the metrics to OAP backend, configure dashboard in UI | Normal Level | Wei Zhang / zhangwei24@apache.org | Core golang metrics should be collected and displayed in SkyWalking. | Go | https://github.com/SkyAPM/go2sky |
-| SkyWalking | Collect metrics from telegraf to OAP backend, configure dashboard in UI | Normal Level | Haoyang Liu / liuhaoyangzz@apache.org | Metrics should be collected and displayed in SkyWalking. | Java | https://github.com/apache/skywalking |
+| SkyWalking | Collect system metrics such as system_load, cpu_usage, mem_usage from telegraf and send the metrics to OAP backend, configure dashboard in UI | Normal Level | Haoyang Liu / liuhaoyangzz@apache.org | System metrics should be collected and displayed in SkyWalking. | Java | https://github.com/apache/skywalking |
 
 Mentors could submit pull requests to update the above list.
 
