@@ -46,74 +46,88 @@ The asynchronous EntrySpan needs to be concatenated with the synchronous or asyn
 
 
 There are 2 types of tandem solutions：
-- **Snapshot Delivery**： Pass the snapshot after creating the EntrySpan to the thread that created the ExitSpan in some way.  
+- **Snapshot Delivery**:  
+  Pass the snapshot after creating the EntrySpan to the thread that created the ExitSpan in some way.  
   Currently this approach is used in the asynchronous WebClient plugin, which can receive asynchronous snapshots. shenYu proxy Http service or SpringCloud service is to achieve span concatenation through snapshot passing.
-- **LocalSpan transit.**
-  Other Rpc class plugins do not receive snapshots for concatenation like Asynchronous WebClient. Although you can modify other Rpc plugins to receive snapshots for concatenation, it is not recommended or necessary to do so.
+- **LocalSpan transit**:  
+  Other RPC class plugins do not receive snapshots for concatenation like Asynchronous WebClient. Although you can modify other RPC plugins to receive snapshots for concatenation, it is not recommended or necessary to do so.
   This can be achieved by creating a LocalSpan in the thread where the ExitSpan is created, and then connecting the asynchronous EntrySpan and LocalSpan by `snapshot passing`. This can be done without changing the original plugin code.
 
 
 The span connection is shown below:  
 ![](span-connect.png)
 
-You may ask if it is possible to create LocalSpan inside a generic plugin, instead of creating one separately for ShenYu Rpc plugin?
+You may ask if it is possible to create LocalSpan inside a generic plugin, instead of creating one separately for ShenYu RPC plugin?
 The answer is no, because you need to ensure that LocalSpan and ExitSpan are in the same thread, and ShenYu is fully linked asynchronously. The code to create LocalSpan is reused in the implementation.
 
 
 ## 3. Adding generalized call tracking to the gRPC plugin and keeping it compatible
 
-The existing SkyWalking gRPC plugin only supports calls initiated by way of stubs. For the gateway there is no proto file, the gateway takes generalized calls (not through stubs), so tracing rpc requests, you will find that the link will break at the gateway node.
+The existing SkyWalking gRPC plugin only supports calls initiated by way of stubs. For the gateway there is no proto file, the gateway takes generalized calls (not through stubs), so tracing RPC requests, you will find that the link will break at the gateway node.
 In this case, it is necessary to make the gRPC plugin support generalized calls, while at the same time needing to remain compatible and not affect the original tracing method. This is achieved by determining whether the request parameter is a DynamicMessage, and if it is not, then the original tracing logic through the stub is used.
-If not, then the original tracing logic via stubs is used, and if not, then the generalized call tracing logic is used. The other compatibility is the difference between the old and new versions of grpc, as well as the compatibility of various cases of obtaining server-side IP, for those interested in the source code.
+If not, then the original tracing logic via stubs is used, and if not, then the generalized call tracing logic is used. The other compatibility is the difference between the old and new versions of gRPC, as well as the compatibility of various cases of obtaining server-side IP, for those interested in the source code.
 
 ![](grpc-generic-call.png)
 
 ## 4. ShenYu Gateway Observability Practice
-The above explains the principle of SkyWalking ShenYu plug-in implementation, the following deployment of applications to see the effect. SkyWalking powerful, in addition to the link tracking requires the development of plug-ins, other powerful features out of the box.
-Here only describe the link tracking and application performance analysis part, if you want to experience the power of SkyWalking features, please refer to the [SkyWalking official documentation](https://skywalking.apache.org/)
+The above explains the principle of SkyWalking ShenYu plug-in implementation, the following deployment application to see the effect. SkyWalking powerful, in addition to the link tracking requires the development of plug-ins, other powerful features out of the box.
+Here only describe the link tracking and application performance analysis part, if you want to experience the power of SkyWalking features, please refer to the [SkyWalking official documentation](https://skywalking.apache.org/).  
+Version description:  
+- skywalking-java: `8.11.0-SNAPSHOT` source code build. Note: The shenyu plugin will be released in version 8.11.0, and will probably release it initially in May or June. the Java agent is in the regular release phase.
+- skywalking: `9.0.0` V9 version
 
-### 4.1 Deploying Applications
+Usage instructions:  
+SkyWalking is designed to be very easy to use. Please refer to the official documentation for configuring and activating the shenyu plugin.
+- [SkyWalking Documentation](https://skywalking.apache.org/docs/main/latest/readme/)
+- [SkyWalking Java Agent Documentation](https://skywalking.apache.org/docs/skywalking-java/latest/readme/)
 
-- After packaging SkyWalking Agent (` . /mvnw clean package -Pall -DskipTests`, recommended to download directly from [official website](https://skywalking.apache.org/downloads/) ), for the tracking of the shenyu gateway, put the shenyu plugin into the plugins directory
-- For the service to be tracked, add the following parameter to the start jar command: `-javaagent:skywalking-agent.jar's path -DSW_AGENT_NAME=Your_ApplicationName`
-- Local environment experience the effect can be directly used H2 database, out of the box, the production environment according to the specific changes agent.config
 
-### 4.2 Sending requests to the gateway
-Initiate various services to the gateway through the postman client.
+### 4.1 Sending requests to the gateway
+Initiate various service requests to the gateway via the `postman` client or `other means`.
 
-### 4.3 Request Topology Diagram
+### 4.2 Request Topology Diagram
+
 ![](topology.png)
+  
+---
+![](topology2.png)
 
-### 4.4 Request Trace (in the case of gRPC)
+---
+### 4.3 Request Trace (in the case of gRPC)
 
-Normal Trace：  
+#### Normal Trace：  
 ![](grpc-ok.png)
 
-Abnormal Trace：  
+#### Abnormal Trace：  
 ![](grpc-error.png)
 
 Click on the link node to see the corresponding node information and exception information   
-Service Provider Span  
-![](grpc-service-span.png)
+#### Service Provider Span  
+![](grpc-error-span.png)
 
-Gateway request span
-![](gateway-error-sapn.png)
+#### Gateway request span
+![](gateway-error-span.png)
 
-### 4.5 Service Metrics Monitoring
+### 4.4 Service Metrics Monitoring
 
-Service Metrics Monitoring
+
 ![](overview.png)
 
-### 4.6 Database metrics monitoring
+### 4.5 Gateway background metrics monitoring
+
+#### Database Monitoring:
 ![](database.png)
 
-### 4.7 JVM Monitoring
+#### Thread pool and connection pool monitoring:
+![img.png](img.png)
+
+### 4.6 JVM Monitoring
 ![](jvm.png)
 
-### 4.8 Endpoint Analysis
+### 4.7 Endpoint Analysis
 ![](endpoint.png)
 
-### 4.9 Exception log and exception link analysis
+### 4.8 Exception log and exception link analysis
 [See official documentation for log configuration](https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/)
 
 Log monitoring
