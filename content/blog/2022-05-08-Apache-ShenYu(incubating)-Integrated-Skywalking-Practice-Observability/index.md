@@ -1,5 +1,5 @@
 ---
-title: "SkyWalking ShenYu plugin implementation principles and observability practices"
+title: "Apache ShenYu(incubating) plugin implementation principles and observability practices"
 date: 2022-05-08
 author: hutaishi
 description: This article introduces the principle of SkyWalking ShenYu plugin implementation and the observability practice of ShenYu gateway
