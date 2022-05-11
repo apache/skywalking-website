@@ -135,7 +135,6 @@ function writeFile(filePath, codeTxt) {
   });
 }
 
-
 async function traverseDocsList(result) {
   let tpl = '';
   const docsInfo = []
