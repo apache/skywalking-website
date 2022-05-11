@@ -28,7 +28,7 @@ async function init() {
 function readDirSync(path, docInfo, replaceMarkdownText) {
   const pa = fs.readdirSync(path);
   pa.forEach(function (ele) {
-    const filePath = path + "/" + ele
+    const filePath = path + "/" + ele;
     const info = fs.statSync(filePath);
     if (info.isDirectory()) {
       readDirSync(filePath, docInfo, replaceMarkdownText);
@@ -58,7 +58,7 @@ function readFile(filePath, docInfo, replaceMarkdownText) {
       throw err
     } else {
       let codeTxt = data.toString();
-      codeTxt = replaceMarkdownText(codeTxt, docInfo, filePath)
+      codeTxt = replaceMarkdownText(codeTxt, docInfo, filePath);
       writeFile(filePath, codeTxt);
     }
   });
