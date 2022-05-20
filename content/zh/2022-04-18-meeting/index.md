@@ -28,3 +28,8 @@ SkyWalking峰会在解读SkyWalking v9新特性的同时，还将首发解密APM
 16:00-16:30 SkyWalking助力云原生函数计算可观测<br>霍秉杰 青云科技 资深架构师
 
 ![](https://img-blog.csdnimg.cn/f98f2935c5404d5cb718123e73908fa5.png)
+
+
+## 峰会视频
+
+{{< bilibili BV1Qu411z7wh >}}
