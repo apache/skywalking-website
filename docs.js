@@ -145,7 +145,7 @@ async function traverseDocsList(result) {
         continue;
       }
       for (const doc of item.docs) {
-        const {repo, repoUrl, docs, description} = item;
+        const {repo, repoUrl, docs, description, icon} = item;
         if (!repoUrl) continue;
         let {version, commitId} = doc;
         commitId = commitId || version;
@@ -155,11 +155,14 @@ async function traverseDocsList(result) {
 
         tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                   <div class="description-wrapper">
-                    <h5>${repo}</h5>
+                    <h5>
+                    <img width="26" height="26" src="/images/project/${icon}.svg">
+                    ${repo}
+                    </h5>
                     <p>${description}</p>
                   </div>
                   {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
-                  <div class="version-wrapper">Documentation: 
+                  <div class="version-wrapper">Version: 
                   <select class="version-select">
                   {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
                     {{$version := .version}}
