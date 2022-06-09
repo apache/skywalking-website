@@ -145,7 +145,7 @@ async function traverseDocsList(result) {
         continue;
       }
       for (const doc of item.docs) {
-        const {repo, repoUrl, docs} = item;
+        const {repo, repoUrl, docs, description} = item;
         if (!repoUrl) continue;
         let {version, commitId} = doc;
         commitId = commitId || version;
@@ -154,8 +154,12 @@ async function traverseDocsList(result) {
         const menuFileName = `${docName.replace(/\-|\./g, '_')}${version.replace(/\-|v|\./g, '_')}`;
 
         tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
+                  <div class="description-wrapper">
+                    <h5>${repo}</h5>
+                    <p>${description}</p>
+                  </div>
                   {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
-                  <h5>Documentation: 
+                  <div class="version-wrapper">Documentation: 
                   <select class="version-select">
                   {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
                     {{$version := .version}}
@@ -169,7 +173,7 @@ async function traverseDocsList(result) {
                     </option>
                   {{end}}
                   </select>
-                  </h5>
+                  </div>
                   
                   {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
                   <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
@@ -205,7 +209,6 @@ async function generateLayoutTemplate(targetPath, tpl) {
 
 function handleDocsFiles(docsInfo) {
   docsInfo.forEach((docInfo) => {
-
     const {localPath} = docInfo
     const root = path.join(__dirname, localPath);
     readDirSync(root, docInfo, replaceMarkdownText);
