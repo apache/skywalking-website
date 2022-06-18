@@ -11,9 +11,6 @@ Changes by Version
 8.11.0
 ------------------
 
-8.11.0
-------------------
-
 * Fix `cluster` and `namespace` value duplicated(`namespace` value) in properties report.
 * Add layer field to event when reporting.
 * Remove redundant `shade.package` property.
