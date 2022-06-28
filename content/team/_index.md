@@ -37,6 +37,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Hongtao Gao                      | hanahmily    |                                                |
 | Hongwei Zhai                     | innerpeacez  |                                                |
 | Ignasi Barrera                   | nacx         |                                                |
+| Jiajing Lu                       | lujiajing    |                                                |
 | Jian Tan                         | tanjian      |                                                |
 | Jiaqi Lin                        | linjiaqi     |                                                |
 | Jinlin Fu                        | withlin      |                                                |
@@ -79,7 +80,6 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
 | Huaxi Jiang       | hoshea      | <i class="iconfont icon-twitter"></i> [Zerone___01](https://twitter.com/Zerone___01)   |
-| Jiajing Lu        | lujiajing   |                                                  |
 | Jiapeng Liu       | liujiapeng  |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
 | Ke Zhang          | zhangke     | <i class="iconfont icon-twitter"></i> [Humbertttttt](https://twitter.com/Humbertttttt) |
