@@ -44,13 +44,13 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Juntao Zhang                     | zhangjuntao  |                                                |
 | Kai Wan                          | wankai       | <i class="iconfont icon-twitter"></i> [wankai123](https://twitter.com/wankai123)     |
 | Kai Wang                         | wangkai      |                                                |
-| Lang Li                          | lilang       |                                                |
 
 </div>
 <div class="table-box">
 
 | Name                             | Apache ID    |                                                |
 | -------------------------------- | ------------ | ---------------------------------------------- |
+| Lang Li                          | lilang       |                                                |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
 | Sheng Wu (V.P. and Chair of PMC) | wusheng      | <i class="iconfont icon-twitter"></i> [wusheng1108](https://twitter.com/wusheng1108) |
