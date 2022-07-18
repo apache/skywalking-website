@@ -11,4 +11,4 @@ SkyWalking NodeJS 0.5.1 is a patch release that fixed a vulnerability in all pre
 versions <=0.5.0, we recommend all users who are using versions <=0.5.0 should upgrade to this version.
 
 The vulnerability will cause NodeJS services that has this agent installed to be unavailable
-if the OAP is unhealthy and NodeJS agent can't establish the connection.
+if the OAP is unhealthy and the downstream service's agent can't establish the connection.
