@@ -81,18 +81,19 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Hailin Wang       | wanghailin  |                                                  |
 | Huaxi Jiang       | hoshea      | <i class="iconfont icon-twitter"></i> [Zerone___01](https://twitter.com/Zerone___01)   |
 | Jiapeng Liu       | liujiapeng  |                                                  |
+| Jiemin Xia        | jmjoy       |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
 | Ke Zhang          | zhangke     | <i class="iconfont icon-twitter"></i> [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
 | Qiang Li          | liqiang     |                                                  |
 | Ruixian Wang      | ax1an       | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
-| Sheng Wang        | wangsheng   |                                                  |
 
 </div>
 <div class="table-box">
 
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
+| Sheng Wang        | wangsheng   |                                                  |
 | Tomasz Pytel      | tompytel    |                                                  |
 | Wei Hua           | alonelaval  |                                                  |
 | Wei Jin           | kvn         |                                                  |
