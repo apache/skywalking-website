@@ -55,5 +55,5 @@ function initMergedGraph() {
 initMergedGraph();
 
 $('.contributors-graph').on('load', function (){
-  window.onresize()
+  window.onresize();
 })
