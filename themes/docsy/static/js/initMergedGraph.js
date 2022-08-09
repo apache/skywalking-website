@@ -51,3 +51,9 @@ function initMergedGraph() {
   option && myChart.setOption(option);
   window.onresize = myChart.resize;
 }
+
+initMergedGraph();
+
+$('.contributors-graph').on('load', function (){
+  window.onresize()
+})
