@@ -11,8 +11,7 @@ function initMergedGraph() {
       boundaryGap: false,
       data: mergedData.date
     },
-    yAxis: {
-    },
+    yAxis: {},
     grid: {
       x: 40,
       y: 25,
