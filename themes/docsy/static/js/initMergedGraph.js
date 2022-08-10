@@ -11,8 +11,7 @@ function initMergedGraph() {
       boundaryGap: false,
       data: mergedData.date
     },
-    yAxis: {
-    },
+    yAxis: {},
     grid: {
       x: 40,
       y: 25,
@@ -51,3 +50,9 @@ function initMergedGraph() {
   option && myChart.setOption(option);
   window.onresize = myChart.resize;
 }
+
+initMergedGraph();
+
+$('.contributors-graph').on('load', function (){
+  window.onresize();
+})

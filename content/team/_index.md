@@ -114,7 +114,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 ## Contributor over time
 
 <div class="graph-wrapper">
-<img class="graph-img" data-nolightbox="true" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/>
+<img class="graph-img contributors-graph" data-nolightbox="true" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/>
 <div class="graph-img">
 <div class="txt">Thousands of contributions every year</div>
 <div id="mergedGraph"></div>
