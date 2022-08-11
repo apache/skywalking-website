@@ -1,5 +1,5 @@
 ---
-title: "[Video] Distributed tracing demo using Apache SkyWalking"
+title: "[Video] Distributed tracing demo using Apache SkyWalking and Kong API Gateway"
 date: 2022-08-11
 author: Andrew Kew. QuadCorps Founder [GitHub](https://github.com/andrewgkew) [Linkedin](https://www.linkedin.com/in/andrewgkew) [Website](https://quadcorps.co.uk)
 description: Kongcast Episode 20 - Distributed Tracing on Kubernetes
