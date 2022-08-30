@@ -9,6 +9,8 @@ const docsFile = path.join(__dirname, '../data/docs.yml')
 const teamFile = path.join(__dirname, '../data/team.yml')
 const mergedDataFile = path.join(__dirname, '../themes/docsy/static/js/mergedData.js')
 
+const shouldUpdateContributionData = !!process.argv[2]
+
 const sleep = (ms) => {
   return new Promise(resolve => setTimeout(() => resolve(), ms));
 }
@@ -44,7 +46,7 @@ class GenerateTeamYaml {
         const list = [];
         if (user && repo) {
           promiseList.push(this.getRepoContributors({user, repo, extraContributors, list, item}));
-          mergedPromiseList.push(this.getMergedData({user, repo}));
+          shouldUpdateContributionData && mergedPromiseList.push(this.getMergedData({user, repo}));
         }
         await sleep(1500)
       }
@@ -131,10 +133,13 @@ class GenerateTeamYaml {
     }
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
+    console.log('team.yml success!');
 
-    const mergedGraphData = this.buildMergedData(this.mergedData)
-    await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
-    console.log('team.yml & mergedData.js success!');
+    if (shouldUpdateContributionData) {
+      const mergedGraphData = this.buildMergedData(this.mergedData)
+      await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
+      console.log('mergedData.js success!');
+    }
   }
 
   async loadYaml() {
