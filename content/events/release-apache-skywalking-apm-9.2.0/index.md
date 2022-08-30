@@ -89,7 +89,7 @@ SkyWalking 9.2.0 is released. Go to [downloads](/downloads) page to find release
 #### UI
 
 * Fix query conditions for the browser logs.
-* Implement a url parameter to activate tab index.
+* Implement a URL parameter to activate tab index.
 * Fix clear interval fail when switch autoRefresh to off.
 * Optimize log tables.
 * Fix log detail pop-up page doesn't work.
