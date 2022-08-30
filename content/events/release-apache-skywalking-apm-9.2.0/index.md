@@ -133,7 +133,7 @@ q* Add Spring Sleuth dashboard to general service instance.
 
 * Fix invalid links in release docs.
 * Clean up doc about event metrics.
-* Add a table for metric calculations in the ui doc.
+* Add a table for metric calculations in the UI doc.
 * Add an explanation for alerting kernel and its in-memory window mechanism.
 * Add more docs for widget details.
 * Update alarm doc introduce configuration property key
