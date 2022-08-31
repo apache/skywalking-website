@@ -131,10 +131,11 @@ class GenerateTeamYaml {
     }
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
+    console.log('team.yml success!');
 
     const mergedGraphData = this.buildMergedData(this.mergedData)
     await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
-    console.log('team.yml & mergedData.js success!');
+    console.log('mergedData.js success!');
   }
 
   async loadYaml() {
