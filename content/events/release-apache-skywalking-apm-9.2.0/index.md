@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking APM 9.2.0
-date: 2022-09-02
+date: 2022-09-01
 author: SkyWalking Team
 description: "Release Apache SkyWalking 9.2.0"
 endTime: 2022-09-30T23:00:00Z
