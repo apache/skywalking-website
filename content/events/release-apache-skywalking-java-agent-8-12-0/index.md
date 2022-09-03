@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking Java Agent 8.12.0
-date: 2022-09-04
+date: 2022-09-03
 author: SkyWalking Team
 description: "Release Apache SkyWalking Java Agent 8.12.0."
 ---
