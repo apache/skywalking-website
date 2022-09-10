@@ -1,7 +1,7 @@
 $(function () {
   var reg = /\/docs\/[a-zA-Z\-]+\/([\w|\.]+)\//;
   var res = reg.exec(location.href);
-  var version = res && res[1] || "latest";
+  var version = res && res[1] || "next";
 
   docsearch({
     container: '#docsearch',
