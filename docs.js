@@ -7,7 +7,7 @@ const {execSync} = require('child_process');
 const {promises} = fs;
 const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
-const LATEST = 'latest';
+const NEXT = 'Next';
 
 init();
 
@@ -184,7 +184,7 @@ async function traverseDocsList(result) {
 
         execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
         const sha = execSync(`git -C ./tmp/${repo} rev-parse HEAD`);
-        if(version === LATEST && sha){
+        if(version === NEXT && sha){
           commitId = sha.toString().replace('\n', '');
         }
         docsInfo.push({localPath, repoUrl, commitId, docName, version})
