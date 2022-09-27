@@ -20,24 +20,24 @@
 <meta name="msapplication-TileColor" content="#da532c">
 <meta name="theme-color" content="#ffffff">
 
-<title>SkyWalking 针对 gRPC 的负载均衡和自动扩容实践 | Apache SkyWalking</title><meta property="og:title" content="SkyWalking 针对 gRPC 的负载均衡和自动扩容实践" />
-<meta property="og:description" content="本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。" />
+<title>使用 eBPF 诊断服务网格网络性能 | Apache SkyWalking</title><meta property="og:title" content="使用 eBPF 诊断服务网格网络性能" />
+<meta property="og:description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。" />
 <meta property="og:type" content="article" />
-<meta property="og:url" content="/zh/2022-01-24-scaling-with-apache-skywalking/" />
-<meta property="article:published_time" content="2022-01-24T00:00:00+00:00" />
-<meta property="article:modified_time" content="2022-09-20T14:54:22+08:00" />
-<meta itemprop="name" content="SkyWalking 针对 gRPC 的负载均衡和自动扩容实践">
-<meta itemprop="description" content="本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。">
-<meta itemprop="datePublished" content="2022-01-24T00:00:00+00:00" />
-<meta itemprop="dateModified" content="2022-09-20T14:54:22+08:00" />
-<meta itemprop="wordCount" content="668">
+<meta property="og:url" content="/zh/diagnose-service-mesh-network-performance-with-ebpf/" />
+<meta property="article:published_time" content="2022-09-27T00:00:00+00:00" />
+<meta property="article:modified_time" content="2022-09-27T22:01:36+08:00" />
+<meta itemprop="name" content="使用 eBPF 诊断服务网格网络性能">
+<meta itemprop="description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。">
+<meta itemprop="datePublished" content="2022-09-27T00:00:00+00:00" />
+<meta itemprop="dateModified" content="2022-09-27T22:01:36+08:00" />
+<meta itemprop="wordCount" content="605">
 
 
 
 <meta itemprop="keywords" content="" />
 <meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="SkyWalking 针对 gRPC 的负载均衡和自动扩容实践"/>
-<meta name="twitter:description" content="本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。"/>
+<meta name="twitter:title" content="使用 eBPF 诊断服务网格网络性能"/>
+<meta name="twitter:description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。"/>
 
 <script type="application/javascript">
 var doNotTrack = false;
@@ -66,7 +66,7 @@ if (!doNotTrack) {
 
 
 
-    <title>SkyWalking 针对 gRPC 的负载均衡和自动扩容实践 | Apache SkyWalking</title>
+    <title>使用 eBPF 诊断服务网格网络性能 | Apache SkyWalking</title>
   </head>
   <body class="td-page td-blog">
     <header>
@@ -208,264 +208,279 @@ if (!doNotTrack) {
           <main class="col-12 col-md-12 col-xl-10 pl-md-4 pr-md-4" role="main">
             
 <div class="td-content">
-	<h1>SkyWalking 针对 gRPC 的负载均衡和自动扩容实践</h1>
-	<div class="lead">本文介绍如何通过 SkyWalking Satellite 在 SkyWalking 后台和代理之间进行负载均衡。</div>
+	<h1>使用 eBPF 诊断服务网格网络性能</h1>
+	<div class="lead">本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。</div>
 	<div class="td-byline mb-4">
 		By <b>刘晗，吴晟</b> |
-		<time datetime="2022-01-24" class="text-muted">Monday, January 24, 2022</time>
+		<time datetime="2022-09-27" class="text-muted">Tuesday, September 27, 2022</time>
 
 	    
 		<p class="mt-1 tags-box">
 			<i class="iconfont icon-tags"></i>Tags |
 			
-			<span> <a href="/zh_tags/%E6%80%A7%E8%83%BD">性能</a></span>
+			<span> <a href="/zh_tags/ebpf">eBPF</a></span>
+			
+			<span> <a href="/zh_tags/performance">Performance</a></span>
 			
 		</p>
 		
 
 	</div>
-	<h2 id="背景介绍">背景介绍</h2>
-<p>在 Apache SkyWalking 生态系统中，OAP 通过 SkyWalking Agent、Envoy 或其他数据源获得指标、追踪、日志和事件数据。在 gRPC 协议下，它通过与单个服务器节点进行通信来传输数据。只有当连接中断时，才会使用基于 DNS 轮流模式的重新连接策略。当新的服务在运行时被添加，或者由于观察到的服务的流量增加而使 OAP 负载保持高位时，OAP 集群需要为增加的流量进行扩容。由于所有现有的代理已经连接到以前的节点，新的 OAP 节点的负载会比较小。即使没有扩展，OAP 节点的负载也会不平衡，因为代理会由于启动阶段的随机策略而保持连接。在这些情况下，保持所有节点的健康状态，还能在需要时进行扩展，将成为一个挑战。</p>
-<p>在这篇文章中，我们主要讨论如何解决 SkyWalking 中的这一挑战。</p>
-<h2 id="如何实现负载均衡">如何实现负载均衡</h2>
-<p>SkyWalking 主要使用 gRPC 协议进行数据传输，所以本文主要介绍 gRPC 协议中的负载均衡。</p>
-<h3 id="代理或客户端">代理或客户端</h3>
-<p>根据 <a href="https://grpc.io/blog/grpc-load-balancing/">gRPC 官方负载均衡博客</a>，有两种负载均衡的方法。</p>
+	<p>本文将展示如何利用 <a href="https://github.com/apache/skywalking">Apache SkyWalking</a> 与 <a href="https://ebpf.io/what-is-ebpf/">eBPF</a>，使服务网格下的网络故障排除更加容易。</p>
+<p>Apache SkyWalking 是一个分布式系统的应用性能监控工具。它观察服务网格中的指标、日志、痕迹和事件，并使用这些数据来生成 pod 和服务的依赖图。这个依赖关系图可以帮助你快速系统，尤其是在出现问题的时候。</p>
+<p>然而，在排除 SkyWalking 服务拓扑中的网络问题时，确定错误的实际位置有时候并不容易。造成这种困难的原因有两个：</p>
+<ul>
+<li><strong>通过 Envoy sidecar 的流量并不容易观察</strong>：来自 Envoy 的<a href="https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/accesslog/v3/als.proto">访问日志服务（ALS）</a>的数据显示了服务之间的流量（sidecar-to-sidecar），但没有关于 Envoy sidecar 和它代理的服务之间的通信指标。如果没有这些信息，就很难理解 sidecar 的影响。</li>
+<li><strong>缺乏来自传输层（OSI 第 4 层）通信的数据</strong>：由于服务通常使用应用层（OSI 第 7 层）协议，如 HTTP，可观测性数据通常被限制在应用层通信中。然而，根本原因可能实际上是在传输层，而传输层对可观测性工具来说通常是不透明的。</li>
+</ul>
+<p>获取 Envoy-to-service 和传输层通信的指标，可以更容易诊断服务问题。为此，SkyWalking 需要收集和分析 Kubernetes pod 内进程之间的传输层指标 —— 这项任务很适合 eBPF。我们调查了为此目的使用 eBPF 的情况，并在下面介绍了我们的结果和演示。</p>
+<h2 id="用-ebpf-监控-kubernetes-网络">用 eBPF 监控 Kubernetes 网络</h2>
+<p>eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可以在 Linux 内核中注入和运行自己的代码，是监测 Kubernetes Pod 中网络流量的优秀工具。在接下来的几节中，我们将概述如何使用 eBPF 进行网络监控，作为介绍 <a href="https://github.com/apache/skywalking-rover">Skywalking Rover</a> 的背景，这是一个由 eBPF 驱动的指标收集器和分析器，用于诊断 CPU 和网络性能。</p>
+<h3 id="应用程序和网络如何相互作用">应用程序和网络如何相互作用</h3>
+<p>应用程序和网络之间的互动一般可分为以下步骤，从较高的抽象层次到较低的抽象层次：</p>
+<p><img src="f0.svg" alt="抽象层次"></p>
 <ol>
-<li><strong>客户端</strong>。客户端感知到多个后端服务，并使用负载均衡算法为每个 RPC 选择一个后端服务。</li>
-<li><strong>代理</strong>。客户端将信息发送到代理服务器，代理服务器将信息负载均衡到后端服务。</li>
+<li><strong>用户代码</strong>：应用程序代码使用应用程序堆栈中的高级网络库，在网络上交换数据，如发送和接收 HTTP 请求。</li>
+<li><strong>网络库</strong>：当网络库收到网络请求时，它与语言 API 进行交互以发送网络数据。</li>
+<li><strong>语言 API</strong>：每种语言都提供了一个操作网络、系统等的 API。当收到一个请求时，它与系统的 API 进行交互。在 Linux 中，这个 API 被称为系统调用（syscalls）。</li>
+<li><strong>Linux API</strong>：当 Linux 内核通过 API 收到请求时，它与套接字进行通信以发送数据，这通常更接近于 OSI 第四层协议，如 TCP、UDP 等。</li>
+<li><strong>Socket Ops</strong>：向 / 从网卡发送或接收数据。</li>
 </ol>
-<p>从可观察性系统结构的角度来看。</p>
+<p>我们的假设是，eBPF 可以监控网络。有两种方法可以实现拦截：<strong>用户空间（uprobe）或内核空间（kprobe）</strong>。下表总结了两者的区别。</p>
 <table>
 <thead>
 <tr>
-<th>类别</th>
+<th>方式</th>
 <th>优点</th>
 <th>缺点</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>客户端</td>
-<td>由于消除了额外的跳跃，所以性能很高</td>
-<td>复杂的客户端（集群感知、负载均衡、健康检查等）；确保每个要连接的数据源提供复杂的客户端功能</td>
+<td>uprobe</td>
+<td>• 获取更多与应用相关的上下文，例如当前请求是 HTTP 还是 HTTPS。</br> • 请求和响应可以通过一个方法来截获。</td>
+<td>• 数据结构可能是不稳定的，所以更难获得所需的数据。</br> • 不同语言/库版本的实现可能不同。</br> • 在没有<a href="https://en.wikipedia.org/wiki/Symbol_table">符号表</a>的应用程序中不起作用。</td>
 </tr>
 <tr>
-<td>代理</td>
-<td>客户端简单</td>
-<td>高延迟</td>
+<td>kprobe</td>
+<td>• 可用于所有语言。</br> • 数据结构和方法很稳定，不需要太多调整。</br> • 更容易与底层数据相关联，如获得 TCP 的目标地址、OSI 第四层协议指标等。</td>
+<td>• 一个单一的请求和响应可能被分割成多个 probe。</br> • 对于有状态的请求，上下文信息不容易得到。例如 HTTP/2 中的头压缩。</td>
 </tr>
 </tbody>
 </table>
-<p>我们选择代理模式是出于以下原因：</p>
+<p>对于一般的网络性能监控，我们选择使用 kprobe（拦截系统调用），原因如下：</p>
 <ol>
-<li>可观察的数据对时间不是很敏感，传输造成的一点延迟是可以接受的。多一层跳跃是可以接受的，对客户端没有影响。</li>
-<li>作为一个观察性平台，我们不能 / 不应该要求改变客户端。他们做出自己的技术决定，并可能有自己的商业考虑。</li>
+<li>它可用于用任何编程语言编写的应用程序，而且很稳定，所以可以节省大量的开发 / 适应成本。</li>
+<li>它可以与系统层面的指标相关联，这使得故障排除更加容易。</li>
+<li>由于一个请求和响应被分割成多个 probe，我们可以利用技术将它们关联起来。</li>
+<li>对于背景信息，它通常用于 OSI 第七层协议网络分析。因此，如果我们只是监测网络性能，那么它们可以被忽略。</li>
 </ol>
-<h3 id="传输策略">传输策略</h3>
-<p>在代理模式下，我们应该确定下行和上行之间的传输路径。</p>
-<p>不同的数据协议需要不同的处理策略。有两种传输政策：</p>
+<h3 id="kprobes-和网络监控">Kprobes 和网络监控</h3>
+<p>按照 <a href="http://linasm.sourceforge.net/docs/syscalls/network.php">Linux 文档中的网络系统调用</a>，我们可以通过两类拦截方法实现网络监控：<strong>套接字操作</strong>和<strong>发送 / 接收</strong>方法。</p>
+<h4 id="套接字操作">套接字操作</h4>
+<p>当接受或与另一个套接字连接时，我们可以得到以下信息：</p>
 <ol>
-<li><strong>同步</strong>：适用于需要在客户端交换数据的协议，如 SkyWalking 动态配置服务。这种类型的协议提供实时结果。</li>
-<li><strong>异步批处理</strong>：当客户端不关心上游的处理结果，而只关心传输的数据（如追踪报告、日志报告等）时使用。</li>
+<li><strong>连接信息</strong>：包括来自连接的远程地址，这有助于我们了解哪个 pod 被连接。</li>
+<li><strong>连接统计</strong> ：包括来自套接字的基本指标，如往返时间（<a href="https://en.wikipedia.org/wiki/Round-trip_delay">RTT</a>）、TCP 的丢包数等。</li>
+<li><strong>套接字和文件描述符（<a href="https://en.wikipedia.org/wiki/File_descriptor">FD</a>）的映射</strong>：包括 Linux 文件描述符和套接字对象之间的关系。在通过 Linux 文件描述符发送和接收数据时，它很有用。</li>
 </ol>
-<p>同步策略要求代理在收到客户端消息时，同时向上游服务器发送消息，并同步返回响应数据给下游客户端。通常情况下，只有少数协议需要使用同步策略。</p>
-<p>如下图所示，在客户端向代理发送请求后，代理将同步向服务器发送消息。当代理收到结果后，会返回给客户端。</p>
-<p><img src="./transmission-policy-synchronous.png" alt=""></p>
-<p>异步批处理策略意味着数据被异步地分批发送到上游服务器。这种策略比较常见，因为 SkyWalking 中的大多数协议主要是基于数据报告的。我们认为将队列作为一个缓冲区可以起到很好的效果。异步批处理策略是按照以下步骤执行的：</p>
+<h4 id="发送--接收">发送 / 接收</h4>
+<p>与发送或接收数据有关的接口是性能分析的重点。它主要包含以下参数：</p>
 <ol>
-<li>代理接收数据并将其包装成一个事件对象。</li>
-<li>一个事件被添加到队列中。</li>
-<li>当达到一定间隔时间或队列元素达到固定数量时，队列中的元素将被并行消费并发送至 OAP。</li>
+<li><strong>Socket 文件描述符</strong>：当前操作对应的套接字的文件描述符。</li>
+<li><strong>缓冲区</strong>：发送或接收的数据，以字节数组形式传递。</li>
 </ol>
-<p>使用队列的好处是：</p>
+<p>基于上述参数，我们可以分析以下数据：</p>
 <ol>
-<li>将数据接收和发送分开，以减少相互影响。</li>
-<li>间隔时间和固定元素数机制可以很好的将事件合并，这有助于加快向 OAP 发送事件的速度。</li>
-<li>使用多线程的消费队列事件可以更充分地利用网络 IO。</li>
+<li><strong>字节</strong>：数据包的大小，以字节为单位。</li>
+<li><strong>协议</strong>：根据缓冲区的数据进行协议分析，如 HTTP、MySQL 等。</li>
+<li><strong>执行时间</strong>：发送 / 接收数据所需的时间。</li>
 </ol>
-<p>如下图所示，在代理收到消息后，代理将把消息包装成一个事件并推送到队列中。消息发送者将从队列中获取批量事件，并将其发送给上游的 OAP。</p>
-<p><img src="./transmission-policy-asynchronous.png" alt=""></p>
-<h3 id="路由">路由</h3>
-<p>路由算法被用来将消息路由到单一的上游服务器节点。</p>
-<p>Round-Robin 算法从上游服务节点的列表中按顺序选择节点。这种算法的优点是，每个节点被选择的次数是平均的。当数据的大小接近时，每个上游节点可以处理相同数量的数据内容。</p>
-<p><img src="./routing-round-robin.png" alt=""></p>
-<p>在 Weight Round-Robin 中，每个上游服务器节点都有一个相应的路由权重比。与 Round-Robin 不同的是，每个上游节点根据其权重设置，有更多机会被路由。这种算法更适合在上游服务器节点机器配置不同时使用。</p>
-<p><img src="./routing-weight-round-robin.png" alt=""></p>
-<p>Fixed 算法是一种混合算法。它可以保证相同的数据被路由到同一个上游服务器节点，当上游服务器规模扩大或缩小时，它仍然保持对同一节点的路由；除非上游节点不存在，否则它将重新路由。这种算法主要用于 SkyWalking Meter 协议，因为该协议需要确保同一服务实例的指标被发送到同一 OAP 节点。路由步骤如下：</p>
+<p>在这一点上（图 1），我们可以分析出连接的整个生命周期的以下步骤：</p>
 <ol>
-<li>根据数据内容生成一个独特的识别字符串，越短越好。数据量是可控的。</li>
-<li>从 LRU Cache 中获取身份的上游节点，如果存在就使用它。</li>
-<li>根据识别结果，生成相应的哈希值，并从上游列表中找到上游服务器节点。</li>
-<li>将上游服务器节点和标识之间的映射关系保存到 LRU Cache。</li>
+<li><strong>连接 / 接受</strong>：当连接被创建时。</li>
+<li><strong>转化</strong>：在连接上发送和接收数据。</li>
+<li><strong>关闭</strong>：当连接被关闭时。</li>
 </ol>
-<p>这种算法的优点是尽可能地将数据与上游服务器节点绑定，因此上游服务器可以更好地处理连续数据。缺点是需要占用一定的内存空间来保存相应的关系。</p>
-<p>如下图所示，图片被分为两部分：</p>
+<p><img src="f1.svg" alt="图 1"></p>
+<p><em><strong>图 1</strong></em></p>
+<h3 id="协议和-tls">协议和 TLS</h3>
+<p>上一节描述了如何使用发送或接收缓冲区数据来分析连接。例如，遵循 <a href="https://www.rfc-editor.org/rfc/rfc2068.html#section-4.1">HTTP/1.1 消息规范</a>来分析连接。然而，这对 TLS 请求 / 响应不起作用。</p>
+<p><img src="f2.svg" alt="图 2"></p>
+<p><em><strong>图 2</strong></em></p>
+<p>当使用 TLS 时，Linux 内核在用户空间中传输加密的数据。在上图中，应用程序通常通过第三方库（如 OpenSSL）传输 SSL 数据。对于这种情况，Linux API 只能得到加密的数据，所以它不能识别任何高层协议。为了在 eBPF 内部解密，我们需要遵循以下步骤：</p>
 <ol>
-<li>左边表示相同的数据内容总是被路由到同一个服务器节点。</li>
-<li>右侧代表数据路由算法。从数据中获得数字，并使用余数算法获得位置。</li>
+<li><strong>通过 uprobe 读取未加密的数据</strong>：兼容多种语言，使用 uprobe 来捕获发送前或接收后没有加密的数据。通过这种方式，我们可以获得原始数据并将其与套接字联系起来。</li>
+<li><strong>与套接字关联</strong>：我们可以将未加密的数据与套接字关联。</li>
 </ol>
-<p><img src="./routing-fixed.png" alt=""></p>
-<p>我们选择使用 Round-Robin 和 Fixed 算法的组合进行路由。</p>
+<h4 id="openssl-用例">OpenSSL 用例</h4>
+<p>例如，发送 / 接收 SSL 数据最常见的方法是使用 OpenSSL 作为共享库，特别是 <a href="https://www.openssl.org/docs/man1.1.1/man3/SSL_read.html">SSL_read</a> 和 <a href="https://www.openssl.org/docs/man1.1.1/man3/SSL_write.html">SSL_write</a> 方法，以提交缓冲区数据与套接字。</p>
+<p>按照<a href="https://www.openssl.org/docs/man1.1.1/man7/ssl.html">文档</a>，我们可以截获这两种方法，这与 Linux 中的 API 几乎相同。OpenSSL 中 SSL 结构的源代码显示， <a href="https://github.com/openssl/openssl/blob/9eae491721209f302a9a475bffd271370e8bcb8f/crypto/bio/bio_local.h#L115-L125">Socket FD</a> 存在于 <a href="https://github.com/openssl/openssl/blob/9eae491721209f302a9a475bffd271370e8bcb8f/ssl/ssl_local.h#L1068-L1083">SSL 结构的 BIO 对象</a>中，我们可以通过 offset 得到它。</p>
+<p>综上所述，通过对 OpenSSL 工作原理的了解，我们可以在一个 eBPF 函数中读取未加密的数据。</p>
+<h2 id="skywalking-rover-基于-ebpf-的指标收集器和分析器">SkyWalking Rover—— 基于 eBPF 的指标收集器和分析器</h2>
+<p><a href="https://github.com/apache/skywalking-rover">SkyWalking Rover</a> 在 SkyWalking 生态系统中引入了 eBPF 网络分析功能。目前已在 Kubernetes 环境中得到支持，所以必须在 Kubernetes 集群内部署。部署完成后，SkyWalking Rover 可以监控特定 Pod 内所有进程的网络。基于监测数据，SkyWalking 可以生成进程之间的拓扑关系图和指标。</p>
+<h3 id="拓扑结构图">拓扑结构图</h3>
+<p>拓扑图可以帮助我们了解同一 Pod 内的进程之间以及进程与外部环境（其他 Pod 或服务）之间的网络访问情况。此外，它还可以根据线路的流动方向来确定流量的数据方向。</p>
+<p>在下面的图 3 中，六边形内的所有节点都是一个 Pod 的内部进程，六边形外的节点是外部关联的服务或 Pod。节点由线连接，表示节点之间的请求或响应方向（客户端或服务器）。线条上标明了协议，它是 HTTP (S)、TCP 或 TCP (TLS)。另外，我们可以在这个图中看到，Envoy 和 Python 应用程序之间的线是双向的，因为 Envoy 拦截了所有的应用程序流量。</p>
+<p><img src="f3.jpg" alt="图 3"></p>
+<p><em><strong>图 3</strong></em></p>
+<h3 id="度量">度量</h3>
+<p>一旦我们通过拓扑结构认识到进程之间的网络调用关系，我们就可以选择一个特定的线路，查看两个进程之间的 TCP 指标。</p>
+<p>下图（图4）显示了两个进程之间网络监控的指标。每行有四个指标。左边的两个是在客户端，右边的两个是在服务器端。如果远程进程不在同一个 Pod 中，则只显示一边的指标。</p>
+<p><img src="f4.jpg" alt="图 4"></p>
+<p><em><strong>图 4</strong></em></p>
+<p>有以下两种度量类型。</p>
 <ol>
-<li>Fixed 路由算法适用于特定的协议，主要在向 SkyWalking Meter 协议传递指标数据时使用。</li>
-<li>默认使用 Round-Robin 算法。当 SkyWalking OAP 集群被部署时，节点的配置需要尽可能的相同，所以就没有必要使用 Weight Round-Robin 算法。</li>
-</ol>
-<h2 id="如何平衡负载均衡器本身">如何平衡负载均衡器本身？</h2>
-<p>Proxy 仍然需要处理从客户端到自身的负载均衡问题，特别是在生产环境中部署 Proxy 集群时。</p>
-<p>有三种方法来解决这个问题：</p>
+<li><strong>计数器（Counter）</strong>：记录一定时期内的数据总数。每个计数器包含以下数据。
 <ol>
-<li><strong>连接管理</strong>：在客户端使用 <code>max_connection</code> 配置来指定每个连接的最大连接时间。欲了解更多信息，请阅读<a href="https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md">提案</a>。</li>
-<li><strong>集群感知</strong>：代理有集群感知，当负载不均衡时，主动断开连接，让客户端重新接上代理。</li>
-<li><strong>资源限制 + HPA</strong>：限制每个代理的连接资源情况，达到资源限制时不再接受新连接。并利用 Kubernetes 的 HPA 机制来动态扩展代理的数量。</li>
+<li><strong>计数</strong>：执行次数。</li>
+<li><strong>字节</strong>：数据包大小，以字节为单位。</li>
+<li><strong>执行时间</strong>：执行时间。</li>
 </ol>
+</li>
+<li><strong>柱状图（Histogram）</strong>：记录数据在桶中的分布。</li>
+</ol>
+<p>基于上述数据类型，暴露了以下指标：</p>
 <table>
 <thead>
 <tr>
-<th>类别</th>
-<th>连接管理</th>
-<th>集群感知</th>
-<th>资源限制 + HPA</th>
+<th>名称</th>
+<th>类型</th>
+<th>单位</th>
+<th>描述</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>优点</td>
-<td>使用简单</td>
-<td>确保每个代理中的连接数是相对的</td>
-<td>使用简单</td>
+<td>Write</td>
+<td>计数器和柱状图</td>
+<td>毫秒</td>
+<td>套接字写计数器。</td>
 </tr>
 <tr>
-<td>缺点</td>
-<td>每个客户端需要确保数据不丢失；客户端需要接受 GOWAY 的响应</td>
-<td>可能导致某些节点上的流量突然增加；每个客户端需要确保数据不丢失</td>
-<td>流量不会在每个实例中特别均衡</td>
+<td>Read</td>
+<td>计数器和柱状图</td>
+<td>毫秒</td>
+<td>套接字读计数器。</td>
+</tr>
+<tr>
+<td>Write RTT</td>
+<td>计数器和柱状图</td>
+<td>微秒</td>
+<td>套接字写入往返时间（RTT）计数器。</td>
+</tr>
+<tr>
+<td>Connect</td>
+<td>计数器和柱状图</td>
+<td>毫秒</td>
+<td>套接字连接/接受另一个服务器/客户端的计数器。</td>
+</tr>
+<tr>
+<td>Close</td>
+<td>计数器和柱状图</td>
+<td>毫秒</td>
+<td>有其他套接字的计数器。</td>
+</tr>
+<tr>
+<td>Retransmit</td>
+<td>计数器</td>
+<td>毫秒</td>
+<td>套接字重发包计数器</td>
+</tr>
+<tr>
+<td>Drop</td>
+<td>计数器</td>
+<td>毫秒</td>
+<td>套接字掉包计数器。</td>
 </tr>
 </tbody>
 </table>
-<p>我们选择 资源限制+HPA 是出于这些原因：</p>
+<h2 id="演示">演示</h2>
+<p>在本节中，我们将演示如何在服务网格中执行网络分析。要跟上进度，你需要一个正在运行的 Kubernetes 环境。</p>
+<p><strong>注意</strong>：所有的命令和脚本都可以<a href="https://github.com/mrproliu/skywalking-network-profiling-demo">在这个 GitHub 资源库中</a>找到。</p>
+<h3 id="安装-istio">安装 Istio</h3>
+<p>Istio是最广泛部署的服务网格，并附带一个完整的演示应用程序，我们可以用来测试。要安装 Istio 和演示应用程序，请遵循以下步骤：</p>
 <ol>
-<li>易于配置和使用代理，根据基本的数据指标，容易理解。</li>
-<li>没有因连接中断而导致的数据丢失。客户端不需要实施任何其他协议来防止数据丢失，特别是当客户端是一个商业产品时。</li>
-<li>代理集群中每个节点的连接不需要特别平衡，只要代理节点本身是高性能的。</li>
+<li>从 <a href="https://istio.tetratelabs.io/">Tetrate Istio Distro</a>安装 getmesh。</li>
+<li>使用演示配置文件安装 Istio。</li>
+<li>标记 default 命名空间，所以当我们要部署应用程序时，Istio 会自动注入 Envoy 的 sidecar 代理。</li>
+<li>将 bookinfo 应用程序部署到集群上。</li>
+<li>部署流量生成器，为应用程序生成一些流量。</li>
 </ol>
-<h2 id="skywalking-satellite">SkyWalking-Satellite</h2>
-<p>我们已经在 <a href="https://github.com/apache/skywalking-satellite">SkyWalking-Satellite</a> 项目中实现了这个代理。它被用于客户端和 SkyWalking OAP 之间，有效地解决了负载均衡问题。</p>
-<p>系统部署后，Satellite 会接受来自客户端的流量，Satellite 会通过 Kubernetes 标签选择器或手动配置感知 OAP 的所有节点，并将流量负载均衡到上游的 OAP 节点。</p>
-<p>如下图所示，单个客户端仍与单个 Satellite 保持连接，Satellite 将与每个 OAP 建立连接，并将消息负载均衡的发向 OAP 节点。</p>
-<p><img src="./skywalking-satellites.png" alt=""></p>
-<p>在扩展 Satellite 时，我们需要在 Kubernetes 中部署 <a href="https://github.com/apache/skywalking-swck">SWCK</a> 适配器并配置 HPA。SWCK 是 SkyWalking 用户的平台，提供、升级、维护 SkyWalking 的相关组件，并使其在 Kubernetes 上原生工作。</p>
-<p>部署完成后，将进行以下步骤：</p>
-<ol>
-<li>从 OAP 中读取指标。HPA 要求 SWCK 指标适配器动态地读取 OAP 中的指标。</li>
-<li>扩大 Satellite 的规模。当 Kubernetes HPA 感知到指标值符合预期，Satellite 便会自动进行扩展。</li>
-</ol>
-<p>如下图所示，用虚线来划分这两部分。HPA 使用 SWCK 适配器来读取 OAP 中的指标。当达到阈值时，HPA 将对 Satellite 部署进行扩展。</p>
-<p><img src="swck-hpa.png" alt=""></p>
-<h2 id="例子">例子</h2>
-<p>在本节中，我们将展示两种情况。</p>
-<ol>
-<li>SkyWalking 扩展：在 SkyWalking OAP 扩展之后，流量将通过 Satellite 自动实现负载均衡。</li>
-<li>Satellite 扩展：Satellite 自身的流量负载均衡。</li>
-</ol>
-<p>注意：所有命令都可以通过 <a href="https://github.com/mrproliu/sw-satellite-demo-scripts/tree/1180c23e8f3bb36778307f9ae15395274ca039b3">GitHub</a> 访问。</p>
-<h3 id="skywalking-扩展">SkyWalking 扩展</h3>
-<p>我们将使用 <a href="https://istio.io/latest/docs/examples/bookinfo/">bookinfo 应用程序</a> 演示如何将 Apache SkyWalking 8.9.1 与 Apache SkyWalking-Satellite 0.5.0 集成，并通过 Envoy ALS 协议观察服务网格。</p>
-<p>在开始之前，请确保你已经有一个 Kubernetes 环境。</p>
-<h4 id="安装-istio"><strong>安装 Istio</strong></h4>
-<p>Istio 提供了一个非常方便的方法来配置 Envoy 代理并启用访问日志服务。下面的步骤：</p>
-<ol>
-<li>在本地安装 istioctl 以帮助管理 Istio 服务网格。</li>
-<li>将 Istio 安装到 Kubernetes 环境中，使用 demo 配置，并启用 Envoy ALS。将 ALS 消息传输到 Satellite 上。我们稍后将部署的 Satellite。</li>
-<li>将标签添加到默认命名空间中，这样 Istio 就可以在你以后部署应用程序时自动注入 Envoy sidecar 代理。</li>
-</ol>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># install istioctl</span>
-<span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.12.0
-curl -L https://istio.io/downloadIstio | sh - 
-sudo mv <span style="color:#008080">$PWD</span>/istio-<span style="color:#008080">$ISTIO_VERSION</span>/bin/istioctl /usr/local/bin/
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.13.1
 
-<span style="color:#998;font-style:italic"># install istio</span>
-istioctl install -y --set <span style="color:#008080">profile</span><span style="color:#000;font-weight:bold">=</span>demo <span style="color:#d14">\
-</span><span style="color:#d14"></span>	--set meshConfig.enableEnvoyAccessLogService<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
-</span><span style="color:#d14"></span>	--set meshConfig.defaultConfig.envoyAccessLogService.address<span style="color:#000;font-weight:bold">=</span>skywalking-system-satellite.skywalking-system:11800
-
-<span style="color:#998;font-style:italic"># enbale envoy proxy in default namespace</span>
+<span style="color:#998;font-style:italic"># 安装 istio</span>
+istioctl install -y --set <span style="color:#008080">profile</span><span style="color:#000;font-weight:bold">=</span>demo
 kubectl label namespace default istio-injection<span style="color:#000;font-weight:bold">=</span>enabled
-</code></pre></div><h4 id="安装-swck"><strong>安装 SWCK</strong></h4>
-<p>SWCK 为用户部署和升级基于 Kubernetes 的 SkyWalking 相关组件提供了便利。Satellite 的自动扩展功能也主要依赖于 SWCK。更多信息，你可以参考 <a href="https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#guides-of-operator-deployment">官方文档</a> 。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># Install cert-manager</span>
-kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.1/cert-manager.yaml
 
-<span style="color:#998;font-style:italic"># Deploy SWCK</span>
-mkdir -p skywalking-swck <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#0086b3">cd</span> skywalking-swck
-wget https://dlcdn.apache.org/skywalking/swck/0.6.1/skywalking-swck-0.6.1-bin.tgz
-tar -zxvf skywalking-swck-0.6.1-bin.tgz
-<span style="color:#0086b3">cd</span> config
-kubectl apply -f operator-bundle.yaml
-</code></pre></div><h4 id="部署-apache-skywalking-和-apache-skywalking-satellite"><strong>部署 Apache SkyWalking 和 Apache SkyWalking-Satellite</strong></h4>
-<p>我们提供了一个简单的脚本来部署 SkyWalking 的 OAP、用户界面和 Satellite。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># Create the skywalking components namespace</span>
-kubectl create namespace skywalking-system
-kubectl label namespace skywalking-system swck-injection<span style="color:#000;font-weight:bold">=</span>enabled
-<span style="color:#998;font-style:italic"># Deploy components</span>
-kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/sw-components.yaml
-</code></pre></div><h4 id="部署-bookinfo-应用程序"><strong>部署 Bookinfo 应用程序</strong></h4>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.12.0
+<span style="color:#998;font-style:italic"># 部署 bookinfo 应用程序</span>
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl <span style="color:#0086b3">wait</span> --for<span style="color:#000;font-weight:bold">=</span><span style="color:#008080">condition</span><span style="color:#000;font-weight:bold">=</span>Ready pods --all --timeout<span style="color:#000;font-weight:bold">=</span>1200s
-kubectl port-forward service/productpage <span style="color:#099">9080</span>
-</code></pre></div><p>接下来，请打开你的浏览器并访问 http://localhost:9080。你应该能够看到 Bookinfo 应用程序。多次刷新网页以产生足够的访问日志。</p>
-<p>然后，你可以在 SkyWalking WebUI 上看到 Bookinfo 应用程序的拓扑结构和指标。这时你可以看到，Satellite 已经正在工作。</p>
-<h4 id="部署监控器"><strong>部署监控器</strong></h4>
-<p>我们需要安装 OpenTelemetry Collector 来收集 OAP 中的指标并对其进行分析。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh"><span style="color:#998;font-style:italic"># Add OTEL collector</span>
-kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/otel-collector-oap.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/virtual-service-all-v1.yaml
 
-kubectl port-forward -n skywalking-system  service/skywalking-system-ui 8080:80
-</code></pre></div><p>接下来，请打开浏览器，访问 http://localhost:8080/，并在仪表板上创建一个新项目。下图中的 SkyWalking Web UI 显示了数据内容的应用方式。</p>
-<p><img src="./mesh-count-conf.png" alt=""></p>
-<h4 id="扩容-oap">扩容 OAP</h4>
-<p>通过 Deployment，扩容 OAP 的数量。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl scale --replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">3</span> -n skywalking-system deployment/skywalking-system-oap
-</code></pre></div><h4 id="完成">完成</h4>
-<p>一段时间后，你会看到 OAP 的数量变成了 3 个，而且 ALS 的流量被平衡到每个 OAP。</p>
-<p><img src="./mesh-count-list.png" alt=""></p>
-<h3 id="扩容-satellite">扩容 Satellite</h3>
-<p>在我们完成了 SkyWalking Scaling 之后，我们将进行 Satellite Scaling 演示。</p>
-<h4 id="部署-swck-hpa"><strong>部署 SWCK HPA</strong></h4>
-<p>SWCK 提供了一个适配器来实现 Kubernetes 外部指标监控，通过读取 SkyWalking OAP 中的指标来适应 HPA。我们将 Satellite 中的指标服务暴露给 OAP，并配置 HPA 资源来自动扩展 Satellite。</p>
-<p>将 SWCK 适配器安装到 Kubernetes 环境中。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl apply -f skywalking-swck/config/adapter-bundle.yaml
-</code></pre></div><p>创建 HPA 资源，并限制每个 Satellite 最多可处理 10 个连接。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/satellite-hpa.yaml
-</code></pre></div><p>然后，你可以看到我们在一个 Satellite 上有 9 个连接。一个 Envoy 代理可能建立多个连接到 Satellite。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">$ kubectl get HorizontalPodAutoscaler -n skywalking-system
-NAME       REFERENCE                                TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-hpa-demo   Deployment/skywalking-system-satellite   9/10      <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">1</span>          5m18s
-</code></pre></div><h4 id="扩容应用">扩容应用</h4>
-<p>扩容应用程序可以建立更多与 Satellite 的连接，以验证 HPA 是否生效。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">kubectl scale --replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">3</span> deployment/productpage-v1 deployment/details-v1
-</code></pre></div><h4 id="完成-1">完成</h4>
-<p>默认情况下，Satellite 将部署一个实例，一个实例只能接受 11 个连接。HPA 资源限制一个 Satellite 处理 10 个连接，并使用稳定窗口使 Satellite 稳定扩展。在这种情况下，我们在扩展后将 Bookinfo 应用程序部署在 10 多个实例中，这意味着将有 10 多个连接建立到 Satellite 上。</p>
-<p>所以在 HPA 资源运行后，Satellite 会自动扩展到 2 个实例。你可以通过 <a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details">官方文档</a> 了解扩容/缩容的计算算法。运行下面的命令来查看运行状态。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">$ kubectl get HorizontalPodAutoscaler -n skywalking-system --watch
-NAME       REFERENCE                                TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">1</span>          3m31s
-hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">1</span>          4m20s
-hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">2</span>          4m38s
-hpa-demo   Deployment/skywalking-system-satellite   11/10     <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">2</span>          5m8s
-hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color:#099">1</span>         <span style="color:#099">3</span>         <span style="color:#099">2</span>          5m23s
-</code></pre></div><p>通过观察 “连接数“ 指标，我们将能够看到，当每个 gRPC 的连接数超过 10 个连接时，那么 Satellite 就会通过 HPA 规则自动进行扩展。结果是，连接数下降到正常状态（在这个例子中，小于 10 个）</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sh" data-lang="sh">swctl metrics linear --name satellite_service_grpc_connect_count --service-name satellite::satellite-service
-</code></pre></div><p><img src="satellite-connection-metrics.png" alt=""></p>
+<span style="color:#998;font-style:italic"># 产生流量</span>
+kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/traffic-generator.yaml
+</code></pre></div><h3 id="安装-skywalking">安装 SkyWalking</h3>
+<p>下面将安装 SkyWalking 所需的存储、后台和用户界面。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">git clone https://github.com/apache/skywalking-kubernetes.git
+<span style="color:#0086b3">cd</span> skywalking-kubernetes
+<span style="color:#0086b3">cd</span> chart
+helm dep up skywalking
+helm -n istio-system install skywalking skywalking <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set <span style="color:#008080">fullnameOverride</span><span style="color:#000;font-weight:bold">=</span>skywalking <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set elasticsearch.minimumMasterNodes<span style="color:#000;font-weight:bold">=</span><span style="color:#099">1</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set elasticsearch.imageTag<span style="color:#000;font-weight:bold">=</span>7.5.1 <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set oap.replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">1</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set ui.image.repository<span style="color:#000;font-weight:bold">=</span>apache/skywalking-ui <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set ui.image.tag<span style="color:#000;font-weight:bold">=</span>9.2.0 <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set oap.image.tag<span style="color:#000;font-weight:bold">=</span>9.2.0 <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set oap.envoy.als.enabled<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set oap.image.repository<span style="color:#000;font-weight:bold">=</span>apache/skywalking-oap-server <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set oap.storageType<span style="color:#000;font-weight:bold">=</span>elasticsearch <span style="color:#d14">\
+</span><span style="color:#d14"></span> --set oap.env.SW_METER_ANALYZER_ACTIVE_FILES<span style="color:#000;font-weight:bold">=</span><span style="color:#d14">&#39;network-profiling&#39;</span>
+</code></pre></div><h3 id="安装-skywalking-rover">安装 SkyWalking Rover</h3>
+<p>SkyWalking Rover 部署在 Kubernetes 的每个节点上，它自动检测 Kubernetes 集群中的服务。网络剖析功能已经在 SkyWalking Rover 的 0.3.0 版本中发布。当网络监控任务被创建时，SkyWalking Rover 会将数据发送到 SkyWalking 后台。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/skywalking-rover.yaml
+</code></pre></div><h3 id="启动网络分析任务">启动网络分析任务</h3>
+<p>一旦所有部署完成，我们必须在 SkyWalking UI 中为服务的特定实例创建一个网络分析任务。</p>
+<p>要打开 SkyWalking UI，请运行：</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl port-forward svc/skywalking-ui 8080:80 --namespace istio-system
+</code></pre></div><p>目前，我们可以通过点击服务网格面板中的<strong>数据平面</strong>项目和 <strong>Kubernetes</strong> 面板中的服务项目来选择我们想要监控的特定实例。</p>
+<p>在下图中，我们选择了一个实例，在网络剖析标签里有一个任务列表。当我们点击启动按钮时，SkyWalking Rover 开始监测这个实例的网络。</p>
+<p><img src="f5.jpg" alt="图 5"></p>
+<p><em><strong>图 5</strong></em></p>
+<h3 id="完成">完成</h3>
+<p>几秒钟后，你会看到页面的右侧出现进程拓扑结构。</p>
+<p><img src="f6.jpg" alt="图 6"></p>
+<p><em><strong>图 6</strong></em></p>
+<p>当你点击进程之间的线时，你可以看到两个进程之间的 TCP 指标。</p>
+<p><img src="f7.jpg" alt="图 7"></p>
+<p><em><strong>图 7</strong></em></p>
+<h2 id="总结">总结</h2>
+<p>在这篇文章中，我们详细介绍了一个使服务网格故障排除困难的问题：网络堆栈中各层之间缺乏上下文。这些情况下，当现有的服务网格 /envoy 不能时，eBPF 开始真正帮助调试 / 生产。然后，我们研究了如何将 eBPF 应用于普通的通信，如 TLS。最后，我们用 SkyWalking Rover 演示了这个过程的实现。</p>
+<p>目前，我们已经完成了对 OSI 第四层（主要是 TCP）的性能分析。在未来，我们还将介绍对 OSI 第 7 层协议的分析，如 HTTP。</p>
+<h2 id="开始使用-istio">开始使用 Istio</h2>
+<p>开始使用服务网格，<a href="https://istio.tetratelabs.io/">Tetrate Istio Distro</a> 是安装、管理和升级 Istio 的最简单方法。它提供了一个经过审查的 Istio 上游发布，由 Tetrate 为特定平台进行测试和优化，加上一个 CLI，方便获取、安装和配置多个 Istio 版本。Tetrate Istio Distro 还为 FedRAMP 环境提供 <a href="https://www.tetrate.io/blog/tetrate-istio-distro-achieves-fips-certification/">FIPS 认证的 Istio 构建</a>。</p>
+<p>对于需要以统一和一致的方式在复杂的异构部署环境中保护和管理服务和传统工作负载的企业，我们提供 <a href="https://www.tetrate.io/tetrate-service-bridge/">Tetrate Service Bridge</a>，这是我们建立在 Istio 和 Envoy 上的旗舰工作负载应用连接平台。</p>
+<p><a href="https://www.tetrate.io/contact/">联系我们以了解更多</a>。</p>
+<h2 id="其他资源">其他资源</h2>
+<ol>
+<li><a href="https://github.com/apache/skywalking">SkyWalking Github Repo</a></li>
+<li><a href="https://github.com/apache/skywalking-rover">SkyWalking Rover Github Repo</a></li>
+<li><a href="https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/">SkyWalking Rover 文件</a></li>
+<li><a href="https://skywalking.apache.org/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/">通过使用 eBPF 博文准确定位服务网格关键性能影响</a></li>
+<li><a href="https://www.youtube.com/watch?v=yUF5qRk4rYY">Apache SkyWalking 与本地 eBPF 代理的介绍</a></li>
+<li><a href="https://ebpf.io/what-is-ebpf#hook-overview">eBPF hook概述</a></li>
+</ol>
 
 	
 
 	<ul class="list-unstyled d-flex justify-content-between align-items-center mb-0 pt-5">
   <li>
-    <a href="/zh/2022-01-18-cyborg-flow/" class="btn btn-primary "><span class="mr-1">←</span> Previous</a>
+    <a href="/zh/2022-08-30-pingan-jiankang/" class="btn btn-primary "><span class="mr-1">←</span> Previous</a>
   </li>
-    <a href="/zh/2022-03-14-the-apache-community/" class="btn btn-primary ">Next <span class="ml-1">→</span></a>
+    <a  class="btn btn-primary  disabled">Next <span class="ml-1">→</span></a>
   </li>
 </ul>
 
@@ -512,6 +527,11 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
         </li>
         
         <li>
+            <a href="/zh_tags/ebpf/" class="tag-link">eBPF</a>
+            <span class="count">1</span>
+        </li>
+        
+        <li>
             <a href="/zh_tags/elasticsearch/" class="tag-link">ElasticSearch</a>
             <span class="count">1</span>
         </li>
@@ -544,6 +564,11 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
         <li>
             <a href="/zh_tags/open-source-promotion-plan/" class="tag-link">Open Source Promotion Plan</a>
             <span class="count">2</span>
+        </li>
+        
+        <li>
+            <a href="/zh_tags/performance/" class="tag-link">Performance</a>
+            <span class="count">1</span>
         </li>
         
         <li>
@@ -596,11 +621,6 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
             <span class="count">1</span>
         </li>
         
-        <li>
-            <a href="/zh_tags/%E6%80%A7%E8%83%BD/" class="tag-link">性能</a>
-            <span class="count">1</span>
-        </li>
-        
     </ul>
 </div>
 
@@ -633,22 +653,31 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
   <ul>
     <li>
       <ul>
-        <li><a href="#背景介绍">背景介绍</a></li>
-        <li><a href="#如何实现负载均衡">如何实现负载均衡</a>
+        <li><a href="#用-ebpf-监控-kubernetes-网络">用 eBPF 监控 Kubernetes 网络</a>
           <ul>
-            <li><a href="#代理或客户端">代理或客户端</a></li>
-            <li><a href="#传输策略">传输策略</a></li>
-            <li><a href="#路由">路由</a></li>
+            <li><a href="#应用程序和网络如何相互作用">应用程序和网络如何相互作用</a></li>
+            <li><a href="#kprobes-和网络监控">Kprobes 和网络监控</a></li>
+            <li><a href="#协议和-tls">协议和 TLS</a></li>
           </ul>
         </li>
-        <li><a href="#如何平衡负载均衡器本身">如何平衡负载均衡器本身？</a></li>
-        <li><a href="#skywalking-satellite">SkyWalking-Satellite</a></li>
-        <li><a href="#例子">例子</a>
+        <li><a href="#skywalking-rover-基于-ebpf-的指标收集器和分析器">SkyWalking Rover—— 基于 eBPF 的指标收集器和分析器</a>
           <ul>
-            <li><a href="#skywalking-扩展">SkyWalking 扩展</a></li>
-            <li><a href="#扩容-satellite">扩容 Satellite</a></li>
+            <li><a href="#拓扑结构图">拓扑结构图</a></li>
+            <li><a href="#度量">度量</a></li>
           </ul>
         </li>
+        <li><a href="#演示">演示</a>
+          <ul>
+            <li><a href="#安装-istio">安装 Istio</a></li>
+            <li><a href="#安装-skywalking">安装 SkyWalking</a></li>
+            <li><a href="#安装-skywalking-rover">安装 SkyWalking Rover</a></li>
+            <li><a href="#启动网络分析任务">启动网络分析任务</a></li>
+            <li><a href="#完成">完成</a></li>
+          </ul>
+        </li>
+        <li><a href="#总结">总结</a></li>
+        <li><a href="#开始使用-istio">开始使用 Istio</a></li>
+        <li><a href="#其他资源">其他资源</a></li>
       </ul>
     </li>
   </ul>
@@ -3968,6 +3997,10 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
 
 
 
+
+
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -3981,6 +4014,22 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
         </div>
 
         <div class="content-box">
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
             
             
             
@@ -4039,18 +4088,6 @@ hpa-demo   Deployment/skywalking-system-satellite   6/10      <span style="color
                     
                 </a>
             </div>
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
             
             
             

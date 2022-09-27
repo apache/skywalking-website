@@ -4,7 +4,7 @@
     <link>/tags/performance/</link>
     <description>Recent content in Performance on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
-    <lastBuildDate>Mon, 24 Jan 2022 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 27 Sep 2022 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/performance/index.xml" rel="self" type="application/rss+xml" />
     
@@ -13,6 +13,275 @@
         
       
     
+    
+    <item>
+      <title>Blog: Diagnose Service Mesh Network Performance with eBPF</title>
+      <link>/blog/diagnose-service-mesh-network-performance-with-ebpf/</link>
+      <pubDate>Tue, 27 Sep 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/diagnose-service-mesh-network-performance-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;This article will show how to use &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; with &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; to make network troubleshooting easier in a service mesh environment.&lt;/p&gt;
+&lt;p&gt;Apache SkyWalking is an application performance monitor tool for distributed systems. It observes metrics, logs, traces, and events in the service mesh environment and uses that data to generate a dependency graph of your pods and services. This dependency graph can provide quick insights into your system, especially when there&amp;rsquo;s an issue.&lt;/p&gt;
+&lt;p&gt;However, when troubleshooting network issues in SkyWalking&amp;rsquo;s service topology, it is not always easy to pinpoint where the error actually is. There are two reasons for the difficulty:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Traffic through the Envoy sidecar is not easy to observe.&lt;/strong&gt; Data from Envoy&amp;rsquo;s &lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/accesslog/v3/als.proto&#34;&gt;Access Log Service (ALS)&lt;/a&gt; shows traffic between services (sidecar-to-sidecar), but not metrics on communication between the Envoy sidecar and the service it proxies. Without that information, it is more difficult to understand the impact of the sidecar.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;There is a lack of data from transport layer (OSI Layer 4) communication.&lt;/strong&gt; Since services generally use application layer (OSI Layer 7) protocols such as HTTP, observability data is generally restricted to application layer communication. However, the root cause may actually be in the transport layer, which is typically opaque to observability tools.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Access to metrics from Envoy-to-service and transport layer communication can make it easier to diagnose service issues. To this end, SkyWalking needs to collect and analyze transport layer metrics between processes inside Kubernetes pods - a task well suited to eBPF. We investigated using eBPF for this purpose and present our results and
+a demo below.&lt;/p&gt;
+&lt;h2 id=&#34;monitoring-kubernetes-networks-with-ebpf&#34;&gt;Monitoring Kubernetes Networks with eBPF&lt;/h2&gt;
+&lt;p&gt;With its origins as the Extended Berkeley Packet Filter, eBPF is a general purpose mechanism for injecting and running your own code into the Linux kernel and is an excellent tool for monitoring network traffic in Kubernetes Pods. In the next few sections, we&#39;ll provide an overview of how to use eBPF for network monitoring as background for introducing &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;Skywalking Rover&lt;/a&gt;, a metrics collector and profiler powered by eBPF to diagnose CPU and network performance.&lt;/p&gt;
+&lt;h3 id=&#34;how-applications-and-the-network-interact&#34;&gt;How Applications and the Network Interact&lt;/h3&gt;
+&lt;p&gt;Interactions between the application and the network can generally be
+divided into the following steps from higher to lower levels of
+abstraction:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f0.svg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;User Code:&lt;/strong&gt; Application code uses high-level network libraries in the application stack to exchange data across the network, like sending and receiving HTTP requests.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Library:&lt;/strong&gt; When the network library receives a network request, it interacts with the language API to send the network data.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Language API:&lt;/strong&gt; Each language provides an API for operating the network, system, etc. When a request is received, it interacts with the system API. In Linux, this API is called syscalls.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Linux API:&lt;/strong&gt; When the Linux kernel receives the request through the API, it communicates with the socket to send the data, which is usually closer to an OSI Layer 4 protocol, such as TCP, UDP, etc.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Socket Ops:&lt;/strong&gt; Sending or receiving the data to/from the NIC.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Our hypothesis is that eBPF can monitor the network. There are two ways
+to implement the interception: &lt;strong&gt;User space (uprobe)&lt;/strong&gt; or &lt;strong&gt;Kernel space
+(kprobe)&lt;/strong&gt;. The table below summarizes the differences.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;Pros&lt;/th&gt;
+&lt;th&gt;Cons&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;uprobe&lt;/td&gt;
+&lt;td&gt;•	Get more application-related contexts, such as whether the current request is HTTP or HTTPS.&lt;/br&gt;•	Requests and responses can be intercepted by a single method&lt;/td&gt;
+&lt;td&gt;•	Data structures can be unstable, so it is more difficult to get the desired data. &lt;/br&gt; •	Implementation may differ between language/library versions. &lt;/br&gt; •	Does not work in applications without &lt;a href=&#34;https://en.wikipedia.org/wiki/Symbol_table&#34;&gt;symbol tables&lt;/a&gt;.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;kprobe&lt;/td&gt;
+&lt;td&gt;•	Available for all languages. &lt;/br&gt; •	The data structure and methods are stable and do not require much adaptation. &lt;/br&gt; •	Easier correlation with underlying data, such as getting the destination address of TCP, OSI Layer 4 protocol metrics, etc.&lt;/td&gt;
+&lt;td&gt;•	A single request and response may be split into multiple probes. &lt;/br&gt; •	Contextual information is not easy to get for stateful requests. For example header compression in HTTP/2.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For the general network performance monitor, we chose to use the kprobe (intercept the syscalls) for the following reasons:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;It&amp;rsquo;s available for applications written in any programming language, and it&amp;rsquo;s stable, so it saves a lot of development/adaptation costs.&lt;/li&gt;
+&lt;li&gt;It can be correlated with metrics from the system level, which makes it easier to troubleshoot.&lt;/li&gt;
+&lt;li&gt;As a single request and response are split into multiple probes, we can use technology to correlate them.&lt;/li&gt;
+&lt;li&gt;For contextual information, It&amp;rsquo;s usually used in OSI Layer 7 protocol network analysis. So, if we just monitor the network performance, then they can be ignored.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;kprobes-and-network-monitoring&#34;&gt;Kprobes and network monitoring&lt;/h3&gt;
+&lt;p&gt;Following the &lt;a href=&#34;http://linasm.sourceforge.net/docs/syscalls/network.php&#34;&gt;network syscalls of Linux documentation&lt;/a&gt;, we can implement network monitoring by intercepting two types of methods: &lt;strong&gt;socket operations&lt;/strong&gt; and &lt;strong&gt;send/receive&lt;/strong&gt; methods.&lt;/p&gt;
+&lt;h4 id=&#34;socket-operations&#34;&gt;Socket Operations&lt;/h4&gt;
+&lt;p&gt;When accepting or connecting with another socket, we can get the
+following information:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Connection information&lt;/strong&gt;: Includes the remote address from the connection which helps us to understand which pod is connected.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Connection statics:&lt;/strong&gt; Includes basic metrics from sockets, such as round-trip time (&lt;a href=&#34;https://en.wikipedia.org/wiki/Round-trip_delay&#34;&gt;RTT&lt;/a&gt;), lost packet count in TCP, etc.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Socket and file descriptor (&lt;a href=&#34;https://en.wikipedia.org/wiki/File_descriptor&#34;&gt;FD&lt;/a&gt;) mapping:&lt;/strong&gt; Includes the relationship between the Linux file descriptor and socket object. It is useful when sending and receiving data through a Linux file descriptor.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;sendreceive&#34;&gt;Send/Receive&lt;/h4&gt;
+&lt;p&gt;The interface related to sending or receiving data is the focus of
+performance analysis. It mainly contains the following parameters:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Socket file descriptor:&lt;/strong&gt; The file descriptor of the current operation corresponding to the socket.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Buffer:&lt;/strong&gt; The data sent or received, passed as a byte array.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Based on the above parameters, we can analyze the following data:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Bytes:&lt;/strong&gt; The size of the packet in bytes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Protocol:&lt;/strong&gt; The protocol analysis according to the buffer data, such as HTTP, MySQL, etc.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Execution Time:&lt;/strong&gt; The time it takes to send/receive the data.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;At this point (Figure 1) we can analyze the following steps for the
+whole lifecycle of the connection:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Connect/Accept:&lt;/strong&gt; When the connection is created.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Transform:&lt;/strong&gt; Sending and receiving data on the connection.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Close:&lt;/strong&gt; When the connection is closed.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f1.svg&#34; alt=&#34;Figure 1&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;protocol-and-tls&#34;&gt;Protocol and TLS&lt;/h3&gt;
+&lt;p&gt;The previous section described how to analyze connections using send or receive buffer data. For example, following the &lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html#section-4.1&#34;&gt;HTTP/1.1 message specification&lt;/a&gt; to analyze the connection. However, this does not work for TLS requests/responses.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.svg&#34; alt=&#34;Figure 2&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When TLS is in use, the Linux Kernel transmits data encrypted in user space. In the figure above, The application usually transmits SSL data through a third-party library (such as OpenSSL). For this case, the Linux API can only get the encrypted data, so it cannot recognize any higher layer protocol. To decrypt inside eBPF, we need to follow these steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Read unencrypted data through uprobe:&lt;/strong&gt; Compatible multiple languages, using uprobe to capture the data that is not encrypted before sending or after receiving. In this way, we can get the original data and associate it with the socket.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Associate with socket:&lt;/strong&gt; We can associate unencrypted data with the socket.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;openssl-use-case&#34;&gt;OpenSSL Use case&lt;/h4&gt;
+&lt;p&gt;For example, the most common way to send/receive SSL data is to use OpenSSL as a shared library, specifically the &lt;a href=&#34;https://www.openssl.org/docs/man1.1.1/man3/SSL_read.html&#34;&gt;SSL_read&lt;/a&gt; and &lt;a href=&#34;https://www.openssl.org/docs/man1.1.1/man3/SSL_write.html&#34;&gt;SSL_write&lt;/a&gt; methods to submit the buffer data with the socket.&lt;/p&gt;
+&lt;p&gt;Following the &lt;a href=&#34;https://www.openssl.org/docs/man1.1.1/man7/ssl.html&#34;&gt;documentation&lt;/a&gt;, we can intercept these two methods, which are almost identical to the API in Linux. The source code of the SSL structure in OpenSSL shows that the &lt;a href=&#34;https://github.com/openssl/openssl/blob/9eae491721209f302a9a475bffd271370e8bcb8f/crypto/bio/bio_local.h#L115-L125&#34;&gt;Socket FD&lt;/a&gt; exists in the &lt;a href=&#34;https://github.com/openssl/openssl/blob/9eae491721209f302a9a475bffd271370e8bcb8f/ssl/ssl_local.h#L1068-L1083&#34;&gt;BIO object of the SSL structure&lt;/a&gt;, and we can get it by the offset.&lt;/p&gt;
+&lt;p&gt;In summary, with knowledge of how OpenSSL works, we can read unencrypted data in an eBPF function.&lt;/p&gt;
+&lt;h2 id=&#34;introducing-skywalking-rover-an-ebpf-based-metrics-collector-and-profiler&#34;&gt;Introducing SkyWalking Rover, an eBPF-based Metrics Collector and Profiler&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; introduces the eBPF network profiling feature into the SkyWalking ecosystem. It&amp;rsquo;s currently supported in a Kubernetes environment, so must be deployed inside a Kubernetes cluster. Once the deployment is complete, SkyWalking Rover can monitor the network for all processes inside a given Pod. Based on the monitoring data, SkyWalking can generate the topology relationship diagram and metrics between processes.&lt;/p&gt;
+&lt;h3 id=&#34;topology-diagram&#34;&gt;Topology Diagram&lt;/h3&gt;
+&lt;p&gt;The topology diagram can help us understand the network access between processes inside the same Pod, and between the process and external environment (other Pod or service). Additionally, it can identify the data direction of traffic based on the line flow direction.&lt;/p&gt;
+&lt;p&gt;In Figure 3 below, all nodes within the hexagon are the internal process of a Pod, and nodes outside the hexagon are externally associated services or Pods. Nodes are connected by lines, which indicate the direction of requests or responses between nodes (client or server). The protocol is indicated on the line, and it&amp;rsquo;s either HTTP(S), TCP, or TCP(TLS). Also, we can see in this figure that the line between Envoy and Python applications is bidirectional because Envoy intercepts all application traffic.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;Figure 3&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;metrics&#34;&gt;Metrics&lt;/h3&gt;
+&lt;p&gt;Once we recognize the network call relationship between processes through the topology, we can select a specific line and view the TCP metrics between the two processes.&lt;/p&gt;
+&lt;p&gt;The diagram below (Figure 4) shows the metrics of network monitoring between two processes. There are four metrics in each line. Two on the left side are on the client side, and two on the right side are on the server side. If the remote process is not in the same Pod, only one side of the metrics is displayed.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;Figure 4&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The following two metric types are available:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Counter:&lt;/strong&gt; Records the total number of data in a certain period. Each counter contains the following data:
+a.  &lt;strong&gt;Count:&lt;/strong&gt; Execution count.
+b.  &lt;strong&gt;Bytes:&lt;/strong&gt; Packet size in bytes.
+c.  &lt;strong&gt;Execution time:&lt;/strong&gt; Execution duration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Histogram:&lt;/strong&gt; Records the distribution of data in the buckets.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Based on the above data types, the following metrics are exposed:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Name&lt;/th&gt;
+&lt;th&gt;Type&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Write&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket write counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Read&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket read counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Write RTT&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Microsecond&lt;/td&gt;
+&lt;td&gt;The socket write round trip time (RTT) counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Connect&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket connect/accept with another server/client counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Close&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket with other socket counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Retransmit&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket retransmit package counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Drop&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket drop package counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, we demonstrate how to perform network profiling in the
+service mesh. To follow along, you will need a running Kubernetes
+environment.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;NOTE:&lt;/strong&gt; All commands and scripts are available &lt;a href=&#34;https://github.com/mrproliu/skywalking-network-profiling-demo&#34;&gt;in this GitHub repository&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;install-istio&#34;&gt;Install Istio&lt;/h3&gt;
+&lt;p&gt;Istio is the most widely deployed service mesh, and comes with a complete demo application that we can use for testing. To install Istio and the demo application, follow these steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Install getmesh from &lt;a href=&#34;https://istio.tetratelabs.io/&#34;&gt;Tetrate Istio Distro&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Install Istio using the demo configuration profile.&lt;/li&gt;
+&lt;li&gt;Label the default namespace, so Istio automatically injects Envoy sidecar proxies when we&amp;rsquo;ll deploy the application.&lt;/li&gt;
+&lt;li&gt;Deploy the bookinfo application to the cluster.&lt;/li&gt;
+&lt;li&gt;Deploy the traffic generator to generate some traffic to the application.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;ISTIO_VERSION&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;1.13.1
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# install istio&lt;/span&gt;
+istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# deploy the bookinfo applications&lt;/span&gt;
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# generate traffic&lt;/span&gt;
+kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/traffic-generator.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;install-skywalking&#34;&gt;Install SkyWalking&lt;/h3&gt;
+&lt;p&gt;The following will install the storage, backend, and UI needed for SkyWalking:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/apache/skywalking-kubernetes.git
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; skywalking-kubernetes
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; chart
+helm dep up skywalking
+helm -n istio-system install skywalking skywalking &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set &lt;span style=&#34;color:#008080&#34;&gt;fullnameOverride&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set elasticsearch.minimumMasterNodes&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set elasticsearch.imageTag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;7.5.1 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.replicas&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set ui.image.repository&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set ui.image.tag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;9.2.0 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.image.tag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;9.2.0 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.envoy.als.enabled&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.image.repository&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.storageType&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;elasticsearch &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.env.SW_METER_ANALYZER_ACTIVE_FILES&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;network-profiling&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;install-skywalking-rover&#34;&gt;Install SkyWalking Rover&lt;/h3&gt;
+&lt;p&gt;SkyWalking Rover is deployed on every node in Kubernetes, and it automatically detects the services in the Kubernetes cluster. The network profiling feature has been released in the version 0.3.0 of SkyWalking Rover. When a network monitoring task is created, the SkyWalking rover sends the data to the SkyWalking backend.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/skywalking-rover.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;start-the-network-profiling-task&#34;&gt;Start the Network Profiling Task&lt;/h3&gt;
+&lt;p&gt;Once all deployments are completed, we must create a network profiling task for a specific instance of the service in the SkyWalking UI.&lt;/p&gt;
+&lt;p&gt;To open SkyWalking UI, run:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/skywalking-ui 8080:80 --namespace
+istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Currently, we can select the specific instances that we wish to monitor by clicking the &lt;strong&gt;Data Plane&lt;/strong&gt; item in the Service Mesh panel and the &lt;strong&gt;Service&lt;/strong&gt; item in the &lt;strong&gt;Kubernetes&lt;/strong&gt; panel.&lt;/p&gt;
+&lt;p&gt;In the figure below, we have selected an instance with a list of tasks in the network profiling tab. When we click the start button, the SkyWalking Rover starts monitoring this instance&amp;rsquo;s network.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;Figure 5&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 5&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;After a few seconds, you will see the process topology appear on the right side of the page.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;Figure 6&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 6&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you click on the line between processes, you can see the TCP metrics between the two processes.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.jpg&#34; alt=&#34;Figure 7&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 7&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we detailed a problem that makes troubleshooting service mesh architectures difficult: lack of context between layers in the network stack. These are the cases when eBPF begins to really help with debugging/productivity when existing service mesh/envoy cannot. Then, we researched how eBPF could be applied to common communication, such as TLS. Finally, we demo the implementation of this process with SkyWalking Rover.&lt;/p&gt;
+&lt;p&gt;For now, we have completed the performance analysis for OSI layer 4 (mostly TCP). In the future, we will also introduce the analysis for OSI layer 7 protocols like HTTP.&lt;/p&gt;
+&lt;h2 id=&#34;get-started-with-istio&#34;&gt;Get Started with Istio&lt;/h2&gt;
+&lt;p&gt;To &lt;a href=&#34;https://istio.tetratelabs.io/&#34;&gt;get started with service mesh today, Tetrate Istio Distro&lt;/a&gt; is the easiest way to install, manage, and upgrade Istio. It provides a vetted upstream distribution of Istio that&amp;rsquo;s tested and optimized for specific platforms by Tetrate plus a CLI that facilitates acquiring, installing, and configuring multiple Istio versions. Tetrate Istio Distro also offers &lt;a href=&#34;https://www.tetrate.io/blog/tetrate-istio-distro-achieves-fips-certification/&#34;&gt;FIPS certified Istio builds&lt;/a&gt; for FedRAMP environments.&lt;/p&gt;
+&lt;p&gt;For enterprises that need a unified and consistent way to secure and manage services and traditional workloads across complex, heterogeneous deployment environments, we offer &lt;a href=&#34;https://www.tetrate.io/tetrate-service-bridge/&#34;&gt;Tetrate Service Bridge&lt;/a&gt;, our flagship edge-to-workload application connectivity platform built on Istio and Envoy.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.tetrate.io/contact/&#34;&gt;Contact us to learn more&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/&#34;&gt;SkyWalking Rover Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/&#34;&gt;Pinpoint Service Mesh Critical Performance impact by using eBPF blog post&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=yUF5qRk4rYY&#34;&gt;Apache SkyWalking with Native eBPF Agent presentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://ebpf.io/what-is-ebpf#hook-overview&#34;&gt;eBPF hook overview&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: Scaling with Apache SkyWalking</title>
