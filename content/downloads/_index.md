@@ -4,53 +4,41 @@ linkTitle: "Downloads"
 descriptions: "Download the SkyWalking releases."
 ---
 
-# Download the SkyWalking recommended releases
-
-Use the links below to download the Apache SkyWalking from one of our mirrors.
-
-**Only source code releases are official Apache releases, binary distributions are just for end user convenience.**
-
 {{< downloads-block >}}
 
-### All Releases
 
-- Find all SkyWalking releases in the [Archive repository](https://archive.apache.org/dist/skywalking/). 
-- [Archive incubating repository](https://archive.apache.org/dist/incubator/skywalking/) hosts older releases when SkyWalking was an incubator project.
+<div class="container verify">
 
-### Docker Images for convenience
+## Verify the releases
 
-**Docker images are not official ASF releases but provided for convenience. Recommended usage is always to build the source**
+It is essential that you verify the integrity of the downloaded files using the PGP or SHA signatures. Please download the KEYS as well as the .asc/.sha512 signature files for relevant distribution. It is recommended to get these files from the main distribution directory and not from the mirrors.
 
-{{< dockerhub-block >}}
+<div class="code-wrapper">
+<div>
 
-# Verify the releases
+##### Verify using GPG/PGP
 
-[PGP signatures KEYS](https://downloads.apache.org/skywalking/KEYS)
+Download [PGP signatures KEYS](https://downloads.apache.org/skywalking/KEYS), and the release with its .asc signature file. And then:
 
-It is essential that you verify the integrity of the downloaded files using the PGP or SHA signatures. The PGP signatures can be verified using GPG or PGP. Please download the KEYS as well as the asc signature files for relevant distribution. It is recommended to get these files from the main distribution directory and not from the mirrors.
+```shell
+# GPG verification
+gpg --import KEYS
+gpg --verify apache-skywalking-apm-***.asc apache-skywalking-apm-***
+```
+</div>
+
+<div>
+
+##### Verify using SHA512
+Download the release with its .sha512 signature file. And then:
+
+```shell
+# SHA-512 verification
+shasum -a 512 hadoop-X.Y.Z-src.tar.gz
 
 ```
-gpg -i KEYS
+</div>
 
-or
+</div>
 
-pgpk -a KEYS
-
-or
-
-pgp -ka KEYS
-```
-
-To verify the binaries/sources you can download the relevant asc files for it from main distribution directory and follow the below guide.
-
-```
-gpg --verify apache-skywalking-apm-********.asc apache-skywalking-apm-*********
-
-or
-
-pgpv apache-skywalking-apm-********.asc
-
-or
-
-pgp apache-skywalking-apm-********.asc
-```
+</div>

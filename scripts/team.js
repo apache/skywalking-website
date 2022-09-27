@@ -9,6 +9,10 @@ const docsFile = path.join(__dirname, '../data/docs.yml')
 const teamFile = path.join(__dirname, '../data/team.yml')
 const mergedDataFile = path.join(__dirname, '../themes/docsy/static/js/mergedData.js')
 
+const sleep = (ms) => {
+  return new Promise(resolve => setTimeout(() => resolve(), ms));
+}
+
 class GenerateTeamYaml {
   constructor(docsFile, teamFile) {
     this.docsFile = docsFile;
@@ -36,12 +40,13 @@ class GenerateTeamYaml {
     const mergedPromiseList = [];
     for (const k of this.nativeObject) {
       for (const item of k.list) {
-        const {user, repo} = item;
+        const {user, repo, extraContributors} = item;
         const list = [];
         if (user && repo) {
-          promiseList.push(this.getRepoContributors({user, repo, list, item}));
+          promiseList.push(this.getRepoContributors({user, repo, extraContributors, list, item}));
           mergedPromiseList.push(this.getMergedData({user, repo}));
         }
+        await sleep(1500)
       }
     }
     await Promise.all(promiseList)
@@ -59,8 +64,10 @@ class GenerateTeamYaml {
       const source = res && res.data || [];
       source.repo = repo;
       this.mergedData.push(source);
+      console.log(`${user}/${repo}/graphs success!`);
     } catch (e) {
-      throw Error(e)
+      console.log(`${user}/${repo}/graphs failed!`);
+      process.exit(1)
     }
   }
 
@@ -71,7 +78,7 @@ class GenerateTeamYaml {
     const date = [];
 
     const x = new Date();
-    const timepoint = x.setFullYear(2021,7,25);
+    const timepoint = x.setFullYear(2021, 7, 25);
 
     for (let i = 0; i < maxWeekLen; i++) {
       let num = 0;
@@ -124,10 +131,11 @@ class GenerateTeamYaml {
     }
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
+    console.log('team.yml success!');
 
     const mergedGraphData = this.buildMergedData(this.mergedData)
     await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
-    console.log('team.yml & mergedData.js success!');
+    console.log('mergedData.js success!');
   }
 
   async loadYaml() {
@@ -152,16 +160,20 @@ class GenerateTeamYaml {
         });
   }
 
-  async getRepoContributors({user, repo, page = 1, per_page = 100, list = [], item}) {
-    let {data} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
+  async getRepoContributors({user, repo, extraContributors = [], page = 1, per_page = 100, list = [], item}) {
+    let {data = []} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
     data = this.handleData(data);
-    list.push(...data)
+    list.push(...data);
     if (data.length === per_page) {
       page++;
-      await this.getRepoContributors({user, repo, page, per_page, list, item})
+      await this.getRepoContributors({user, repo, extraContributors, page, per_page, list, item})
     } else {
-      item.contributors = list;
-      item.contributorCount = [...new Set(list.map(item => item.id || item.email))].length;
+      if (extraContributors && extraContributors.length) {
+        extraContributors.forEach(item => this.logins[item.login] = item.login);
+      }
+      const repoContributors = [...list, ...extraContributors];
+      item.contributors = repoContributors;
+      item.contributorCount = [...new Set(repoContributors.map(item => item.id || item.login))].length;
     }
   }
 }

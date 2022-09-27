@@ -20,7 +20,7 @@ fi
 
 mkdir ./${repo}
 cd ./${repo}
-if [ "$commitId" = "latest" ]; then
+if [ "$commitId" = "Next" ]; then
   git clone --depth=1 ${repoUrl} .
 else
   git init
