@@ -171,11 +171,10 @@ environment.
 
 Istio is the most widely deployed service mesh, and comes with a complete demo application that we can use for testing. To install Istio and the demo application, follow these steps:
 
-1.  Install getmesh from [Tetrate Istio Distro](https://istio.tetratelabs.io/)
-2.  Install Istio using the demo configuration profile.
-3.  Label the default namespace, so Istio automatically injects Envoy sidecar proxies when we'll deploy the application.
-4.  Deploy the bookinfo application to the cluster.
-5.  Deploy the traffic generator to generate some traffic to the application.
+1.  Install Istio using the demo configuration profile.
+2.  Label the default namespace, so Istio automatically injects Envoy sidecar proxies when we'll deploy the application.
+3.  Deploy the bookinfo application to the cluster.
+4.  Deploy the traffic generator to generate some traffic to the application.
 
 ```bash
 export ISTIO_VERSION=1.13.1
