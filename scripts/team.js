@@ -54,24 +54,49 @@ class GenerateTeamYaml {
   }
 
   async getMergedData({user, repo}) {
-    try {
-      const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
-        headers: {
-          'accept': 'application/json',
-          'User-Agent': '',
-        },
-      });
-      const source = res.data;
-      if (!source || !source.length) {
-        console.log(JSON.stringify(res))
-        console.log(`${user}/${repo}/graphs: no valid response data!`);
-        process.exit(1)
+    let count = 0;
+    const NUM = 3;
+    const FAIL_TIPS = `${user}/${repo}/graphs failed!`;
+
+    async function getContributionsGraphs() {
+      ++count;
+      if(count > 1){
+        console.log(`${user}/${repo}: retry ${count} ...`);
       }
-      source.repo = repo;
-      this.mergedData.push(source);
-      console.log(`${user}/${repo}/graphs success!`);
+      try {
+        const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
+          headers: {
+            'accept': 'application/json',
+            'User-Agent': '',
+          },
+        });
+        const source = res.data;
+        if (!source || !source.length) {
+          console.log(`${user}/${repo}/graphs: no valid response data!`);
+          console.log(JSON.stringify(res))
+          if (count >= NUM) {
+            process.exit(1)
+          }
+          await getContributionsGraphs()
+        } else {
+          source.repo = repo;
+          this.mergedData.push(source);
+          console.log(`${user}/${repo}/graphs success!`);
+        }
+      } catch (e) {
+        if (count >= NUM) {
+          console.log(FAIL_TIPS);
+          process.exit(1)
+          return;
+        }
+        await getContributionsGraphs()
+      }
+    }
+
+    try {
+      await getContributionsGraphs()
     } catch (e) {
-      console.log(`${user}/${repo}/graphs failed!`);
+      console.log(FAIL_TIPS);
       process.exit(1)
     }
   }
