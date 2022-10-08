@@ -61,7 +61,11 @@ class GenerateTeamYaml {
           'User-Agent': '',
         },
       });
-      const source = res && res.data || [];
+      const source = res.data;
+      if (!source || !source.length) {
+        console.log(`${user}/${repo}/graphs: no valid response data!`);
+        process.exit(1)
+      }
       source.repo = repo;
       this.mergedData.push(source);
       console.log(`${user}/${repo}/graphs success!`);
