@@ -63,6 +63,7 @@ class GenerateTeamYaml {
       });
       const source = res.data;
       if (!source || !source.length) {
+        console.log(JSON.stringify(res))
         console.log(`${user}/${repo}/graphs: no valid response data!`);
         process.exit(1)
       }
