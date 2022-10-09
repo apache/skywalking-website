@@ -24,6 +24,7 @@ I believe this would not be the end for the moment between SkyWalking and him.
 
 Welcome to join the team.
 
+Referrer & PMC member, Sheng Wu.
 
 - [1] https://github.com/apache/skywalking/issues/7420#issuecomment-1173061870
 - [2] https://github.com/apache/skywalking-java/pull/286
