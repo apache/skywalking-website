@@ -17,7 +17,7 @@ He built MySQL and PostgreSQL server monitoring, metrics and slow SQLs collectin
 
 It is unbelievable to see his contributions in the main repo, 8 PRs[3],  LOC 4,857++, 1,627--
 
-Meanwhile, this story continous, he is trying to build <A lightweight and APM-oriented SQL parser module>[4] under my mentoring. This would be another challenge idea, but also very useful to 
+Meanwhile, this story continous, he is trying to build **A lightweight and APM-oriented SQL parser module**[4] under my mentoring. This would be another challenge idea, but also very useful to 
 enhance existing virtual database perf. analyzing.
 
 I belive this would not be the end for the moment between SkyWalking and him.
@@ -25,7 +25,7 @@ I belive this would not be the end for the moment between SkyWalking and him.
 Welcome to join the team.
 
 
-[1] https://github.com/apache/skywalking/issues/7420#issuecomment-1173061870
-[2] https://github.com/apache/skywalking-java/pull/286
-[3] https://github.com/apache/skywalking/commits?author=yswdqz
-[4] https://github.com/apache/skywalking/issues/9661
+- [1] https://github.com/apache/skywalking/issues/7420#issuecomment-1173061870
+- [2] https://github.com/apache/skywalking-java/pull/286
+- [3] https://github.com/apache/skywalking/commits?author=yswdqz
+- [4] https://github.com/apache/skywalking/issues/9661
