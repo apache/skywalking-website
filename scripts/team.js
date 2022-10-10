@@ -54,13 +54,21 @@ class GenerateTeamYaml {
   }
 
   async getMergedData({user, repo}) {
+    const that = this
     let count = 0;
-    const NUM = 3;
+    const NUM = 6;
     const FAIL_TIPS = `${user}/${repo}/graphs failed!`;
+
+    try {
+      await getContributionsGraphs()
+    } catch (e) {
+      console.log(FAIL_TIPS);
+      process.exit(1)
+    }
 
     async function getContributionsGraphs() {
       ++count;
-      if(count > 1){
+      if (count > 1) {
         console.log(`${user}/${repo}: retry ${count} ...`);
       }
       try {
@@ -70,20 +78,21 @@ class GenerateTeamYaml {
             'User-Agent': '',
           },
         });
-        const source = res.data;
-        if (!source || !source.length) {
-          console.log(`${user}/${repo}/graphs: no valid response data!`);
-          console.log(JSON.stringify(res));
+        const {status, data: source = []} = res
+        if (status === 200 && source.length) {
+          source.repo = repo;
+          that.mergedData.push(source);
+          console.log(`${user}/${repo}/graphs success!`);
+        } else {
+          console.log(`${user}/${repo}/graphs: res.status ${status}!`);
           if (count >= NUM) {
             process.exit(1)
           }
+          await sleep(1000)
           await getContributionsGraphs()
-        } else {
-          source.repo = repo;
-          this.mergedData.push(source);
-          console.log(`${user}/${repo}/graphs success!`);
         }
       } catch (e) {
+        console.log(`${user}/${repo}/`, e);
         if (count >= NUM) {
           console.log(FAIL_TIPS);
           process.exit(1)
@@ -91,13 +100,6 @@ class GenerateTeamYaml {
         }
         await getContributionsGraphs()
       }
-    }
-
-    try {
-      await getContributionsGraphs()
-    } catch (e) {
-      console.log(FAIL_TIPS);
-      process.exit(1)
     }
   }
 
