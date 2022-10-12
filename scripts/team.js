@@ -85,20 +85,17 @@ class GenerateTeamYaml {
           console.log(`${user}/${repo}/graphs success!`);
         } else {
           console.log(`${user}/${repo}/graphs: res.status ${status}!`);
-          if (count >= NUM) {
-            process.exit(1)
+          if (count < NUM) {
+            await sleep(1000)
+            await getContributionsGraphs()
           }
-          await sleep(1000)
-          await getContributionsGraphs()
+
         }
       } catch (e) {
         console.log(`${user}/${repo}/`, e);
-        if (count >= NUM) {
-          console.log(FAIL_TIPS);
-          process.exit(1)
-          return;
+        if (count < NUM) {
+          await getContributionsGraphs()
         }
-        await getContributionsGraphs()
       }
     }
   }
