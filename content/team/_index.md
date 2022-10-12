@@ -104,6 +104,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Yihao Chen        | yihaochen   | <i class="iconfont icon-twitter"></i> [Superskyyy](https://twitter.com/Superskyyyyy)   |
 | Yuntao Li         | liyuntao    |                                                  |
 | Zhusheng Xu       | aderm       |                                                  |
+| Yueqin Zhang      | yswdqz      |                                                  |
 
 </div>
 </div>
