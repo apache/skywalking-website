@@ -37,19 +37,21 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Hongtao Gao                      | hanahmily    |                                                |
 | Hongwei Zhai                     | innerpeacez  |                                                |
 | Ignasi Barrera                   | nacx         |                                                |
+| Jiajing Lu                       | lujiajing    |                                                |
 | Jian Tan                         | tanjian      |                                                |
 | Jiaqi Lin                        | linjiaqi     |                                                |
+| Jiemin Xia                       | jmjoy        |                                                |
 | Jinlin Fu                        | withlin      |                                                |
 | Juntao Zhang                     | zhangjuntao  |                                                |
 | Kai Wan                          | wankai       | <i class="iconfont icon-twitter"></i> [wankai123](https://twitter.com/wankai123)     |
 | Kai Wang                         | wangkai      |                                                |
-| Lang Li                          | lilang       |                                                |
 
 </div>
 <div class="table-box">
 
 | Name                             | Apache ID    |                                                |
 | -------------------------------- | ------------ | ---------------------------------------------- |
+| Lang Li                          | lilang       |                                                |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
 | Sheng Wu (V.P. and Chair of PMC) | wusheng      | <i class="iconfont icon-twitter"></i> [wusheng1108](https://twitter.com/wusheng1108) |
@@ -58,6 +60,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Wenbing Wang                     | wangwenbin   |                                                |
 | Willem Ning Jiang                | ningjiang    |                                                |
 | Yang Bai                         | baiyang      |                                                |
+| Yanlong He                       | heyanlong    | <i class="iconfont icon-twitter"></i> [YanlongHe](https://twitter.com/YanlongHe)       |
 | Yao Wang                         | ywang        |                                                |
 | Yixiong Cao                      | caoyixiong   |                                                |
 | Yongsheng Peng                   | pengys       |                                                |
@@ -79,28 +82,27 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
 | Huaxi Jiang       | hoshea      | <i class="iconfont icon-twitter"></i> [Zerone___01](https://twitter.com/Zerone___01)   |
-| Jiajing Lu        | lujiajing   |                                                  |
 | Jiapeng Liu       | liujiapeng  |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
 | Ke Zhang          | zhangke     | <i class="iconfont icon-twitter"></i> [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
 | Qiang Li          | liqiang     |                                                  |
 | Ruixian Wang      | ax1an       | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
+| Sheng Wang        | wangsheng   |                                                  |
 
 </div>
 <div class="table-box">
 
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
-| Sheng Wang        | wangsheng   |                                                  |
 | Tomasz Pytel      | tompytel    |                                                  |
 | Wei Hua           | alonelaval  |                                                  |
 | Wei Jin           | kvn         |                                                  |
 | Weijie Zou        | kdump       | <i class="iconfont icon-twitter"></i> [RootShellExp](https://twitter.com/RootShellExp) |
 | Weiyi Liu         | wayilau     |                                                  |
-| Yanlong He        | heyanlong   | <i class="iconfont icon-twitter"></i> [YanlongHe](https://twitter.com/YanlongHe)       |
 | Ye Cao            | dashanji    |                                                  |
 | Yihao Chen        | yihaochen   | <i class="iconfont icon-twitter"></i> [Superskyyy](https://twitter.com/Superskyyyyy)   |
+| Yueqin Zhang      | yswdqz      |                                                  |
 | Yuntao Li         | liyuntao    |                                                  |
 | Zhusheng Xu       | aderm       |                                                  |
 
@@ -113,7 +115,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 ## Contributor over time
 
 <div class="graph-wrapper">
-<img class="graph-img" data-nolightbox="true" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/>
+<img class="graph-img contributors-graph" data-nolightbox="true" src="https://contributor-graph-api.apiseven.com/contributors-svg?repo=apache/skywalking&merge=true"/>
 <div class="graph-img">
 <div class="txt">Thousands of contributions every year</div>
 <div id="mergedGraph"></div>

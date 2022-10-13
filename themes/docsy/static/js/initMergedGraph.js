@@ -1,4 +1,13 @@
 function initMergedGraph() {
+  if (window.location.hostname.indexOf('.netlify.app') > -1) {
+    var previewTips = "<p>This part doesn't show up in preview mode.</p>";
+    $('#mergedGraph').html(previewTips);
+    if ($('.contributors-wrapper').length) {
+      $('.contributors-wrapper').html(previewTips);
+    }
+    return
+  }
+
   var chartDom = document.getElementById('mergedGraph');
   var myChart = echarts.init(chartDom);
 
@@ -11,8 +20,7 @@ function initMergedGraph() {
       boundaryGap: false,
       data: mergedData.date
     },
-    yAxis: {
-    },
+    yAxis: {},
     grid: {
       x: 40,
       y: 25,
@@ -51,3 +59,9 @@ function initMergedGraph() {
   option && myChart.setOption(option);
   window.onresize = myChart.resize;
 }
+
+initMergedGraph();
+
+$('.contributors-graph').on('load', function () {
+  window.onresize && window.onresize();
+})

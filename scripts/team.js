@@ -54,20 +54,49 @@ class GenerateTeamYaml {
   }
 
   async getMergedData({user, repo}) {
+    const that = this;
+    let count = 0;
+    const NUM = 10;
+    const FAIL_TIPS = `${user}/${repo}/graphs failed!`;
+
     try {
-      const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
-        headers: {
-          'accept': 'application/json',
-          'User-Agent': '',
-        },
-      });
-      const source = res && res.data || [];
-      source.repo = repo;
-      this.mergedData.push(source);
-      console.log(`${user}/${repo}/graphs success!`);
+      await getContributionsGraphs()
     } catch (e) {
-      console.log(`${user}/${repo}/graphs failed!`);
+      console.log(FAIL_TIPS);
       process.exit(1)
+    }
+
+    async function getContributionsGraphs() {
+      ++count;
+      if (count > 1) {
+        console.log(`${user}/${repo}: retry ${count} ...`);
+      }
+      try {
+        const res = await axios.get(`https://github.com/${user}/${repo}/graphs/contributors-data`, {
+          headers: {
+            'accept': 'application/json',
+            'User-Agent': '',
+          },
+        });
+        const {status, data: source = []} = res
+        if (status === 200 && source.length) {
+          source.repo = repo;
+          that.mergedData.push(source);
+          console.log(`${user}/${repo}/graphs success!`);
+        } else {
+          console.log(`${user}/${repo}/graphs: res.status ${status}!`);
+          if (count < NUM) {
+            await sleep(1000)
+            await getContributionsGraphs()
+          }
+
+        }
+      } catch (e) {
+        console.log(`${user}/${repo}/`, e);
+        if (count < NUM) {
+          await getContributionsGraphs()
+        }
+      }
     }
   }
 
@@ -131,10 +160,11 @@ class GenerateTeamYaml {
     }
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
+    console.log('team.yml success!');
 
     const mergedGraphData = this.buildMergedData(this.mergedData)
     await promises.writeFile(this.mergedDataFile, `var mergedData = ${JSON.stringify(mergedGraphData)}`, 'utf8');
-    console.log('team.yml & mergedData.js success!');
+    console.log('mergedData.js success!');
   }
 
   async loadYaml() {
