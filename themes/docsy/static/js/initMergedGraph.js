@@ -1,6 +1,7 @@
 function initMergedGraph() {
   if (window.location.hostname.indexOf('.netlify.app') > -1) {
     var previewTips = "<p>This part doesn't show up in preview mode.</p>";
+    $('.contributors-wrapper').html(previewTips);
     $('#mergedGraph').html(previewTips);
     return
   }
