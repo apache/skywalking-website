@@ -110,3 +110,9 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 </div>
 
 {{< contributors >}}
+
+## Contributions over time
+
+<div class="graph-wrapper">
+<div id="mergedGraph" style="height: 300px"></div>
+</div>

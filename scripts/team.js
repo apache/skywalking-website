@@ -56,7 +56,7 @@ class GenerateTeamYaml {
   async getMergedData({user, repo}) {
     const that = this;
     let count = 0;
-    const NUM = 10;
+    const NUM = 8;
     const FAIL_TIPS = `${user}/${repo}/graphs failed!`;
 
     try {
