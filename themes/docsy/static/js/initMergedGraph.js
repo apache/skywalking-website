@@ -1,10 +1,8 @@
 function initMergedGraph() {
   if (window.location.hostname.indexOf('.netlify.app') > -1) {
     var previewTips = "<p>This part doesn't show up in preview mode.</p>";
+    $('.contributors-wrapper').html(previewTips);
     $('#mergedGraph').html(previewTips);
-    if ($('.contributors-wrapper').length) {
-      $('.contributors-wrapper').html(previewTips);
-    }
     return
   }
 
@@ -14,6 +12,15 @@ function initMergedGraph() {
   var option = {
     title: {
       left: 'center',
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'cross',
+        label: {
+          backgroundColor: '#6a7985'
+        }
+      }
     },
     xAxis: {
       type: 'category',
@@ -32,7 +39,7 @@ function initMergedGraph() {
         lineStyle: {
           width: 1
         },
-        name: 'Merged Data',
+        name: 'Contributions',
         type: 'line',
         symbol: 'none',
         sampling: 'lttb',
@@ -61,7 +68,3 @@ function initMergedGraph() {
 }
 
 initMergedGraph();
-
-$('.contributors-graph').on('load', function () {
-  window.onresize && window.onresize();
-})
