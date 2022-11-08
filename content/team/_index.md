@@ -86,6 +86,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | JunXu Chen        | chenjunxu   |                                                  |
 | Ke Zhang          | zhangke     | <i class="iconfont icon-twitter"></i> [Humbertttttt](https://twitter.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
+| Puguang Yang      | ypg         |                                                  |
 | Qiang Li          | liqiang     |                                                  |
 | Ruixian Wang      | ax1an       | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
 | Sheng Wang        | wangsheng   |                                                  |
