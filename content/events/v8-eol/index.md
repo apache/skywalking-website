@@ -1,6 +1,6 @@
 ---
 title: SkyWalking v8 OAP server End-of-life(EOL) 
-date: 2022-09-02
+date: 2022-11-20
 author: SkyWalking Team
 description: "The SkyWalking community deprecated all v8 releases from the docs and download pages"
 endTime: 2022-12-30T23:00:00Z
