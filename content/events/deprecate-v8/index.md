@@ -1,9 +1,8 @@
 ---
-title: Plan to End-of-life(EOL) all v8 releases in Nov. 30th 2022
+title: Plan to End-of-life(EOL) all v8 releases in Nov. 2022
 date: 2022-09-02
 author: SkyWalking Team
 description: "The SkyWalking community plans to deprecate all v8 releases from the docs and download pages"
-endTime: 2022-11-30T23:00:00Z
 ---
 
 This is an official annoucement from SkyWalking team.
