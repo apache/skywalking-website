@@ -9,7 +9,7 @@ endTime: 2022-12-30T23:00:00Z
 This is an official annoucement from SkyWalking team.
 
 Due to the [Plan to End-of-life(EOL) all v8 releases in Nov. 2022](../deprecate-v8/index.md) had been posted in 3 months,
-SkyWalking community doesn't received any rejection or a proposal about releasing a new patch version.
+SkyWalking community doesn't received any objection or a proposal about releasing a new patch version.
 
 Now, it is time to end the v8 series. All documents of v8 are not going to be hosted on the website. 
 You only could find the artifacts and source codes from [the Apache's archive repository](https://archive.apache.org/dist/skywalking/).
