@@ -120,7 +120,7 @@ Distributed tracing systems are similar in principle. There are many such system
 | ------------------- | ------------------------------------------------------------ | -------------------------------------------- | -------------------------------------------- |
 | Implementations     | Language-based probes, service mesh probes, eBPF agent, third-party instrumental libraries (Zipkin currently supported) | Language-based probes                        | Language-based probes                        |
 | Database            | ES, H2, MySQL, TiDB, Sharding-sphere, BanyanDB               | ES, MySQL, Cassandra, Memory                 | ES, MySQL, Cassandra, Memory                 |
-| Supported Languages | Java, Rust, PHP, NodeJS, Go, Ruby, Python                    | Java, Go, Python, NodeJS, C#, PHP, Ruby, C++ | Java, Go, Python, NodeJS, C#, PHP, Ruby, C++ |
+| Supported Languages | Java, Rust, PHP, NodeJS, Go, Python, C++, .Net, Lua          | Java, Go, Python, NodeJS, C#, PHP, Ruby, C++ | Java, Go, Python, NodeJS, C#, PHP, Ruby, C++ |
 | Initiator           | Personal                                                     | Uber                                         | Twitter                                      |
 | Governance          | Apache Foundation                                            | CNCF                                         | CNCF                                         |
 | Version             | 9.3.0                                                        | 1.39.0                                       | 2.23.19                                      |
