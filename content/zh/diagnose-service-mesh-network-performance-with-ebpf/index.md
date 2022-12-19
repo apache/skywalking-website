@@ -159,11 +159,10 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 Istio是最广泛部署的服务网格，并附带一个完整的演示应用程序，我们可以用来测试。要安装 Istio 和演示应用程序，请遵循以下步骤：
 
-1.  从 [Tetrate Istio Distro](https://istio.tetratelabs.io/)安装 getmesh。
-2.  使用演示配置文件安装 Istio。
-3.  标记 default 命名空间，所以当我们要部署应用程序时，Istio 会自动注入 Envoy 的 sidecar 代理。
-4.  将 bookinfo 应用程序部署到集群上。
-5.  部署流量生成器，为应用程序生成一些流量。
+1.  使用演示配置文件安装 Istio。
+2.  标记 default 命名空间，所以当我们要部署应用程序时，Istio 会自动注入 Envoy 的 sidecar 代理。
+3.  将 bookinfo 应用程序部署到集群上。
+4.  部署流量生成器，为应用程序生成一些流量。
 
 ```bash
 export ISTIO_VERSION=1.13.1
