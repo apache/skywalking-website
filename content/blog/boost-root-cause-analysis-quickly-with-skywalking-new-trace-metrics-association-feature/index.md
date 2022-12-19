@@ -8,6 +8,8 @@ tags:
 - Metric
 ---
 
+![Banner](banner.jpg)
+
 Observability for modern distributed applications work is critical for understanding how they behave under a variety of conditions and for troubleshooting and resolving issues when they arise. Traces, metrics, and logs are regarded as fundamental parts of the observability stack. Traces are the footprints of distributed system executions, meanwhile, metrics measure system performance with numbers in the timeline. Essentially, they measure the performance from two dimensions. Being able to quickly visualize the connection between traces and corresponding metrics makes it possible to quickly diagnose which process flows are correlated to potentially pathological behavior. This powerful new capability is now [available in SkyWalking 9.3.0](https://skywalking.apache.org/events/release-apache-skywalking-apm-9.3.0/).
 
 The SkyWalking project started only with tracing, with a focus on 100% sampling-based metrics and topology analysis since 2018. When users face anomaly trends of time-series metrics, like a peak on the line chart, or histogram shows a larger gap between p95 and p95, the immediate question is, why is this happening? One of SkyWalking's latest features, the **trace-metric association**, makes it much easier to answer that question and to address the root cause.
