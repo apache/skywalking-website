@@ -1,5 +1,5 @@
 ---
-title: "[License Issue] Aliyun's trace analysis service copied SkyWalking's trace profiling page."
+title: "[License Issue] Aliyun(阿里云)'s trace analysis service copied SkyWalking's trace profiling page."
 date: 2023-01-03
 author: Apache SkyWalking
 description: "Aliyun's trace analysis service copied SkyWalking's UI design but declares it as their codes, rather than a fork."
@@ -22,6 +22,9 @@ support [SkyWalking's In-Process(Trace) Profiling](https://skywalking.apache.org
 
 ### Aliyun Trace Analysis UI on their document page
 <img src="aliyun.jpeg">
+
+
+___
 
 The UI visualization is a part of the copyright. Aliyun declared their backend is NOT a re-distribution of SkyWalking repeatedly on their website, 
 and they never mentioned this page is actually copied from upstream.
