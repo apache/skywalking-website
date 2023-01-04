@@ -12,7 +12,7 @@ tags:
 On Jan. 3rd, 2022, we received reports about [Aliyun Trace Analysis Service](https://help.aliyun.com/document_detail/90277.html). It provides a cloud service compatible
 with SkyWalking trace APIs and agents. 
 
-On their product page, there is a `best-practice` document describing about their service is not SkyWalking OAP, but can work with SkyWalking agents to 
+On their product page, there is a [`best-practice` document](https://help.aliyun.com/document_detail/178204.html) describing about their service is not SkyWalking OAP, but can work with SkyWalking agents to 
 support [SkyWalking's In-Process(Trace) Profiling](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/#in-process-profiling).
 
 **BUT, they copied the whole page of SkyWalking's profiling UI, including page layout, words,  and profiling task setup.** The only difference is the color schemes.
