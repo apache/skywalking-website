@@ -36,9 +36,9 @@ HTTP 是最常用的 7 层协议之一，通常用于为外部方提供服务和
 
 *图 1：HTTP 通信时间线。*
 
-### HTTP 多路复用
+### HTTP 管线化
 
-[HTTP 多路复用（Pipelining）](https://en.wikipedia.org/wiki/HTTP_pipelining&sa=D&source=editors&ust=1672289009768584&usg=AOvVaw0wJkiaMGDCg4gWbj8zCd43)是 HTTP/1.1 的一个特性，允许在等待对应的响应的情况下在单个 TCP 连接上发送多个 HTTP 请求。这个特性很重要，因为它确保了服务器端的响应顺序必须与请求的顺序匹配。
+[HTTP 管线化（Pipelining）](https://en.wikipedia.org/wiki/HTTP_pipelining)是 HTTP/1.1 的一个特性，允许在等待对应的响应的情况下在单个 TCP 连接上发送多个 HTTP 请求。这个特性很重要，因为它确保了服务器端的响应顺序必须与请求的顺序匹配。
 
 图 2 说明了这是如何工作的，考虑以下情况：HTTP 客户端向服务器发送多个请求，服务器通过按照请求的顺序发送 HTTP 响应来响应。这意味着客户端发送的第一个请求将收到服务器的第一个响应，第二个请求将收到第二个响应，以此类推。
 
