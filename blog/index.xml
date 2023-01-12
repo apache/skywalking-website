@@ -14,6 +14,208 @@
     
     
     <item>
+      <title>Blog: eBPF enhanced HTTP observability - L7 metrics and tracing</title>
+      <link>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
+      <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;banner&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking is an open-source Application Performance Management system that helps users collect and aggregate logs, traces, metrics, and events for display on a UI. In the &lt;a href=&#34;/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;previous article&lt;/a&gt;, we introduced how to use Apache SkyWalking Rover to analyze the network performance issue in the service mesh environment. However, in business scenarios, users often rely on mature layer 7 protocols, such as HTTP, for interactions between systems. In this article, we will discuss how to use eBPF techniques to analyze performance bottlenecks of layer 7 protocols and how to enhance the tracing system using network sampling.&lt;/p&gt;
+&lt;p&gt;This article will show how to use &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; with &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; to enhance metrics and traces in HTTP observability.&lt;/p&gt;
+&lt;h2 id=&#34;http-protocol-analysis&#34;&gt;HTTP Protocol Analysis&lt;/h2&gt;
+&lt;p&gt;HTTP is one of the most common Layer 7 protocols and is usually used to provide services to external parties and for inter-system communication. In the following sections, we will show how to identify and analyze HTTP/1.x protocols.&lt;/p&gt;
+&lt;h3 id=&#34;protocol-identification&#34;&gt;Protocol Identification&lt;/h3&gt;
+&lt;p&gt;In HTTP/1.x, the client and server communicate through a single file descriptor (FD) on each side. Figure 1 shows the process of communication involving the following steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Connect/accept: The client establishes a connection with the HTTP server, or the server accepts a connection from the client.&lt;/li&gt;
+&lt;li&gt;Read/write (multiple times): The client or server reads and writes HTTPS requests and responses. A single request-response pair occurs within the same connection on each side.&lt;/li&gt;
+&lt;li&gt;Close: The client and server close the connection.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;To obtain HTTP content, it’s necessary to read it from the second step of this process. As defined in the &lt;a href=&#34;http://rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC&lt;/a&gt;, the content is contained within the data of the Layer 4 protocol and can be obtained by parsing the data. The request and response pair can be correlated because they both occur within the same connection on each side.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.png&#34; alt=&#34;Figure 1: HTTP communication timeline.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: HTTP communication timeline.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;http-pipeline&#34;&gt;HTTP Pipeline&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/HTTP_pipelining&#34;&gt;HTTP pipelining&lt;/a&gt; is a feature of HTTP/1.1 that enables multiple HTTP requests to be sent over a single TCP connection without waiting for the corresponding responses. This feature is important because it ensures that the order of the responses on the server side matches the order of the requests.&lt;/p&gt;
+&lt;p&gt;Figure 2 illustrates how this works. Consider the following scenario: an HTTP client sends multiple requests to a server, and the server responds by sending the HTTP responses in the same order as the requests. This means that the first request sent by the client will receive the first response from the server, the second request will receive the second response, and so on.&lt;/p&gt;
+&lt;p&gt;When designing HTTP parsing, we should follow this principle by adding request data to a list and removing the first item when parsing a response. This ensures that the responses are processed in the correct order.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.png&#34; alt=&#34;Figure 2: HTTP/1.1  pipeline.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: HTTP/1.1  pipeline.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;metrics&#34;&gt;Metrics&lt;/h3&gt;
+&lt;p&gt;Based on the identification of the HTTP content and process topology diagram mentioned in the previous article, we can combine these two to generate process-to-process metrics data.&lt;/p&gt;
+&lt;p&gt;Figure 3 shows the metrics that currently support the analysis between the two processes. Based on the HTTP request and response data, we can analyze the following data:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;Metrics Name&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Type&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Unit&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Description&lt;/strong&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Request CPM(Call Per Minute)&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The HTTP request count&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Response Status CPM(Call Per Minute)&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The count of per HTTP response status code&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Request Package Size&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Byte&lt;/td&gt;
+&lt;td&gt;The request package size&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Response Package Size&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Byte&lt;/td&gt;
+&lt;td&gt;The response package size&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Client Duration&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The duration of single HTTP response on the client side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Server Duration&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The duration of single HTTP response on the server side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;img src=&#34;f3.png&#34; alt=&#34;Figure 3: Process-to-process metrics.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Process-to-process metrics.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;http-and-trace&#34;&gt;HTTP and Trace&lt;/h2&gt;
+&lt;p&gt;During the HTTP process, if we unpack the HTTP requests and responses from raw data, we can use this data to correlate with the existing tracing system.&lt;/p&gt;
+&lt;h3 id=&#34;trace-context-identification&#34;&gt;Trace Context Identification&lt;/h3&gt;
+&lt;p&gt;In order to track the flow of requests between multiple services, the trace system usually creates a trace context when a request enters a service and passes it along to other services during the request-response process. For example, when an HTTP request is sent to another server, the trace context is included in the request header.&lt;/p&gt;
+&lt;p&gt;Figure 4 displays the raw content of an HTTP request intercepted by Wireshark. The trace context information generated by the Zipkin Tracing system can be identified by the “X-B3” prefix in the header. By using eBPF to intercept the trace context in the HTTP header, we can connect the current request with the trace system.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.png&#34; alt=&#34;Figure 4: View of HTTP headers in Wireshark.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: View of HTTP headers in Wireshark.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;trace-event&#34;&gt;Trace Event&lt;/h3&gt;
+&lt;p&gt;We have added the concept of an &lt;em&gt;event&lt;/em&gt; to traces. An event can be attached to a span and consists of start and end times, tags, and summaries, allowing us to attach any desired information to the Trace.&lt;/p&gt;
+&lt;p&gt;When performing eBPF network profiling, two events can be generated based on the request-response data. Figure 5 illustrates what happens when a service performs an HTTP request with profiling. The trace system generates &lt;em&gt;trace context&lt;/em&gt; information and sends it in the request. When the service executes in the kernel, we can generate an event for the corresponding trace span by interacting with the request-response data and execution time in the kernel space.&lt;/p&gt;
+&lt;p&gt;Previously, we could only observe the execution status in the user space. However, by combining traces and eBPF technologies, we can now also get more information about the current trace in the kernel space, which would impact less performance for the target service if we do similar things in the tracing SDK and agent.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.png&#34; alt=&#34;Figure 5: Logical view of profiling an HTTP request and response.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: Logical view of profiling an HTTP request and response.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;sampling&#34;&gt;Sampling&lt;/h3&gt;
+&lt;p&gt;To ensure efficient data storage and minimize unnecessary data sampling, we use a sampling mechanism for traces in our system. This mechanism triggers sampling only when certain conditions are met. We also provide a list of the top &lt;em&gt;N&lt;/em&gt; traces, which allows users to quickly access the relevant request information for a specific trace.&lt;/p&gt;
+&lt;p&gt;To help users easily identify and analyze relevant events, we offer three different sampling rules:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Slow Traces&lt;/strong&gt;: Sampling is triggered when the response time for a request exceeds a specified threshold.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Status [400, 500)&lt;/strong&gt;: Sampling is triggered when the response status code is greater than or equal to 400 and less than 500.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Status [500, 600)&lt;/strong&gt;: Sampling is triggered when the response status code is greater than or equal to 500 and less than 600.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In addition, we recognize that not all request or response raw data may be necessary for analysis. For example, users may be more interested in requesting data when trying to identify performance issues, while they may be more interested in response data when troubleshooting errors. As such, we also provide configuration options for request or response events to allow users to specify which type of data they would like to sample.&lt;/p&gt;
+&lt;h2 id=&#34;profiling-in-a-service-mesh&#34;&gt;Profiling in a Service Mesh&lt;/h2&gt;
+&lt;p&gt;The SkyWalking and SkyWalking Rover projects have already implemented the HTTP protocol &lt;em&gt;analyze&lt;/em&gt; and &lt;em&gt;trace&lt;/em&gt; associations. How do they perform when running in a service mesh environment?&lt;/p&gt;
+&lt;h3 id=&#34;deployment&#34;&gt;Deployment&lt;/h3&gt;
+&lt;p&gt;Figure 6 demonstrates the deployment of SkyWalking and SkyWalking Rover in a service mesh environment. SkyWalking Rover is deployed as a DaemonSet on each machine where a service is located and communicates with the SkyWalking backend cluster. It automatically recognizes the services on the machine and reports metadata information to the SkyWalking backend cluster. When a new network profiling task arises, SkyWalking Rover senses the task and analyzes the designated processes, collecting and aggregating network data before ultimately reporting it back to the SkyWalking backend service.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.png&#34; alt=&#34;Figure 6: SkyWalking rover deployment topology in a service mesh.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: SkyWalking rover deployment topology in a service mesh.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-systems&#34;&gt;Tracing Systems&lt;/h3&gt;
+&lt;p&gt;Starting from version 9.3.0, the SkyWalking backend fully supports all functions in the Zipkin server. Therefore, the SkyWalking backend can collect traces from both the SkyWalking and Zipkin protocols. Similarly, SkyWalking Rover can identify and analyze trace context in both the SkyWalking and Zipkin trace systems. In the following two sections, network analysis results will be displayed in the SkyWalking and Zipkin UI respectively.&lt;/p&gt;
+&lt;h4 id=&#34;skywalking&#34;&gt;SkyWalking&lt;/h4&gt;
+&lt;p&gt;When SkyWalking performs network profiling, similar to the TCP metrics in the &lt;a href=&#34;/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;previous article&lt;/a&gt;, the SkyWalking UI will first display the topology between processes. When you open the dashboard of the line representing the traffic metrics between processes, you can see the metrics of HTTP traffic from the “HTTP/1.x” tab and the sampled HTTP requests with tracing in the “HTTP Requests” tab.&lt;/p&gt;
+&lt;p&gt;As shown in Figure 7, there are three lists in the tab, each corresponding to a condition in the event sampling rules. Each list displays the traces that meet the pre-specified conditions. When you click on an item in the trace list, you can view the complete trace.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.png&#34; alt=&#34;Figure 7: Sampled HTTP requests within tracing context.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Sampled HTTP requests within tracing context.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you click on an item in the trace list, you can quickly view the specified trace. In Figure 8, we can see that in the current service-related span, there is a tag with a number indicating how many HTTP events are related to that trace span.&lt;/p&gt;
+&lt;p&gt;Since we are in a service mesh environment, each service involves interacting with Envoy. Therefore, the current span includes Envoy’s request and response information. Additionally, since the current service has both incoming and outgoing requests, there are events in the corresponding span.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.png&#34; alt=&#34;Figure 8: Events in the trace detail.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 8: Events in the trace detail.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When the span is clicked, the details of the span will be displayed. If there are events in the current span, the relevant event information will be displayed on a time axis. As shown in Figure 9, there are a total of 6 related events in the current Span. Each event represents a data sample of an HTTP request/response. One of the events spans multiple time ranges, indicating a longer system call time. It may be due to a blocked system call, depending on the implementation details of the HTTP request in different languages. This can also help us query the possible causes of errors.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.png&#34; alt=&#34;Figure 9: Events in one trace span.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 9: Events in one trace span.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Finally, we can click on a specific event to see its complete information. As shown in Figure 10, it displays the sampling information of a request, including the SkyWalking trace context protocol contained in the request header from the HTTP raw data. The raw request data allows you to quickly re-request the request to solve any issues.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.png&#34; alt=&#34;Figure 10: The detail of the event.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 10: The detail of the event.&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;zipkin&#34;&gt;Zipkin&lt;/h4&gt;
+&lt;p&gt;Zipkin is one of the most widely used distributed tracing systems in the world. SkyWalking can function as an &lt;a href=&#34;https://zipkin.io/pages/extensions_choices.html&#34;&gt;alternative server&lt;/a&gt; to provide advanced features for Zipkin users. Here, we use this way to bring the feature into the Zipkin ecosystem out-of-box. The new events would also be treated as a kind of Zipkin’s tags and annotations.&lt;/p&gt;
+&lt;p&gt;To add events to a Zipkin span, we need to do the following:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Split the start and end times of each event into two annotations with a canonical name.&lt;/li&gt;
+&lt;li&gt;Add the sampled HTTP raw data from the event to the Zipkin span tags, using the same event name for corresponding purposes.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Figures 11 and 12 show annotations and tags in the same span. In these figures, we can see that the span includes at least two events with the same event name and sequence suffix (e.g., “Start/Finished HTTP Request/Response Sampling-x” in the figure). Both events have separate timestamps to represent their relative times within the span. In the tags, the data content of the corresponding event is represented by the event name and sequence number, respectively.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.png&#34; alt=&#34;Figure 11: Event timestamp in the Zipkin span annotation.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 11: Event timestamp in the Zipkin span annotation.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.png&#34; alt=&#34;Figure 12: Event raw data in the Zipkin span tag.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 12: Event raw data in the Zipkin span tag.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, we demonstrate how to perform network profiling in a service mesh and complete metrics collection and HTTP raw data sampling. To follow along, you will need a running Kubernetes environment.&lt;/p&gt;
+&lt;h3 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking. For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.4.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;start-network-profiling-task&#34;&gt;Start Network Profiling Task&lt;/h3&gt;
+&lt;p&gt;Currently, we can select the specific instances that we wish to monitor by clicking the &lt;strong&gt;Data Plane&lt;/strong&gt; item in the &lt;strong&gt;Service Mesh&lt;/strong&gt; panel and the &lt;strong&gt;Service&lt;/strong&gt; item in the &lt;strong&gt;Kubernetes&lt;/strong&gt; panel.&lt;/p&gt;
+&lt;p&gt;In figure 13, we have selected an instance with a list of tasks in the network profiling tab.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f13.png&#34; alt=&#34;Figure 13: Network Profiling tab in the Data Plane.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 13: Network Profiling tab in the Data Plane.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When we click the Start button, as shown in Figure 14, we need to specify the sampling rules for the profiling task. The sampling rules consist of one or more rules, each of which is distinguished by a different URI regular expression. When the HTTP request URI matches the regular expression, the rule is used. If the URI regular expression is empty, the default rule is used. Using multiple rules can help us make different sampling configurations for different requests.&lt;/p&gt;
+&lt;p&gt;Each rule has three parameters to determine if sampling is needed:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Minimal Request Duration (ms)&lt;/strong&gt;: requests with a response time exceeding the specified time will be sampled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling response status code between 400 and 499&lt;/strong&gt;: all status codes in the range [400-499) will be sampled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling response status code between 500 and 599&lt;/strong&gt;: all status codes in the range [500-599) will be sampled.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Once the sampling configuration is complete, we can create the task.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f14.png&#34; alt=&#34;Figure 14: Create network profiling task page.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 14: Create network profiling task page.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;After a few seconds, you will see the process topology appear on the right side of the page.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f15.png&#34; alt=&#34;Figure 15&#34;&gt;&lt;/p&gt;
+&lt;p&gt;When you click on the line between processes, you can view the data between the two processes, which is divided into three tabs:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;TCP&lt;/strong&gt;: displays TCP-related metrics.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/1.x&lt;/strong&gt;: displays metrics in the HTTP 1 protocol.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP Requests&lt;/strong&gt;: displays the analyzed request and saves it to a list according to the sampling rule.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f16.png&#34; alt=&#34;Figure 16: TCP metrics in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 16: TCP metrics in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f17.png&#34; alt=&#34;Figure 17: HTTP/1.x metrics in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 17: HTTP/1.x metrics in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f18.png&#34; alt=&#34;Figure 18: HTTP sampled requests in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 18: HTTP sampled requests in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we detailed the overview of how to analyze the Layer 7 HTTP/1.x protocol in network analysis, and how to associate it with existing trace systems. This allows us to extend the scope of data we can observe from just user space to also include kernel-space data.&lt;/p&gt;
+&lt;p&gt;In the future, we will delve further into the analysis of kernel data, such as collecting information on TCP packet size, transmission frequency, network card, and help on enhancing distributed tracing from another perspective.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/&#34;&gt;SkyWalking Rover Documentation ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;Diagnose Service Mesh Network Performance with eBPF blog post &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/&#34;&gt;SkyWalking Profiling Documentation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/&#34;&gt;SkyWalking Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;Zipkin Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC - Hypertext Transfer Protocol – HTTP/1.1 &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: [License Issue] Aliyun(阿里云)&#39;s trace analysis service copied SkyWalking&#39;s trace profiling page.</title>
       <link>/blog/2023-01-03-aliyun-copy-page/</link>
       <pubDate>Tue, 03 Jan 2023 00:00:00 +0000</pubDate>
@@ -6755,70 +6957,6 @@ bash build/build.sh
 &lt;li&gt;The collector is CPU intensive application. So you should provide sufficient CPU resource to it.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;This blog gives people a common method to evaluate the throughput of Service Mesh Receiver. Users could use this to design their Apache Skywalking backend deployment architecture.&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: Understand distributed trace easier in the incoming 6-GA</title>
-      <link>/blog/2019-01-01-understand-trace/</link>
-      <pubDate>Tue, 01 Jan 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2019-01-01-understand-trace/</guid>
-      <description>
-        
-        
-        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
-&lt;p&gt;Distributed tracing is a necessary part of modern microservices architecture, but how to understand or use distributed tracing data is unclear to some end users. This blog overviews typical distributed tracing use cases with new visualization features in SkyWalking v6. We hope new users will understand more through these examples.&lt;/p&gt;
-&lt;h2 id=&#34;metric-and-topology&#34;&gt;Metric and topology&lt;/h2&gt;
-&lt;p&gt;Trace data underpins in two well known analysis features: &lt;strong&gt;metric&lt;/strong&gt; and &lt;strong&gt;topology&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Metric&lt;/strong&gt; of each service, service instance, endpoint are derived from entry spans in trace. Metrics represent response time performance. So, you could have average response time, 99% response time, success rate, etc. These are broken down by service, service instance, endpoint.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Topology&lt;/strong&gt; represents links between services and is distributed tracing&amp;rsquo;s most attractive feature. Topologies allows all users to understand distributed service relationships and dependencies even when they are varied or complex. This is important as it brings a single view to all interested parties, regardless of if they are a developer, designer or operator.&lt;/p&gt;
-&lt;p&gt;Here&amp;rsquo;s an example topology of 4 projects, including Kafka and two outside dependencies.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;./demo-spring.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;Topology in SkyWalking optional UI, RocketBot&lt;/p&gt;
-&lt;h2 id=&#34;trace&#34;&gt;Trace&lt;/h2&gt;
-&lt;p&gt;In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk and Network) to generate, transport and persistent trace data. Let&amp;rsquo;s try to answer why we do this? What are the typical diagnosis and system performance questions we can answer with trace data?&lt;/p&gt;
-&lt;p&gt;SkyWalking v6 includes two trace views:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;TreeMode: The first time provided. Help you easier to identify issues.&lt;/li&gt;
-&lt;li&gt;ListMode: Traditional view in time line, also usually seen in other tracing system, such as Zipkin.&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h3 id=&#34;error-occurred&#34;&gt;Error occurred&lt;/h3&gt;
-&lt;p&gt;In the trace view, the easiest part is locating the error, possibly caused by a code exception or network fault. Both ListMode and TreeMode can identify errors, while the span detail screen provides details.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;span-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;ListMode error span&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;span-error-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;TreeMode error span&lt;/p&gt;
-&lt;h3 id=&#34;slow-span&#34;&gt;Slow span&lt;/h3&gt;
-&lt;p&gt;A high priority feature is identifying the slowest spans in a trace. This uses execution duration captured by application agents. In the old ListMode trace view, parent span almost always includes the child span&amp;rsquo;s duration, due to nesting. In other words, a slow span usually causes its parent to also become slow. In SkyWalking 6, we provide &lt;code&gt;Top 5 of slow span&lt;/code&gt; filter to help you locate the spans directly.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;top5-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;Top 5 slow span&lt;/p&gt;
-&lt;p&gt;The above screenshot highlights the top 5 slow spans, excluding child span duration. Also, this shows all spans&#39; execution time, which helps identify the slowest ones.&lt;/p&gt;
-&lt;h3 id=&#34;too-many-child-spans&#34;&gt;Too many child spans&lt;/h3&gt;
-&lt;p&gt;In some cases, individual durations are quick, but the trace is still slow, like this one:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;top5-not-clear.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;Trace with no slow span&lt;/p&gt;
-&lt;p&gt;To understand if the root problem is related to too many operations, use &lt;code&gt;Top 5 of children span number&lt;/code&gt;. This filter shows the amount of children each span has, highlighting the top 5.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;too-many-child.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;13 database accesses of a span&lt;/p&gt;
-&lt;p&gt;In this screenshot, there is a span with 13 children, which are all Database accesses. Also, when you see overview of trace, database cost 1380ms of this 2000ms trace.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;database-long-duration.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;1380ms database accesses&lt;/p&gt;
-&lt;p&gt;In this example, the root cause is too many database accesses. This is also typical in other scenarios like too many RPCs or cache accesses.&lt;/p&gt;
-&lt;h3 id=&#34;trace-depth&#34;&gt;Trace depth&lt;/h3&gt;
-&lt;p&gt;Trace depth is also related latency. Like the &lt;a href=&#34;#too-many-child-spans&#34;&gt;too many child spans&lt;/a&gt; scenario, each span latency looks good, but the whole trace is slow.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;deep-trace-1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;Trace depth&lt;/p&gt;
-&lt;p&gt;Here, the slowest spans are less than 500ms, which are not too slow for a 2000ms trace. When you see the first line, there are four different colors representing four services involved in this distributed trace. Every one of them costs 100~400ms. For all four, there nearly 2000ms. From here, we know this slow trace is caused by 3 RPCs in a serial sequence.&lt;/p&gt;
-&lt;h2 id=&#34;at-the-end&#34;&gt;At the end&lt;/h2&gt;
-&lt;p&gt;Distributed tracing and APM tools help users identify root causes, allowing development and operation teams to optimize accordingly. We hope you enjoyed this, and love Apache SkyWalking and our new trace visualization. If so, &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
-&lt;p&gt;SkyWalking 6 is scheduled to release at the end of January 2019. You can contact the project team through the following channels:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt; . Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe the mail list.&lt;/li&gt;
-&lt;li&gt;Join &lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt; room.&lt;/li&gt;
-&lt;/ul&gt;
 
       </description>
     </item>
