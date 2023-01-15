@@ -9,7 +9,7 @@ const docsFile = path.join(__dirname, '../data/docs.yml')
 const teamFile = path.join(__dirname, '../data/team.yml')
 const mergedDataFile = path.join(__dirname, '../themes/docsy/static/js/mergedData.js')
 
-const sleep = (ms = 4 * 1000) => {
+const sleep = (ms = 8 * 1000) => {
   console.log('waiting...');
   return new Promise(resolve => setTimeout(() => resolve(), ms));
 }
