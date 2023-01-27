@@ -20,7 +20,7 @@ fi
 
 mkdir ./${repo}
 cd ./${repo}
-if [ "$commitId" = "Next" ]; then
+if [ "$commitId" = "next" ]; then
   git clone --depth=1 ${repoUrl} .
 else
   git init
@@ -29,10 +29,10 @@ else
   git reset --hard FETCH_HEAD
 fi
 
-if [ -d "../../${localPath}" ]; then
-  rm -rf ../../${localPath}
+if [ -d "../..${localPath}" ]; then
+  rm -rf ../..${localPath}
 fi
-mkdir -p ../../${localPath}
-cp -rf ./docs/* ../../${localPath}
+mkdir -p ../..${localPath}
+cp -rf ./docs/* ../..${localPath}
 cp ./docs/menu.yml ../../data/docSidebar/${menuFileName}.yml
 
