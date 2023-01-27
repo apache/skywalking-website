@@ -7,7 +7,7 @@ const {execSync} = require('child_process');
 const {promises} = fs;
 const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
-const NEXT = 'Next';
+const NEXT = 'next';
 
 init();
 
@@ -148,6 +148,7 @@ async function traverseDocsList(result) {
         const {repo, repoUrl, docs, description, icon} = item;
         if (!repoUrl) continue;
         let {version, commitId} = doc;
+        version = version.toLowerCase();
         commitId = commitId || version;
         const docName = repo === 'skywalking' ? 'main' : repo;
         const localPath = `/content/docs/${docName}/${version}`;
