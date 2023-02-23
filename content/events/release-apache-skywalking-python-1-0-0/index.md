@@ -12,6 +12,7 @@ SkyWalking Python 1.0.0 is released! Go to [downloads](/downloads) page to find 
 **DockerHub Image**: https://hub.docker.com/r/apache/skywalking-python
 
 - **Important Notes and Breaking Changes:**
+  - The new PVM metrics reported from Python agent requires SkyWalking OAP v9.3.0 to show out-of-the-box.
   - **BREAKING**: Python 3.6 is no longer supported and may not function properly, Python 3.11 support is added and tested.
   - **BREAKING**: A number of common configuration options and environment variables are renamed to follow the convention of Java agent,
   please check with the latest official documentation before upgrading. (#273, #282)
