@@ -3,7 +3,7 @@ title: Release Apache SkyWalking APM 9.4.0
 date: 2023-03-09
 author: SkyWalking Team
 description: "Release Apache SkyWalking 9.4.0"
-endTime: 2022-12-30T23:00:00Z
+endTime: 2023-03-30T23:00:00Z
 ---
 
 SkyWalking 9.4.0 is released. Go to [downloads](/downloads) page to find release tars.
