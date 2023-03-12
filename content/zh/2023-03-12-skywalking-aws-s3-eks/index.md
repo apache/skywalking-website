@@ -5,7 +5,7 @@ author: 杨普光
 description: 本文展示如何利用SkyWalking监控EKS和S3
 ---
 
-![icon.png](./icon.webp)
+![icon.png](./icon.png)
 
 
 SKyWalking OAP 现有的 [OpenTelemetry receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/opentelemetry-receiver/) 可以通过[OTLP](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/otlp.md)协议接收指标(metrics)，并且使用[MAL](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/)实时分析相关指标。从OAP 9.4.0开始，SkyWalking 新增了[AWS Firehose receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/)，用来接收，分析CloudWatch metrics数据。本文将以EKS和S3为例介绍SkyWalking OAP 接收，分析 AWS 服务的指标数据的过程
