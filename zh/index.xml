@@ -14,6 +14,366 @@
     
     
     <item>
+      <title>Zh: 使用SkyWalking监控DynamoDB</title>
+      <link>/zh/2023-03-13-skywalking-aws-dynamodb/</link>
+      <pubDate>Mon, 13 Mar 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-03-13-skywalking-aws-dynamodb/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;./icon.png&#34; alt=&#34;icon.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt;  是一个开源应用性能管理系统，帮助用户收集和聚合日志、追踪、指标和事件，并在 UI 上显示。从 OAP 9.4.0 开始，SkyWalking 新增了 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/&#34;&gt;AWS Firehose receiver&lt;/a&gt;，用来接收，计算CloudWatch metrics的数据。本文将以DynamoDB为例，展示如何使用 SkyWalking接收并计算 CloudWatch metrics 数据，以监控Amazon Web Services。&lt;/p&gt;
+&lt;h2 id=&#34;什么是-amazon-cloudwatch-与-amazon-kinesis-data-firehose-&#34;&gt;什么是 Amazon CloudWatch 与 Amazon Kinesis Data Firehose ？&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/cn/cloudwatch/&#34;&gt;Amazon CloudWatch&lt;/a&gt; 是一个指标存储库, 此工具可从 AWS中 ( 如 DynamoDB ) 收集原始数据，近实时处理为可读取的指标。同时，我们也可以使用&lt;strong&gt;指标流&lt;/strong&gt;持续地将 CloudWatch 指标流式传输到所选的目标位置，实现近实时传送和低延迟。SkyWalking 利用此特性，创建指标流并将其导向 Amazon Kinesis Data Firehose 传输流，并由后者进一步传输处理。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/cn/kinesis/data-firehose/&#34;&gt;Amazon Kinesis Data Firehose&lt;/a&gt;是一项提取、转换、加载服务，可以将流式处理数据以可靠方式捕获、转换和提供到数据湖、数据存储和分析服务中。SkyWalking利用此特性，将指标流最终导向 aws-firehose-receiver，交由OAP计算并最终展示指标。&lt;/p&gt;
+&lt;p&gt;整体过程流程图如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./aws-service.png&#34; alt=&#34;aws-service.png&#34;&gt;&lt;/p&gt;
+&lt;h6 id=&#34;注意&#34;&gt;注意&lt;/h6&gt;
+&lt;ul&gt;
+&lt;li&gt;由于 Kinesis Data Firehose 规定，HTTP端点的URL必须使用HTTPS协议，且必须使用443端口。同时，此URL必须由Gateway代理并转发到真正的aws-firehose-receiver。&lt;/li&gt;
+&lt;li&gt;TLS 证书必须由CA签发的，自签证书不会被 Kinesis Data Firehose 信任。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;设置dynamodb监控&#34;&gt;设置DynamoDB监控&lt;/h2&gt;
+&lt;p&gt;接下来以DynamoDB为例说明使用OAP 收集CloudWatch metrics 前，aws中必要的设置:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;进入 &lt;a href=&#34;https://console.aws.amazon.com/kinesis/home&#34;&gt;Kinesis 控制台&lt;/a&gt;，创建数据流， &lt;code&gt;Source&lt;/code&gt;选择 &lt;code&gt;Direct PUT&lt;/code&gt;, &lt;code&gt;Destination&lt;/code&gt; 选择 &lt;code&gt;HTTP Endpoint&lt;/code&gt;. 并且设置&lt;code&gt;HTTP Endpoint URL&lt;/code&gt; 为 &lt;code&gt;Gateway对应URL&lt;/code&gt;。 其余配置选项可由需要自行配置。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;./kinesis.png&#34; alt=&#34;image.png&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;进入 &lt;a href=&#34;https://console.aws.amazon.com/cloudwatch/home&#34;&gt;CloudWatch 控制台&lt;/a&gt;，在左侧控制面板中选择&lt;code&gt;Metrics-Stream&lt;/code&gt;，点击Create metric stream。其中，&lt;code&gt;namespace&lt;/code&gt; 选择 &lt;code&gt;AWS/DynamoDB&lt;/code&gt;。同时，根据需要，也可以增加其他命名空间。 &lt;code&gt;Kinesis Data Firehose&lt;/code&gt;选择在第一步中创建好的数据流。最后，设置输出格式为opentelemetry0.7。其余配置选项可由需要自行配置。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;./cloudwatch.png&#34; alt=&#34;cloudwatch.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;至此，DynamoDB监控配置的AWS方面设置完成。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-oap-指标处理分析&#34;&gt;SkyWalking OAP 指标处理分析&lt;/h2&gt;
+&lt;p&gt;SkyWalking 利用 aws-firehose-receiver 接收并解码由Gateway转发来的 AWS 指标流，交由&lt;a href=&#34;https://github.com/apache/skywalking/tree/master/oap-server/server-receiver-plugin/otel-receiver-plugin&#34;&gt;Opentelemetry-receiver&lt;/a&gt;进行处理，转化为SkyWalking metrics。并由&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;Meter Analysis Language (MAL)&lt;/a&gt;进行指标的分析与聚合，最终呈现在UI上。&lt;/p&gt;
+&lt;p&gt;其中 MAL 部分以及 UI 部分，SkyWalking支持用户自由定制，从而更多样性的展示指标数据。详情请参考&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;MAL doc&lt;/a&gt; 以及 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;UI doc&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./gateway_to_ui.png&#34; alt=&#34;gateway_to_ui.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;典型指标分析&#34;&gt;典型指标分析&lt;/h2&gt;
+&lt;h3 id=&#34;作用域&#34;&gt;作用域&lt;/h3&gt;
+&lt;p&gt;SkyWalking中，有作用域 ( scope ) 的概念。通过作用域, 我们可以对指标进行更合理的分类与聚合。在对DynamoDB的监控中，使用到了其中两种作用域———Service和Endpoint。&lt;/p&gt;
+&lt;p&gt;Service表示一组工作负荷，这些工作负荷为传入请求提供相同的行为。常用作服务的集群级别作用域，在AWS中，用户的账户更接近集群的概念。 所以SkyWalking将AWS account id作为key，将AWS账户映射为Service类型。&lt;/p&gt;
+&lt;p&gt;同理，Endpoint表示一种逻辑概念，常用于服务中用于传入请求的路径，例如 HTTP URI 路径或 gRPC 服务类 + 方法签名，也可以表示数据库中的表结构。所以SkyWalking将DynamoDB表映射为Endpoint类型。&lt;/p&gt;
+&lt;h3 id=&#34;指标&#34;&gt;指标&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;指标名称&lt;/th&gt;
+&lt;th&gt;含义&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;AccountMaxReads / AccountMaxWrites&lt;/td&gt;
+&lt;td&gt;账户可以使用的最大 读取/写入 容量单位数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;AccountMaxTableLevelReads / AccountMaxTableLevelWrites&lt;/td&gt;
+&lt;td&gt;账户的表或全局二级索引可以使用的最大 读取/写入 容量单位数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;AccountProvisionedReadCapacityUtilization / AccountProvisionedWriteCapacityUtilization&lt;/td&gt;
+&lt;td&gt;账户使用的预置 读取/写入 容量单位百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;MaxProvisionedTableReadCapacityUtilization / MaxProvisionedTableWriteCapacityUtilization&lt;/td&gt;
+&lt;td&gt;账户的最高预调配 读取/写入 表或全局二级索引使用的预调配读取容量单位百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;以上为一些常用的账户指标(Serivce 作用域)。它们是DynamoDB中的各种配置信息，SkyWalking通过对这些指标的监控，可以完整的展示出数据库配置的变动情况。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;指标名称&lt;/th&gt;
+&lt;th&gt;含义&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;ConsumedReadCapacityUnits / ConsumedWriteCapacityUnits&lt;/td&gt;
+&lt;td&gt;指定时间段内占用的 读取/写入 容量单位数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ReturnedItemCount&lt;/td&gt;
+&lt;td&gt;&lt;code&gt;Query&lt;/code&gt;、&lt;code&gt;Scan&lt;/code&gt; 或 &lt;code&gt;ExecuteStatement&lt;/code&gt;（可选择）操作在指定时段内返回的项目数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;SuccessfulRequestLatency&lt;/td&gt;
+&lt;td&gt;指定时间段内对于 DynamoDB 或 Amazon DynamoDB Streams 的成功请求的延迟。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;TimeToLiveDeletedItemCount&lt;/td&gt;
+&lt;td&gt;指定时间段内按存活时间 (TTL) 删除的项目数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;以上为一些常用的表指标(Endpoint作用域)，它们也会被聚合到账户指标中。这些指标一般用于分析数据库的性能，用户可以通过它们判断出数据库配置的合理程度。例如，用户可以通过ConsumedReadCapicityUnits / ConsumedReadCapicityUnits，跟踪预置吞吐量的使用，从而判断表或账户的预制吞吐量的合理性。关于预置吞吐量，请参见&lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ProvisionedThroughputIntro.html&#34;&gt;读/写容量模式&lt;/a&gt;。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;指标名称&lt;/th&gt;
+&lt;th&gt;含义&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;UserErrors&lt;/td&gt;
+&lt;td&gt;在指定时间段内生成 HTTP 400 状态代码的对 DynamoDB 或 Amazon DynamoDB Streams 的请求。HTTP 400 通常表示客户端错误，如参数组合无效，尝试更新不存在的表或请求签名错误。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;SystemErrors&lt;/td&gt;
+&lt;td&gt;在指定的时间段内生成 HTTP 500 状态代码的对 DynamoDB 或 Amazon DynamoDB Streams 的请求。HTTP 500 通常指示内部服务错误。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ThrottledRequests&lt;/td&gt;
+&lt;td&gt;超出资源（如表或索引）预置吞吐量限制的 DynamoDB 请求。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;TransactionConflict&lt;/td&gt;
+&lt;td&gt;由于同一项目的并发请求之间的事务性冲突而被拒绝的项目级请求。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;以上为一些常用的错误指标，其中UserErrors为用户级别指标，其余为表级别指标。用户可以在这些指标上设置告警，如果警告出现，那么可能说明数据库的使用出现了一些问题，需要用户自行查看验证。&lt;/p&gt;
+&lt;h3 id=&#34;注意-1&#34;&gt;注意&lt;/h3&gt;
+&lt;p&gt;SkyWalking对于DynamoDB的指标选取直接来源于CloudWatch metrics， 您也可以通过&lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/metrics-dimensions.html&#34;&gt;CloudWatch metrics doc&lt;/a&gt;来获取指标详细信息。&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;在本节中，我们将演示如何利用terraform创建一个DynamoDB表，以及可以产生指标流的其他AWS服务，并部署Skywalking完成指标收集。&lt;/p&gt;
+&lt;p&gt;首先，您需要一个正在运行的网关实例，例如 &lt;a href=&#34;https://www.nginx.com/&#34;&gt;NGINX&lt;/a&gt;，它负责接收AWS传来的指标流并且转发到aws-firehose-receiver。注意, 网关需要配置证书以便接受HTTPS协议的请求。&lt;/p&gt;
+&lt;p&gt;下面是一个NGINX的示例配置。配置不要求完全一致，只要能将收到的HTTPS请求发送到&lt;code&gt;oap所在host:12801/aws/firehose/metrics&lt;/code&gt;即可。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;server {
+        listen       443 ssl;
+        
+        ssl_certificate     /crt/test.pem;
+        ssl_certificate_key  /crt/test.key; 
+        
+        ssl_session_timeout  5m;   
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:ECDH:AES:HIGH:!NULL:!aNULL:!MD5:!ADH:!RC4; 
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2;  
+        ssl_prefer_server_ciphers on; 
+    
+        location /aws/firehose/metrics {
+            proxy_pass http://test.xyz:12801/aws/firehose/metrics;
+        }
+    }
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;部署skywalking&#34;&gt;部署SkyWalking&lt;/h3&gt;
+&lt;p&gt;SkyWalking的部署方式有很多种，您可以直接从&lt;a href=&#34;https://github.com/apache/skywalking/releases/tag/v9.4.0&#34;&gt;release页面&lt;/a&gt;中直接获取。&lt;/p&gt;
+&lt;p&gt;当然，如果您更习惯于 Kubernetes，您也可以从&lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;SkyWalking-kubernetes&lt;/a&gt;找到相应部署方式。&lt;/p&gt;
+&lt;p&gt;请注意，无论使用哪种部署方式，请确保OAP和UI的版本为9.4.0以上，并且需要开放12801端口。&lt;/p&gt;
+&lt;p&gt;下面是一个使用helm指令部署的示例：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;export SKYWALKING_RELEASE_VERSION=4.3.0 
+export SKYWALKING_RELEASE_NAME=skywalking  
+export SKYWALKING_RELEASE_NAMESPACE=default
+
+helm install &amp;quot;${SKYWALKING_RELEASE_NAME}&amp;quot; \
+  oci://registry-1.docker.io/apache/skywalking-helm \
+  --version &amp;quot;${SKYWALKING_RELEASE_VERSION}&amp;quot; \
+  -n &amp;quot;${SKYWALKING_RELEASE_NAMESPACE}&amp;quot; \
+  --set oap.image.tag=9.4.0 \
+  --set oap.storageType=elasticsearch \
+  --set ui.image.tag=9.4.0 \
+  --set oap.ports.firehose=12801
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;开启对应aws服务&#34;&gt;开启对应AWS服务&lt;/h3&gt;
+&lt;p&gt;terraform 配置文件如下（实例修改于&lt;a href=&#34;https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kinesis_firehose_delivery_stream&#34;&gt;Terraform Registry - kinesis_firehose_delivery_stream&lt;/a&gt;）：&lt;/p&gt;
+&lt;details&gt;
+&lt;summary&gt;terraform 配置文件 &lt;/summary&gt;
+&lt;pre&gt;&lt;code&gt;provider &amp;quot;aws&amp;quot; {
+  region = &amp;quot;ap-northeast-1&amp;quot;
+  access_key = &amp;quot;在这里填入您的access_key&amp;quot;
+  secret_key = &amp;quot;在这里填入您的secret_key&amp;quot;
+}
+resource &amp;quot;aws_dynamodb_table&amp;quot; &amp;quot;basic-dynamodb-table&amp;quot; {
+  name           = &amp;quot;GameScores&amp;quot;
+  billing_mode   = &amp;quot;PROVISIONED&amp;quot;
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = &amp;quot;UserId&amp;quot;
+  range_key      = &amp;quot;GameTitle&amp;quot;
+
+  attribute {
+    name = &amp;quot;UserId&amp;quot;
+    type = &amp;quot;S&amp;quot;
+  }
+
+  attribute {
+    name = &amp;quot;GameTitle&amp;quot;
+    type = &amp;quot;S&amp;quot;
+  }
+
+  attribute {
+    name = &amp;quot;TopScore&amp;quot;
+    type = &amp;quot;N&amp;quot;
+  }
+
+  ttl {
+    attribute_name = &amp;quot;TimeToExist&amp;quot;
+    enabled        = true
+  }
+
+  global_secondary_index {
+    name               = &amp;quot;GameTitleIndex&amp;quot;
+    hash_key           = &amp;quot;GameTitle&amp;quot;
+    range_key          = &amp;quot;TopScore&amp;quot;
+    write_capacity     = 10
+    read_capacity      = 10
+    projection_type    = &amp;quot;INCLUDE&amp;quot;
+    non_key_attributes = [&amp;quot;UserId&amp;quot;]
+  }
+
+  tags = {
+    Name        = &amp;quot;dynamodb-table-1&amp;quot;
+    Environment = &amp;quot;production&amp;quot;
+  }
+}
+
+resource &amp;quot;aws_cloudwatch_metric_stream&amp;quot; &amp;quot;main&amp;quot; {
+  name          = &amp;quot;my-metric-stream&amp;quot;
+  role_arn      = aws_iam_role.metric_stream_to_firehose.arn
+  firehose_arn  = aws_kinesis_firehose_delivery_stream.http_stream.arn
+  output_format = &amp;quot;opentelemetry0.7&amp;quot;
+
+  include_filter {
+    namespace = &amp;quot;AWS/DynamoDB&amp;quot;
+  }
+}
+
+# https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-metric-streams-trustpolicy.html
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;streams_assume_role&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    principals {
+      type        = &amp;quot;Service&amp;quot;
+      identifiers = [&amp;quot;streams.metrics.cloudwatch.amazonaws.com&amp;quot;]
+    }
+
+    actions = [&amp;quot;sts:AssumeRole&amp;quot;]
+  }
+}
+
+resource &amp;quot;aws_iam_role&amp;quot; &amp;quot;metric_stream_to_firehose&amp;quot; {
+  name               = &amp;quot;metric_stream_to_firehose_role&amp;quot;
+  assume_role_policy = data.aws_iam_policy_document.streams_assume_role.json
+}
+
+# https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-metric-streams-trustpolicy.html
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;metric_stream_to_firehose&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    actions = [
+      &amp;quot;firehose:PutRecord&amp;quot;,
+      &amp;quot;firehose:PutRecordBatch&amp;quot;,
+    ]
+
+    resources = [aws_kinesis_firehose_delivery_stream.http_stream.arn]
+  }
+}
+resource &amp;quot;aws_iam_role_policy&amp;quot; &amp;quot;metric_stream_to_firehose&amp;quot; {
+  name   = &amp;quot;default&amp;quot;
+  role   = aws_iam_role.metric_stream_to_firehose.id
+  policy = data.aws_iam_policy_document.metric_stream_to_firehose.json
+}
+
+resource &amp;quot;aws_s3_bucket&amp;quot; &amp;quot;bucket&amp;quot; {
+  bucket = &amp;quot;metric-stream-test-bucket&amp;quot;
+}
+
+resource &amp;quot;aws_s3_bucket_acl&amp;quot; &amp;quot;bucket_acl&amp;quot; {
+  bucket = aws_s3_bucket.bucket.id
+  acl    = &amp;quot;private&amp;quot;
+}
+
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;firehose_assume_role&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    principals {
+      type        = &amp;quot;Service&amp;quot;
+      identifiers = [&amp;quot;firehose.amazonaws.com&amp;quot;]
+    }
+
+    actions = [&amp;quot;sts:AssumeRole&amp;quot;]
+  }
+}
+
+resource &amp;quot;aws_iam_role&amp;quot; &amp;quot;firehose_to_s3&amp;quot; {
+  assume_role_policy = data.aws_iam_policy_document.firehose_assume_role.json
+}
+
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;firehose_to_s3&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    actions = [
+      &amp;quot;s3:AbortMultipartUpload&amp;quot;,
+      &amp;quot;s3:GetBucketLocation&amp;quot;,
+      &amp;quot;s3:GetObject&amp;quot;,
+      &amp;quot;s3:ListBucket&amp;quot;,
+      &amp;quot;s3:ListBucketMultipartUploads&amp;quot;,
+      &amp;quot;s3:PutObject&amp;quot;,
+    ]
+
+    resources = [
+      aws_s3_bucket.bucket.arn,
+      &amp;quot;${aws_s3_bucket.bucket.arn}/*&amp;quot;,
+    ]
+  }
+}
+
+resource &amp;quot;aws_iam_role_policy&amp;quot; &amp;quot;firehose_to_s3&amp;quot; {
+  name   = &amp;quot;default&amp;quot;
+  role   = aws_iam_role.firehose_to_s3.id
+  policy = data.aws_iam_policy_document.firehose_to_s3.json
+}
+
+resource &amp;quot;aws_kinesis_firehose_delivery_stream&amp;quot; &amp;quot;http_stream&amp;quot; {
+  name        = &amp;quot;metric-stream-test-stream&amp;quot;
+  destination = &amp;quot;http_endpoint&amp;quot;
+
+  http_endpoint_configuration {
+    name       = &amp;quot;test_http_endpoint&amp;quot;
+    url        = &amp;quot;这里填入Gateway的url&amp;quot;
+    role_arn   = aws_iam_role.firehose_to_s3.arn
+  }
+  s3_configuration {
+    role_arn   = aws_iam_role.firehose_to_s3.arn
+    bucket_arn = aws_s3_bucket.bucket.arn
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/details&gt;
+&lt;p&gt;使用步骤：&lt;/p&gt;
+&lt;p&gt;1.获取AWS账户的access_key以及secret_key。( 关于如何获取，请参考：&lt;a href=&#34;https://aws.amazon.com/premiumsupport/knowledge-center/create-access-key/&#34;&gt;create-access-key&lt;/a&gt; )&lt;/p&gt;
+&lt;p&gt;2.将上一步中获取的access_key与secret_key填入对应位置，并将您的网关对应 url 填入 &lt;code&gt;aws_kinesis_firehose_delivery_stream&lt;/code&gt; 配置的对应位置中。&lt;/p&gt;
+&lt;p&gt;3.复制以上内容并保存到main.tf文件中。&lt;/p&gt;
+&lt;p&gt;4.在对应路径下执行以下代码。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;terraform init
+terraform apply
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;至此，需要的AWS服务已全部建立成功，您可以检查您的控制台，查看服务是否成功创建。&lt;/p&gt;
+&lt;h3 id=&#34;完成&#34;&gt;完成！&lt;/h3&gt;
+&lt;p&gt;如果以上步骤全部成功，请耐心等待约五分钟。之后您可以访问SkyWalking UI，查看指标变动情况&lt;/p&gt;
+&lt;p&gt;目前，SkyWalking 默认收集的指标展示如下：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;账户指标:&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./service.png&#34; alt=&#34;service.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;表指标：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./endpoint.png&#34; alt=&#34;endpoint.png&#34;&gt;&lt;/p&gt;
+&lt;h5 id=&#34;现已支持的服务&#34;&gt;现已支持的服务&lt;/h5&gt;
+&lt;p&gt;目前SkyWalking官方支持EKS，S3，DynamoDB监控。
+用户也参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/opentelemetry-receiver/&#34;&gt;OpenTelemetry receiver&lt;/a&gt; 配置OTEL rules来收集，计算AWS其他服务的CloudWatch metrics，并且通过&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;自定义dashboard&lt;/a&gt;展示。&lt;/p&gt;
+&lt;h4 id=&#34;相关的资料&#34;&gt;相关的资料&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring.html&#34;&gt;Monitoring S3 metrics with Amazon CloudWatch&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/monitoring-cloudwatch.html&#34;&gt;Monitoring DynamoDB metrics with Amazon CloudWatch&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/&#34;&gt;Supported metrics in AWS Firehose receiver of OAP&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/configuration-vocabulary/&#34;&gt;Configuration Vocabulary | Apache SkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Zh: 使用SkyWalking监控AWS EKS和S3</title>
       <link>/zh/2023-03-12-skywalking-aws-s3-eks/</link>
       <pubDate>Sun, 12 Mar 2023 00:00:00 +0000</pubDate>
@@ -6318,83 +6678,6 @@ Use module classpath需要选择oap-server&lt;/p&gt;
   &amp;#34;tagline&amp;#34; : &amp;#34;You Know, for Search&amp;#34;
 }
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;看到如上结果那么恭喜你成功了。&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Zh: 更容易理解将要到来的分布式链路追踪 6.0GA (翻译)</title>
-      <link>/zh/2019-01-02-understand-trace-trans2cn/</link>
-      <pubDate>Wed, 02 Jan 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/zh/2019-01-02-understand-trace-trans2cn/</guid>
-      <description>
-        
-        
-        &lt;ul&gt;
-&lt;li&gt;作者: Wu Sheng, tetrate, SkyWalking original creator&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;GitHub&lt;/a&gt;, &lt;a href=&#34;https://twitter.com/wusheng1108&#34;&gt;Twitter&lt;/a&gt;, &lt;a href=&#34;https://www.linkedin.com/in/wusheng1108&#34;&gt;Linkedin&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;翻译: jjlu521016&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
-&lt;p&gt;在当前的微服务架构中分布式链路追踪是很有必要的一部分，但是对于一些用户来说如何去理解和使用分布式链路追踪的相关数据是不清楚的。
-这个博客概述了典型的分布式跟踪用例，以及Skywalking的V6版本中新的可视化功能。我们希望新的用户通过这些示例来更好的理解。&lt;/p&gt;
-&lt;h2 id=&#34;指标和拓扑图&#34;&gt;指标和拓扑图&lt;/h2&gt;
-&lt;p&gt;跟踪数据支持两个众所周知的分析特性：&lt;code&gt;指标&lt;/code&gt;和&lt;code&gt;拓扑图&lt;/code&gt;&lt;br&gt;
-&lt;code&gt;指标&lt;/code&gt;: 每个service, service instance, endpoint的指标都是从跟踪中的入口span派生的。指标代表响应时间的性能。所以可以有一个平均响应时间，99%的响应时间，成功率等。它们按service, service instance, endpoint进行分解。&lt;br&gt;
-&lt;code&gt;拓扑图&lt;/code&gt;: 拓扑表示服务之间的链接，是分布式跟踪最有吸引力的特性。拓扑结构允许所有用户理解分布式服务关系和依赖关系，即使它们是不同的或复杂的。这一点很重要，因为它为所有相关方提供了一个单一的视图，无论他们是开发人员、设计者还是操作者。&lt;/p&gt;
-&lt;p&gt;这里有一个拓扑图的例子包含了4个项目，包括kafka和两个外部依赖。&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44oveesj31gr0u00u1.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-在skywalking的可选择UI0RocketBot的拓扑图-&lt;/p&gt;
-&lt;h1 id=&#34;trace&#34;&gt;Trace&lt;/h1&gt;
-&lt;p&gt;在分布式链路追踪系统中，我们花费大量资源（CPU、内存、磁盘和网络）来生成、传输和持久跟踪数据。让我们试着回答为什么要这样做？我们可以用跟踪数据回答哪些典型的诊断和系统性能问题？&lt;/p&gt;
-&lt;p&gt;Skywalking v6包含两种追踪视图:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;ol&gt;
-&lt;li&gt;TreeMode: 第一次提供,帮助您更容易识别问题。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;ol start=&#34;2&#34;&gt;
-&lt;li&gt;ListMode: 常规的时间线视图，通常也出现在其他跟踪系统中，如Zipkin。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h1 id=&#34;发生错误&#34;&gt;发生错误&lt;/h1&gt;
-&lt;p&gt;在trace视图，最简单的部分是定位错误，可能是由代码异常或网络故障引起的。通过span详情提供的细节，ListMode和TreeMode都能够找到错误
-&lt;img src=&#34;0081Kckwly1gkl44lh09oj32ha0se42w.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-ListMode 错误span-&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44kwl6nj31q20u0dl0.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-TreeMode 错误span-&lt;/p&gt;
-&lt;h1 id=&#34;慢span&#34;&gt;慢span&lt;/h1&gt;
-&lt;p&gt;一个高优先级的特性是识别跟踪中最慢的span。这将使用应用程序代理捕获的执行持续时间。在旧的ListMode跟踪视图中，由于嵌套，父span几乎总是包括子span的持续时间。换句话说，一个缓慢的span通常会导致它的父节点也变慢，在Skywalking 6中，我们提供了 &lt;code&gt;最慢的前5个span&lt;/code&gt; 过滤器来帮助你您直接定位span。&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44odek5j31sd0u0q8f.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-最慢的前5个span-&lt;/p&gt;
-&lt;h1 id=&#34;太多子span&#34;&gt;太多子span&lt;/h1&gt;
-&lt;p&gt;在某些情况下，个别持续时间很快，但跟踪速度仍然很慢，如：
-&lt;img src=&#34;0081Kckwly1gkl44mxmddj310i0lktbp.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-没有慢span的追踪-&lt;/p&gt;
-&lt;p&gt;如果要了解根问题是否与太多操作相关，请使用子范围号的&lt;code&gt;Top 5 of children span number&lt;/code&gt;,筛选器显示每个span的子级数量，突出显示前5个。
-&lt;img src=&#34;0081Kckwly1gkl44nbryhj31fa0tcafl.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-13个数据库访问相关的span-&lt;/p&gt;
-&lt;p&gt;在这个截图中，有一个包含13个子项的span，这些子项都是数据库访问。另外，当您看到跟踪的概述时，这个2000ms跟踪的数据库花费了1380ms。
-&lt;img src=&#34;0081Kckwly1gkl44lzkbwj31040famyy.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-1380ms花费在数据库访问-&lt;/p&gt;
-&lt;p&gt;在本例中，根本原因是数据库访问太多。这在其他场景中也很常见，比如太多的RPC或缓存访问。&lt;/p&gt;
-&lt;h1 id=&#34;链路深度&#34;&gt;链路深度&lt;/h1&gt;
-&lt;p&gt;跟踪深度也与延迟有关。像&lt;a href=&#34;#%E5%A4%AA%E5%A4%9A%E5%AD%90span&#34;&gt;太多子span&lt;/a&gt;的场景一样，每个span延迟看起来不错，但整个链路追踪的过程很慢。
-&lt;img src=&#34;0081Kckwly1gkl44nv4gfj32600u0q7a.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;-链路深度-&lt;/p&gt;
-&lt;p&gt;上图所示,最慢的span小鱼500ms,对于2000毫秒的跟踪来说，速度并不太慢。当您看到第一行时，有四种不同的颜色表示这个分布式跟踪中涉及的四个services。每一个都需要100~400ms，这四个都需要近2000ms，从这里我们知道这个缓慢的跟踪是由一个序列中的3个RPC造成的。&lt;/p&gt;
-&lt;h2 id=&#34;结束语&#34;&gt;结束语&lt;/h2&gt;
-&lt;p&gt;分布式链路追踪和APM 工具帮助我们确定造成问题的根源，允许开发和操作团队进行相应的优化。我们希望您喜欢这一点，并且喜欢Apache Skywalking和我们的新链路追踪可视化界面。如果你喜欢的话，在&lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;github上面给我们加start来鼓励我们&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;Skywakling 6计划在2019年的1月底完成release。您可以通过以下渠道联系项目团队成员&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;关注 &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;skywalking推特&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;订阅邮件:dev@skywalking.apache.org。发送邮件到 &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; 来订阅.&lt;/li&gt;
-&lt;li&gt;加入&lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt;聊天室&lt;/li&gt;
-&lt;/ul&gt;
 
       </description>
     </item>
