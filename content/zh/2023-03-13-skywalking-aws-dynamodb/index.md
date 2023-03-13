@@ -19,6 +19,7 @@ description: 本文将展示如何使用 Apache SkyWalking 监控 Amazon DynamoD
 [Amazon Kinesis Data Firehose](https://aws.amazon.com/cn/kinesis/data-firehose/)是一项提取、转换、加载服务，可以将流式处理数据以可靠方式捕获、转换和提供到数据湖、数据存储和分析服务中。SkyWalking利用此特性，将指标流最终导向 aws-firehose-receiver，交由OAP计算并最终展示指标。
 
 整体过程流程图如下：
+
 ![aws-service.png](./aws-service.png)
 
 ###### 注意
@@ -36,6 +37,7 @@ description: 本文将展示如何使用 Apache SkyWalking 监控 Amazon DynamoD
 2. 进入 [CloudWatch 控制台](https://console.aws.amazon.com/cloudwatch/home)，在左侧控制面板中选择`Metrics-Stream`，点击Create metric stream。其中，`namespace` 选择 `AWS/DynamoDB`。同时，根据需要，也可以增加其他命名空间。 `Kinesis Data Firehose`选择在第一步中创建好的数据流。最后，设置输出格式为opentelemetry0.7。其余配置选项可由需要自行配置。
 
 ![cloudwatch.png](./cloudwatch.png)
+
 至此，DynamoDB监控配置的AWS方面设置完成。
 ## SkyWalking OAP 指标处理分析
 SkyWalking 利用 aws-firehose-receiver 接收并解码由Gateway转发来的 AWS 指标流，交由[Opentelemetry-receiver](https://github.com/apache/skywalking/tree/master/oap-server/server-receiver-plugin/otel-receiver-plugin)进行处理，转化为SkyWalking metrics。并由[Meter Analysis Language (MAL)](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/)进行指标的分析与聚合，最终呈现在UI上。
