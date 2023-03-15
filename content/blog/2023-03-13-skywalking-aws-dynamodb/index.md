@@ -310,7 +310,7 @@ resource "aws_kinesis_firehose_delivery_stream" "http_stream" {
 
 Steps to use.
 
-1. Get the access_key and secret_key of the AWS account.( For how to get them, please refer to: [create-access-key](https://aws.amazon.com/premiumsupport/knowledge-center/create- access-key/) )
+1. Get the access_key and secret_key of the AWS account.( For how to get them, please refer to: [create-access-key](https://aws.amazon.com/premiumsupport/knowledge-center/create-access-key/) )
 
 2. Fill in the access_key and secret_key you got in the previous step, and fill in the corresponding url of your gateway in the corresponding location of `aws_kinesis_firehose_delivery_stream` configuration.
 
