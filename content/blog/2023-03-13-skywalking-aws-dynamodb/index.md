@@ -10,9 +10,9 @@ description: This article shows how to use SkyWalking to monitor DynamoDB.
 
 
 ## Background
-[Apache SkyWalking](https://skywalking.apache.org/) is an open source application performance management system that helps users collect and aggregate logs, traces, metrics and events, and display them on the UI. Starting from OAP 9.4.0, SkyWalking has added [AWS Firehose receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/), which is used to receive and calculate the data of CloudWatch metrics. In this article, we will take DynamoDB as an example to show how to use SkyWalking to receive and calculate CloudWatch metrics data for monitoring Amazon Web Services.
+[Apache SkyWalking](https://skywalking.apache.org/) is an open-source application performance management system that helps users collect and aggregate logs, traces, metrics, and events, and display them on the UI. Starting from OAP 9.4.0, SkyWalking has added [AWS Firehose receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/), which is used to receive and calculate the data of CloudWatch metrics. In this article, we will take DynamoDB as an example to show how to use SkyWalking to receive and calculate CloudWatch metrics data for monitoring Amazon Web Services.
 
-## What is Amazon CloudWatch and Amazon Kinesis Data Firehose ？
+## What are Amazon CloudWatch and Amazon Kinesis Data Firehose？
 
 [Amazon CloudWatch](https://aws.amazon.com/cloudwatch/) is a metrics repository, this tool can collect raw data from AWS (e.g. DynamoDB) and process it into readable metrics in near real-time. Also, we can use **Metric Stream** to continuously stream CloudWatch metrics to a selected target location for near real-time delivery and low latency. SkyWalking takes advantage of this feature to create metric streams and direct them to Amazon Kinesis Data Firehose transport streams for further transport processing.
 
@@ -30,11 +30,11 @@ The flow chart is as follows.
 ## Setting up DynamoDB monitoring
 Next, let's take DynamoDB as an example to illustrate the necessary settings in aws before using OAP to collect CloudWatch metrics:
 
-1. Go to [Kinesis Console](https://console.aws.amazon.com/kinesis/home), create a data stream, select `Direct PUT` for `Source` and `HTTP Endpoint` for `Destination`. And set `HTTP Endpoint URL` to `Gateway URL`. The rest of the configuration options can be configured as needed.
+1. Go to [Kinesis Console](https://console.aws.amazon.com/kinesis/home), create a data stream, and select `Direct PUT` for `Source` and `HTTP Endpoint` for `Destination`. And set `HTTP Endpoint URL` to `Gateway URL`. The rest of the configuration options can be configured as needed.
 
 ! [image.png](. /kinesis.png)
 
-2. Go to the [CloudWatch Console](https://console.aws.amazon.com/cloudwatch/home), select `Metrics-Stream` in the left control panel, and click Create metric stream. Select `AWS/DynamoDB` for `namepsace`. Also, you can add other namespaces as needed. `Kinesis Data Firehose` selects the data stream created in the first step. Finally, set the output format to opentelemetry0.7. The rest of the configuration options can be configured as needed.
+2. Go to the [CloudWatch Console](https://console.aws.amazon.com/cloudwatch/home), select `Metrics-Stream` in the left control panel, and click Create metric stream. Select `AWS/DynamoDB` for `namespace`. Also, you can add other namespaces as needed. `Kinesis Data Firehose` selects the data stream created in the first step. Finally, set the output format to opentelemetry0.7. The rest of the configuration options can be configured as needed.
 
 ! [cloudwatch.png](. /cloudwatch.png)
 
@@ -42,13 +42,13 @@ At this point, the AWS side of DynamoDB monitoring configuration is set up.
 ## SkyWalking OAP metrics processing analysis
 SkyWalking uses aws-firehose-receiver to receive and decode AWS metrics streams forwarded by Gateway, and send it to [Opentelemetry-receiver](https://github.com/apache/skywalking/tree/master/oap-server/server-receiver-plugin/otel-receiver-plugin) for processing and transforming into SkyWalking metrics. Then, the metrics are analyzed and aggregated by [Meter Analysis Language (MAL)](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) and finally presented on the UI.
 
-The MAL part and the UI part of SkyWalking support users' customization, so as to display the metrics data in a more diversified way. For details, please refer to [MAL doc](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) and [UI doc](https://skywalking.apache.org/docs/main/next/en/ui/readme/).
+The MAL part and the UI part of SkyWalking support users' customization, to display the metrics data in a more diversified way. For details, please refer to [MAL doc](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) and [UI doc](https://skywalking.apache.org/docs/main/next/en/ui/readme/).
 
 ![gateway_to_ui.png](./gateway_to_ui.png)
 
 ## Typical metrics analysis
 ### Scope
-In SkyWalking, there is the concept of scope. By using scope, we can classify and aggregate metrics in a more reasonable way. In the monitoring of DynamoDB, two of these scopes are used - Service and Endpoint.
+In SkyWalking, there is the concept of scope. By using scopes, we can classify and aggregate metrics more rationally. In the monitoring of DynamoDB, two of these scopes are used - Service and Endpoint.
 
 Service represents a set of workloads that provide the same behavior for incoming requests. Commonly used as cluster-level scopes for services, user accounts are closer to the concept of clusters in AWS. So SkyWalking uses AWS account id as a key to map AWS accounts to Service types.
 
@@ -71,7 +71,7 @@ Above are some common account metrics (Serivce scope). They are various configur
 | SuccessfulRequestLatency | The latency of successful requests to DynamoDB or Amazon DynamoDB Streams during the specified time period. |
 | TimeToLiveDeletedItemCount | The number of items deleted by Time to Live (TTL) during the specified time period. |
 
-The above are some common table metrics (Endpoint scope), which will also be aggregated into account metrics. These metrics are generally used to analyze the performance of the database, and users can use them to determine the reasonable level of database configuration. For example, userscan track how much of your provisioned throughput is used through ConsumedReadCapicityUnits / ConsumedReadCapicityUnits to determine the reasonableness of the preconfigured throughput of a table or account. For more information about provisioned throughput, see [Provisioned Throughput Intro](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ProvisionedThroughputIntro.html).
+The above are some common table metrics (Endpoint scope), which will also be aggregated into account metrics. These metrics are generally used to analyze the performance of the database, and users can use them to determine the reasonable level of database configuration. For example, users can track how much of their provisioned throughput is used through ConsumedReadCapicityUnits / ConsumedReadCapicityUnits to determine the reasonableness of the preconfigured throughput of a table or account. For more information about provisioned throughput, see [Provisioned Throughput Intro](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ProvisionedThroughputIntro.html).
 
 | Metric Name | Meaning |
 | --- | --- |
@@ -310,9 +310,9 @@ resource "aws_kinesis_firehose_delivery_stream" "http_stream" {
 
 Steps to use.
 
-1. Get the access_key and secret_key of the AWS account.( For how to get them, please refer to: [create-access-key](https://aws.amazon.com/premiumsupport/knowledge-center/create-access-key/) )
+1. Get the access_key and secret_key of the AWS account.( For how to get them, please refer to [create-access-key](https://aws.amazon.com/premiumsupport/knowledge-center/create-access-key/) )
 
-2. Fill in the access_key and secret_key you got in the previous step, and fill in the corresponding url of your gateway in the corresponding location of `aws_kinesis_firehose_delivery_stream` configuration.
+2. Fill in the access_key and secret_key you got in the previous step, and fill in the corresponding URL of your gateway in the corresponding location of `aws_kinesis_firehose_delivery_stream` configuration.
 
 3. Copy the above content and save it to the main.tf file.
 
@@ -341,9 +341,9 @@ Currently, the metrics collected by SkyWalking by default are displayed as follo
 
 ![endpoint.png](./endpoint.png)
 
-### Other service
+### Other services
 
-Currently SkyWalking officially supports EKS, S3, DynamoDB monitoring. Users also refer to [the OpenTelemetry receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/opentelemetry-receiver/) to configure OTel rules to collect and analyze CloudWatch metrics of other AWS services, and display them through [a custom dashboard](https://skywalking.apache.org/docs/main/next/en/ui/readme/).
+Currently, SkyWalking officially supports EKS, S3, DynamoDB monitoring. Users also refer to [the OpenTelemetry receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/opentelemetry-receiver/) to configure OTel rules to collect and analyze CloudWatch metrics of other AWS services and display them through [a custom dashboard](https://skywalking.apache.org/docs/main/next/en/ui/readme/).
 
 ### Material
 
