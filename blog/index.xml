@@ -14,6 +14,375 @@
     
     
     <item>
+      <title>Blog: Monitoring DynamoDB with SkyWalking</title>
+      <link>/blog/2023-03-13-skywalking-aws-dynamodb/</link>
+      <pubDate>Mon, 13 Mar 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-03-13-skywalking-aws-dynamodb/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;./icon.png&#34; alt=&#34;icon.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; is an open-source application performance management system that helps users collect and aggregate logs, traces, metrics, and events, and display them on the UI. Starting from OAP 9.4.0, SkyWalking has added &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/&#34;&gt;AWS Firehose receiver&lt;/a&gt;, which is used to receive and calculate the data of CloudWatch metrics. In this article, we will take DynamoDB as an example to show how to use SkyWalking to receive and calculate CloudWatch metrics data for monitoring Amazon Web Services.&lt;/p&gt;
+&lt;h2 id=&#34;what-are-amazon-cloudwatch-and-amazon-kinesis-data-firehose&#34;&gt;What are Amazon CloudWatch and Amazon Kinesis Data Firehose？&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/cloudwatch/&#34;&gt;Amazon CloudWatch&lt;/a&gt; is a metrics repository, this tool can collect raw data from AWS (e.g. DynamoDB) and process it into readable metrics in near real-time. Also, we can use &lt;strong&gt;Metric Stream&lt;/strong&gt; to continuously stream CloudWatch metrics to a selected target location for near real-time delivery and low latency. SkyWalking takes advantage of this feature to create metric streams and direct them to Amazon Kinesis Data Firehose transport streams for further transport processing.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/kinesis/data-firehose/&#34;&gt;Amazon Kinesis Data Firehose&lt;/a&gt;is an extract, transform, and load (ETL) service that reliably captures, transforms, and delivers streaming data to data lakes, data stores, and analytics services. SkyWalking takes advantage of this feature to eventually direct the metrics stream to the aws-firehose-receiver for OAP to calculate and ultimately display the metrics.&lt;/p&gt;
+&lt;p&gt;The flow chart is as follows.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./aws-service.png&#34; alt=&#34;aws-service.png&#34;&gt;&lt;/p&gt;
+&lt;h6 id=&#34;notice&#34;&gt;Notice&lt;/h6&gt;
+&lt;ul&gt;
+&lt;li&gt;Due to Kinesis Data Firehose specifications, the URL of the HTTP endpoint must use the HTTPS protocol and must use port 443. Also, this URL must be proxied by Gateway and forwarded to the real aws-firehose-receiver.&lt;/li&gt;
+&lt;li&gt;The TLS certificate must be signed by a CA and the self-signed certificate will not be trusted by Kinesis Data Firehose.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;setting-up-dynamodb-monitoring&#34;&gt;Setting up DynamoDB monitoring&lt;/h2&gt;
+&lt;p&gt;Next, let&amp;rsquo;s take DynamoDB as an example to illustrate the necessary settings in aws before using OAP to collect CloudWatch metrics:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Go to &lt;a href=&#34;https://console.aws.amazon.com/kinesis/home&#34;&gt;Kinesis Console&lt;/a&gt;, create a data stream, and select &lt;code&gt;Direct PUT&lt;/code&gt; for &lt;code&gt;Source&lt;/code&gt; and &lt;code&gt;HTTP Endpoint&lt;/code&gt; for &lt;code&gt;Destination&lt;/code&gt;. And set &lt;code&gt;HTTP Endpoint URL&lt;/code&gt; to &lt;code&gt;Gateway URL&lt;/code&gt;. The rest of the configuration options can be configured as needed.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;! [image.png](. /kinesis.png)&lt;/p&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;Go to the &lt;a href=&#34;https://console.aws.amazon.com/cloudwatch/home&#34;&gt;CloudWatch Console&lt;/a&gt;, select &lt;code&gt;Metrics-Stream&lt;/code&gt; in the left control panel, and click Create metric stream. Select &lt;code&gt;AWS/DynamoDB&lt;/code&gt; for &lt;code&gt;namespace&lt;/code&gt;. Also, you can add other namespaces as needed. &lt;code&gt;Kinesis Data Firehose&lt;/code&gt; selects the data stream created in the first step. Finally, set the output format to opentelemetry0.7. The rest of the configuration options can be configured as needed.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;! [cloudwatch.png](. /cloudwatch.png)&lt;/p&gt;
+&lt;p&gt;At this point, the AWS side of DynamoDB monitoring configuration is set up.&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-oap-metrics-processing-analysis&#34;&gt;SkyWalking OAP metrics processing analysis&lt;/h2&gt;
+&lt;p&gt;SkyWalking uses aws-firehose-receiver to receive and decode AWS metrics streams forwarded by Gateway, and send it to &lt;a href=&#34;https://github.com/apache/skywalking/tree/master/oap-server/server-receiver-plugin/otel-receiver-plugin&#34;&gt;Opentelemetry-receiver&lt;/a&gt; for processing and transforming into SkyWalking metrics. Then, the metrics are analyzed and aggregated by &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;Meter Analysis Language (MAL)&lt;/a&gt; and finally presented on the UI.&lt;/p&gt;
+&lt;p&gt;The MAL part and the UI part of SkyWalking support users&#39; customization, to display the metrics data in a more diversified way. For details, please refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;MAL doc&lt;/a&gt; and &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;UI doc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./gateway_to_ui.png&#34; alt=&#34;gateway_to_ui.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;typical-metrics-analysis&#34;&gt;Typical metrics analysis&lt;/h2&gt;
+&lt;h3 id=&#34;scope&#34;&gt;Scope&lt;/h3&gt;
+&lt;p&gt;In SkyWalking, there is the concept of scope. By using scopes, we can classify and aggregate metrics more rationally. In the monitoring of DynamoDB, two of these scopes are used - Service and Endpoint.&lt;/p&gt;
+&lt;p&gt;Service represents a set of workloads that provide the same behavior for incoming requests. Commonly used as cluster-level scopes for services, user accounts are closer to the concept of clusters in AWS. So SkyWalking uses AWS account id as a key to map AWS accounts to Service types.&lt;/p&gt;
+&lt;p&gt;Similarly, Endpoint represents a logical concept, often used in services for the path of incoming requests, such as HTTP URI path or gRPC service class + method signature, and can also represent the table structure in the database. So SkyWalking maps DynamoDB tables to Endpoint type.&lt;/p&gt;
+&lt;h3 id=&#34;metrics&#34;&gt;Metrics&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Metric Name&lt;/th&gt;
+&lt;th&gt;Meaning&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;AccountMaxReads / AccountMaxWrites&lt;/td&gt;
+&lt;td&gt;The maximum number of read/write capacity units that can be used by an account.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;AccountMaxTableLevelReads / AccountMaxTableLevelWrites&lt;/td&gt;
+&lt;td&gt;The maximum number of read/write capacity units that can be used by a table or global secondary index of an account.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;AccountProvisionedReadCapacityUtilization / AccountProvisionedWriteCapacityUtilization&lt;/td&gt;
+&lt;td&gt;The percentage of provisioned read/write capacity units utilized by an account.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;MaxProvisionedTableReadCapacityUtilization / MaxProvisionedTableWriteCapacityUtilization&lt;/td&gt;
+&lt;td&gt;The percentage of provisioned read/write capacity utilized by the highest provisioned read table or global secondary index of an account.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Above are some common account metrics (Serivce scope). They are various configuration information in DynamoDB, and SkyWalking can show a complete picture of the database configuration changes by monitoring these metrics.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Metric Name&lt;/th&gt;
+&lt;th&gt;Meaning&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;ConsumedReadCapacityUnits / ConsumedWriteCapacityUnits&lt;/td&gt;
+&lt;td&gt;The number of read/write capacity units consumed over the specified time period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ReturnedItemCount&lt;/td&gt;
+&lt;td&gt;The number of items returned by Query, Scan or ExecuteStatement (select) operations during the specified time period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;SuccessfulRequestLatency&lt;/td&gt;
+&lt;td&gt;The latency of successful requests to DynamoDB or Amazon DynamoDB Streams during the specified time period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;TimeToLiveDeletedItemCount&lt;/td&gt;
+&lt;td&gt;The number of items deleted by Time to Live (TTL) during the specified time period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The above are some common table metrics (Endpoint scope), which will also be aggregated into account metrics. These metrics are generally used to analyze the performance of the database, and users can use them to determine the reasonable level of database configuration. For example, users can track how much of their provisioned throughput is used through ConsumedReadCapicityUnits / ConsumedReadCapicityUnits to determine the reasonableness of the preconfigured throughput of a table or account. For more information about provisioned throughput, see &lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ProvisionedThroughputIntro.html&#34;&gt;Provisioned Throughput Intro&lt;/a&gt;.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Metric Name&lt;/th&gt;
+&lt;th&gt;Meaning&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;UserErrors&lt;/td&gt;
+&lt;td&gt;Requests to DynamoDB or Amazon DynamoDB Streams that generate an HTTP 400 status code during the specified time period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;SystemErrors&lt;/td&gt;
+&lt;td&gt;The requests to DynamoDB or Amazon DynamoDB Streams that generate an HTTP 500 status code during the specified time period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ThrottledRequests&lt;/td&gt;
+&lt;td&gt;Requests to DynamoDB that exceed the provisioned throughput limits on a resource.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;TransactionConflict&lt;/td&gt;
+&lt;td&gt;Rejected item-level requests due to transactional conflicts between concurrent requests on the same items.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The above are some common error metrics, among which UserErrors are account-level metrics and the rest are table-level metrics. Users can set alarms on these metrics, and if warnings appear, then it may indicate that there are some problems with the use of the database, and users need to check and verify by themselves.&lt;/p&gt;
+&lt;h3 id=&#34;notice-1&#34;&gt;Notice&lt;/h3&gt;
+&lt;p&gt;SkyWalking&amp;rsquo;s metrics selection for DynamoDB comes directly from CloudWatch metrics, which can also be found at &lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/metrics-dimensions.html&#34;&gt;CloudWatch metrics doc&lt;/a&gt; to get metrics details.&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, we will demonstrate how to use terraform to create a DynamoDB table and other AWS services that can generate metrics streams, and deploy Skywalking to complete the metrics collection.&lt;/p&gt;
+&lt;p&gt;First, you need a running gateway instance, such as &lt;a href=&#34;https://www.nginx.com/&#34;&gt;NGINX&lt;/a&gt;, which is responsible for receiving metrics streams from AWS and forwarding them to the aws-firehose-receiver. Note that the gateway needs to be configured with certificates to accept HTTPS protocol requests.&lt;/p&gt;
+&lt;p&gt;Below is an example configuration for NGINX. The configuration does not need to be identical, as long as it can send incoming HTTPS requests to &lt;code&gt;oap host:12801/aws/firehose/metrics&lt;/code&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;server {
+        listen       443 ssl;
+        
+        ssl_certificate     /crt/test.pem;
+        ssl_certificate_key  /crt/test.key; 
+        
+        ssl_session_timeout  5m;   
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:ECDH:AES:HIGH:!NULL:!aNULL:!MD5:!ADH:!RC4; 
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2;  
+        ssl_prefer_server_ciphers on; 
+    
+        location /aws/firehose/metrics {
+            proxy_pass http://test.xyz:12801/aws/firehose/metrics;
+        }
+    }
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;deploying-skywalking&#34;&gt;Deploying SkyWalking&lt;/h3&gt;
+&lt;p&gt;There are various ways to deploy SkyWalking, and you can get them directly from the &lt;a href=&#34;https://github.com/apache/skywalking/releases/tag/v9.4.0&#34;&gt;release page&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Of course, if you are more comfortable with Kubernetes, you can also find the appropriate deployment method from &lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;SkyWalking-kubernetes&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Please note that no matter which deployment method you use, please make sure that the OAP and UI version is 9.4.0 or higher and that port 12801 needs to be open.&lt;/p&gt;
+&lt;p&gt;The following is an example of a deployment using the helm command.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;export SKYWALKING_RELEASE_VERSION=4.3.0 
+export SKYWALKING_RELEASE_NAME=skywalking  
+export SKYWALKING_RELEASE_NAMESPACE=default
+
+helm install &amp;quot;${SKYWALKING_RELEASE_NAME}&amp;quot; \
+  oci://registry-1.docker.io/apache/skywalking-helm \
+  --version &amp;quot;${SKYWALKING_RELEASE_VERSION}&amp;quot; \
+  -n &amp;quot;${SKYWALKING_RELEASE_NAMESPACE}&amp;quot; \
+  --set oap.image.tag=9.4.0 \
+  --set oap.storageType=elasticsearch \
+  --set ui.image.tag=9.4.0 \
+  --set oap.ports.firehose=12801
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;start-the-corresponding-aws-service&#34;&gt;Start the corresponding AWS service&lt;/h3&gt;
+&lt;p&gt;The terraform configuration file is as follows (example modified in&lt;a href=&#34;https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kinesis_firehose_delivery_stream&#34;&gt;Terraform Registry - kinesis_firehose_delivery_stream&lt;/a&gt;）：&lt;/p&gt;
+&lt;details&gt;
+&lt;summary&gt;terraform configuration file &lt;/summary&gt;
+&lt;pre&gt;&lt;code&gt;provider &amp;quot;aws&amp;quot; {
+  region = &amp;quot;ap-northeast-1&amp;quot;
+  access_key = &amp;quot;[need change]your access_key&amp;quot;
+  secret_key = &amp;quot;[need change]your secret_key&amp;quot;
+}
+resource &amp;quot;aws_dynamodb_table&amp;quot; &amp;quot;basic-dynamodb-table&amp;quot; {
+  name           = &amp;quot;GameScores&amp;quot;
+  billing_mode   = &amp;quot;PROVISIONED&amp;quot;
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = &amp;quot;UserId&amp;quot;
+  range_key      = &amp;quot;GameTitle&amp;quot;
+
+  attribute {
+    name = &amp;quot;UserId&amp;quot;
+    type = &amp;quot;S&amp;quot;
+  }
+
+  attribute {
+    name = &amp;quot;GameTitle&amp;quot;
+    type = &amp;quot;S&amp;quot;
+  }
+
+  attribute {
+    name = &amp;quot;TopScore&amp;quot;
+    type = &amp;quot;N&amp;quot;
+  }
+
+  ttl {
+    attribute_name = &amp;quot;TimeToExist&amp;quot;
+    enabled        = true
+  }
+
+  global_secondary_index {
+    name               = &amp;quot;GameTitleIndex&amp;quot;
+    hash_key           = &amp;quot;GameTitle&amp;quot;
+    range_key          = &amp;quot;TopScore&amp;quot;
+    write_capacity     = 10
+    read_capacity      = 10
+    projection_type    = &amp;quot;INCLUDE&amp;quot;
+    non_key_attributes = [&amp;quot;UserId&amp;quot;]
+  }
+
+  tags = {
+    Name        = &amp;quot;dynamodb-table-1&amp;quot;
+    Environment = &amp;quot;production&amp;quot;
+  }
+}
+
+resource &amp;quot;aws_cloudwatch_metric_stream&amp;quot; &amp;quot;main&amp;quot; {
+  name          = &amp;quot;my-metric-stream&amp;quot;
+  role_arn      = aws_iam_role.metric_stream_to_firehose.arn
+  firehose_arn  = aws_kinesis_firehose_delivery_stream.http_stream.arn
+  output_format = &amp;quot;opentelemetry0.7&amp;quot;
+
+  include_filter {
+    namespace = &amp;quot;AWS/DynamoDB&amp;quot;
+  }
+}
+
+# https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-metric-streams-trustpolicy.html
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;streams_assume_role&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    principals {
+      type        = &amp;quot;Service&amp;quot;
+      identifiers = [&amp;quot;streams.metrics.cloudwatch.amazonaws.com&amp;quot;]
+    }
+
+    actions = [&amp;quot;sts:AssumeRole&amp;quot;]
+  }
+}
+
+resource &amp;quot;aws_iam_role&amp;quot; &amp;quot;metric_stream_to_firehose&amp;quot; {
+  name               = &amp;quot;metric_stream_to_firehose_role&amp;quot;
+  assume_role_policy = data.aws_iam_policy_document.streams_assume_role.json
+}
+
+# https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-metric-streams-trustpolicy.html
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;metric_stream_to_firehose&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    actions = [
+      &amp;quot;firehose:PutRecord&amp;quot;,
+      &amp;quot;firehose:PutRecordBatch&amp;quot;,
+    ]
+
+    resources = [aws_kinesis_firehose_delivery_stream.http_stream.arn]
+  }
+}
+resource &amp;quot;aws_iam_role_policy&amp;quot; &amp;quot;metric_stream_to_firehose&amp;quot; {
+  name   = &amp;quot;default&amp;quot;
+  role   = aws_iam_role.metric_stream_to_firehose.id
+  policy = data.aws_iam_policy_document.metric_stream_to_firehose.json
+}
+
+resource &amp;quot;aws_s3_bucket&amp;quot; &amp;quot;bucket&amp;quot; {
+  bucket = &amp;quot;metric-stream-test-bucket&amp;quot;
+}
+
+resource &amp;quot;aws_s3_bucket_acl&amp;quot; &amp;quot;bucket_acl&amp;quot; {
+  bucket = aws_s3_bucket.bucket.id
+  acl    = &amp;quot;private&amp;quot;
+}
+
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;firehose_assume_role&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    principals {
+      type        = &amp;quot;Service&amp;quot;
+      identifiers = [&amp;quot;firehose.amazonaws.com&amp;quot;]
+    }
+
+    actions = [&amp;quot;sts:AssumeRole&amp;quot;]
+  }
+}
+
+resource &amp;quot;aws_iam_role&amp;quot; &amp;quot;firehose_to_s3&amp;quot; {
+  assume_role_policy = data.aws_iam_policy_document.firehose_assume_role.json
+}
+
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;firehose_to_s3&amp;quot; {
+  statement {
+    effect = &amp;quot;Allow&amp;quot;
+
+    actions = [
+      &amp;quot;s3:AbortMultipartUpload&amp;quot;,
+      &amp;quot;s3:GetBucketLocation&amp;quot;,
+      &amp;quot;s3:GetObject&amp;quot;,
+      &amp;quot;s3:ListBucket&amp;quot;,
+      &amp;quot;s3:ListBucketMultipartUploads&amp;quot;,
+      &amp;quot;s3:PutObject&amp;quot;,
+    ]
+
+    resources = [
+      aws_s3_bucket.bucket.arn,
+      &amp;quot;${aws_s3_bucket.bucket.arn}/*&amp;quot;,
+    ]
+  }
+}
+
+resource &amp;quot;aws_iam_role_policy&amp;quot; &amp;quot;firehose_to_s3&amp;quot; {
+  name   = &amp;quot;default&amp;quot;
+  role   = aws_iam_role.firehose_to_s3.id
+  policy = data.aws_iam_policy_document.firehose_to_s3.json
+}
+
+resource &amp;quot;aws_kinesis_firehose_delivery_stream&amp;quot; &amp;quot;http_stream&amp;quot; {
+  name        = &amp;quot;metric-stream-test-stream&amp;quot;
+  destination = &amp;quot;http_endpoint&amp;quot;
+
+  http_endpoint_configuration {
+    name       = &amp;quot;test_http_endpoint&amp;quot;
+    url        = &amp;quot;[need change]Gateway url&amp;quot;
+    role_arn   = aws_iam_role.firehose_to_s3.arn
+  }
+  s3_configuration {
+    role_arn   = aws_iam_role.firehose_to_s3.arn
+    bucket_arn = aws_s3_bucket.bucket.arn
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/details&gt;
+&lt;p&gt;Steps to use.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Get the access_key and secret_key of the AWS account.( For how to get them, please refer to &lt;a href=&#34;https://aws.amazon.com/premiumsupport/knowledge-center/create-access-key/&#34;&gt;create-access-key&lt;/a&gt; )&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Fill in the access_key and secret_key you got in the previous step, and fill in the corresponding URL of your gateway in the corresponding location of &lt;code&gt;aws_kinesis_firehose_delivery_stream&lt;/code&gt; configuration.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Copy the above content and save it to the main.tf file.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Execute the following code in the corresponding path.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code&gt;terraform init
+terraform apply
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;At this point, all the required AWS services have been successfully created, and you can check your console to see if the services were successfully created.&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;If all the above steps were successful, please wait for about five minutes. After that, you can visit the SkyWalking UI to see the metrics.&lt;/p&gt;
+&lt;p&gt;Currently, the metrics collected by SkyWalking by default are displayed as follows.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;account metrics:&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./service.png&#34; alt=&#34;service.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;table metrics：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./endpoint.png&#34; alt=&#34;endpoint.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;other-services&#34;&gt;Other services&lt;/h3&gt;
+&lt;p&gt;Currently, SkyWalking officially supports EKS, S3, DynamoDB monitoring. Users also refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/opentelemetry-receiver/&#34;&gt;the OpenTelemetry receiver&lt;/a&gt; to configure OTel rules to collect and analyze CloudWatch metrics of other AWS services and display them through &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;a custom dashboard&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;material&#34;&gt;Material&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring.html&#34;&gt;Monitoring S3 metrics with Amazon CloudWatch&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/monitoring-cloudwatch.html&#34;&gt;Monitoring DynamoDB metrics with Amazon CloudWatch&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/&#34;&gt;Supported metrics in AWS Firehose receiver of OAP&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/configuration-vocabulary/&#34;&gt;Configuration Vocabulary | Apache SkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Monitoring AWS EKS and S3 with SkyWalking</title>
       <link>/blog/2023-03-12-skywalking-aws-s3-eks/</link>
       <pubDate>Sun, 12 Mar 2023 00:00:00 +0000</pubDate>
@@ -7162,57 +7531,6 @@ At the moment of graduation in spring 2019, the project had 100 contributors. No
 &lt;p&gt;Over the whole 4+ years open source journey, we have had supports from leaders in the tracing open source community around the world, including Adrian Cole, William Jiang, Luke Han, Michael Semb Wever, Ben Sigelman, and Jonah Kowall. And we’ve had critical  foundations&#39; help, especially Apache Software Foundation and the Cloud Native Computing Foundation.&lt;/p&gt;
 &lt;p&gt;Our contributors also have their support from their employers, including, to the best of my knowledge, Alibaba, Huawei, China Mobile, ke.com, DaoCloud, Lizhi.fm, Yonghui Supermarket, and dangdang.com. I also have support from my employers, &lt;a href=&#34;https://www.tetrate.io/&#34;&gt;tetrate.io&lt;/a&gt;, Huawei, and OneAPM.&lt;/p&gt;
 &lt;p&gt;Thanks to our 200+ contributors and the companies behind them. You make this magic happen.&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: SkyWalking alarm webhook sharing</title>
-      <link>/blog/2019-09-25-alarm-webhook-share/</link>
-      <pubDate>Wed, 25 Sep 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2019-09-25-alarm-webhook-share/</guid>
-      <description>
-        
-        
-        &lt;ul&gt;
-&lt;li&gt;Author: Wei Qiang&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/weiqiang333&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
-&lt;p&gt;SkyWalking backend provides the alarm function, we can define some Alarm rules, call webhook after the rule is triggered. I share my implementation&lt;/p&gt;
-&lt;h2 id=&#34;demonstration&#34;&gt;Demonstration&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&#34;skywalking-UI-alarm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;SkyWalking alarm UI&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;skywalking-dingding-notify.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p align=&#34;center&#34;&gt;dingtalk message body&lt;/p&gt;
-&lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
-&lt;ul&gt;
-&lt;li&gt;install&lt;/li&gt;
-&lt;/ul&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;go get -u github.com/weiqiang333/infra-skywalking-webhook
-&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;$GOPATH&lt;/span&gt;/src/github.com/weiqiang333/infra-skywalking-webhook/
-bash build/build.sh
-./bin/infra-skywalking-webhook &lt;span style=&#34;color:#0086b3&#34;&gt;help&lt;/span&gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
-&lt;li&gt;Configuration&lt;/li&gt;
-&lt;/ul&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;main configs file&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;configs/production.yml&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;dingtalk&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;p3&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;token...&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
-&lt;li&gt;Example&lt;/li&gt;
-&lt;/ul&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;./bin/infra-skywalking-webhook --config configs/production.yml --address 0.0.0.0:8000
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
-&lt;li&gt;SkyWalking backend alarm settings&lt;/li&gt;
-&lt;/ul&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;webhooks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- http://127.0.0.1:8000/dingtalk&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;collaboration&#34;&gt;Collaboration&lt;/h2&gt;
-&lt;p&gt;Hope that we can improve together &lt;a href=&#34;https://github.com/weiqiang333/infra-skywalking-webhook&#34;&gt;webhook&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;SkyWalking alarm rules may add more metric names (eg priority name), we can send different channels by locating different levels of alerts (dingtalk / SMS / phone)&lt;/p&gt;
-&lt;p&gt;Thanks.&lt;/p&gt;
 
       </description>
     </item>
