@@ -32,11 +32,11 @@ Next, let's take DynamoDB as an example to illustrate the necessary settings in 
 
 1. Go to [Kinesis Console](https://console.aws.amazon.com/kinesis/home), create a data stream, and select `Direct PUT` for `Source` and `HTTP Endpoint` for `Destination`. And set `HTTP Endpoint URL` to `Gateway URL`. The rest of the configuration options can be configured as needed.
 
-! [image.png](. /kinesis.png)
+![image.png](./kinesis.png)
 
 2. Go to the [CloudWatch Console](https://console.aws.amazon.com/cloudwatch/home), select `Metrics-Stream` in the left control panel, and click Create metric stream. Select `AWS/DynamoDB` for `namespace`. Also, you can add other namespaces as needed. `Kinesis Data Firehose` selects the data stream created in the first step. Finally, set the output format to opentelemetry0.7. The rest of the configuration options can be configured as needed.
 
-! [cloudwatch.png](. /cloudwatch.png)
+![cloudwatch.png](./cloudwatch.png)
 
 At this point, the AWS side of DynamoDB monitoring configuration is set up.
 ## SkyWalking OAP metrics processing analysis
