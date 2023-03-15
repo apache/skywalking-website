@@ -14,7 +14,7 @@ description: This article shows how to use SkyWalking to monitor DynamoDB.
 
 ## What is Amazon CloudWatch and Amazon Kinesis Data Firehose ？
 
-[Amazon CloudWatch](https://aws.amazon.com/cloudwatch/) is a metrics repository, this tool can collect raw data from AWS (e.g. DynamoDB) and process it into readable metrics in near real-time. Also, we can use **Metric Streaming** to continuously stream CloudWatch metrics to a selected target location for near real-time delivery and low latency. SkyWalking takes advantage of this feature to create metric streams and direct them to Amazon Kinesis Data Firehose transport streams for further transport processing.
+[Amazon CloudWatch](https://aws.amazon.com/cloudwatch/) is a metrics repository, this tool can collect raw data from AWS (e.g. DynamoDB) and process it into readable metrics in near real-time. Also, we can use **Metric Stream** to continuously stream CloudWatch metrics to a selected target location for near real-time delivery and low latency. SkyWalking takes advantage of this feature to create metric streams and direct them to Amazon Kinesis Data Firehose transport streams for further transport processing.
 
 [Amazon Kinesis Data Firehose](https://aws.amazon.com/kinesis/data-firehose/)is an extract, transform, and load (ETL) service that reliably captures, transforms, and delivers streaming data to data lakes, data stores, and analytics services. SkyWalking takes advantage of this feature to eventually direct the metrics stream to the aws-firehose-receiver for OAP to calculate and ultimately display the metrics.
 
@@ -40,7 +40,7 @@ Next, let's take DynamoDB as an example to illustrate the necessary settings in 
 
 At this point, the AWS side of DynamoDB monitoring configuration is set up.
 ## SkyWalking OAP metrics processing analysis
-SkyWalking uses aws-firehose-receiver to receive and decode AWS metrics streams forwarded by Gateway to [Opentelemetry-receiver](https://github.com/apache/skywalking/tree/master/oap-server/server-receiver-plugin/otel-receiver-plugin) for processing and transforming into SkyWalking metrics. And the metrics are analyzed and aggregated by [Meter Analysis Language (MAL)](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) and finally presented on the UI.
+SkyWalking uses aws-firehose-receiver to receive and decode AWS metrics streams forwarded by Gateway, and send it to [Opentelemetry-receiver](https://github.com/apache/skywalking/tree/master/oap-server/server-receiver-plugin/otel-receiver-plugin) for processing and transforming into SkyWalking metrics. Then, the metrics are analyzed and aggregated by [Meter Analysis Language (MAL)](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) and finally presented on the UI.
 
 The MAL part and the UI part of SkyWalking support users' customization, so as to display the metrics data in a more diversified way. For details, please refer to [MAL doc](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) and [UI doc](https://skywalking.apache.org/docs/main/next/en/ui/readme/).
 
@@ -71,7 +71,7 @@ Above are some common account metrics (Serivce scope). They are various configur
 | SuccessfulRequestLatency | The latency of successful requests to DynamoDB or Amazon DynamoDB Streams during the specified time period. |
 | TimeToLiveDeletedItemCount | The number of items deleted by Time to Live (TTL) during the specified time period. |
 
-The above are some common table metrics (Endpoint scope), which will also be aggregated into account metrics. These metrics are generally used to analyze the performance of the database, and users can use them to determine the reasonable level of database configuration. For example, userscan track how much of your provisioned throughput is used through ConsumedReadCapicityUnits / ConsumedReadCapicityUnits to determine the reasonableness of the preconfigured throughput of a table or account. For more information about provisioned throughput, see [ProvisionedThroughputIntro](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ProvisionedThroughputIntro.html).
+The above are some common table metrics (Endpoint scope), which will also be aggregated into account metrics. These metrics are generally used to analyze the performance of the database, and users can use them to determine the reasonable level of database configuration. For example, userscan track how much of your provisioned throughput is used through ConsumedReadCapicityUnits / ConsumedReadCapicityUnits to determine the reasonableness of the preconfigured throughput of a table or account. For more information about provisioned throughput, see [Provisioned Throughput Intro](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ProvisionedThroughputIntro.html).
 
 | Metric Name | Meaning |
 | --- | --- |
@@ -80,7 +80,7 @@ The above are some common table metrics (Endpoint scope), which will also be agg
 | ThrottledRequests | Requests to DynamoDB that exceed the provisioned throughput limits on a resource.|
 | TransactionConflict | Rejected item-level requests due to transactional conflicts between concurrent requests on the same items. |
 
-The above are some common error metrics, among which UserErrors are user-level metrics and the rest are table-level metrics. Users can set alarms on these metrics, and if warnings appear, then it may indicate that there are some problems with the use of the database, and users need to check and verify by themselves.
+The above are some common error metrics, among which UserErrors are account-level metrics and the rest are table-level metrics. Users can set alarms on these metrics, and if warnings appear, then it may indicate that there are some problems with the use of the database, and users need to check and verify by themselves.
 
 ### Notice
 SkyWalking's metrics selection for DynamoDB comes directly from CloudWatch metrics, which can also be found at [CloudWatch metrics doc](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/metrics-dimensions.html) to get metrics details.
