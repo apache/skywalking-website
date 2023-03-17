@@ -253,7 +253,7 @@ In the future, we will delve further into the analysis of kernel data, such as c
 
 1. [SkyWalking Github Repo ›](https://github.com/apache/skywalking)
 2. [SkyWalking Rover Github Repo ›](https://github.com/apache/skywalking-rover)
-3. [SkyWalking Rover Documentation ›](https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/)
+3. [SkyWalking Rover Documentation ›](https://skywalking.apache.org/docs/skywalking-rover/next/readme/)
 4. [Diagnose Service Mesh Network Performance with eBPF blog post >](https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/)
 5. [SkyWalking Profiling Documentation >](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/)
 6. [SkyWalking Trace Context Propagation >](https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/)
