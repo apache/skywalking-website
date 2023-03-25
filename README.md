@@ -8,7 +8,7 @@ This site was compiled using [Hugo](https://gohugo.io).
 
 1. Install hugo
 2. Run `npm install` to install the required libraries.
-3. Pull this repo into your local environment, and run `hugo server` at the root folder, you can see the site preview from http://localhost:1313
+3. Pull this repo into your local environment, and run `hugo server` at the root folder, you can see the site preview from <http://localhost:1313>
 4. To generate the static website, run `npm run build` for the whole website. Run `npm run build-with-docs` if you want to build the project documentations.
 
 ## Contributing
@@ -23,9 +23,9 @@ Located at `content/_index.html`。
 
 ### Projects and Document
 
-The data of documentation link is located in `data/docs.yml` and formated as `YAML`.
+The data of documentation link is located in `data/docs.yml` and formatted as `YAML`.
 
-Update the [config file](https://github.com/algolia/docsearch-configs/blob/master/configs/skywalking.json) everytime in order that a new documentation version will be available searched by [algolia](https://www.algolia.com/).
+Update the [config file](https://github.com/algolia/docsearch-configs/blob/master/configs/skywalking.json) every time in order that a new documentation version will be available searched by [algolia](https://www.algolia.com/).
 
 ### Event
 
