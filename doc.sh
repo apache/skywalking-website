@@ -8,31 +8,29 @@ commitId=$3
 localPath=$4
 menuFileName=$5
 
-
 if [ ! -d "./tmp" ]; then
   mkdir ./tmp
 fi
 cd ./tmp
 
 if [ -d "./${repo}" ]; then
-  rm -rf ./${repo}
+  rm -rf ./"${repo}"
 fi
 
-mkdir ./${repo}
-cd ./${repo}
+mkdir ./"${repo}"
+cd ./"${repo}"
 if [ "$commitId" = "next" ]; then
-  git clone --depth=1 ${repoUrl} .
+  git clone --depth=1 "${repoUrl}" .
 else
   git init
-  git remote add origin ${repoUrl}
+  git remote add origin "${repoUrl}"
   git fetch origin "$commitId"
   git reset --hard FETCH_HEAD
 fi
 
 if [ -d "../..${localPath}" ]; then
-  rm -rf ../..${localPath}
+  rm -rf ../.."${localPath}"
 fi
-mkdir -p ../..${localPath}
-cp -rf ./docs/* ../..${localPath}
-cp ./docs/menu.yml ../../data/docSidebar/${menuFileName}.yml
-
+mkdir -p ../.."${localPath}"
+cp -rf ./docs/* ../.."${localPath}"
+cp ./docs/menu.yml ../../data/docSidebar/"${menuFileName}".yml
