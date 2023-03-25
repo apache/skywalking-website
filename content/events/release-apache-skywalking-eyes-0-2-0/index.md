@@ -8,6 +8,7 @@ description: "Release Apache SkyWalking Eyes 0.2.0."
 SkyWalking Eyes 0.2.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Dependency License
+
   - Support resolving go.mod for Go
   - Support resolving pom.xml for maven (#50)
   - Support resolving jars' licenses (#53)
@@ -16,6 +17,7 @@ SkyWalking Eyes 0.2.0 is released. Go to [downloads](/downloads) page to find re
   - Add `dependency check` to check dependencies license compatibilities (#58)
 
 - License Header
+
   - `fix` command supports more languages:
     - Add support for plantuml (#42)
     - Add support for PHP (#40)

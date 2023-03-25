@@ -128,7 +128,7 @@ docker-compose -f skywalking-docker-compose.yaml down
 
 ## 未来计划
 
-在今年五月份，SkyWalking  8.0 版本会进行一次全面升级，采用新的探针协议和分析逻辑，探针将更具互感知能力，更好的在 Service Mesh 下使用探针进行监控。同时，SkyWalking 将开放之前仅存在于内核中的 metrics 指标分析体系。Prmoetheus、Spring Cloud Sleuth、Zabbix 等常用的 metrics 监控方式，都会被统一的接入进来，进行分析。此外， SkyWalking 与 MOSN 社区将继续合作：支持追踪 Dubbo 和 [SOFARPC](https://github.com/sofastack/sofa-rpc)，同时适配 sidecar 模式下的链路追踪。
+在今年五月份，SkyWalking 8.0 版本会进行一次全面升级，采用新的探针协议和分析逻辑，探针将更具互感知能力，更好的在 Service Mesh 下使用探针进行监控。同时，SkyWalking 将开放之前仅存在于内核中的 metrics 指标分析体系。Prmoetheus、Spring Cloud Sleuth、Zabbix 等常用的 metrics 监控方式，都会被统一的接入进来，进行分析。此外， SkyWalking 与 MOSN 社区将继续合作：支持追踪 Dubbo 和 [SOFARPC](https://github.com/sofastack/sofa-rpc)，同时适配 sidecar 模式下的链路追踪。
 
 ## 关于 MOSN
 

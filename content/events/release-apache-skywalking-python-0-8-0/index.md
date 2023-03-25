@@ -8,10 +8,12 @@ description: "Release Apache SkyWalking Python 0.8.0."
 SkyWalking Python 0.8.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Feature:
+
   - Update mySQL plugin to support two different parameter keys. (#186)
   - Add a `SW_AGENT_LOG_REPORTER_SAFE_MODE` option to control the HTTP basic auth credential filter (#200)
 
 - Plugins:
+
   - Add Psycopg(3.x) support (#168)
   - Add MySQL support (#178)
   - Add FastAPI support (#181)
@@ -19,6 +21,7 @@ SkyWalking Python 0.8.0 is released. Go to [downloads](/downloads) page to find 
   - Add Bottle support (#214)
 
 - Fixes:
+
   - Spans now correctly reference finished parents (#161)
   - Remove potential password leak from Aiohttp outgoing url (#175)
   - Handle error when REMOTE_PORT is missing in Flask (#176)
@@ -39,6 +42,7 @@ SkyWalking Python 0.8.0 is released. Go to [downloads](/downloads) page to find 
   - Set spans whose http code > 400 to error (#187)
 
 - Docs:
+
   - Add a FAQ doc on `how to use with uwsgi` (#188)
 
 - Others:

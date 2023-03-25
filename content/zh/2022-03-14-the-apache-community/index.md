@@ -96,7 +96,7 @@ Apache GitHub Organization 下的 GitHub Actions 资源是企业级支持，这�
 我跟姜宁老师在一年前认识，交流 The Apache Way 期间萌生出相互认同。姜宁老师在 Apache 孵化器当中帮助众多项目理解 The Apache Way 并予以实践，德高望重。在今年的 ASF Members 年会当中，姜宁老师也被推举为 ASF Board 的一员。
 
 我跟吴晟老师在去年认识。他经常会强调开发者尤其是没有强烈公司背景的开发者的视角，多次提到这些开发者是整个开源生态的重要组成部分。他作为 PMC Chair 的 Apache SkyWalking 项目相信“没有下一个版本的计划，只知道会有下一个版本”，这是最佳实践的传播，也是伴随技术的文化理念的传播。SkyWalking 项目出于自己需要，也出于为开源世界添砖加瓦的动机创建的 [SkyWalking Eyes](https://github.com/apache/skywalking-eyes) 项目，被广泛用在不止于 ASF 治下项目，而是整个开源世界的轻量级的软件协议审计和 License Header 检查上。
-    
+
 主要贡献在 Apache APISIX 的琚致远同学今年也被推选成为 Apache Members 的一员。他最让我印象深刻的是在 APISIX 社群当中积极[讨论社群建设的议题](https://lists.apache.org/thread/40spln9t62dz8dlwf0xg174g131t89fq)，以及作为 APISIX 发布的 GSoC 项目的 mentor 帮助在校学生接触开源，实践开源，锻炼技艺。巧合的是，他跟我年龄相同，于是我痛失 Youngest Apache Member 的噱头，哈哈。
 
 或许，参与 Apache Community 就是这样的一种体验。并不是什么复杂的叙事，只是找到志同道合的人做出好的软件。我希望能够为提升整个软件行业付出自己的努力，希望我（参与）制造的软件创造出更大的价值，这里的人看起来大都也有相似的想法，这很好。仅此而已。

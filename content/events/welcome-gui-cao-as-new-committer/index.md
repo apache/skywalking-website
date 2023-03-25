@@ -4,7 +4,7 @@ date: 2020-12-04
 author: SkyWalking Team
 ---
 
-Gui Cao began the code contributions since May 3, 2020. 
+Gui Cao began the code contributions since May 3, 2020.
 In the past 6 months, his 23 pull requests(GitHub, zifeihan[1]) have been accepted, which includes 5k+ lines of codes.
 
 Meanwhile, he took part in the tech discussion, and show the interests to contribute more to the project.

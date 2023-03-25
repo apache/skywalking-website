@@ -4,12 +4,12 @@ date: 2022-12-13
 author: "[柯振旭](https://github.com/kezhenxu94)"
 description: "介绍如何在 AWS EKS 和 RDS/Aurora 上快速搭建 Apache SkyWalking。"
 tags:
-- SkyWalking
-- Observability
-- Demo
-- AWS
-- RDS
-- Aurora
+  - SkyWalking
+  - Observability
+  - Demo
+  - AWS
+  - RDS
+  - Aurora
 ---
 
 ## 介绍

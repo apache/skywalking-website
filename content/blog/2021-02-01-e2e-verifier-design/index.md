@@ -5,7 +5,7 @@ author: "[Zhenxu Ke](https://github.com/kezhenxu94), Tetrate.io; [Huaxi Jiang](h
 description: "The design of Next Generation End-to-End Testing Framework  Verifier"
 
 tags:
-- Testing
+  - Testing
 ---
 
 ## Background
@@ -60,7 +60,7 @@ Users can use these provided functions in the template to describe the expected 
 Example:
 
 ```yaml
-id: {{ notEmpty .id }}
+id: { { notEmpty .id } }
 ```
 
 ### Regexp match
@@ -70,7 +70,7 @@ id: {{ notEmpty .id }}
 Examples:
 
 ```yaml
-label: {{ regexp .label "ratings.*" }}
+label: { { regexp .label "ratings.*" } }
 ```
 
 ### Base64
@@ -199,9 +199,9 @@ The `contains` does an unordered list verification, in order to do list verifica
 # expected.data.yaml
 metrics:
   - name: p99
-    value: {{ gt (index .metrics 0).value 0 }}
+    value: { { gt (index .metrics 0).value 0 } }
   - name: p95
-    value: {{ gt (index .metrics 1).value 0 }}
+    value: { { gt (index .metrics 1).value 0 } }
 ```
 
 which expects the actual `metrics` list to be exactly ordered, with first element named `p99` and `value` greater 0, second element named `p95` and `value` greater 0.

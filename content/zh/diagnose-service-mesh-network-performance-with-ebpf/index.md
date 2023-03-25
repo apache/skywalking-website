@@ -4,8 +4,8 @@ date: 2022-09-27
 author: "刘晗，吴晟"
 description: "本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。"
 zh_tags:
-- eBPF
-- Performance
+  - eBPF
+  - Performance
 ---
 
 本文将展示如何利用 [Apache SkyWalking](https://github.com/apache/skywalking) 与 [eBPF](https://ebpf.io/what-is-ebpf/)，使服务网格下的网络故障排除更加容易。
@@ -37,10 +37,10 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 我们的假设是，eBPF 可以监控网络。有两种方法可以实现拦截：**用户空间（uprobe）或内核空间（kprobe）**。下表总结了两者的区别。
 
-| 方式   | 优点                                                         | 缺点                                                         |
-| ------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| uprobe | • 获取更多与应用相关的上下文，例如当前请求是 HTTP 还是 HTTPS。</br> • 请求和响应可以通过一个方法来截获。 | • 数据结构可能是不稳定的，所以更难获得所需的数据。</br> • 不同语言/库版本的实现可能不同。</br> • 在没有[符号表](https://en.wikipedia.org/wiki/Symbol_table)的应用程序中不起作用。 |
-| kprobe | • 可用于所有语言。</br> • 数据结构和方法很稳定，不需要太多调整。</br> • 更容易与底层数据相关联，如获得 TCP 的目标地址、OSI 第四层协议指标等。 | • 一个单一的请求和响应可能被分割成多个 probe。</br> • 对于有状态的请求，上下文信息不容易得到。例如 HTTP/2 中的头压缩。 |
+| 方式   | 优点                                                                                                                                          | 缺点                                                                                                                                                                              |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| uprobe | • 获取更多与应用相关的上下文，例如当前请求是 HTTP 还是 HTTPS。</br> • 请求和响应可以通过一个方法来截获。                                      | • 数据结构可能是不稳定的，所以更难获得所需的数据。</br> • 不同语言/库版本的实现可能不同。</br> • 在没有[符号表](https://en.wikipedia.org/wiki/Symbol_table)的应用程序中不起作用。 |
+| kprobe | • 可用于所有语言。</br> • 数据结构和方法很稳定，不需要太多调整。</br> • 更容易与底层数据相关联，如获得 TCP 的目标地址、OSI 第四层协议指标等。 | • 一个单一的请求和响应可能被分割成多个 probe。</br> • 对于有状态的请求，上下文信息不容易得到。例如 HTTP/2 中的头压缩。                                                            |
 
 对于一般的网络性能监控，我们选择使用 kprobe（拦截系统调用），原因如下：
 
@@ -82,7 +82,7 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 ![图 1](f1.svg)
 
-***图 1***
+**_图 1_**
 
 ### 协议和 TLS
 
@@ -90,7 +90,7 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 ![图 2](f2.svg)
 
-***图 2***
+**_图 2_**
 
 当使用 TLS 时，Linux 内核在用户空间中传输加密的数据。在上图中，应用程序通常通过第三方库（如 OpenSSL）传输 SSL 数据。对于这种情况，Linux API 只能得到加密的数据，所以它不能识别任何高层协议。为了在 eBPF 内部解密，我们需要遵循以下步骤：
 
@@ -105,7 +105,7 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 综上所述，通过对 OpenSSL 工作原理的了解，我们可以在一个 eBPF 函数中读取未加密的数据。
 
-## SkyWalking Rover—— 基于 eBPF 的指标收集器和分析器 
+## SkyWalking Rover—— 基于 eBPF 的指标收集器和分析器
 
 [SkyWalking Rover](https://github.com/apache/skywalking-rover) 在 SkyWalking 生态系统中引入了 eBPF 网络分析功能。目前已在 Kubernetes 环境中得到支持，所以必须在 Kubernetes 集群内部署。部署完成后，SkyWalking Rover 可以监控特定 Pod 内所有进程的网络。基于监测数据，SkyWalking 可以生成进程之间的拓扑关系图和指标。
 
@@ -117,17 +117,17 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 ![图 3](f3.jpg)
 
-***图 3***
+**_图 3_**
 
 ### 度量
 
 一旦我们通过拓扑结构认识到进程之间的网络调用关系，我们就可以选择一个特定的线路，查看两个进程之间的 TCP 指标。
 
-下图（图4）显示了两个进程之间网络监控的指标。每行有四个指标。左边的两个是在客户端，右边的两个是在服务器端。如果远程进程不在同一个 Pod 中，则只显示一边的指标。
+下图（图 4）显示了两个进程之间网络监控的指标。每行有四个指标。左边的两个是在客户端，右边的两个是在服务器端。如果远程进程不在同一个 Pod 中，则只显示一边的指标。
 
 ![图 4](f4.jpg)
 
-***图 4***
+**_图 4_**
 
 有以下两种度量类型。
 
@@ -157,7 +157,7 @@ eBPF 起源于 Extended Berkeley Packet Filter，是一种通用的机制，可�
 
 ### 安装 Istio
 
-Istio是最广泛部署的服务网格，并附带一个完整的演示应用程序，我们可以用来测试。要安装 Istio 和演示应用程序，请遵循以下步骤：
+Istio 是最广泛部署的服务网格，并附带一个完整的演示应用程序，我们可以用来测试。要安装 Istio 和演示应用程序，请遵循以下步骤：
 
 1.  使用演示配置文件安装 Istio。
 2.  标记 default 命名空间，所以当我们要部署应用程序时，Istio 会自动注入 Envoy 的 sidecar 代理。
@@ -228,7 +228,7 @@ kubectl port-forward svc/skywalking-ui 8080:80 --namespace istio-system
 
 ![图 5](f5.jpg)
 
-***图 5***
+**_图 5_**
 
 ### 完成
 
@@ -236,13 +236,13 @@ kubectl port-forward svc/skywalking-ui 8080:80 --namespace istio-system
 
 ![图 6](f6.jpg)
 
-***图 6***
+**_图 6_**
 
 当你点击进程之间的线时，你可以看到两个进程之间的 TCP 指标。
 
 ![图 7](f7.jpg)
 
-***图 7***
+**_图 7_**
 
 ## 总结
 
@@ -265,4 +265,4 @@ kubectl port-forward svc/skywalking-ui 8080:80 --namespace istio-system
 3.  [SkyWalking Rover 文件](https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/)
 4.  [通过使用 eBPF 博文准确定位服务网格关键性能影响](https://skywalking.apache.org/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/)
 5.  [Apache SkyWalking 与本地 eBPF 代理的介绍](https://www.youtube.com/watch?v=yUF5qRk4rYY)
-6.  [eBPF hook概述](https://ebpf.io/what-is-ebpf#hook-overview)
+6.  [eBPF hook 概述](https://ebpf.io/what-is-ebpf#hook-overview)

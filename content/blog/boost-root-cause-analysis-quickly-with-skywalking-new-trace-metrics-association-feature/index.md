@@ -4,8 +4,8 @@ date: 2022-12-19
 author: "Sheng Wu"
 description: "SkyWalking 9.3.0 introduced the new capability that help you visualize the connection between traces and corresponding metrics quickly."
 tags:
-- Trace
-- Metric
+  - Trace
+  - Metric
 ---
 
 ![Banner](banner.jpg)
@@ -14,7 +14,7 @@ Observability for modern distributed applications work is critical for understan
 
 The SkyWalking project started only with tracing, with a focus on 100% sampling-based metrics and topology analysis since 2018. When users face anomaly trends of time-series metrics, like a peak on the line chart, or histogram shows a larger gap between p95 and p95, the immediate question is, why is this happening? One of SkyWalking's latest features, the **trace-metric association**, makes it much easier to answer that question and to address the root cause.
 
-## How Are Metrics Generated? 
+## How Are Metrics Generated?
 
 SkyWalking provides three ways to calculate metrics:
 
@@ -30,7 +30,7 @@ Tracing data and visualization are critical troubleshooting tools for both devel
 
 ## Find the Associated Trace
 
-When looking for association between metrics and traces, the kind of metrics we're dealing with determines their relationships to traces. Let’s review the standard request *rate, error, and duration (RED)* metrics to see how it works.
+When looking for association between metrics and traces, the kind of metrics we're dealing with determines their relationships to traces. Let’s review the standard request _rate, error, and duration (RED)_ metrics to see how it works.
 
 ### Success Rate Metrics
 
@@ -38,29 +38,29 @@ The success rate is determined by the return code, RPC response code, or excepti
 
 ![Figure 1: The success rate graph from SkyWalking's 9.3.0 dashboard with the option to view related traces at a particular time.](f1.jpg)
 
-*Figure 1: The success rate graph from SkyWalking's 9.3.0 dashboard with the option to view related traces at a particular time.*
+_Figure 1: The success rate graph from SkyWalking's 9.3.0 dashboard with the option to view related traces at a particular time._
 
 Drilling down from the peak of the success rate, SkyWalking lists all traces and their error status that were collected in this particular minute (Figure 2):
 
 ![Figure 2: SkyWalking shows related traces with an error status.](f2.jpg)
 
-*Figure 2: SkyWalking shows related traces with an error status.*
+_Figure 2: SkyWalking shows related traces with an error status._
 
-Requests to */test* can be located from the trace, and the span’s tag indicates a 404 response code of the HTTP request.
+Requests to _/test_ can be located from the trace, and the span’s tag indicates a 404 response code of the HTTP request.
 
 ![Figure 3: A detail view of a request to http://frontend/test showing that the URI doesn't exist.](f3.jpg)
 
-*Figure 3: A detail view of a request to http://frontend/test showing that the URI doesn't exist.*
+_Figure 3: A detail view of a request to http://frontend/test showing that the URI doesn't exist._
 
 By looking at the trace data, it becomes immediately clear that the drop in success rate is caused by requests to a nonexistent URI.
 
 ### Average Response Time
 
-The average response time metric provides a general overview of service performance. When average response time is unstable, this usually means that the system is facing serious performance impacts. 
+The average response time metric provides a general overview of service performance. When average response time is unstable, this usually means that the system is facing serious performance impacts.
 
 ![Figure 4: SkyWalking's query UI for searching for related traces showing traces for requests that exceed a particular duration threshold.](f4.jpg)
 
-*Figure 4: SkyWalking's query UI for searching for related traces showing traces for requests that exceed a particular duration threshold.*
+_Figure 4: SkyWalking's query UI for searching for related traces showing traces for requests that exceed a particular duration threshold._
 
 When you drill down from this metric, this query condition (Figure 4) will reveal the slowest traces of the service in this specific minute. Notice, at least 168ms is added as a condition automatically, to avoid scanning a large number of rows in the Database.
 
@@ -70,25 +70,25 @@ Apdex—the Application Performance Index—is a measure of response time based 
 
 ![Figure 5: The Apdex formula](f5.jpg)
 
-*Figure 5: The Apdex formula*
+_Figure 5: The Apdex formula_
 
-A user defines a response time tolerating threshold *T*. All responses handled in *T* or less time satisfy the user.
+A user defines a response time tolerating threshold _T_. All responses handled in _T_ or less time satisfy the user.
 
-For example, if *T* is 1.2 seconds and a response completes in 0.5 seconds, then the user is satisfied. All responses greater than 1.2 seconds dissatisfy the user. Responses greater than 4.8 seconds frustrate the user.
+For example, if _T_ is 1.2 seconds and a response completes in 0.5 seconds, then the user is satisfied. All responses greater than 1.2 seconds dissatisfy the user. Responses greater than 4.8 seconds frustrate the user.
 
 When the Apdex score decreases, we need to find related traces from two perspectives: slow traces and error status traces. SkyWalking's new related tracing features offers a quick way to view both (Figure 6) directly from the Apdex graph.
 
 ![Figure 6: Show slow trace and error status traces from the Apdex graph](f6.jpg)
 
-*Figure 6: Show slow trace and error status traces from the Apdex graph*
+_Figure 6: Show slow trace and error status traces from the Apdex graph_
 
 ### Service Response Time
 
-Percentile MetricThe percentile graph (Figure 7) provides p50, p75, p90, p95, and p99 latency ranks to measure the long-tail issues of service performance. 
+Percentile MetricThe percentile graph (Figure 7) provides p50, p75, p90, p95, and p99 latency ranks to measure the long-tail issues of service performance.
 
 ![Figure 7: The service response time percentile graph helps to highlight long-tail issues of service performance.](f7.jpg)
 
-*Figure 7: The service response time percentile graph helps to highlight long-tail issues of service performance.*
+_Figure 7: The service response time percentile graph helps to highlight long-tail issues of service performance._
 
 This percentile graph shows a typical long-tail issue. P99 latency is four times slower than the P95. When we use the association, we see the traces with latency between P95 - P99 and P99 - Infinity.
 
@@ -96,7 +96,7 @@ The traces of requests causing this kind of long-tail phenomena are automaticall
 
 ![Figure 8: Query parameters to search for traces based on latency.](f8.jpg)
 
-*Figure 8: Query parameters to search for traces based on latency.*
+_Figure 8: Query parameters to search for traces based on latency._
 
 ## Are More Associations Available?
 
@@ -112,33 +112,33 @@ Now in SkyWalking 9.3.0, when you click the peak of one graph, the pop-out box l
 
 ![Figure 9: SkyWalking's option to view associated metrics.](f9.jpg)
 
-*Figure 9: SkyWalking's option to view associated metrics.*
+_Figure 9: SkyWalking's option to view associated metrics._
 
 When you choose that option, all associated metrics graphs will show axis pointers (the dotted vertical lines) in all associated graphs like in Figure 10. This makes it easier to correlate the peaks in different graphs with each other. Often, these correlated peaks with have the same root cause.
 
 ![Figure 10: Axis pointers (vertical dotted lines) show associations between peaks across multiple metrics graphs.](f10.jpg)
 
-*Figure 10: Axis pointers (vertical dotted lines) show associations between peaks across multiple metrics graphs.*
+_Figure 10: Axis pointers (vertical dotted lines) show associations between peaks across multiple metrics graphs._
 
 ### Event-to-Metric Associations
 
 SkyWalking provides the event concept to associate possible service performance impacted by the infrastructure, such as new deployment even from k8s. Or, the anomaly had been detected by alerting or integrated AIOps engine.
 
-The event to metrics association is also automatically, it could cover the time range of the event on the metric graphs(blue areas). If the area of event and peaks are matched, most likely this event covered this anomaly. 
+The event to metrics association is also automatically, it could cover the time range of the event on the metric graphs(blue areas). If the area of event and peaks are matched, most likely this event covered this anomaly.
 
 ![Figure 11: SkyWalking's event to metric association view.](f11.jpg)
 
-*Figure 11: SkyWalking's event to metric association view.*
+_Figure 11: SkyWalking's event to metric association view._
 
 ## SkyWalking Makes it Easier and Faster to Find Root Causes
 
-SkyWalking now makes it easy to find associations between metrics, events, and traces, ultimately making it possible to identify root causes and fix problems fast. The associations we've discussed in this article are available out-of-box in the SkyWalking 9.3.0 release. 
+SkyWalking now makes it easy to find associations between metrics, events, and traces, ultimately making it possible to identify root causes and fix problems fast. The associations we've discussed in this article are available out-of-box in the SkyWalking 9.3.0 release.
 
 ![Figure 12: Just click on the dots to see related traces and metrics associations.](f12.jpg)
 
-*Figure 12: Just click on the dots to see related traces and metrics associations.*
+_Figure 12: Just click on the dots to see related traces and metrics associations._
 
-Click the dots on any metric graph, and you will see a *View Related Traces* item pop-out if this metric has logical mapping traces.
+Click the dots on any metric graph, and you will see a _View Related Traces_ item pop-out if this metric has logical mapping traces.
 
 ## Conclusion
 

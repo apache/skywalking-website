@@ -4,8 +4,8 @@ date: 2022-12-02
 author: "万凯"
 description: "在 MySQL 存储基础上 SkyWalking v9.3.0 提供了一种新的存储方式 MySQL-Sharding，它提供了基于 ShardingSphere-Proxy 的分库分表特性，而分库分表是关系型数据库面对大数据量处理的成熟解决方案。"
 zh_tags:
-- ShardingSphere
-- ShardingSphere-proxy
+  - ShardingSphere
+  - ShardingSphere-proxy
 ---
 
 Apache SkyWalking 作为一个分布式系统的应用性能监控工具，它观察服务网格中的指标、日志、痕迹和事件。其中 SkyWalking OAP 高性能的数据流处理架构能够实时处理庞大的数据流量，但是这些海量数据的存储更新和后续查询对后端存储系统带来了挑战。
@@ -67,7 +67,7 @@ ds_{dataSourceShardingColumn.hashcode() % dataSourceList.size()}
 
 由于 TTL 机制的存在，分表算法主要根据时间的日期进行分片，分片表的数量是根据 TTL 每天一个表：
 
-分片表名 = 逻辑表名_时间序列（日期）：`{tableName =logicTableName_timeSeries}`
+分片表名 = 逻辑表名\_时间序列（日期）：`{tableName =logicTableName_timeSeries}`
 
 为保证在 TTL 有效期内的数据能够被写入和查询，时间序列将生成当前日期
 
@@ -86,12 +86,12 @@ logicTableName_20220908
 
 SkyWalking 提供了多种不同的分表算法用于不同的数据模型：
 
-| 算法名称                              | 分片说明                              | 分片键时间精度要求                                     | 典型应用数据模型                                             |
-| :------------------------------------ | :------------------------------------ | :----------------------------------------------------- | :----------------------------------------------------------- |
-| `NO_SHARDING`                         | 不做任何表分片，保持单表模式          | /                                                      | 数据量小无需分片的数据模型                                   |
-| `TIME_RELATIVE_ID_SHARDING_ALGORITHM` | 使用 ID 列中的 `time_bucket` 按天分片 | `time_bucket` 的精度可以是同一表中的秒、分、小时和天   | 各类 Metrics 指标                                            |
-| `TIME_SEC_RANGE_SHARDING_ALGORITHM`   | 使用 `time_bucket` 列按天分片         | `time_bucket` 的精度必须是秒                           | `SegmentRecordLogRecord` 等                                  |
-| `TIME_MIN_RANGE_SHARDING_ALGORITHM`   | 使用 `time_bucket` 列按天分片         | `time_bucket` 的精度必须是分钟                         | EndpointTraffic                                              |
+| 算法名称                              | 分片说明                              | 分片键时间精度要求                                     | 典型应用数据模型                                                            |
+| :------------------------------------ | :------------------------------------ | :----------------------------------------------------- | :-------------------------------------------------------------------------- |
+| `NO_SHARDING`                         | 不做任何表分片，保持单表模式          | /                                                      | 数据量小无需分片的数据模型                                                  |
+| `TIME_RELATIVE_ID_SHARDING_ALGORITHM` | 使用 ID 列中的 `time_bucket` 按天分片 | `time_bucket` 的精度可以是同一表中的秒、分、小时和天   | 各类 Metrics 指标                                                           |
+| `TIME_SEC_RANGE_SHARDING_ALGORITHM`   | 使用 `time_bucket` 列按天分片         | `time_bucket` 的精度必须是秒                           | `SegmentRecordLogRecord` 等                                                 |
+| `TIME_MIN_RANGE_SHARDING_ALGORITHM`   | 使用 `time_bucket` 列按天分片         | `time_bucket` 的精度必须是分钟                         | EndpointTraffic                                                             |
 | `TIME_BUCKET_SHARDING_ALGORITHM`      | 使用 `time_bucket` 列按天分片         | `time_bucket` 的精度可以是同一个表中的秒、分、小时和天 | Service、Instance、Endpoint 调用关系等如 `ServiceRelationServerSideMetrics` |
 
 ## TTL 机制
@@ -199,4 +199,4 @@ curl http://127.0.0.1:9092/info
 
 ## 总结
 
-在这篇文章中我们详细介绍了 SkyWalking  基于 ShardingSphere-Proxy 的 MySQL-Sharding 存储特性的部署架构、适应场景、核心分库分表逻辑以及 TTL 机制，并提供了运行后的数据存储示例和详细部署配置步骤以便大家快速理解上手。SkyWalking 提供了多种存储方式以供选择，如果你目前的需求如本文所述，欢迎使用该新特性。
+在这篇文章中我们详细介绍了 SkyWalking 基于 ShardingSphere-Proxy 的 MySQL-Sharding 存储特性的部署架构、适应场景、核心分库分表逻辑以及 TTL 机制，并提供了运行后的数据存储示例和详细部署配置步骤以便大家快速理解上手。SkyWalking 提供了多种存储方式以供选择，如果你目前的需求如本文所述，欢迎使用该新特性。

@@ -7,7 +7,6 @@ description: This article shows how to use SkyWalking to monitor EKS and S3.
 
 ![icon.png](./icon.png)
 
-
 SKyWalking OAP's existing [OpenTelemetry receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/opentelemetry-receiver/) can receive metrics through the [OTLP protocol, and use ](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/otlp.md)[MAL](https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/) to analyze related metrics in real time. Starting from OAP 9.4.0, SkyWalking has added [an AWS Firehose receiver](https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/) to receive and analyze CloudWatch metrics data. This article will take EKS and S3 as examples to introduce the process of SkyWalking OAP receiving and analyzing the indicator data of AWS services.
 
 ### EKS
@@ -34,44 +33,42 @@ EKS monitoring is realized through OTel. You only need to deploy OpenTelemetry C
 ###### OTel Collector configuration demo
 
 ```yaml
-
 extensions:
   health_check:
 receivers:
   awscontainerinsightreceiver:
 processors:
-# To enable OAP to correctly identify EKS metrics, add the job_name attribute
+  # To enable OAP to correctly identify EKS metrics, add the job_name attribute
   resource/job-name:
     attributes:
-    - key: job_name   
-      value: aws-cloud-eks-monitoring
-      action: insert     
+      - key: job_name
+        value: aws-cloud-eks-monitoring
+        action: insert
 
 # Specify OAP as exporters
 exporters:
   otlp:
-    endpoint: oap-service:11800 
+    endpoint: oap-service:11800
     tls:
       insecure: true
   logging:
-      loglevel: debug          
+    loglevel: debug
 service:
   pipelines:
     metrics:
       receivers: [awscontainerinsightreceiver]
       processors: [resource/job-name]
-      exporters: [otlp,logging]
+      exporters: [otlp, logging]
   extensions: [health_check]
-  
 ```
 
 By default, SkyWalking OAP counts the network, disk, CPU and other related indicator data in the three dimensions of Node, Pod, and Service. Only part of the content is shown here.
 
-######  Pod dimensions
+###### Pod dimensions
 
 ![eks-pod.png](./eks-pod.png)
 
-######  Service dimensions
+###### Service dimensions
 
 ![eks-service.png](./eks-service.png)
 
@@ -115,7 +112,7 @@ rules:
     verbs: ["get","update"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
-    verbs: ["create","get","update"]    
+    verbs: ["create","get","update"]
 
 ---
 kind: ClusterRoleBinding
@@ -151,9 +148,9 @@ data:
     processors:
       resource/job-name:
         attributes:
-        - key: job_name   
+        - key: job_name
           value: aws-cloud-eks-monitoring
-          action: insert     
+          action: insert
 
     exporters:
       otlp:
@@ -161,7 +158,7 @@ data:
         tls:
           insecure: true
       logging:
-          loglevel: debug          
+          loglevel: debug
 
     service:
       pipelines:
@@ -235,7 +232,7 @@ spec:
               readOnly: true
             - name: otel-agent-config-vol
               mountPath: /conf
-            - name: otel-output-vol  
+            - name: otel-output-vol
               mountPath: /otel-output
           resources:
             limits:
@@ -269,15 +266,14 @@ spec:
         - name: devdisk
           hostPath:
             path: /dev/disk/
-        - name: otel-output-vol  
+        - name: otel-output-vol
           hostPath:
             path: /otel-output
       serviceAccountName: aws-otel-sa
-        
+
 ```
 
 </details>
-
 
 ### S3
 
@@ -307,6 +303,7 @@ To ensure that external services can correctly receive indicator data, AWS provi
   ]
 }
 ```
+
 1. **requestId**: Request id, which can achieve deduplication and debugging purposes.
 2. **timestamp**: Firehose generated the timestamp of the request (in milliseconds).
 3. **records**: Actual delivery records
@@ -314,20 +311,20 @@ To ensure that external services can correctly receive indicator data, AWS provi
 
 ##### aws-firehose-receiver
 
-`aws-firehose-receiver`  provides an HTTP Endpoint that implements Firehose Specifications: `/aws/firehose/metrics`. The figure below shows the data flow of monitoring DynamoDB, S3 and other services through CloudWatch, and using Firehose to send indicator data to SKywalking OAP.
+`aws-firehose-receiver` provides an HTTP Endpoint that implements Firehose Specifications: `/aws/firehose/metrics`. The figure below shows the data flow of monitoring DynamoDB, S3 and other services through CloudWatch, and using Firehose to send indicator data to SKywalking OAP.
 
 ![aws-service.png](./aws-service.png)
 
 #### Step-by-step setup of S3 monitoring
 
 1. Enter the S3 console and create a filter for`Request metrics`: `Amazon S3 >> Buckets >> (Your Bucket) >> Metrics >> metrics >> View additional charts >> Request metrics`
-  ![s3-create-filter.png](./s3-create-filter.png)
+   ![s3-create-filter.png](./s3-create-filter.png)
 2. Enter the Amazon Kinesis console, create a delivery stream, `Source` select `Direct PUT`, `Destination` select `HTTP Endpoint`. And set `HTTP endpoint URL` to `https://your_domain/aws/firehose/metrics`. Other configuration items:
-  *  `Buffer hints`: Set the size and period of the cache
-  * `Access key` just matches the AccessKey in aws-firehose-receiver
-  * `Retry duration`:  Retry period
-  * `Backup settings`: Backup settings, optionally backup the posted data to S3 at the same time.
 
+- `Buffer hints`: Set the size and period of the cache
+- `Access key` just matches the AccessKey in aws-firehose-receiver
+- `Retry duration`: Retry period
+- `Backup settings`: Backup settings, optionally backup the posted data to S3 at the same time.
 
 ![firehose-stream-create.png](./firehose-stream-create.png)
 
@@ -345,7 +342,7 @@ Currently SkyWalking officially supports EKS, S3, DynamoDB monitoring. Users als
 
 ### Material
 
-* [Monitoring S3 metrics with Amazon CloudWatch](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring.html)
-* [Monitoring DynamoDB metrics with Amazon CloudWatch](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/monitoring-cloudwatch.html)
-* [Supported metrics in AWS Firehose receiver of OAP](https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/)
-* [Configuration Vocabulary | Apache SkyWalking](https://skywalking.apache.org/docs/main/next/en/setup/backend/configuration-vocabulary/)
+- [Monitoring S3 metrics with Amazon CloudWatch](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudwatch-monitoring.html)
+- [Monitoring DynamoDB metrics with Amazon CloudWatch](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/monitoring-cloudwatch.html)
+- [Supported metrics in AWS Firehose receiver of OAP](https://skywalking.apache.org/docs/main/next/en/setup/backend/aws-firehose-receiver/)
+- [Configuration Vocabulary | Apache SkyWalking](https://skywalking.apache.org/docs/main/next/en/setup/backend/configuration-vocabulary/)

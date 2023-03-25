@@ -4,8 +4,8 @@ date: 2019-01-25
 author: Hongtao Gao(Tetrate)
 description: "Service mesh receiver performance test on Google Kubernetes Engine."
 tags:
-- Performance
-- Testing
+  - Performance
+  - Testing
 ---
 
 - Author: Hongtao Gao, Apache SkyWalking & ShardingShpere PMC
@@ -27,7 +27,7 @@ You could find a variety of elements in it just like web service, local method, 
 
 ![](image1.png)
 
-But using sidecar is a little different.The client requesting “A” that will send a segment to service mesh receiver from “A”’s sidecar. If “A” depends on “B”,  another segment will be sent from “A”’s sidecar. But for a trace system, only one segment is received by the collector. The sidecar model splits one segment into small segments, that will increase service mesh receiver network overhead.
+But using sidecar is a little different.The client requesting “A” that will send a segment to service mesh receiver from “A”’s sidecar. If “A” depends on “B”, another segment will be sent from “A”’s sidecar. But for a trace system, only one segment is received by the collector. The sidecar model splits one segment into small segments, that will increase service mesh receiver network overhead.
 
 ## Deployment Architecture
 
@@ -37,28 +37,28 @@ Mini unit is a suitable architecture for dev or test environment. It saves your 
 
 The standard cluster provides good performance and HA for a production scenario. Though you will pay more money and take care of the cluster carefully, the reliability of the cluster will be a good reward to you.
 
-I pick 8 CPU and 16GB VM to set up the test environment. This test targets the performance of normal usage scenarios, so that choice is reasonable. The cluster is built on Google Kubernetes Engine(GKE), and every node links each other with a VPC network. For running collector is a CPU intensive task, the resource request of collector deployment should be 8 CPU, which means every collector instance occupy a VM node. 
+I pick 8 CPU and 16GB VM to set up the test environment. This test targets the performance of normal usage scenarios, so that choice is reasonable. The cluster is built on Google Kubernetes Engine(GKE), and every node links each other with a VPC network. For running collector is a CPU intensive task, the resource request of collector deployment should be 8 CPU, which means every collector instance occupy a VM node.
 
 ## Testing Process
 
 Receiving mesh fragments per second(MPS) depends on the following variables.
 
- 1. Ingress query per second(QPS)
- 1. The topology of a microservice cluster
- 1. Service mesh mode(proxy or sidecar)
+1.  Ingress query per second(QPS)
+1.  The topology of a microservice cluster
+1.  Service mesh mode(proxy or sidecar)
 
 In this test, I use Bookinfo app as a demo cluster.
 
 ![](image6.png)
 
-So every request will touch max 4 nodes. Plus picking the sidecar mode(every request will send two telemetry data),  the MPS will be QPS * 4 *2. 
+So every request will touch max 4 nodes. Plus picking the sidecar mode(every request will send two telemetry data), the MPS will be QPS * 4 *2.
 
 There are also some important metrics that should be explained
 
- * Client Query Latency: GraphQL API query response time heatmap.
- * Client Mesh Sender: Send mesh segments per second. The total line represents total send amount and the error line is the total number of failed send.
- * Mesh telemetry latency: service mesh receiver handling data heatmap.
- * Mesh telemetry received: received mesh telemetry data per second.
+- Client Query Latency: GraphQL API query response time heatmap.
+- Client Mesh Sender: Send mesh segments per second. The total line represents total send amount and the error line is the total number of failed send.
+- Mesh telemetry latency: service mesh receiver handling data heatmap.
+- Mesh telemetry received: received mesh telemetry data per second.
 
 ### Mini Unit
 
@@ -79,8 +79,9 @@ Compare to the mini-unit, cluster’s throughput increases linearly. Three insta
 ## Conclusion
 
 Let’s wrap them up. There are some important things you could get from this test.
- * QPS varies by the there variables. The test results in this blog are not important. The user should pick property value according to his system.
- * Collector cluster’s processing power could scale out.
- * The collector is CPU intensive application. So you should provide sufficient CPU resource to it.
+
+- QPS varies by the there variables. The test results in this blog are not important. The user should pick property value according to his system.
+- Collector cluster’s processing power could scale out.
+- The collector is CPU intensive application. So you should provide sufficient CPU resource to it.
 
 This blog gives people a common method to evaluate the throughput of Service Mesh Receiver. Users could use this to design their Apache Skywalking backend deployment architecture.

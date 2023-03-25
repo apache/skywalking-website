@@ -5,4 +5,3 @@ author: SkyWalking Team
 ---
 
 Support tracing and collect metrics from Nginx server. Require SkyWalking APM 7.0+.
-

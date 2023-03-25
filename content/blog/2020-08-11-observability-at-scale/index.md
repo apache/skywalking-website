@@ -56,37 +56,37 @@ Today, SkyWalking is monitoring super large-scale distributed systems in many la
 
 SkyWalking is the observability platform used for a variety of use cases for distributed systems that are super-large by many measures:
 
-*   Lagou.com, an online job recruitment platform
-    *   SkyWalking is observing >100 services, 500+ JVM instances
-    *   SkyWalking collects and analyzes 4+ billion traces per day to analyze performance data, including metrics of 300k+ endpoints and dependencies
-    *   Monitoring >50k traffic per second in the whole cluster
-*   Yonghui SuperMarket, online service
-    *   SkyWalking analyzes at least 10+ billion (3B) traces with metrics per day
-    *   SkyWalking's second, smaller deployment, analyzes 200+ million traces per day
-*   Baidu, internet and AI company, Kubernetes deployment
-    *   SkyWalking collects 1T+ traces a day from 1,400+ pods of 120+ services
-    *   Continues to scale out as more services are added
-*   Beike Zhaofang(ke.com), a Chinese online property brokerage backed by Tencent Holdings and SoftBank Group
-    *   Has used SkyWalking from its very beginning, and has two members in the PMC team. 
-    *   Deployments collect 16+ billion traces per day
-*   Ali Yunxiao, DevOps service on the Alibaba Cloud,
-    *   SkyWalking collects and analyzes billions of spans per day
-    *   SkyWalking keeps AliCloud's 45 services and ~300 instances stable
-*   A department of Alibaba TMall, one of the largest business-to-consumer online retailers, spun off from Taobao
-    *   A customized version of SkyWalking monitors billions of traces per day
-    *   At the same time, they are building a load testing platform based on SkyWalking's agent tech stack, leveraging its tracing and context propagation cabilities
+- Lagou.com, an online job recruitment platform
+  - SkyWalking is observing >100 services, 500+ JVM instances
+  - SkyWalking collects and analyzes 4+ billion traces per day to analyze performance data, including metrics of 300k+ endpoints and dependencies
+  - Monitoring >50k traffic per second in the whole cluster
+- Yonghui SuperMarket, online service
+  - SkyWalking analyzes at least 10+ billion (3B) traces with metrics per day
+  - SkyWalking's second, smaller deployment, analyzes 200+ million traces per day
+- Baidu, internet and AI company, Kubernetes deployment
+  - SkyWalking collects 1T+ traces a day from 1,400+ pods of 120+ services
+  - Continues to scale out as more services are added
+- Beike Zhaofang(ke.com), a Chinese online property brokerage backed by Tencent Holdings and SoftBank Group
+  - Has used SkyWalking from its very beginning, and has two members in the PMC team.
+  - Deployments collect 16+ billion traces per day
+- Ali Yunxiao, DevOps service on the Alibaba Cloud,
+  - SkyWalking collects and analyzes billions of spans per day
+  - SkyWalking keeps AliCloud's 45 services and ~300 instances stable
+- A department of Alibaba TMall, one of the largest business-to-consumer online retailers, spun off from Taobao
+  - A customized version of SkyWalking monitors billions of traces per day
+  - At the same time, they are building a load testing platform based on SkyWalking's agent tech stack, leveraging its tracing and context propagation cabilities
 
 ### Conclusion
 
 SkyWalking's approach to observability follows these principles:
 
-1.  Understand the logic model: don't treat observability as a mathematical tool. 
+1.  Understand the logic model: don't treat observability as a mathematical tool.
 2.  Identify dependencies first, then their metrics.
 3.  Scaling should be accomplished easily and natively.
 4.  Maintain consistency across different architectures, and in the performance of APM itself.
 
 ### Resources
 
-*   Read about the [SkyWalking 8.1 release highlights](https://github.com/apache/skywalking/blob/master/CHANGES.md).
-*   Get more SkyWalking updates on [Twitter](https://twitter.com/asfskywalking?lang=en).
-*   Sign up to hear more about SkyWalking and observability from [Tetrate](https://www.tetrate.io/contact-us/).
+- Read about the [SkyWalking 8.1 release highlights](https://github.com/apache/skywalking/blob/master/CHANGES.md).
+- Get more SkyWalking updates on [Twitter](https://twitter.com/asfskywalking?lang=en).
+- Sign up to hear more about SkyWalking and observability from [Tetrate](https://www.tetrate.io/contact-us/).

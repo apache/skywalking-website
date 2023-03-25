@@ -4,8 +4,8 @@ date: 2021-02-05
 author: Zhenxu Ke, Sheng Wu. tetrate.io
 description: "Logs, VM Monitoring, and Dynamic Configurations at Agent Side"
 tags:
-- Release Blog
-- Logs
+  - Release Blog
+  - Logs
 ---
 
 ![](heading.png)
@@ -13,7 +13,7 @@ tags:
 > Origin: [Tetrate.io blog](https://www.tetrate.io/blog/skywalking-8-4/)
 
 The Apache SkyWalking team today announced the 8.4 release is generally available. This release fills the gap between all previous versions of SkyWalking and the logging domain area.
-The release also advances SkyWalking’s capabilities  for infrastructure observability, starting with virtual machine monitoring.
+The release also advances SkyWalking’s capabilities for infrastructure observability, starting with virtual machine monitoring.
 
 ## Background
 
@@ -33,7 +33,7 @@ Figure 1: Logs Collected By SkyWalking
 Figure 2: Logs Collected By SkyWalking
 
 The Java agent firstly provides SDKs to enhance the widely-used logging frameworks, log4j (1.x and 2.x) [2] and logback [3], and send the logs to the SkyWalking backend (OAP).
-The latter is able to collect logs from wherever the protocol is  implemented.
+The latter is able to collect logs from wherever the protocol is implemented.
 This is not a big deal, but when it comes to the correlation between logs and traces, the traditional solution is to print the trace IDs in the logs, and pick the IDs in the error logs to query the related traces.
 SkyWalking just simplifies the workflow by correlating the logs and traces natively. Navigating between traces and their related logs is as simple as clicking a button.
 
@@ -42,13 +42,13 @@ Figure 3: Correlation Between Logs and Traces
 
 ## Infrastructure Monitoring
 
-SkyWalking is known as an application performance monitoring tool. One of the most important factors that impacts the application’s performance is the infrastructure on which the application runs. 
+SkyWalking is known as an application performance monitoring tool. One of the most important factors that impacts the application’s performance is the infrastructure on which the application runs.
 In the 8.4 release, we added the monitoring metrics of virtual machines into the dashboard.
 
 ![VM Metrics](figure04.png)
 Figure 4: VM Metrics
 
-Fundamental metrics such as `CPU Used`, `Memory Used`,  `Disk Read / Write` and `Network Usage` are available on the dashboard.
+Fundamental metrics such as `CPU Used`, `Memory Used`, `Disk Read / Write` and `Network Usage` are available on the dashboard.
 And as usual, those metrics are also available to be configured as alarm triggers when needed.
 
 ## Dynamic Configurations at Agent Side
@@ -65,16 +65,19 @@ This enhancement is from the UI. SkyWalking backend supports grouping the servic
 Figure 5: Grouped Service Topology
 
 ## Other Notable Enhancements
+
 - Agent: resolves domain names to look up backend service IP addresses.
 - Backend: meter receiver supports meter analysis language (MAL).
 - Backend: several CVE fixes.
 - Backend: supports Envoy `{AccessLog,Metrics}Service` API V3 and adopts MAL.
 
 ## Links
+
 - [1] https://peter.bourgon.org/blog/2017/02/21/metrics-tracing-and-logging.html
 - [2] https://logging.apache.org/log4j/2.x/
 - [3] http://logback.qos.ch
 
 ## Additional Resources
+
 - Read more about the [SkyWalking 8.4 release highlights](https://github.com/apache/skywalking/blob/v8.4.0/changes/changes-8.4.0.md).
 - Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).

@@ -4,7 +4,7 @@ date: 2020-12-03
 author: 柯振旭, 吴晟, Tevah Platt. tetrate.io
 description: 本文将详细介绍如何摆脱 Istio Mixer 使用 Apache SkyWalking 来观测 service mesh
 zh_tags:
-- Service Mesh
+  - Service Mesh
 ---
 
 ![img](../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/canyonhorseshoe.jpg)
@@ -19,7 +19,7 @@ zh_tags:
 
 Apache SkyWalking 一直通过 Istio Mixer 的适配器，支持服务网格的可观察性。不过自从 v1.5 版本，由于 Mixer 在大型集群中差强人意的表现，Istio 开始弃用 Mixer。Mixer 的功能现已迁至 Envoy 代理，并获 Istio 1.7 版本支持。
 
-在去年的中国 [KubeCon](https://kccncosschn19eng.sched.com/event/NroB/observability-in-service-mesh-powered-by-envoy-and-apache-skywalking-sheng-wu-lizan-zhou-tetrate) 中，[吴晟](https://github.com/wu-sheng)和[周礼赞](https://github.com/lizan)基于 Apache SkyWalking 和 Envoy ALS，发布了新的方案：不再受制于 Mixer  带来的性能影响，也同时保持服务网格中同等的可观察性。这个方案最初是由吴晟、[高洪涛](https://github.com/hanahmily)、周礼赞和 [Dhi Aurrahman](https://github.com/dio) 在 Tetrate.io 实现的。
+在去年的中国 [KubeCon](https://kccncosschn19eng.sched.com/event/NroB/observability-in-service-mesh-powered-by-envoy-and-apache-skywalking-sheng-wu-lizan-zhou-tetrate) 中，[吴晟](https://github.com/wu-sheng)和[周礼赞](https://github.com/lizan)基于 Apache SkyWalking 和 Envoy ALS，发布了新的方案：不再受制于 Mixer 带来的性能影响，也同时保持服务网格中同等的可观察性。这个方案最初是由吴晟、[高洪涛](https://github.com/hanahmily)、周礼赞和 [Dhi Aurrahman](https://github.com/dio) 在 Tetrate.io 实现的。
 
 如果你正在寻找在 Mixer 方案之外，为你的服务网格进行观察的最优解，本文正是你当前所需的。在这个教程中，我们会解释此方案的运作逻辑，并将它实践到 bookinfo 应用上。
 
@@ -53,29 +53,32 @@ Apache SkyWalking 一直通过 Istio Mixer 的适配器，支持服务网格的�
 
 1. **代理传入请求**︰在此情况下，Envoy 会作为服务器端的 Sidecar，以 `inbound|portNumber|portName|Hostname[or]SidecarScopeID` 格式设定 `upstream_cluster`。
 
-    ![](../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.37.49-PM.png)
+   ![](../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.37.49-PM.png)
 
-    SkyWalking 分析器会检查 `downstream_remote_address` 是否能够找到对应的 Kubernetes 服务。
+   SkyWalking 分析器会检查 `downstream_remote_address` 是否能够找到对应的 Kubernetes 服务。
 
-    如果在此 IP（和端口）中有一个服务（例如服务 B）正在运行，那我们就会建立起服务对服务的关系（即服务 B → 服务 A），帮助建立拓扑。再配合访问日志中的 `start_time` 和 `duration` 两个字段，我们就可以获得延迟的指标数据了。
-    
-    如果没有任何服务可以和 `downstream_remote_address` 相对应，那请求就有可能来自网格以外的服务。由于 SkyWalking 无法识别请求的服务来源，在没有源服务的情况下，它简单地根据[拓扑分析方法](https://wu-sheng.github.io/STAM/)生成数据。拓扑依然可以准确地建立，而从服务器端侦测出来的指标数据也依然是正确的。
+   如果在此 IP（和端口）中有一个服务（例如服务 B）正在运行，那我们就会建立起服务对服务的关系（即服务 B → 服务 A），帮助建立拓扑。再配合访问日志中的 `start_time` 和 `duration` 两个字段，我们就可以获得延迟的指标数据了。
+
+   如果没有任何服务可以和 `downstream_remote_address` 相对应，那请求就有可能来自网格以外的服务。由于 SkyWalking 无法识别请求的服务来源，在没有源服务的情况下，它简单地根据[拓扑分析方法](https://wu-sheng.github.io/STAM/)生成数据。拓扑依然可以准确地建立，而从服务器端侦测出来的指标数据也依然是正确的。
 
 2. **代理传出请求**︰在此情况下，Envoy 会作为客户端的 Sidecar，以 `outbound|<port>|<subset>|<serviceFQDN>` 格式设定 `upstream_cluster`。
 
-    ![](../../blog//2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.43.16-PM.png)
+   ![](../../blog//2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.43.16-PM.png)
 
-    客户端的侦测相对来说比代理传入请求容易。如果 `upstream_remote_address` 是另一个 Sidecar 或代理的话，我们只需要获得它相应的服务名称，便可生成拓扑和指标数据。否则，我们没有办法理解它，只能把它当作 UNKNOWN 服务。
+   客户端的侦测相对来说比代理传入请求容易。如果 `upstream_remote_address` 是另一个 Sidecar 或代理的话，我们只需要获得它相应的服务名称，便可生成拓扑和指标数据。否则，我们没有办法理解它，只能把它当作 UNKNOWN 服务。
 
 ### 代理角色
+
 当 Envoy 被部署为前端代理时，它是独立的服务，并不会像 Sidecar 一样，代表任何其他的服务。所以，我们可以建立客户端以及服务器端的指标数据。
 
 ![](../../blog/2020-12-03-obs-service-mesh-with-sw-and-als/Screen-Shot-2020-12-02-at-2.46.56-PM.png)
 
 ## 演示范例
+
 在本章，我们会使用典型的 bookinfo 应用，来演示 Apache SkyWalking 8.3.0+ （截至 2020 年 11 月 30 日的最新版本）如何与 Envoy ALS 合作，联手观察服务网格。
 
 ### 安装 Kubernetes
+
 在 Kubernetes 和虚拟机器（VM）的环境下，SkyWalking 8.3.0 均支持 Envoy ALS 的方案。在本教程中，我们只会演示在 Kubernetes 的情境，至于 VM 方案，请耐心期待我们下一篇文章。所以在进行下一步之前，我们需要先安装 Kubernetes。
 
 在本教程中，我们会使用 [Minikube](https://minikube.sigs.k8s.io/docs/) 工具来快速设立本地的 Kubernetes（v1.17 版本）集群用作测试。要运行所有必要组件，包括 bookinfo 应用、SkyWalking OAP 和 WebUI，集群需要动用至少 4GB 内存和 2 个 CPU 的核心。
@@ -95,7 +98,7 @@ Istio 为配置 Envoy 代理和实现访问日志服务提供了一个非常方�
 
 export ISTIO_VERSION=1.7.1
 
-curl -L https://istio.io/downloadIstio | sh - 
+curl -L https://istio.io/downloadIstio | sh -
 
 sudo mv $PWD/istio-$ISTIO_VERSION/bin/istioctl /usr/local/bin/
 
@@ -119,7 +122,7 @@ istioctl  manifest install \
         --set meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800
 ```
 
-范例指令 `--set meshConfig.enableEnvoyAccessLogService=true` 会在网格中启动访问日志服务。正如之前提到，ALS 本质上是一个会发放请求日志的 gRPC 服务。配置 `meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800` 会告诉这个gRPC 服务往哪里发送日志，这里是往 `skywalking-oap.istio-system:11800` 发送，稍后我们会部署 SkyWalking ALS 接收器到这个地址。
+范例指令 `--set meshConfig.enableEnvoyAccessLogService=true` 会在网格中启动访问日志服务。正如之前提到，ALS 本质上是一个会发放请求日志的 gRPC 服务。配置 `meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800` 会告诉这个 gRPC 服务往哪里发送日志，这里是往 `skywalking-oap.istio-system:11800` 发送，稍后我们会部署 SkyWalking ALS 接收器到这个地址。
 
 **注意**︰
 

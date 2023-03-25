@@ -8,11 +8,13 @@ description: "Release Apache SkyWalking CLI 0.6.0."
 SkyWalking CLI 0.6.0 is released. Go to [downloads](https://skywalking.apache.org/downloads) page to find release tars.
 
 - Features
+
   - Support authorization when connecting to the OAP
   - Add `install` command and `manifest` sub-command
   - Add `event` command and `report` sub-command
 
 - Bug Fixes
+
   - Fix the bug that can't query JVM instance metrics
 
 - Chores

@@ -4,7 +4,7 @@ date: 2020-04-19
 author: 芋道源码
 description: 从 0 开始入门 SkyWalking，搭建 SkyWalking 服务，并接入 Java 项目中实现分布式链路追踪。
 zh_tags:
-- User Manual
+  - User Manual
 ---
 
 目录：
@@ -19,7 +19,6 @@ zh_tags:
 
 > - 作者：[芋道源码](https://github.com/YunaiV)
 > - [原文地址](http://www.iocoder.cn/SkyWalking/install/?skywalkinng)
-
 
 # 1. 概述
 
@@ -39,12 +38,12 @@ SkyWalking 有哪些功能？
 
 > FROM <http://skywalking.apache.org/>
 >
-> * 多种监控手段。可以通过语言探针和 service mesh 获得监控是数据。
-> * 多个语言自动探针。包括 Java，.NET Core 和 Node.JS。
-> * 轻量高效。无需大数据平台，和大量的服务器资源。
-> * 模块化。UI、存储、集群管理都有多种机制可选。
-> * 支持告警。
-> * 优秀的可视化解决方案。
+> - 多种监控手段。可以通过语言探针和 service mesh 获得监控是数据。
+> - 多个语言自动探针。包括 Java，.NET Core 和 Node.JS。
+> - 轻量高效。无需大数据平台，和大量的服务器资源。
+> - 模块化。UI、存储、集群管理都有多种机制可选。
+> - 支持告警。
+> - 优秀的可视化解决方案。
 
 ## 1.3 整体架构
 
@@ -58,10 +57,10 @@ SkyWalking 整体架构如何？
 
 > 考虑到让描述更简单，我们舍弃掉 Metric 指标相关，而着重在 Tracing 链路相关功能。
 
-* 上部分 **Agent** ：负责从应用中，收集链路信息，发送给 SkyWalking OAP 服务器。目前支持 SkyWalking、Zikpin、Jaeger 等提供的 Tracing 数据信息。而我们目前采用的是，SkyWalking Agent 收集 SkyWalking Tracing 数据，传递给服务器。
-* 下部分 **SkyWalking OAP** ：负责接收 Agent 发送的 Tracing 数据信息，然后进行分析(Analysis Core) ，存储到外部存储器( Storage )，最终提供查询( Query )功能。
-* 右部分 **Storage** ：Tracing 数据存储。目前支持 ES、MySQL、Sharding Sphere、TiDB、H2 多种存储器。而我们目前采用的是 ES ，主要考虑是 SkyWalking 开发团队自己的生产环境采用 ES 为主。
-* 左部分 **SkyWalking UI** ：负责提供控台，查看链路等等。
+- 上部分 **Agent** ：负责从应用中，收集链路信息，发送给 SkyWalking OAP 服务器。目前支持 SkyWalking、Zikpin、Jaeger 等提供的 Tracing 数据信息。而我们目前采用的是，SkyWalking Agent 收集 SkyWalking Tracing 数据，传递给服务器。
+- 下部分 **SkyWalking OAP** ：负责接收 Agent 发送的 Tracing 数据信息，然后进行分析(Analysis Core) ，存储到外部存储器( Storage )，最终提供查询( Query )功能。
+- 右部分 **Storage** ：Tracing 数据存储。目前支持 ES、MySQL、Sharding Sphere、TiDB、H2 多种存储器。而我们目前采用的是 ES ，主要考虑是 SkyWalking 开发团队自己的生产环境采用 ES 为主。
+- 左部分 **SkyWalking UI** ：负责提供控台，查看链路等等。
 
 ## 1.4 官方文档
 
@@ -71,8 +70,8 @@ SkyWalking 整体架构如何？
 
 考虑到胖友使用 SkyWalking 的目的，是实现**分布式链路追踪**的功能，所以最好去了解下相关的知识。这里推荐阅读两篇文章：
 
-* [《OpenTracing 官方标准 —— 中文版》](https://github.com/opentracing-contrib/opentracing-specification-zh)
-* Google 论文 [《Dapper，大规模分布式系统的跟踪系统》](http://www.iocoder.cn/Fight/Dapper-translation/?self)
+- [《OpenTracing 官方标准 —— 中文版》](https://github.com/opentracing-contrib/opentracing-specification-zh)
+- Google 论文 [《Dapper，大规模分布式系统的跟踪系统》](http://www.iocoder.cn/Fight/Dapper-translation/?self)
 
 # 2. 搭建 SkyWalking 单机环境
 
@@ -80,11 +79,11 @@ SkyWalking 整体架构如何？
 
 ![SkyWalking 单机环境](0081Kckwly1gkl533oq0xj30ww0pomzt.jpg)
 
-* 第一步，搭建一个 Elasticsearch 服务。
-* 第二步，下载 SkyWalking 软件包。
-* 第三步，搭建一个 SkyWalking OAP 服务。
-* 第四步，启动一个 Spring Boot 应用，并配置 SkyWalking Agent。
-* 第五步，搭建一个 SkyWalking UI 服务。
+- 第一步，搭建一个 Elasticsearch 服务。
+- 第二步，下载 SkyWalking 软件包。
+- 第三步，搭建一个 SkyWalking OAP 服务。
+- 第四步，启动一个 Spring Boot 应用，并配置 SkyWalking Agent。
+- 第五步，搭建一个 SkyWalking UI 服务。
 
 仅仅五步，按照艿艿标题党的性格，应该给本文取个《10 分钟快速搭建 SkyWalking 服务》标题才对，哈哈哈。
 
@@ -102,8 +101,8 @@ SkyWalking 整体架构如何？
 
 对于 SkyWalking 的软件包，有两种方式获取：
 
-* 手动编译
-* 官方包
+- 手动编译
+- 官方包
 
 一般情况下，我们建议使用**官方包**。手动编译，更多是尝鲜或者等着急修复的 BUG 的版本。
 
@@ -151,9 +150,9 @@ $ ls -ls
 
 需要前置安装如下：
 
-* GIT
-* JDK 8+
-* Maven
+- GIT
+- JDK 8+
+- Maven
 
 **① 克隆代码**：
 
@@ -161,7 +160,7 @@ $ ls -ls
 $ git clone https://github.com/apache/skywalking.git
 ```
 
-* 因为网络问题，可能克隆会有点久。
+- 因为网络问题，可能克隆会有点久。
 
 **② 初始化子模块**：
 
@@ -177,7 +176,7 @@ $ git submodule update
 $ ./mvnw clean package -DskipTests
 ```
 
-* 编译过程，如果机子比较差，花费时间会比较久。
+- 编译过程，如果机子比较差，花费时间会比较久。
 
 **④ 查看编译结果**
 
@@ -236,22 +235,22 @@ storage:
 #    metadataQueryMaxSize: ${SW_STORAGE_H2_QUERY_MAX_SIZE:5000}
 ```
 
-* `storage.elasticsearch7` 配置项，设置使用 Elasticsearch 7.X 版本作为存储器。
-  * 这里，我们打开注释，并记得通过 `nameSpace` 设置 Elasticsearch 集群名。
-* `storage.elasticsearch` 配置项，设置使用 Elasticsearch 6.X 版本作为存储器。
-  * 这里，我们无需做任何改动。
-  * 如果胖友使用 Elasticsearch 6.X 版本作为存储器，记得设置这个配置项，而不是 `storage.elasticsearch7` 配置项。
-* `storage.h2` 配置项，设置使用 H2 作为存储器。
-  * 这里，我们需要手动注释掉，因为 H2 是默认配置的存储器。 
+- `storage.elasticsearch7` 配置项，设置使用 Elasticsearch 7.X 版本作为存储器。
+  - 这里，我们打开注释，并记得通过 `nameSpace` 设置 Elasticsearch 集群名。
+- `storage.elasticsearch` 配置项，设置使用 Elasticsearch 6.X 版本作为存储器。
+  - 这里，我们无需做任何改动。
+  - 如果胖友使用 Elasticsearch 6.X 版本作为存储器，记得设置这个配置项，而不是 `storage.elasticsearch7` 配置项。
+- `storage.h2` 配置项，设置使用 H2 作为存储器。
+  - 这里，我们需要手动注释掉，因为 H2 是默认配置的存储器。
 
 > 友情提示：如果配置文件，适合 SkyWalking 7.X 版本。
 
 ![配置文件](0081Kckwly1gkl534r2llj30pc0rs1kx.jpg)
 
-* 重点修改 `storage` 配置项，通过 `storage.selector` 配置项来设置具体使用的存储器。
-* `storage.elasticsearch` 配置项，设置使用 Elasticsearch 6.X 版本作为存储器。胖友可以主要修改 `nameSpace`、`clusterNodes` 两个配置项即可，设置使用的 Elasticsearch 的集群和命名空间。
-* `storage.elasticsearch7` 配置项，设置使用 Elasticsearch 7.X 版本作为存储器。
-* 还有 MySQL、H2、InfluxDB 等等存储器的配置可以选择，胖友自己根据需要去选择哈~
+- 重点修改 `storage` 配置项，通过 `storage.selector` 配置项来设置具体使用的存储器。
+- `storage.elasticsearch` 配置项，设置使用 Elasticsearch 6.X 版本作为存储器。胖友可以主要修改 `nameSpace`、`clusterNodes` 两个配置项即可，设置使用的 Elasticsearch 的集群和命名空间。
+- `storage.elasticsearch7` 配置项，设置使用 Elasticsearch 7.X 版本作为存储器。
+- 还有 MySQL、H2、InfluxDB 等等存储器的配置可以选择，胖友自己根据需要去选择哈~
 
 **② 启动 SkyWalking OAP 服务**
 
@@ -287,8 +286,8 @@ SkyWalking Web Application started successfully!
 
 如果想要修改 SkyWalking UI 服务的参数，可以编辑 `webapp/webapp.yml` 配置文件。例如说：
 
-* `server.port` ：SkyWalking UI 服务端口。
-* `collector.ribbon.listOfServers` ：SkyWalking OAP 服务地址数组。因为 SkyWalking UI 界面的数据，是通过请求 SkyWalking OAP 服务来获得的。
+- `server.port` ：SkyWalking UI 服务端口。
+- `collector.ribbon.listOfServers` ：SkyWalking OAP 服务地址数组。因为 SkyWalking UI 界面的数据，是通过请求 SkyWalking OAP 服务来获得的。
 
 **② 访问 UI 界面：**
 
@@ -319,7 +318,7 @@ total 35176
 35176 -rw-r--r--@  1 yunai  staff  18006420 Dec 24 14:12 skywalking-agent.jar # SkyWalking Agent
 ```
 
-* 关于 SkyWalking Agent 提供的插件列表，可以看看[《SkyWalking 文档 —— 插件支持列表》](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/service-agent/java-agent/Supported-list.md)。
+- 关于 SkyWalking Agent 提供的插件列表，可以看看[《SkyWalking 文档 —— 插件支持列表》](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/service-agent/java-agent/Supported-list.md)。
 
 因为艿艿是在本机测试，所以无需拷贝，SkyWalking Agent 目录是 `/Users/yunai/skywalking/apache-skywalking-apm-bin-es7/agent/`。
 
@@ -338,8 +337,8 @@ export JAVA_AGENT=-javaagent:/Users/yunai/skywalking/apache-skywalking-apm-bin-e
 java -jar $JAVA_AGENT -jar lab-39-demo-2.2.2.RELEASE.jar
 ```
 
-* 通过环境变量，进行配置。
-* 更多的变量，可以在 [`/work/programs/skywalking/apache-skywalking-apm-bin/agent/config/agent.config`](https://github.com/apache/skywalking/blob/master/apm-sniffer/config/agent.config) 查看。要注意，可能有些变量是被注释掉的，例如说 `SW_AGENT_SPAN_LIMIT` 对应的 `agent.span_limit_per_segment` 。
+- 通过环境变量，进行配置。
+- 更多的变量，可以在 [`/work/programs/skywalking/apache-skywalking-apm-bin/agent/config/agent.config`](https://github.com/apache/skywalking/blob/master/apm-sniffer/config/agent.config) 查看。要注意，可能有些变量是被注释掉的，例如说 `SW_AGENT_SPAN_LIMIT` 对应的 `agent.span_limit_per_segment` 。
 
 **③ 执行脚本：**
 
@@ -356,7 +355,7 @@ INFO 2020-01-02 19:29:29:402 main SnifferConfigInitializer : Config file found i
 DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient-0 ServiceAndEndpointRegisterClient : ServiceAndEndpointRegisterClient running, status:CONNECTED.
 ```
 
-* 这里，我们看到 `status:CONNECTED` ，表示 SkyWalking Agent 连接 SkyWalking OAP 服务成功。
+- 这里，我们看到 `status:CONNECTED` ，表示 SkyWalking Agent 连接 SkyWalking OAP 服务成功。
 
 **④ 简单测试**
 
@@ -368,15 +367,15 @@ DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient
 
 这里，我们会看到 SkyWalking 中非常重要的三个概念：
 
-* **服务(Service)** ：表示对请求提供相同行为的一系列或一组工作负载。在使用 Agent 或 SDK 的时候，你可以定义服务的名字。如果不定义的话，SkyWalking 将会使用你在平台（例如说 Istio）上定义的名字。
+- **服务(Service)** ：表示对请求提供相同行为的一系列或一组工作负载。在使用 Agent 或 SDK 的时候，你可以定义服务的名字。如果不定义的话，SkyWalking 将会使用你在平台（例如说 Istio）上定义的名字。
 
   > 这里，我们可以看到 Spring Boot 应用的**服务**为 `"demo-application"`，就是我们在环境变量 `SW_AGENT_NAME` 中所定义的。
 
-* **服务实例(Service Instance)** ：上述的一组工作负载中的每一个工作负载称为一个实例。就像 Kubernetes 中的 pods 一样, 服务实例未必就是操作系统上的一个进程。但当你在使用 Agent 的时候, 一个服务实例实际就是操作系统上的一个真实进程。
+- **服务实例(Service Instance)** ：上述的一组工作负载中的每一个工作负载称为一个实例。就像 Kubernetes 中的 pods 一样, 服务实例未必就是操作系统上的一个进程。但当你在使用 Agent 的时候, 一个服务实例实际就是操作系统上的一个真实进程。
 
   > 这里，我们可以看到 Spring Boot 应用的**服务**为 `{agent_name}-pid:{pid}@{hostname}`，由 Agent 自动生成。关于它，我们在[「5.1 hostname」](#)小节中，有进一步的讲解，胖友可以瞅瞅。
 
-* **端点(Endpoint)** ：对于特定服务所接收的请求路径, 如 HTTP 的 URI 路径和 gRPC 服务的类名 + 方法签名。
+- **端点(Endpoint)** ：对于特定服务所接收的请求路径, 如 HTTP 的 URI 路径和 gRPC 服务的类名 + 方法签名。
 
   > 这里，我们可以看到 Spring Boot 应用的一个**端点**，为 API 接口 `/demo/echo`。
 
@@ -396,11 +395,11 @@ DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient
 
 搭建一个 SkyWalking **集群**环境，步骤如下：
 
-* 第一步，搭建一个 Elasticsearch 服务的**集群**。
-* 第二步，搭建一个注册中心的**集群**。目前 SkyWalking 支持 Zookeeper、Kubernetes、Consul、Nacos 作为注册中心。
-* 第三步，搭建一个 SkyWalking OAP 服务的**集群**，同时参考[《SkyWalking 文档 —— 集群管理》](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/backend/backend-cluster.md)，将 SkyWalking OAP 服务注册到注册中心上。
-* 第四步，启动一个 Spring Boot 应用，并配置 SkyWalking Agent。另外，在设置 SkyWaling Agent 的 `SW_AGENT_COLLECTOR_BACKEND_SERVICES` 地址时，需要设置多个 SkyWalking OAP 服务的地址数组。
-* 第五步，搭建一个 SkyWalking UI 服务的**集群**，同时使用 Nginx 进行负载均衡。另外，在设置 SkyWalking UI 的 `collector.ribbon.listOfServers` 地址时，也需要设置多个 SkyWalking OAP 服务的地址数组。
+- 第一步，搭建一个 Elasticsearch 服务的**集群**。
+- 第二步，搭建一个注册中心的**集群**。目前 SkyWalking 支持 Zookeeper、Kubernetes、Consul、Nacos 作为注册中心。
+- 第三步，搭建一个 SkyWalking OAP 服务的**集群**，同时参考[《SkyWalking 文档 —— 集群管理》](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/backend/backend-cluster.md)，将 SkyWalking OAP 服务注册到注册中心上。
+- 第四步，启动一个 Spring Boot 应用，并配置 SkyWalking Agent。另外，在设置 SkyWaling Agent 的 `SW_AGENT_COLLECTOR_BACKEND_SERVICES` 地址时，需要设置多个 SkyWalking OAP 服务的地址数组。
+- 第五步，搭建一个 SkyWalking UI 服务的**集群**，同时使用 Nginx 进行负载均衡。另外，在设置 SkyWalking UI 的 `collector.ribbon.listOfServers` 地址时，也需要设置多个 SkyWalking OAP 服务的地址数组。
 
 😈 具体的搭建过程，并不复杂，胖友自己去尝试下。
 
@@ -414,11 +413,11 @@ DEBUG 2020-01-02 19:37:22:539 SkywalkingAgent-5-ServiceAndEndpointRegisterClient
 
 同时，我们自定义 [Webhook](https://github.com/SkyAPM/document-cn-translation-of-skywalking/blob/master/docs/zh/master/setup/backend/backend-alarm.md#webhook) ，对接 SkyWalking 的告警请求。而具体的邮箱、钉钉等告警方式，需要自己进行开发。至于自定义 WebHook 如何实现，可以参考：
 
-* Java 语言：
-  * [《基于 SkyWalking 的分布式跟踪系统 - 异常告警》](http://www.iocoder.cn/Fight/Distributed-tracking-system-based-on-SkyWalking-abnormal-alert/?self)
-* Go 语言：
-  * [dingding-notify-for-skywalking](https://github.com/yanmaipian/dingding-notify-for-skywalking)
-  * [infra-skywalking-webhook](https://github.com/weiqiang333/infra-skywalking-webhook)
+- Java 语言：
+  - [《基于 SkyWalking 的分布式跟踪系统 - 异常告警》](http://www.iocoder.cn/Fight/Distributed-tracking-system-based-on-SkyWalking-abnormal-alert/?self)
+- Go 语言：
+  - [dingding-notify-for-skywalking](https://github.com/yanmaipian/dingding-notify-for-skywalking)
+  - [infra-skywalking-webhook](https://github.com/weiqiang333/infra-skywalking-webhook)
 
 # 5. 注意事项
 
@@ -462,8 +461,8 @@ $ hostnamectl set-hostname pre-app-01 # 其中 pre-app-01 就是你希望的 hos
 
 想要进一步深入的胖友，也可以阅读如下资料：
 
-* [《SkyWalking 源码解析》](http://www.iocoder.cn/categories/SkyWalking/?self)
-* [《APM 巅峰对决：Apache Skywalking P.K. Pinpoint》](http://www.iocoder.cn/Fight/APM-Apache-Skywalking-and-Pinpoint/?self)
-* [《SkyWalking 官方 —— 博客合集》](http://skywalking.apache.org/zh/blog/)
+- [《SkyWalking 源码解析》](http://www.iocoder.cn/categories/SkyWalking/?self)
+- [《APM 巅峰对决：Apache Skywalking P.K. Pinpoint》](http://www.iocoder.cn/Fight/APM-Apache-Skywalking-and-Pinpoint/?self)
+- [《SkyWalking 官方 —— 博客合集》](http://skywalking.apache.org/zh/blog/)
 
 😈 最后弱弱的问一句，上完 SkyWaling 之后，有没发现自己系统各种地方慢慢慢！嘻嘻。

@@ -5,7 +5,7 @@ author: Han Liu, Sheng Wu
 description: "Introduce how to load balance the traffic between SkyWalking backend and agent through SkyWalking Satellite"
 
 tags:
-- Performance
+  - Performance
 ---
 
 ## Background
@@ -27,10 +27,10 @@ Based on the [gRPC official Load Balancing blog](https://grpc.io/blog/grpc-load-
 
 From the perspective of observability system architecture:
 
-|     | Pros | Cons |
-| --- | ---- | ---- |
-|Client-side|<li>High performance because of the elimination of extra hop</li> | <li>Complex client (cluster awareness, load balancing, health check, etc.)</li><li>Ensure each data source to be connected provides complex client capabilities</li> |
-|Proxy|<li>Simple Client</li>|<li>Higher latency</li>|
+|             | Pros                                                              | Cons                                                                                                                                                                 |
+| ----------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client-side | <li>High performance because of the elimination of extra hop</li> | <li>Complex client (cluster awareness, load balancing, health check, etc.)</li><li>Ensure each data source to be connected provides complex client capabilities</li> |
+| Proxy       | <li>Simple Client</li>                                            | <li>Higher latency</li>                                                                                                                                              |
 
 We choose Proxy mode for the following reasons:
 
@@ -112,10 +112,10 @@ There are three ways to solve this problem:
 2. **Cluster awareness**: The proxy has cluster awareness, and actively disconnects the connection when the load is unbalanced to allow the client to re-pick up the proxy.
 3. **Resource limit+HPA**: Restrict the connection resource situation of each proxy, and no longer accept new connections when the resource limit is reached. And use the HPA mechanism of Kubernetes to dynamically scale out the number of the proxy.
 
-|     | Connection management | Cluster awareness | Resource Limit+HPA |
-| --- | ---- | ---- | ---- |
-|Pros|<li>Simple to use</li> | <li>Ensure that the number of connections in each proxy is relatively </li> | <li>Simple to use</li> |
-|Cons|<li>Each client needs to ensure that data is not lost</li><li>The client is required to accept GOWAY responses</li>|<li>May cause a sudden increase in traffic on some nodes</li><li>Each client needs to ensure that data is not lost </li>|<li>Traffic will not be particularly balanced in each instance</li>|
+|      | Connection management                                                                                               | Cluster awareness                                                                                                        | Resource Limit+HPA                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Pros | <li>Simple to use</li>                                                                                              | <li>Ensure that the number of connections in each proxy is relatively </li>                                              | <li>Simple to use</li>                                              |
+| Cons | <li>Each client needs to ensure that data is not lost</li><li>The client is required to accept GOWAY responses</li> | <li>May cause a sudden increase in traffic on some nodes</li><li>Each client needs to ensure that data is not lost </li> | <li>Traffic will not be particularly balanced in each instance</li> |
 
 We choose Limit+HPA for these reasons:
 
@@ -149,7 +149,7 @@ As shown below, use the dotted line to divide the two parts. HPA uses SWCK Adapt
 In this section, we will demonstrate two cases:
 
 1. SkyWalking Scaling: After SkyWalking OAP scaling, the traffic would auto load balancing through Satellite.
-2. Satellite Scaling: Satellite’s own traffic load balancing. 
+2. Satellite Scaling: Satellite’s own traffic load balancing.
 
 NOTE: All commands could be accessed through [GitHub](https://github.com/mrproliu/sw-satellite-demo-scripts/tree/1180c23e8f3bb36778307f9ae15395274ca039b3).
 
@@ -170,7 +170,7 @@ Istio provides a very convenient way to configure the Envoy proxy and enable the
 ```shell
 # install istioctl
 export ISTIO_VERSION=1.12.0
-curl -L https://istio.io/downloadIstio | sh - 
+curl -L https://istio.io/downloadIstio | sh -
 sudo mv $PWD/istio-$ISTIO_VERSION/bin/istioctl /usr/local/bin/
 
 # install istio
@@ -261,16 +261,19 @@ After we have completed the SkyWalking Scaling, we would carry out the Satellite
 SWCK provides an adapter to implement the Kubernetes external metrics to adapt the HPA through reading the metrics in SkyWalking OAP. We expose the metrics service in Satellite to OAP and configure HPA Resource to auto-scaling the Satellite.
 
 Install the SWCK adapter into the Kubernetes environment:
+
 ```shell
 kubectl apply -f skywalking-swck/config/adapter-bundle.yaml
 ```
 
 Create the HPA resource, and limit each Satellite to handle a maximum of 10 connections:
+
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/mrproliu/sw-satellite-demo-scripts/5821a909b647f7c8f99c70378e197630836f45f7/resources/satellite-hpa.yaml
 ```
 
 Then, you could see we have 9 connections in one satellite. One envoy proxy may establish multiple connections to the satellite.
+
 ```shell
 $ kubectl get HorizontalPodAutoscaler -n skywalking-system
 NAME       REFERENCE                                TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
@@ -280,13 +283,14 @@ hpa-demo   Deployment/skywalking-system-satellite   9/10      1         3       
 #### Scaling Application
 
 The scaling application could establish more connections to the satellite, to verify whether the HPA is in effect.
+
 ```shell
 kubectl scale --replicas=3 deployment/productpage-v1 deployment/details-v1
 ```
 
 #### Done!
 
-By default, Satellite will deploy a single instance and a single instance will only accept 11 connections. HPA resources limit one Satellite to handle 10 connections and use a stabilization window to make Satellite stable scaling up. In this case, we deploy the Bookinfo application in 10+ instances after scaling, which means that 10+ connections will be established to the Satellite. 
+By default, Satellite will deploy a single instance and a single instance will only accept 11 connections. HPA resources limit one Satellite to handle 10 connections and use a stabilization window to make Satellite stable scaling up. In this case, we deploy the Bookinfo application in 10+ instances after scaling, which means that 10+ connections will be established to the Satellite.
 
 So after HPA resources are running, the Satellite would be automatically scaled up to 2 instances. You can learn about the calculation algorithm of replicas through the [official documentation](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#algorithm-details). Run the following command to view the running status:
 
@@ -305,4 +309,5 @@ By observing the “number of connections” metric, we would be able to see tha
 ```shell
 swctl metrics linear --name satellite_service_grpc_connect_count --service-name satellite::satellite-service
 ```
+
 ![](satellite-connection-metrics.png)

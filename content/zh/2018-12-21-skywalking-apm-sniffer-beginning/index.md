@@ -4,8 +4,8 @@ date: 2018-12-21
 author: 赵禹光
 description: SkyWalking apm-sniffer 插件编写实践 与 ByteBuddy实现类转化的实践。
 zh_tags:
-- User Manual
-- Development
+  - User Manual
+  - Development
 ---
 
 ## 导读
@@ -71,7 +71,7 @@ Can-Redefine-Classes: true
 
 ```xml
 dependencies
-    +net.bytebuddy.byte-buddy 
+    +net.bytebuddy.byte-buddy
     +javax.servlet.javax.servlet-api *scope=provided
 plugins
     +maven-jar-plugin *manifestFile=src/main/resources/META-INF/MANIFEST.MF

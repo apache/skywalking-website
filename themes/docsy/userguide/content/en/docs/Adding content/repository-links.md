@@ -8,9 +8,9 @@ description: >
 
 The Docsy [docs and blog layouts](/docs/adding-content/content/#adding-docs-and-blog-posts) include links for readers to edit the page or create issues for your docs or project via your site's source repository. The current generated links for each docs or blog page are:
 
-* **Edit this page**: Brings the user to an editable version of the page content in their fork (if available) of your docs repo. If the user doesn't have a current fork of your docs repo, they are invited to create one before making their edit. The user can then create a pull request for your docs.
-* **Create documentation issue**: Brings the user to a new issue form in your docs repo with the name of the current page as the issue's title.
-* **Create project issue** (optional): Brings the user to a new issue form in your project repo. This can be useful if you have separate project and docs repos and your users want to file issues against the project feature being discussed rather than your docs.
+- **Edit this page**: Brings the user to an editable version of the page content in their fork (if available) of your docs repo. If the user doesn't have a current fork of your docs repo, they are invited to create one before making their edit. The user can then create a pull request for your docs.
+- **Create documentation issue**: Brings the user to a new issue form in your docs repo with the name of the current page as the issue's title.
+- **Create project issue** (optional): Brings the user to a new issue form in your project repo. This can be useful if you have separate project and docs repos and your users want to file issues against the project feature being discussed rather than your docs.
 
 This page shows you how to configure these links using your `config.toml` file.
 
@@ -43,5 +43,3 @@ Specify a value here if you have a separate project repo and you'd like your use
 ```toml
 github_project_repo = "https://github.com/google/docsy"
 ```
-
-

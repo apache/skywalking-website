@@ -4,8 +4,8 @@ date: 2020-10-29
 author: Zhenxu Ke, Sheng Wu, Hongtao Gao, and Tevah Platt. tetrate.io
 description: "Browser Side Monitoring; Query Traces by Tags; Meter Analysis Language; Composite Alert Rules"
 tags:
-- Release Blog
-- Browser
+  - Release Blog
+  - Browser
 ---
 
 ![](0081Kckwly1gkl5m6kv3uj31lb0u0jum.jpg)
@@ -26,11 +26,9 @@ APM helps SRE and Engineering teams to diagnose system failures, or optimize the
 
 In 8.2.0, SkyWalking extends its monitoring boundary to the browser side, e.g., Chrome, or the network between Chrome and the backend service, or the codes running in the browser. With this, not only can we monitor the backend services and requests sent by the browser as usual, but also the front end rendering speed, error logs, etc., which are the most efficient metrics for capturing the experiences of our end users. (This does not currently extend to IoT devices, but this feature moves SkyWalking a step in that direction).
 
-
 ![SkyWalking 8.2.0 Browser Side Monitoring: Overview](0081Kckwly1gkl5m71k6bj30zk0m8tdb.jpg)
 
 What's more, SkyWalking browser monitoring also provides data about how the users use products, such as PV(page views), UV(unique visitors), top N PV(page views), etc., which can give a product team clues for optimizing their products.
-
 
 ![SkyWalking 8.2.0 Browser Side Monitoring: Pages](0081Kckwly1gkl5m5tld9j30zk0m843n.jpg)
 
@@ -50,7 +48,7 @@ In 8.2.0, users can now configure composite alert rules, where composite rules t
 
 Common scenarios like `successful rate < 90% but there are only 1~2 requests` can now be resolved by a composite rule, such as `traffic(calls per minute) > n && successful rate < m%`.
 
-## Other Notable Enhancements 
+## Other Notable Enhancements
 
 1.  The agent toolkit exposes some APIs for users to send customizable metrics.
 1.  The agent `exclude_plugins` allows you to exclude some plugins; `mount` enables you to load a new set of plugins.
@@ -61,4 +59,3 @@ Common scenarios like `successful rate < 90% but there are only 1~2 requests` ca
 
 - Read more about the [SkyWalking 8.2 release highlights](https://github.com/apache/skywalking/blob/v8.2.0/CHANGES.md).
 - Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
-

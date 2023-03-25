@@ -8,13 +8,15 @@ description: "Release Apache SkyWalking Python 0.3.0."
 SkyWalking Python 0.3.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - New plugins
+
   - Urllib3 Plugin (#69)
-  - Elasticsearch  Plugin (#64)
+  - Elasticsearch Plugin (#64)
   - PyMongo Plugin (#60)
   - Rabbitmq Plugin (#53)
   - Make plugin compatible with Django (#52)
 
 - API
+
   - Add process propagation (#67)
   - Add tags to decorators (#65)
   - Add Check version of packages when install plugins (#63)

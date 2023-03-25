@@ -4,7 +4,7 @@ date: 2021-02-21
 author: "[Zhenxu Ke](http://github.com/kezhenxu94) and Hongtao Gao. tetrate.io"
 description: In this tutorial, you can learn how to use Apache SkyWalking for service mesh observability, in Kubernetes and / or in virtual machines.
 tags:
-- Service Mesh
+  - Service Mesh
 ---
 
 ![](stone-arch.jpg)
@@ -81,18 +81,18 @@ Make sure to init the `gcloud` SDK properly before moving on. Modify the `GCP_PR
 project name. Most of the other variables should be OK to work if you keep them intact. If you would like to
 use `ISTIO_VERSION` >/= 1.8.0, please make sure [this patch](https://github.com/istio/istio/pull/28956) is included.
 
-* Prepare Kubernetes cluster and VM instances
+- Prepare Kubernetes cluster and VM instances
   [`00-create-cluster-and-vms.sh`](https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/00-create-cluster-and-vms.sh)
   creates a new GKE cluster and 2 VM instances that will be used through the entire tutorial, and sets up some necessary
   firewall rules for them to communicate with each other.
-* Install Istio and SkyWalking
+- Install Istio and SkyWalking
   [`01a-install-istio.sh`](https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/01a-install-istio.sh)
   installs Istio Operator with spec `resources/vmintegration.yaml`. In the YAML file, we enable the `meshExpansion` that
   supports VM in mesh. We also enable the Envoy access log service and specify the
   address `skywalking-oap.istio-system.svc.cluster.local:11800` to which Envoy emits the access logs.
   [`01b-install-skywalking.sh`](https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/01b-install-skywalking.sh)
   installs Apache SkyWalking and sets the analyzer to `mx-mesh`.
-* Create files to initialize the VM
+- Create files to initialize the VM
   [`02-create-files-to-transfer-to-vm.sh`](https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/02-create-files-to-transfer-to-vm.sh)
   creates necessary files that will be used to initialize the VMs.
   [`03-copy-work-files-to-vm.sh`](https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/03-copy-work-files-to-vm.sh)
@@ -119,7 +119,7 @@ use `ISTIO_VERSION` >/= 1.8.0, please make sure [this patch](https://github.com/
   with `.svc.cluster.local` to Istio service IP, so that you are able to access the Kubernetes services in the VM by
   fully qualified domain name (FQDN) such as `httpbin.default.svc.cluster.local`.
 
-* Deploy demo application Because we want to deploy `CheckoutService` and `PaymentService` manually on
+- Deploy demo application Because we want to deploy `CheckoutService` and `PaymentService` manually on
   VM, `resources/google-demo.yaml` removes the two services
   from [the original YAML](https://github.com/GoogleCloudPlatform/microservices-demo/blob/master/release/kubernetes-manifests.yaml)
   .
@@ -127,7 +127,7 @@ use `ISTIO_VERSION` >/= 1.8.0, please make sure [this patch](https://github.com/
   deploys the other services on Kubernetes. Then log into the 2 VMs, run `~/work/deploy-checkoutservice.sh`
   and `~/work/deploy-paymentservice.sh` respectively to deploy `CheckoutService` and `PaymentService`.
 
-* Register VMs to Istio Services on VMs can access the services on Kubernetes by FQDN, but that’s not the case when the
+- Register VMs to Istio Services on VMs can access the services on Kubernetes by FQDN, but that’s not the case when the
   Kubernetes services want to talk to the VM services. The mesh has no idea where to forward the requests such
   as `checkoutservice.default.svc.cluster.local` because `checkoutservice` is isolated in the VM. Therefore, we need to
   register the services to the
@@ -160,14 +160,14 @@ Navigate the browser to http://localhost:8080 . The metrics, topology should be 
 
 If you face any trouble when walking through the steps, here are some common problems and possible solutions:
 
-* VM service cannot access Kubernetes services? It’s likely the DNS on the VM doesn’t correctly resolve the fully
+- VM service cannot access Kubernetes services? It’s likely the DNS on the VM doesn’t correctly resolve the fully
   qualified domain names. Try to verify that with `nslookup istiod.istio-system.svc.cluster.local`. If it doesn’t
   resolve to the Kubernetes CIDR address, recheck the step in `prep-checkoutservice.sh` and `prep-paymentservice.sh`. If
   the DNS works correctly, try to verify that Envoy has fetched the upstream clusters from the control plane
   with `curl http://localhost:15000/clusters`. If it doesn’t contain the target service,
   recheck `prep-checkoutservice.sh`.
 
-* Services are normal but nothing on SkyWalking WebUI? Check the SkyWalking OAP logs
+- Services are normal but nothing on SkyWalking WebUI? Check the SkyWalking OAP logs
   via `kubectl -n istio-system logs -f $(kubectl get pod -A -l "app=skywalking,release=skywalking,component=oap" -o name)`
   and WebUI logs
   via `kubectl -n istio-system logs -f $(kubectl get pod -A -l "app=skywalking,release=skywalking,component=ui" -o name)`

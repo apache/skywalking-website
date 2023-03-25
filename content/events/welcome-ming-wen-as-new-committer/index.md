@@ -5,4 +5,3 @@ author: SkyWalking Team
 ---
 
 Based on his continuous contributions, Ming Wen (a.k.a [moonming](https://github.com/moonming)) has been voted as a new committer.
-

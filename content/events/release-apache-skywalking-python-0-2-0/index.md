@@ -7,6 +7,7 @@ author: SkyWalking Team
 SkyWalking Python 0.2.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Plugins:
+
   - Kafka Plugin (#50)
   - Tornado Plugin (#48)
   - Redis Plugin (#44)
@@ -15,6 +16,7 @@ SkyWalking Python 0.2.0 is released. Go to [downloads](/downloads) page to find 
   - Flask plugin (#31)
 
 - API
+
   - Add `ignore_suffix` Config (#40)
   - Add missing `log` method and simplify test codes (#34)
   - Add content equality of SegmentRef (#30)

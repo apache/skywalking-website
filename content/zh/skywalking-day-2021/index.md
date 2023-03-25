@@ -4,8 +4,8 @@ date: 2021-07-06
 author: "SKyWalking"
 description: "SkyWalking Day 2021 讲师视频，请到 B 站观看。"
 zh_tags:
-- Video
-- Conference
+  - Video
+  - Conference
 ---
 
 时间：2021 年 6 月 26 日
@@ -63,7 +63,7 @@ Apache SkyWalking 对前端进行了监控与跟踪，分别有 Metric, Log, Tra
 通过本次分享，观众可以：
 
 1. 为什么国内一些程序员会对开源产生误解？
-2. 了解 “开源≠自由≠非商业” 的来龙去脉。
+2. 了解 “开源 ≠ 自由 ≠ 非商业” 的来龙去脉。
 3. 一名普通工程师，如何高效地向开源社区做贡献？
 
 #### [可观测性技术生态和 OpenTelemetry 原理及实践](https://www.bilibili.com/video/BV1NU4y1V7LX)

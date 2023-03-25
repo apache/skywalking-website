@@ -4,8 +4,8 @@ date: 2022-09-27
 author: "Han Liu, Sheng Wu"
 description: "This article will show how to use Apache SkyWalking with eBPF to make network troubleshooting easier in a service mesh environment."
 tags:
-- eBPF
-- Performance
+  - eBPF
+  - Performance
 ---
 
 ## Background
@@ -16,8 +16,8 @@ Apache SkyWalking is an application performance monitor tool for distributed sys
 
 However, when troubleshooting network issues in SkyWalking's service topology, it is not always easy to pinpoint where the error actually is. There are two reasons for the difficulty:
 
--   **Traffic through the Envoy sidecar is not easy to observe.** Data from Envoy's [Access Log Service (ALS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/accesslog/v3/als.proto) shows traffic between services (sidecar-to-sidecar), but not metrics on communication between the Envoy sidecar and the service it proxies. Without that information, it is more difficult to understand the impact of the sidecar.
--   **There is a lack of data from transport layer (OSI Layer 4) communication.** Since services generally use application layer (OSI Layer 7) protocols such as HTTP, observability data is generally restricted to application layer communication. However, the root cause may actually be in the transport layer, which is typically opaque to observability tools.
+- **Traffic through the Envoy sidecar is not easy to observe.** Data from Envoy's [Access Log Service (ALS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/accesslog/v3/als.proto) shows traffic between services (sidecar-to-sidecar), but not metrics on communication between the Envoy sidecar and the service it proxies. Without that information, it is more difficult to understand the impact of the sidecar.
+- **There is a lack of data from transport layer (OSI Layer 4) communication.** Since services generally use application layer (OSI Layer 7) protocols such as HTTP, observability data is generally restricted to application layer communication. However, the root cause may actually be in the transport layer, which is typically opaque to observability tools.
 
 Access to metrics from Envoy-to-service and transport layer communication can make it easier to diagnose service issues. To this end, SkyWalking needs to collect and analyze transport layer metrics between processes inside Kubernetes pods - a task well suited to eBPF. We investigated using eBPF for this purpose and present our results and
 a demo below.
@@ -44,10 +44,10 @@ Our hypothesis is that eBPF can monitor the network. There are two ways
 to implement the interception: **User space (uprobe)** or **Kernel space
 (kprobe)**. The table below summarizes the differences.
 
-|        | Pros                                                         | Cons                                                         |
-| ------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| uprobe | •	Get more application-related contexts, such as whether the current request is HTTP or HTTPS.</br>•	Requests and responses can be intercepted by a single method | •	Data structures can be unstable, so it is more difficult to get the desired data. </br> •	Implementation may differ between language/library versions. </br> •	Does not work in applications without [symbol tables](https://en.wikipedia.org/wiki/Symbol_table). |
-| kprobe | •	Available for all languages. </br> •	The data structure and methods are stable and do not require much adaptation. </br> •	Easier correlation with underlying data, such as getting the destination address of TCP, OSI Layer 4 protocol metrics, etc. | •	A single request and response may be split into multiple probes. </br> •	Contextual information is not easy to get for stateful requests. For example header compression in HTTP/2. |
+|        | Pros                                                                                                                                                                                                                                                     | Cons                                                                                                                                                                                                                                                                |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| uprobe | • Get more application-related contexts, such as whether the current request is HTTP or HTTPS.</br>• Requests and responses can be intercepted by a single method                                                                                        | • Data structures can be unstable, so it is more difficult to get the desired data. </br> • Implementation may differ between language/library versions. </br> • Does not work in applications without [symbol tables](https://en.wikipedia.org/wiki/Symbol_table). |
+| kprobe | • Available for all languages. </br> • The data structure and methods are stable and do not require much adaptation. </br> • Easier correlation with underlying data, such as getting the destination address of TCP, OSI Layer 4 protocol metrics, etc. | • A single request and response may be split into multiple probes. </br> • Contextual information is not easy to get for stateful requests. For example header compression in HTTP/2.                                                                               |
 
 For the general network performance monitor, we chose to use the kprobe (intercept the syscalls) for the following reasons:
 
@@ -92,7 +92,7 @@ whole lifecycle of the connection:
 
 ![Figure 1](f1.svg)
 
-***Figure 1***
+**_Figure 1_**
 
 ### Protocol and TLS
 
@@ -100,7 +100,7 @@ The previous section described how to analyze connections using send or receive 
 
 ![Figure 2](f2.svg)
 
-***Figure 2***
+**_Figure 2_**
 
 When TLS is in use, the Linux Kernel transmits data encrypted in user space. In the figure above, The application usually transmits SSL data through a third-party library (such as OpenSSL). For this case, the Linux API can only get the encrypted data, so it cannot recognize any higher layer protocol. To decrypt inside eBPF, we need to follow these steps:
 
@@ -127,7 +127,7 @@ In Figure 3 below, all nodes within the hexagon are the internal process of a Po
 
 ![Figure 3](f3.jpg)
 
-***Figure 3***
+**_Figure 3_**
 
 ### Metrics
 
@@ -137,27 +137,27 @@ The diagram below (Figure 4) shows the metrics of network monitoring between two
 
 ![Figure 4](f4.jpg)
 
-***Figure 4***
+**_Figure 4_**
 
 The following two metric types are available:
 
 1.  **Counter:** Records the total number of data in a certain period. Each counter contains the following data:
-    a.  **Count:** Execution count.
-    b.  **Bytes:** Packet size in bytes.
-    c.  **Execution time:** Execution duration.
+    a. **Count:** Execution count.
+    b. **Bytes:** Packet size in bytes.
+    c. **Execution time:** Execution duration.
 2.  **Histogram:** Records the distribution of data in the buckets.
 
 Based on the above data types, the following metrics are exposed:
 
-| Name       | Type                  | Unit        | Description                                                  |
-| ---------- | --------------------- | ----------- | ------------------------------------------------------------ |
-| Write      | Counter and histogram | Millisecond | The socket write counter.                                    |
-| Read       | Counter and histogram | Millisecond | The socket read counter.                                     |
-| Write RTT  | Counter and histogram | Microsecond | The socket write round trip time (RTT) counter.              |
+| Name       | Type                  | Unit        | Description                                                   |
+| ---------- | --------------------- | ----------- | ------------------------------------------------------------- |
+| Write      | Counter and histogram | Millisecond | The socket write counter.                                     |
+| Read       | Counter and histogram | Millisecond | The socket read counter.                                      |
+| Write RTT  | Counter and histogram | Microsecond | The socket write round trip time (RTT) counter.               |
 | Connect    | Counter and histogram | Millisecond | The socket connect/accept with another server/client counter. |
-| Close      | Counter and histogram | Millisecond | The socket with other socket counter.                        |
-| Retransmit | Counter               | Millisecond | The socket retransmit package counter.                       |
-| Drop       | Counter               | Millisecond | The socket drop package counter.                             |
+| Close      | Counter and histogram | Millisecond | The socket with other socket counter.                         |
+| Retransmit | Counter               | Millisecond | The socket retransmit package counter.                        |
+| Drop       | Counter               | Millisecond | The socket drop package counter.                              |
 
 ## Demo
 
@@ -241,7 +241,7 @@ In the figure below, we have selected an instance with a list of tasks in the ne
 
 ![Figure 5](f5.jpg)
 
-***Figure 5***
+**_Figure 5_**
 
 ### Done!
 
@@ -249,13 +249,13 @@ After a few seconds, you will see the process topology appear on the right side 
 
 ![Figure 6](f6.jpg)
 
-***Figure 6***
+**_Figure 6_**
 
 When you click on the line between processes, you can see the TCP metrics between the two processes.
 
 ![Figure 7](f7.jpg)
 
-***Figure 7***
+**_Figure 7_**
 
 ## Conclusion
 

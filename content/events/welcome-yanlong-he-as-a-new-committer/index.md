@@ -5,4 +5,3 @@ author: SkyWalking Team
 ---
 
 Based on his contributions to the skywalking PHP project, Yanlong He (a.k.a [heyanlong](https://github.com/heyanlong) has been accepted as a new committer.
-

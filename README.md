@@ -42,19 +42,18 @@ description: This is description.
 # buttonText: Go
 # img: /images/skywalking_200x200.png
 ---
-
 Content
 ```
 
 If you want to display the summary in the popover in the lower right corner, you need to configure a parameter `endTime`. The parameters are as follows.
 
-|Parameter|Description|Required|Default|
-|----|----|----|----|
-|endTime|End time|true|-|
-|startTime|Start time|false|Current time|
-|buttonText|Button text|false|Read more|
-|img|The illustration|false|/images/skywalking_200x200.png|
-|poster|The poster|false|-|
+| Parameter  | Description      | Required | Default                        |
+| ---------- | ---------------- | -------- | ------------------------------ |
+| endTime    | End time         | true     | -                              |
+| startTime  | Start time       | false    | Current time                   |
+| buttonText | Button text      | false    | Read more                      |
+| img        | The illustration | false    | /images/skywalking_200x200.png |
+| poster     | The poster       | false    | -                              |
 
 ### Blog
 
@@ -67,7 +66,6 @@ date: 2020-04-28
 author: Author
 description: This is description.
 ---
-
 Content
 ```
 
@@ -91,7 +89,6 @@ date: 2020-04-28
 author: 作者姓名
 description: 博客摘要
 ---
-
 博客正文。
 ```
 
@@ -101,7 +98,7 @@ All user information are in `/data/users.yml`. Users are encouraged to add thems
 
 ### Links
 
-Configure in the `config.toml` file. 
+Configure in the `config.toml` file.
 
 ### Website Configuration
 

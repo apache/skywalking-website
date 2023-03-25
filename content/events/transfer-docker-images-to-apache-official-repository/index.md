@@ -6,10 +6,10 @@ author: SkyWalking Team
 
 According to Apache Software Foundation branding policy all docker images of Apache Skywalking should be
 transferred from [skywalking](https://hub.docker.com/u/skywalking) to [apache](https://hub.docker.com/u/apache) with
-a prefix *skywalking-*. The transfer details are as follows
+a prefix _skywalking-_. The transfer details are as follows
 
- - skywalking/base -> apache/skywalking-base
- - skywalking/oap -> apache/skywalking-oap-server
- - skywalking/ui -> apache/skywalking-ui
+- skywalking/base -> apache/skywalking-base
+- skywalking/oap -> apache/skywalking-oap-server
+- skywalking/ui -> apache/skywalking-ui
 
- All of repositories in [skywalking](https://hub.docker.com/u/skywalking) will be **removed after one week**.
+All of repositories in [skywalking](https://hub.docker.com/u/skywalking) will be **removed after one week**.

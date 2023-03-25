@@ -4,13 +4,13 @@ date: 2020-04-13
 author: "Sheng Wu, Adrian Cole and Han Liu"
 description: "This post introduces a way to automatically profile code in production with Apache SkyWalking. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis."
 tags:
-- Profiling
-- Java
-- Agent
-- Tracing
+  - Profiling
+  - Java
+  - Agent
+  - Tracing
 ---
 
-*This post originally appears on [The New Stack](https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/)*
+_This post originally appears on [The New Stack](https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/)_
 
 This post introduces a way to automatically profile code in production with [Apache SkyWalking](https://skywalking.apache.org). We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis.
 
@@ -26,7 +26,7 @@ Have you been surprised to find a span duration longer than expected, but no ins
 2. The process of ad-hoc (manual) instrumentation usually implies at least a restart. Trace instrumentation libraries, like Zipkin Brave, are integrated into many framework libraries. To instrument a method’s performance typically implies changing code, even if only an annotation. This implies a re-deploy. Even if you have the way to do auto instrumentation, like Apache SkyWalking, you still need to change the configuration and reboot the app. Otherwise, you take the risk of GC caused by hot dynamic instrumentation.
 3. Injecting instrumentation into an uninstrumented third party library is hard and complex. It takes more time and many won’t know how to do this.
 4. Usually, we don’t have code line numbers in the distributed tracing. Particularly when lambdas are in use, it can be difficult to identify the line of code associated with a span.
-Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.
+   Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.
 
 Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.
 
@@ -59,10 +59,10 @@ Distributed profiling is built-into Apache SkyWalking application performance mo
 
 ```
 final CountDownLatchcountDownLatch= new CountDownLatch(2);
- 
+
 threadPool.submit(new Task1(countDownLatch));
 threadPool.submit(new Task2(countDownLatch));
- 
+
 try {
    countDownLatch.await(500, TimeUnit.MILLISECONDS);
 } catch (InterruptedExceptione) {
@@ -100,8 +100,8 @@ SkyWalking 7 has just been released. You can contact the project team through th
 - Follow [SkyWalking twitter](https://twitter.com/ASFSkyWalking).
 - Subscribe mailing list: [dev@skywalking.apache.org](mailto:dev@skywalking.apache.org). Send to [dev-subscribe@kywalking.apache.org](mailto:dev-subscribe@kywalking.apache.org) to subscribe to the mail list.
 
-*Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.*
+_Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments._
 
-*Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin*
+_Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin_
 
-*Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer*
+_Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer_

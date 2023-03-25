@@ -4,12 +4,12 @@ date: 2022-01-28
 author: Apache SkyWalking
 description: "Volcengine Inc.(火山引擎) Application Performance Monitoring - Distributed Tracing (应用性能监控全链路版) redistributed Apache SkyWalking illegally. They don't follow the Apache 2.0 License requirements"
 tags:
-- License
+  - License
 ---
 
 [Apache SkyWalking](https://skywalking.apache.org) is an open-source APM for a distributed system, Apache Software Foundation top-level project.
 
-On Jan. 28th, we received a License violation report from one of the committers (anonymously). They have a cloud service called [Application Performance Monitoring - Distributed Tracing (应用性能监控全链路版)](https://www.volcengine.com/docs/6431/69088). 
+On Jan. 28th, we received a License violation report from one of the committers (anonymously). They have a cloud service called [Application Performance Monitoring - Distributed Tracing (应用性能监控全链路版)](https://www.volcengine.com/docs/6431/69088).
 At the [Java service monitoring section](https://www.volcengine.com/docs/6431/81123), it provides this agent download link
 
 > wget https://datarangers.com.cn/apminsight/repo/v2/download/java-agent/apminsight-java-agent_latest.tar.gz
@@ -37,7 +37,7 @@ This is the Volcengine package hierarchy structure, and check the [SkyWalking's 
 
 ![](code-hierarchy.png)
 
-___
+---
 
 **Volcengine Inc.'s team changed all package names, removed the Apache Software Foundation's header, and don't keep Apache Software Foundation and Apache SkyWalking's LICENSE and NOTICE file in their redistribution**.
 
@@ -65,13 +65,15 @@ On Jan. 30th night, UTC+8, 2022. We received a response from Volcengine's APMPlu
 
 We have updated the status to the PMC mail list. This license violation issue has been resolved for now.
 
-___
+---
+
 ## Appendix
-###  Inquiries of committers
+
+### Inquiries of committers
 
 **Q**: I hope Volcengine Inc. can give a reason for this license issue, not just an afterthought PR. This will not only let us know where the issue is but also avoid similar problems in the future.
 
-**A(apmplus <apmplus@volcengine.com>)**: 
+**A(apmplus <apmplus@volcengine.com>)**:
 
 ```
 The developers neglected this repository during submitting compliance

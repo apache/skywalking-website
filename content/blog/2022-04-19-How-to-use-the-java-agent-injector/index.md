@@ -5,7 +5,7 @@ author: "[Ye Cao](https://github.com/dashanji), Apache SkyWalking Committer; [Ho
 description: "Introduce how to quickly get started the java agent injector based on SWCK"
 
 tags:
-- User Manual
+  - User Manual
 ---
 
 ### content:
@@ -17,11 +17,7 @@ tags:
 5. [Verify the injector](#5.-Verify-the-injector)
 6. [Concluding remarks](#6.-Concluding-remarks)
 
-
-
-## 1. Introduction 
-
-
+## 1. Introduction
 
 ### 1.1 What's SWCK?
 
@@ -36,13 +32,9 @@ In fact, SWCK is an operator developed based on [kubebuilder](https://book.kubeb
 - [Satellite](https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#satellite)
 - [Fetcher](https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#fetcher)
 
-
-
 ### 1.2 What's the java agent injector?
 
 For a java application, users need to inject the java agent into the application to get metadata and send it to the SkyWalking backend. To make users use the java agent more natively, we propose the java agent injector to inject the java agent sidecar into a pod. The java agent injector is actually a [Kubernetes Mutation Webhook Controller](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/). The controller intercepts pod events and applies mutations to the pod if annotations exist within the request.
-
-
 
 ## 2. Features
 
@@ -52,13 +44,9 @@ For a java application, users need to inject the java agent into the application
 
 - **Observability.** For each injected java agent, we provide [CustomDefinitionResources](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/) called `JavaAgent` to observe the final agent configuration. Please refer to [javaagent](https://github.com/apache/skywalking-swck/blob/master/docs/javaagent.md) to get more details.
 
-
-
 ## 3. Install SWCK
 
 In the next steps, we will show how to build a stand-alone Kubernetes cluster and deploy the 0.6.1 version of SWCK on the platform.
-
-
 
 ### 3.1 Tool Preparation
 
@@ -66,8 +54,6 @@ Firstly, you need to install some tools as follows:
 
 1. [kind](http://kind.sigs.k8s.io), which is used to create a stand-alone Kubernetes cluster.
 2. [kubectl](https://kubernetes.io/docs/tasks/tools/), which is used to communicate with the Kubernetes cluster.
-
-
 
 ### 3.2 Install stand-alone Kubernetes cluster
 
@@ -82,7 +68,7 @@ $ kind create cluster --image=kindest/node:v1.19.1
 After creating a cluster, you can get the pods as below.
 
 ```sh
-$ kubectl get pod -A                          
+$ kubectl get pod -A
 NAMESPACE            NAME                                         READY   STATUS    RESTARTS   AGE
 kube-system          coredns-f9fd979d6-57xpc                      1/1     Running   0          7m16s
 kube-system          coredns-f9fd979d6-8zj8h                      1/1     Running   0          7m16s
@@ -94,8 +80,6 @@ kube-system          kube-proxy-6zbtb                             1/1     Runnin
 kube-system          kube-scheduler-kind-control-plane            1/1     Running   0          7m23s
 local-path-storage   local-path-provisioner-78776bfc44-jwwcs      1/1     Running   0          7m16s
 ```
-
-
 
 ### 3.3 Install certificates manger(cert-manger)
 
@@ -115,8 +99,6 @@ cert-manager-cainjector-64c949654c-tfmt2   1/1     Running   0          73s
 cert-manager-webhook-6bdffc7c9d-h8cfv      1/1     Running   0          73s
 ```
 
-
-
 ### 3.4 Install SWCK
 
 The java agent injector is a component of the operator, so please follow the next steps to install the operator first.
@@ -134,8 +116,6 @@ $ kubectl get pod -n skywalking-swck-system
 NAME                                                  READY   STATUS    RESTARTS   AGE
 skywalking-swck-controller-manager-7f64f996fc-qh8s9   2/2     Running   0          94s
 ```
-
-
 
 ### 3.5 Install Skywalking components — OAPServer and UI
 
@@ -161,13 +141,9 @@ NAME      INSTANCES   RUNNING   INTERNALADDRESS      EXTERNALIPS   PORTS
 default   1           1         default-ui.default                 [80]
 ```
 
-
-
 ## 4. Deploy a demo application
 
 In the third step, we have installed SWCK and related Skywalking components. Next, we will show how to use the java agent injector in SWCK through two java application examples in two ways: global configuration and custom configuration.
-
-
 
 ### 4.1 Set the global configuration
 
@@ -206,15 +182,13 @@ data:
     # Please refer to https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/configurations/#table-of-agent-configuration-properties to get more details.
 ```
 
-
-
 ### 4.2 Set the custom configuration
 
 In some cases, we need to use the Skywalking component to monitor different java applications, so the agent configuration of different applications may be different, such as the name of the application, and the plugins that the application needs to use, etc. Next, we will take two simple java applications developed based on `spring boot` and `spring cloud gateway` as examples for a detailed description. You can use the [source code](https://github.com/dashanji/swck-spring-cloud-k8s-demo) to build the image.
 
 ```sh
-# build the springboot and springcloudgateway image 
-$ git clone https://github.com/dashanji/swck-spring-cloud-k8s-demo 
+# build the springboot and springcloudgateway image
+$ git clone https://github.com/dashanji/swck-spring-cloud-k8s-demo
 $ cd swck-spring-cloud-k8s-demo && make
 
 # check the image
@@ -226,8 +200,6 @@ app            v0.0.1    62f4dbcde2ed   48 minutes ago   561MB
 # load the image into the cluster
 $ kind load docker-image app:v0.0.1 && kind load docker-image gateway:v0.0.1
 ```
-
-
 
 ### 4.3 deploy spring boot application
 
@@ -260,18 +232,18 @@ spec:
   template:
     metadata:
       labels:
-        swck-java-agent-injected: "true"  # enable the java agent injector
+        swck-java-agent-injected: "true" # enable the java agent injector
         app: demo-springboot
       annotations:
-        strategy.skywalking.apache.org/agent.Overlay: "true"  # enable the agent overlay
+        strategy.skywalking.apache.org/agent.Overlay: "true" # enable the agent overlay
         agent.skywalking.apache.org/agent.service_name: "backend-service"
     spec:
       containers:
-      - name: springboot
-        imagePullPolicy: IfNotPresent
-        image: app:v0.0.1
-        command: ["java"]
-        args: ["-jar","/app.jar"]
+        - name: springboot
+          imagePullPolicy: IfNotPresent
+          image: app:v0.0.1
+          command: ["java"]
+          args: ["-jar", "/app.jar"]
 ---
 apiVersion: v1
 kind: Service
@@ -281,10 +253,10 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: 8085-tcp
-    port: 8085
-    protocol: TCP
-    targetPort: 8085
+    - name: 8085-tcp
+      port: 8085
+      protocol: TCP
+      targetPort: 8085
   selector:
     app: demo-springboot
 ```
@@ -310,8 +282,6 @@ $ kubectl get javaagent -n springboot-system
 NAME                            PODSELECTOR           SERVICENAME       BACKENDSERVICE
 app-demo-springboot-javaagent   app=demo-springboot   backend-service   default-oap.default:11800
 ```
-
-
 
 ### 4.4 deploy spring cloud gateway application
 
@@ -350,14 +320,14 @@ spec:
         app: demo-gateway
       annotations:
         strategy.skywalking.apache.org/agent.Overlay: "true"
-        agent.skywalking.apache.org/agent.service_name: "gateway-service"     
+        agent.skywalking.apache.org/agent.service_name: "gateway-service"
         optional.skywalking.apache.org: "cloud-gateway-3.x" # add spring cloud gateway plugin
     spec:
       containers:
-      - image: gateway:v0.0.1
-        name: gateway
-        command: ["java"]
-        args: ["-jar","/gateway.jar"]
+        - image: gateway:v0.0.1
+          name: gateway
+          command: ["java"]
+          args: ["-jar", "/gateway.jar"]
 ---
 apiVersion: v1
 kind: Service
@@ -367,10 +337,10 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: 9999-tcp
-    port: 9999
-    protocol: TCP
-    targetPort: 9999
+    - name: 9999-tcp
+      port: 9999
+      protocol: TCP
+      targetPort: 9999
   selector:
     app: demo-gateway
 ```
@@ -397,8 +367,6 @@ NAME                         PODSELECTOR        SERVICENAME       BACKENDSERVICE
 app-demo-gateway-javaagent   app=demo-gateway   gateway-service   default-oap.default:11800
 ```
 
-
-
 ## 5. Verify the injector
 
 1. After completing the above steps, we can view detailed state of the injected pod, like the injected `agent` container.
@@ -423,7 +391,7 @@ Events:
   Normal Created  90s  kubelet,kind-control-plane Created  container springboot
   Normal Started  90s  kubelet,kind-control-plane Started  container springboot
 
-# view detailed state of the injected pod [demo-gateway] 
+# view detailed state of the injected pod [demo-gateway]
 $ kubectl describe pod -l app=demo-gateway -n gateway-system
 ...
 Events:
@@ -449,7 +417,7 @@ NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
 default-ui   ClusterIP   10.111.39.250   <none>        80/TCP    82m
 ```
 
-3. Then open two terminals to expose the service:  `service-gateway`、`default-ui`.
+3. Then open two terminals to expose the service: `service-gateway`、`default-ui`.
 
 ```sh
 $ kubectl port-forward service/service-gateway -n gateway-system 9999:9999
@@ -458,7 +426,7 @@ Forwarding from [::1]:9999 -> 9999
 ```
 
 ```sh
-$ kubectl port-forward service/default-ui 8090:80                     
+$ kubectl port-forward service/default-ui 8090:80
 Forwarding from 127.0.0.1:8090 -> 8080
 Forwarding from [::1]:8090 -> 8080
 ```
@@ -495,9 +463,6 @@ Hello World!
 
 ![](backend.png)
 
-
-
 ## 6. Concluding remarks
 
 If your application is deployed in the Kubernetes platform and requires Skywalking to provide monitoring services, SWCK can help you deploy, upgrade and maintain the Skywalking components in the Kubernetes cluster. In addition to this blog, you can also view [swck document](https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#operator-Usage-Guide) and [Java agent injector documentation](https://github.com/apache/skywalking-swck/blob/master/docs/java-agent-injector.md) for more information. If you find this project useful, please give [SWCK](https://github.com/apache/skywalking-swck) a star! If you have any questions, welcome to ask in [Issues](https://github.com/apache/skywalking/issues) or [Discussions](https://github.com/apache/skywalking/discussions).
-

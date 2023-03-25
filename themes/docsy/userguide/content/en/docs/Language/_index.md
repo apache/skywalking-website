@@ -35,7 +35,7 @@ time_format_blog = "02.01.2006"
 
 Any setting not defined in a `[languages]` block will fall back to the global value for that setting: so, for example, the content directory used for the site above will be `content/en` unless the user selects the Norwegian language option.
 
-Once you've updated your site config, you create a content root directory for each language version in your source repo, such as  `content/en` for English text, and add your [content](/docs/adding-content/content/) as usual. See the [Hugo Docs](https://gohugo.io/content-management/multilingual) on multi-language support for more information.
+Once you've updated your site config, you create a content root directory for each language version in your source repo, such as `content/en` for English text, and add your [content](/docs/adding-content/content/) as usual. See the [Hugo Docs](https://gohugo.io/content-management/multilingual) on multi-language support for more information.
 
 {{% alert title="Tip" %}}
 If there's any possibility your site might be translated into other languages, consider creating your site with your content in a language-specific subdirectory, as it means you don't need to move it if you add another language.
@@ -49,12 +49,10 @@ If you configure more than one language in `config.toml`, the Docsy theme adds a
 
 ## Internationalization bundles
 
-All UI strings (text for buttons etc.) are bundled inside `/i18n` in the theme, with a `.toml` file for each language. 
+All UI strings (text for buttons etc.) are bundled inside `/i18n` in the theme, with a `.toml` file for each language.
 
 If your chosen language isn't currently in the theme and you create your own `.toml` file for all the common UI strings (for example, if you translate the UI text into Japanese and create a copy of `en.toml` called `jp.toml`), we recommend you do this **in the theme** rather than in your own project, so it can be reused by others. Any additional strings or overridden values can be added to your project's `/i18n` folder.
 
 {{% alert title="Hugo Tip" %}}
 Run `hugo server --i18n-warnings` when doing translation work, as it will give you warnings on what strings are missing.
 {{% /alert %}}
-
-

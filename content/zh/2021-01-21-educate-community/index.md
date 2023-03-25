@@ -4,8 +4,8 @@ date: 2021-01-20
 author: "吴晟"
 description: "Apache SkyWalking社区的成功之道。教育社区，建设贡献者团队。"
 zh_tags:
-- Conference
-- Video
+  - Conference
+  - Video
 ---
 
 - 第一节：开篇介绍

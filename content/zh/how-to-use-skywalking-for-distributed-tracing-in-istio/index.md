@@ -4,8 +4,8 @@ date: 2022-12-14
 author: "[宋净超 (tetrate.io)](https://jimmysong.io)"
 description: "这篇文章将介绍一些关于分布式追踪的基础知识以及如何在 Istio 中使用分布式追踪。"
 tags:
-- Istio
-- Service Mesh
+  - Istio
+  - Service Mesh
 ---
 
 在云原生应用中，一次请求往往需要经过一系列的 API 或后台服务处理才能完成，这些服务有些是并行的，有些是串行的，而且位于不同的平台或节点。那么如何确定一次调用的经过的服务路径和节点以帮助我们进行问题排查？这时候就需要使用到分布式追踪。
@@ -113,15 +113,15 @@ def getForwardHeaders(request):
 - 都是基于 OpenTracing 规范；
 - 都支持与 Istio 及 Envoy 集成；
 
-| 类别      | Apache SkyWalking                                            | Jaeger                                       | Zipkin                                       |
-| :-------- | :----------------------------------------------------------- | :------------------------------------------- | :------------------------------------------- |
+| 类别      | Apache SkyWalking                                                         | Jaeger                                       | Zipkin                                       |
+| :-------- | :------------------------------------------------------------------------ | :------------------------------------------- | :------------------------------------------- |
 | 实现方式  | 基于语言的探针、服务网格探针、eBPF agent、第三方指标库（当前支持 Zipkin） | 基于语言的探针                               | 基于语言的探针                               |
-| 数据存储  | ES、H2、MySQL、TiDB、Sharding-sphere、BanyanDB               | ES、MySQL、Cassandra、内存                   | ES、MySQL、Cassandra、内存                   |
-| 支持语言  | Java、Rust、PHP、NodeJS、Go、Python、C++、.NET、Lua          | Java、Go、Python、NodeJS、C#、PHP、Ruby、C++ | Java、Go、Python、NodeJS、C#、PHP、Ruby、C++ |
-| 发起者    | 个人                                                         | Uber                                         | Twitter                                      |
-| 治理方式  | Apache Foundation                                            | CNCF                                         | CNCF                                         |
-| 版本      | 9.3.0                                                        | 1.39.0                                       | 2.23.19                                      |
-| Star 数量 | 20.9k                                                        | 16.8k                                        | 15.8k                                        |
+| 数据存储  | ES、H2、MySQL、TiDB、Sharding-sphere、BanyanDB                            | ES、MySQL、Cassandra、内存                   | ES、MySQL、Cassandra、内存                   |
+| 支持语言  | Java、Rust、PHP、NodeJS、Go、Python、C++、.NET、Lua                       | Java、Go、Python、NodeJS、C#、PHP、Ruby、C++ | Java、Go、Python、NodeJS、C#、PHP、Ruby、C++ |
+| 发起者    | 个人                                                                      | Uber                                         | Twitter                                      |
+| 治理方式  | Apache Foundation                                                         | CNCF                                         | CNCF                                         |
+| 版本      | 9.3.0                                                                     | 1.39.0                                       | 2.23.19                                      |
+| Star 数量 | 20.9k                                                                     | 16.8k                                        | 15.8k                                        |
 
 分布式追踪系统对比表（数据截止时间 2022-12-07）
 
@@ -300,4 +300,4 @@ kubectl delete namespace istio-system
 
 如果您正在寻找一种快速将 Istio 投入生产的方法，请查看 [Tetrate Istio Distribution (TID)](https://tetr8.io/tid)。TID 是 Tetrate 的强化、完全上游的 Istio 发行版，具有经过 FIPS 验证的构建和支持。这是开始使用 Istio 的好方法，因为您知道您有一个值得信赖的发行版，有一个支持您的专家团队，并且如果需要，还可以选择快速获得 FIPS 合规性。
 
-一旦启动并运行 Istio，您可能需要更简单的方法来管理和保护您的服务，而不仅仅是 Istio 中可用的方法，这就是 Tetrate Service Bridge 的用武之地。您可以[在这里](https://tetr8.io/tsb)详细了解 Tetrate Service Bridge 如何使服务网格更安全、更易于管理和弹性，或[联系我们进行快速演示](https://tetr8.io/contact)。 
+一旦启动并运行 Istio，您可能需要更简单的方法来管理和保护您的服务，而不仅仅是 Istio 中可用的方法，这就是 Tetrate Service Bridge 的用武之地。您可以[在这里](https://tetr8.io/tsb)详细了解 Tetrate Service Bridge 如何使服务网格更安全、更易于管理和弹性，或[联系我们进行快速演示](https://tetr8.io/contact)。

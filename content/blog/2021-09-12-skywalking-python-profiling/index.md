@@ -5,9 +5,9 @@ author: "[Ke Zhang](http://github.com/HumbertZhang), Committer; [Sheng Wu](https
 description: "This post introduces how to use profiling in SkyWalking Python Agent and the mechanism of profiling."
 
 tags:
-- Profiling
-- Python
-- Agent
+  - Profiling
+  - Python
+  - Agent
 ---
 
 The Java Agent of Apache SkyWalking has supported profiling since [v7.0.0](https://github.com/apache/skywalking/releases/tag/v7.0.0), and it enables users to troubleshoot the root cause of performance issues, and now we bring it into Python Agent.
@@ -55,16 +55,15 @@ if __name__ == '__main__':
         httpd.serve_forever()
 ```
 
-We can start it with SkyWalking Python Agent CLI without changing any application code now, which is also the latest feature of v0.7.0.  We just need to add `sw-python run` before our start command(i.e. `sw-python run python3 main.py`), to start the application with python agent attached. More information about sw-python can be found [there](https://github.com/apache/skywalking-python/blob/master/docs/en/setup/CLI.md).
+We can start it with SkyWalking Python Agent CLI without changing any application code now, which is also the latest feature of v0.7.0. We just need to add `sw-python run` before our start command(i.e. `sw-python run python3 main.py`), to start the application with python agent attached. More information about sw-python can be found [there](https://github.com/apache/skywalking-python/blob/master/docs/en/setup/CLI.md).
 
-Then, we should add a new profile task for the ` / ` endpoint from the SkyWalking UI, as shown below. 
+Then, we should add a new profile task for the `/` endpoint from the SkyWalking UI, as shown below.
 
 ![profiling-create](profiling-create.png)
 
-We can access it by `curl -X POST http://localhost:19090/`, after that, we can view the result of this profile task on the SkyWalking UI. 
+We can access it by `curl -X POST http://localhost:19090/`, after that, we can view the result of this profile task on the SkyWalking UI.
 
 ![profiling-result](profiling-result.png)
-
 
 ### The mechanism of profiling
 
@@ -92,10 +91,10 @@ def methodD():
     time.sleep(0.06)
 ```
 
-The agent collects a total of 10 `ThreadSnapShot(s)` over the entire time period(Diagram A). The first 4 snapshots represent the thread dumps during the execution of function C, and the last 6 snapshots represent the thread dumps during the execution of function D.  After the analysis of OAPServer, we can see the result of this profile task on the SkyWalking Rocketbot UI as shown in the right of the diagram. With this result, we can clearly see the function call relationship and the time consumption situation of this program.
-
+The agent collects a total of 10 `ThreadSnapShot(s)` over the entire time period(Diagram A). The first 4 snapshots represent the thread dumps during the execution of function C, and the last 6 snapshots represent the thread dumps during the execution of function D. After the analysis of OAPServer, we can see the result of this profile task on the SkyWalking Rocketbot UI as shown in the right of the diagram. With this result, we can clearly see the function call relationship and the time consumption situation of this program.
 
 ![Diagram A](Diagram_A.png)
+
 <center>Diagram A</center>
 <br>
 

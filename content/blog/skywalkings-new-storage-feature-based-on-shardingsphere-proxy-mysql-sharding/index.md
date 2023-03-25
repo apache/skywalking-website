@@ -4,8 +4,8 @@ date: 2022-12-06
 author: Kan Wan (tetrate.io)
 description: "Based on MySQL storage, SkyWalking v9.3.0 provides a new storage method: MySQL-Sharding. It supports database and table sharding features thanks to ShardingSphere-Proxy, which is a mature solution for dealing with relational databases’ massive amounts of data."
 tags:
-- Sharding-Sphere
-- Sharding-Sphere-proxy
+  - Sharding-Sphere
+  - Sharding-Sphere-proxy
 ---
 
 As an application performance monitoring tool for distributed systems, Apache SkyWalking observes metrics, logs, traces, and events in the service mesh.
@@ -37,7 +37,7 @@ Data sharding defines the data Model in SkyWalking with the annotation **@SQLDat
 @interface Sharding {
   ShardingAlgorithm shardingAlgorithm();
   String dataSourceShardingColumn() default "";
-  String tableShardingColumn() default ""; 
+  String tableShardingColumn() default "";
 }
 ```
 
@@ -57,8 +57,8 @@ SkyWalking adopts a unified method to carry out database sharding. The number of
 ds_{dataSourceShardingColumn.hashcode() % dataSourceList.size()}
 ```
 
-For example, we now have *dataSourceList = ds_0…ds_n*.
-If *{dataSourceShardingColumn.hashcode() % dataSourceList.size() = 2}*, all the data will be routed to the data source node ds_2.
+For example, we now have _dataSourceList = ds_0…ds_n_.
+If _{dataSourceShardingColumn.hashcode() % dataSourceList.size() = 2}_, all the data will be routed to the data source node ds_2.
 
 ### 3.2 Table Sharding Method
 
@@ -82,17 +82,17 @@ logicTableName_20220908
 
 **SkyWalking provides table sharding algorithms for different data models:**
 
-| Algorithm Name                      | Sharding Description                                   | Time Precision Requirements for Sharding Key                 | Typical Application Data Model                               |
-| ----------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| NO_SHARDING                         | No table sharding and single-table mode is maintained. | N/A                                                          | Data model with a small amount of data and no need for sharding. |
-| TIME_RELATIVE_ID_SHARDING_ALGORITHM | Shard by day using time_bucket in the ID column.       | time_bucket can be accurate to seconds, minutes, hours, or days in the same table. | Various metrics.                                             |
-| TIME_SEC_RANGE_SHARDING_ALGORITHM   | Shard by day using time_bucket column.                 | time_bucket must be accurate to seconds.                     | SegmentRecordLogRecord, etc.                                 |
-| TIME_MIN_RANGE_SHARDING_ALGORITHM   | Shard by day using time_bucket column.                 | time_bucket must be accurate to minutes.                     | EndpointTraffic                                              |
+| Algorithm Name                      | Sharding Description                                   | Time Precision Requirements for Sharding Key                                        | Typical Application Data Model                                                                |
+| ----------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| NO_SHARDING                         | No table sharding and single-table mode is maintained. | N/A                                                                                 | Data model with a small amount of data and no need for sharding.                              |
+| TIME_RELATIVE_ID_SHARDING_ALGORITHM | Shard by day using time_bucket in the ID column.       | time_bucket can be accurate to seconds, minutes, hours, or days in the same table.  | Various metrics.                                                                              |
+| TIME_SEC_RANGE_SHARDING_ALGORITHM   | Shard by day using time_bucket column.                 | time_bucket must be accurate to seconds.                                            | SegmentRecordLogRecord, etc.                                                                  |
+| TIME_MIN_RANGE_SHARDING_ALGORITHM   | Shard by day using time_bucket column.                 | time_bucket must be accurate to minutes.                                            | EndpointTraffic                                                                               |
 | TIME_BUCKET_SHARDING_ALGORITHM      | Shard by day using time_bucket column.                 | time_bucket can be accurate to seconds, minutes, hours, and days in the same table. | Service, Instance, Endpoint and other call relations such as ServiceRelationServerSideMetrics |
 
 ## 4. TTL Mechanism
 
-- For sharding tables, delete the physical table *deadline >= timeSeries* according to TTL.
+- For sharding tables, delete the physical table _deadline >= timeSeries_ according to TTL.
 
   ```
   {deadline = new DateTime().plusDays(-ttl)}
@@ -100,11 +100,11 @@ logicTableName_20220908
 
 - TTL timer will delete the expired tables according to the current date while updating sharding rules according to the new date and informing ShardingSphere-Proxy to create new sharding tables.
 
-- For a single table, use the previous method and delete the row record of ***deadline >=time_bucket***.
+- For a single table, use the previous method and delete the row record of **_deadline >=time_bucket_**.
 
 ## 5. Examples of Sharding Data Storage
 
-Next, we’ll take **segment** (Record type) and *service_resp_time* (Metrics type) as examples to illustrate the data storage logic and physical distribution. Here, imagine MySQL has two nodes *ds_0* and ds_1.
+Next, we’ll take **segment** (Record type) and _service_resp_time_ (Metrics type) as examples to illustrate the data storage logic and physical distribution. Here, imagine MySQL has two nodes _ds_0_ and ds_1.
 
 **Note:**
 
@@ -143,21 +143,21 @@ Here we take the deployment of a single-node SkyWalking OAP and [ShardingSphere-
 - Prepare the MySQL cluster.
 - Deploy, install and configure [ShardingSphere-Proxy](https://shardingsphere.apache.org/document/current/en/overview/):
 
-1) *conf/server.yaml* and *props.proxy-hint-enabled* must be true. Refer to the [link](https://github.com/wankai123/skywalking-mysql-sharding-demo/blob/main/shardingsphere-proxy/conf/server.yaml) for the complete configuration.
+1. _conf/server.yaml_ and _props.proxy-hint-enabled_ must be true. Refer to the [link](https://github.com/wankai123/skywalking-mysql-sharding-demo/blob/main/shardingsphere-proxy/conf/server.yaml) for the complete configuration.
 
-2) conf/config-sharding.yaml configures logical database and dataSources list. The dataSource name must be prefixed with ds_ and start with ds_0. For details about the configuration, please refer to [this page](https://github.com/wankai123/skywalking-mysql-sharding-demo/blob/main/shardingsphere-proxy/conf/config-sharding.yaml).
+2. conf/config-sharding.yaml configures logical database and dataSources list. The dataSource name must be prefixed with ds\_ and start with ds_0. For details about the configuration, please refer to [this page](https://github.com/wankai123/skywalking-mysql-sharding-demo/blob/main/shardingsphere-proxy/conf/config-sharding.yaml).
 
 - Deploy, install and configure SkyWalking OAP:
 
-1) Set up OAP environment variables: `${SW_STORAGE:mysql-sharding}`，
+1. Set up OAP environment variables: `${SW_STORAGE:mysql-sharding}`，
 
-2) Configure the connection information based on the actual deployment: `${SW_JDBC_URL} ${SW_DATA_SOURCE_USER} ${SW_DATA_SOURCE_PASSWORD}`
+2. Configure the connection information based on the actual deployment: `${SW_JDBC_URL} ${SW_DATA_SOURCE_USER} ${SW_DATA_SOURCE_PASSWORD}`
 
 **Note:**
 
 > Connection information must correspond to ShardingSphere-Proxy virtual database.
 
-3) Configure the data source name configured by conf/config-sharding.yaml in ShardingSphere-Proxy to `${SW_JDBC_SHARDING_DATA_SOURCES}` and separate names with commas.
+3. Configure the data source name configured by conf/config-sharding.yaml in ShardingSphere-Proxy to `${SW_JDBC_SHARDING_DATA_SOURCES}` and separate names with commas.
 
 - Start the MySQL cluster.
 - Start [ShardingSphere-Proxy](https://shardingsphere.apache.org/document/current/en/overview/).

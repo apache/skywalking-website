@@ -13,22 +13,21 @@ The Docsy theme contains built-in support for [Google Analytics](https://analyti
 
 ### Setup
 
-1. Ensure you have [set up a Google Analytics property](https://support.google.com/analytics/answer/1042508) for your site: this gives you an Analytics ID to add to your config, which Docsy in turn adds to all your site's pages.
-1. Open `config.toml`.
-1. Enable Google Analytics by setting the Tracking ID property to your site's Analytics ID.
+1.  Ensure you have [set up a Google Analytics property](https://support.google.com/analytics/answer/1042508) for your site: this gives you an Analytics ID to add to your config, which Docsy in turn adds to all your site's pages.
+1.  Open `config.toml`.
+1.  Enable Google Analytics by setting the Tracking ID property to your site's Analytics ID.
 
         [services.googleAnalytics]
         id = "UA-00000000-0"
 
-1. Save and close `config.toml`.
-1. Ensure that your site is built with `HUGO_ENV="production"`, as Docsy only adds Analytics tracking to production-ready sites. You can specify this variable as a command line flag to Hugo: 
+1.  Save and close `config.toml`.
+1.  Ensure that your site is built with `HUGO_ENV="production"`, as Docsy only adds Analytics tracking to production-ready sites. You can specify this variable as a command line flag to Hugo:
 
     ```
     $ env HUGO_ENV="production" hugo
     ```
 
     Alternatively, if you're using Netlify, you can specify it as a Netlify [deployment setting](https://www.netlify.com/docs/continuous-deployment/#build-environment-variables) in `netlify.toml` or the Netlify UI, along with the Hugo version.
-
 
 ## User Feedback
 
@@ -78,15 +77,16 @@ technical writing, in other words!
 
 ### Setup
 
-1. Open `config.toml`.
-1. Ensure that Google Analytics is enabled, as described [above](#setup).
-1. Set the response text that users see after clicking **Yes** or **No**.
+1.  Open `config.toml`.
+1.  Ensure that Google Analytics is enabled, as described [above](#setup).
+1.  Set the response text that users see after clicking **Yes** or **No**.
 
         [params.ui.feedback]
         enable = true
         yes = 'Glad to hear it! Please <a href="https://github.com/USERNAME/REPOSITORY/issues/new">tell us how we can improve</a>.'
         no = 'Sorry to hear that. Please <a href="https://github.com/USERNAME/REPOSITORY/issues/new">tell us how we can improve</a>.'
-1. Save and close `config.toml`.
+
+1.  Save and close `config.toml`.
 
 ### Access the feedback data
 
@@ -102,20 +102,20 @@ multiple documentation sites.
 
 Here's what the 4 columns represent:
 
-* **Total Events** is the total number of times that users clicked *either* **Yes** or **No**.
-* **Unique Events** provides a rough indication of how frequenly users are rating your pages per
+- **Total Events** is the total number of times that users clicked _either_ **Yes** or **No**.
+- **Unique Events** provides a rough indication of how frequenly users are rating your pages per
   session. For example, suppose your **Total Events** is 5000, and **Unique Events** is 2500.
   This means that you have 2500 users who are rating 2 pages per session.
-* **Event Value** isn't that useful.
-* **Avg. Value** is the aggregated rating for that page. The value is always between 0 
-  and 1. When users click **No** a value of 0 is sent to Google Analytics. When users click 
+- **Event Value** isn't that useful.
+- **Avg. Value** is the aggregated rating for that page. The value is always between 0
+  and 1. When users click **No** a value of 0 is sent to Google Analytics. When users click
   **Yes** a value of 1 is sent. You can think of it as a percentage. If a page has an
   **Avg. Value** of 0.67, it means that 67% of users clicked **Yes** and 33% clicked **No**.
 
 [events]: https://developers.google.com/analytics/devguides/collection/analyticsjs/events
 [PR]: https://github.com/google/docsy/pull/1/files
 
-The underlying Google Analytics infrastructure that stores the "was this page helpful?" data is 
+The underlying Google Analytics infrastructure that stores the "was this page helpful?" data is
 called [Events][events]. See [docsy pull request #1][PR] to see exactly
 what happens when a user clicks **Yes** or **No**. It's just a `click` event listener that
 fires the Google Analytics JavaScript function for logging an Event, disables the **Yes** and

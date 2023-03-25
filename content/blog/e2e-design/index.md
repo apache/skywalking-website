@@ -5,7 +5,7 @@ author: "[Zhenxu Ke](https://github.com/kezhenxu94), Tetrate.io; [Huaxi Jiang](h
 description: "The design of Next Generation End-to-End Testing Framework"
 
 tags:
-- Testing
+  - Testing
 ---
 
 NGE2E is the next generation End-to-End Testing framework that aims to help developers to set up, debug, and verify E2E tests with ease. It's built based on the lessons learnt from tens of hundreds of test cases in the SkyWalking main repo.
@@ -57,7 +57,6 @@ e2e setup # If configuration file e2e.yaml is present
 - `--command`: a command to run after the environment is started, this may be useful when users need to install some extra tools or apply resources from command line, like `istioctl install --profile=demo`;
 - `--wait-for`: can be specified multiple times to give a list of conditions to be met; wait until the given conditions are met; the most frequently-used strategy should be `--wait-for=service/health`, `--wait-for=deployments/available`, etc. that make the `e2e setup` command to wait for all conditions to be met; other possible strategies may be something like `--wait-for="log:Started Successfully"`, `--wait-for="http:localhost:8080/healthcheck"`, etc. if really needed;
 
-
 ### Trigger Inputs
 
 ```shell
@@ -71,7 +70,6 @@ e2e trigger # If configuration file e2e.yaml is present
 - `--action=http`: the action of the trigger, i.e. "perform an http request as an input";
 - `--action=cmd`: the action of the trigger, i.e. "execute the `cmd` as an input";
 
-
 ### Query Output
 
 ```shell
@@ -79,7 +77,6 @@ swctl service ls
 ```
 
 this is a project-specific step, different project may use different tools to query the actual output, for SkyWalking, it uses `swctl` to query the actual output.
-
 
 ### Verify
 
@@ -92,9 +89,8 @@ e2e verify # If configuration file e2e.yaml is present
 - `--actual`: the actual data file, only YAML file format is supported;
 - `--expected`: the expected data file, only YAML file format is supported;
 - `--query`: the query to get the actual data, the query result must have the same format as `--actual` and `--expected`;
-  
-  > The `--query` option will get the output into a temporary file and use the `--actual` under the hood;
 
+  > The `--query` option will get the output into a temporary file and use the `--actual` under the hood;
 
 ### Cleanup
 
@@ -238,33 +234,32 @@ func run() {
 The initializer is responsible for
 
 - When `env==compose`
-    + Start the `docker-compose` services;
-    + Check the services' healthiness; 
-    + Wait until all services are ready according to the `interval`, etc.;
 
+  - Start the `docker-compose` services;
+  - Check the services' healthiness;
+  - Wait until all services are ready according to the `interval`, etc.;
 
 - When `env==kind`
-    + Start the KinD cluster according to the config files;
-    + Apply the resources files (`--manifests`) or/and run the custom init command (`--commands`);
-    + Check the pods' readiness;
-    + Wait until all pods are ready according to the `interval`, etc.;
+  - Start the KinD cluster according to the config files;
+  - Apply the resources files (`--manifests`) or/and run the custom init command (`--commands`);
+  - Check the pods' readiness;
+  - Wait until all pods are ready according to the `interval`, etc.;
 
 ## Verifier
 
 According to scenarios we have at the moment, the must-have features are:
 
 - Matchers
-    + Exact match
-    + Not null
-    + Not empty
-    + Greater than 0
-    + Regexp match
-    + At least one of list element match
 
+  - Exact match
+  - Not null
+  - Not empty
+  - Greater than 0
+  - Regexp match
+  - At least one of list element match
 
 - Functions
-    + Base64 encode/decode
-
+  - Base64 encode/decode
 
 in order to help to identify simple bugs from the GitHub Actions workflow, there are some "nice to have" features:
 
@@ -280,7 +275,6 @@ Logs through the entire process of a test case are:
 - Containers/pods logs;
 - The logs from the NGE2E itself;
 
-
 # More Planned
 
 ## Debugging
@@ -289,16 +283,15 @@ Debugging the E2E locally has been a strong requirement and time killer that we 
 
 The most common case when debugging is to run the E2E tests, with one or more services forwarded into the host machine, where the services are run in the IDE or in debug mode.
 
-For example, you may run the SkyWalking OAP server in an IDE and run `e2e run`, expecting the other services (e.g. agent services, SkyWalking WebUI, etc.) inside the containers to connect to your local OAP, instead of the one declared in `docker-compose.yaml`.  
+For example, you may run the SkyWalking OAP server in an IDE and run `e2e run`, expecting the other services (e.g. agent services, SkyWalking WebUI, etc.) inside the containers to connect to your local OAP, instead of the one declared in `docker-compose.yaml`.
 
 For Docker Desktop Mac/Windows, we can access the services running on the host machine inside containers via `host.docker.internal`, for Linux, it's `172.17.0.1`.
 
-One possible solution is to add an option `--debug-services=oap,other-service-name` that rewrites all the router rules inside the containers from `oap` to `host.docker.internal`/`172.17.0.1`. 
+One possible solution is to add an option `--debug-services=oap,other-service-name` that rewrites all the router rules inside the containers from `oap` to `host.docker.internal`/`172.17.0.1`.
 
 ## CodeGen
 
 When adding new test case, a code generator would be of great value to eliminate the repeated labor and copy-pasting issues.
-
 
 ```shell
 e2e new <case-name>

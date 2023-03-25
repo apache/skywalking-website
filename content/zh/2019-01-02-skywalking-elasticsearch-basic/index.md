@@ -4,8 +4,8 @@ date: 2019-01-02
 author: 刘离勇
 description: ElasticSearch basic 验证。
 zh_tags:
-- User Manual
-- ElasticSearch
+  - User Manual
+  - ElasticSearch
 ---
 
 SkyWalking 依赖 elasticsearch 集群，如果 elasticsearch 安装有 x-pack 插件的话，那么就会存在一个 Basic 认证，导致 skywalking 无法调用 elasticsearch, 解决方法是使用 nginx 做代理，让 nginx 来做这个 Basic 认证，那么这个问题就自然解决了。
@@ -22,7 +22,7 @@ SkyWalking 依赖 elasticsearch 集群，如果 elasticsearch 安装有 x-pack �
 server {
         listen       9200 default_server;
         server_name  _;
-        
+
         location / {
                  proxy_set_header Host $host;
                  proxy_set_header X-Real-IP $remote_addr;

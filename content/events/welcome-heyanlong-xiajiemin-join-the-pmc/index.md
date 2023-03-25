@@ -4,9 +4,9 @@ date: 2022-10-04
 author: SkyWalking Team
 ---
 
-Yanlong He (GitHub: [heyanlong](https://github.com/heyanlong)) is a SkyWalking committer for years. 
+Yanlong He (GitHub: [heyanlong](https://github.com/heyanlong)) is a SkyWalking committer for years.
 He was working on [skyapm-php](https://github.com/SkyAPM/SkyAPM-php-sdk) for years to support the SkyWalking
-ecosystem. That PHP agent has significant contributions for SkyWalking's users adoption in the PHP landscape. 
+ecosystem. That PHP agent has significant contributions for SkyWalking's users adoption in the PHP landscape.
 Yanlong keeps active in supporting and maintaining the project to help the community.
 
 Jiemin Xia (GitHub: [jmjoy](https://github.com/jmjoy)) is a new committer voted in July 2022. He is super active in this year.

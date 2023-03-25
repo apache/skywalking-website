@@ -8,9 +8,11 @@ description: "Release Apache SkyWalking Eyes 0.3.0."
 SkyWalking Eyes 0.3.0 is released. Go to [downloads](/downloads) page to find release tars.
 
 - Dependency License
+
   - Fix license check in go library testify (#93)
 
 - License Header
+
   - `fix` command supports more languages:
     - Add comment style for cmake language (#86)
     - Add comment style for hcl (#89)

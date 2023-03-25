@@ -14,15 +14,16 @@ Depending on your deployment choice you may want to serve your site locally duri
 
 1.  Ensure you have an up to date local copy of your site files cloned from your repo. Don't forget to use `--recurse-submodules` or you won't pull down some of the code you need to generate a working site.
 
-    ```
-    git clone --recurse-submodules --depth 1 https://github.com/my/example.git
-    ```
-   
-    {{% alert title="Note" color="primary" %}}
-If you've just added the theme as a submodule in a local version of your site and haven't committed it to a repo yet,  you must get local copies of the theme's own submodules before serving your site.
-    
-    git submodule update --init --recursive
-    {{% /alert %}}
+        ```
+        git clone --recurse-submodules --depth 1 https://github.com/my/example.git
+        ```
+
+        {{% alert title="Note" color="primary" %}}
+
+    If you've just added the theme as a submodule in a local version of your site and haven't committed it to a repo yet, you must get local copies of the theme's own submodules before serving your site.
+
+        git submodule update --init --recursive
+        {{% /alert %}}
 
 1.  Ensure you have the tools described in [Installation and Prerequisites](#installation-and-prerequisites) installed on your local machine, including `postcss-cli` (you'll need it to generate the site resources the first time you run the server).
 1.  Run the `hugo server` command in your site root. By default your site will be available at http://localhost:1313/.
@@ -39,11 +40,9 @@ Follow the instructions in [Host on Netlify](https://gohugo.io/hosting-and-deplo
 1. Click your chosen Git provider, then choose your site repo from your list of repos.
 1. In the **Deploy settings** page:
    1. For your **Build command**, specify `cd themes/docsy && git submodule update -f --init && cd ../.. && hugo`. You need to specify this rather than just `hugo` so that Netlify can use the theme's submodules.
-   1. Click **Show advanced**. 
-   1. In the **Advanced build settings** section, click **New variable**. 
-   1. Specify `HUGO_VERSION` as the **Key** for the new variable, and `0.53` or later as its **Value**. 
+   1. Click **Show advanced**.
+   1. In the **Advanced build settings** section, click **New variable**.
+   1. Specify `HUGO_VERSION` as the **Key** for the new variable, and `0.53` or later as its **Value**.
 1. Click **Deploy site**.
 
 If you have an existing deployment you can view and update the relevant information by selecting the site from your list of sites in Netlify, then clicking **Site settings** - **Build and deploy**. Ensure that **Ubuntu Xenial 16.04** is selected in the **Build image selection** section - if you're creating a new deployment this is used by default. You need to use this image to run the extended version of Hugo.
-
-

@@ -4,9 +4,9 @@ date: 2021-03-16
 author: "Brandon Fergerson"
 description: "The JetBrains plugin providing continuous feedback capabilities via Apache SkyWalking."
 tags:
-- Tracing
-- Logs
-- Design
+  - Tracing
+  - Logs
+  - Design
 ---
 
 ![Alt Text](SM_IDE-APM.gif)

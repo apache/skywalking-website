@@ -4,8 +4,8 @@ date: 2018-05-24
 author: Haoyang Liu, the major maintainer of SkyWalking .NET Core agent
 description: "SkyWalking .NET Core SDK is available."
 tags:
-- DotNetCore
-- Agent
+  - DotNetCore
+  - Agent
 ---
 
 Translated by Sheng Wu.
@@ -32,20 +32,19 @@ At here, I are giving a quick start to represent, how to monitor a demo distribu
 Now you can open http://localhost:5001/api/values to access the demo application. Then you can open SkyWalking WebUI http://localhost:8080
 
 - Overview of the whole distributed system
-<img src="https://cdn-images-1.medium.com/max/1600/1*sZY-9RaSz40sAHLkhwSV5g.png"/>
+  <img src="https://cdn-images-1.medium.com/max/1600/1*sZY-9RaSz40sAHLkhwSV5g.png"/>
 
 - Topology of distributed system
-<img src="https://cdn-images-1.medium.com/max/1600/1*mMEGHg12fziDdeoa4r9CrA.png"/>
+  <img src="https://cdn-images-1.medium.com/max/1600/1*mMEGHg12fziDdeoa4r9CrA.png"/>
 
 - Application view
-<img src="https://cdn-images-1.medium.com/max/1600/1*uxBlfP6Byvf8xpRpG-qRZw.png"/>
+  <img src="https://cdn-images-1.medium.com/max/1600/1*uxBlfP6Byvf8xpRpG-qRZw.png"/>
 
 - Trace query
-<img src="https://cdn-images-1.medium.com/max/1600/1*bj8bdC7LscCD4tmcs8c_gg.png"/>
+  <img src="https://cdn-images-1.medium.com/max/1600/1*bj8bdC7LscCD4tmcs8c_gg.png"/>
 
 - Span’s tags, logs and related traces
-<img src="https://cdn-images-1.medium.com/max/1600/1*bj8bdC7LscCD4tmcs8c_gg.png"/>
-
+  <img src="https://cdn-images-1.medium.com/max/1600/1*bj8bdC7LscCD4tmcs8c_gg.png"/>
 
 ## GitHub
 

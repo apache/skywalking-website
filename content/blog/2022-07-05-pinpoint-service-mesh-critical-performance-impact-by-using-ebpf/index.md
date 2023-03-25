@@ -4,11 +4,11 @@ date: 2022-07-05
 author: Han Liu, Sheng Wu
 description: Introducing performance analysis in production with SkyWalking Rover
 tags:
-- SkyWalking
-- Observability
-- eBPF
-- service mesh
-- profiling
+  - SkyWalking
+  - Observability
+  - eBPF
+  - service mesh
+  - profiling
 ---
 
 ### Content
@@ -29,17 +29,18 @@ Since SkyWalking 7.0.0, Trace Profiling has helped developers find performance p
    1. It's hard to differentiate system performance from class code manipulation in the booting stage.
    2. Trace profiling is linked to an endpoint to identify performance impact, but there is no endpoint to match these short-lived services.
 
-Fortunately, there are techniques that can go further than Trace Profiling in these situations. 
+Fortunately, there are techniques that can go further than Trace Profiling in these situations.
 
 # Introduce eBPF
 
 We have found that eBPF — a technology that can run sandboxed programs in an operating system kernel and thus safely and efficiently extend the capabilities of the kernel without requiring kernel modifications or loading kernel modules — can help us fill gaps left by Trace Profiling. eBPF is a trending technology because it breaks the traditional barrier between user and kernel space. Programs can now inject bytecode that runs in the kernel, instead of having to recompile the kernel to customize it. This is naturally a good fit for observability.
 
-In the figure below, we can see that when the system executes the execve syscalls, the eBPF program is triggered, and the current process runtime information is obtained by using function calls. 
+In the figure below, we can see that when the system executes the execve syscalls, the eBPF program is triggered, and the current process runtime information is obtained by using function calls.
 
 ![eBPF Hook Point](eBPF-hook-points.png)
 
 Using eBPF technology, we can expand the scope of Skywalking's profiling capabilities:
+
 1. **Global Performance Analysis**: Before eBPF, data collection was limited to what agents can observe. Since eBPF programs run in the kernel, they can observe all threads. This is especially useful when you are not sure whether a performance problem is caused by a particular request.
 2. **Data Content**: eBPF can dump both user and kernel space thread stacks, so if a performance issue happens in kernel space, it’s easier to find.
 3. **Agent Binding**: All modern Linux kernels support eBPF, so there is no need to install anything. This means it is an orchestration-free vs an agent model. This reduces friction caused by built-in software which may not have the correct agents installed, such as Envoy in a Service Mesh.
@@ -57,7 +58,7 @@ While eBPF offers significant advantages for hunting performance bottlenecks, no
 
 [SkyWalking Rover](https://github.com/apache/skywalking-rover) introduces the eBPF profiling feature into the SkyWalking ecosystem. The figure below shows the overall architecture of SkyWalking Rover. SkyWalking Rover is currently supported in Kubernetes environments and must be deployed inside a Kubernetes cluster. After establishing a connection with the SkyWalking backend server, it saves information about the processes on the current machine to SkyWalking. When the user creates an eBPF profiling task via the user interface, SkyWalking Rover receives the task and executes it in the relevant C, C++, Golang, and Rust language-based programs.
 
-Other than an eBPF-capable kernel, there are no additional prerequisites for deploying SkyWalking Rover. 
+Other than an eBPF-capable kernel, there are no additional prerequisites for deploying SkyWalking Rover.
 
 ![architecture](architecture.png)
 
@@ -91,7 +92,7 @@ When installing Istio using the demo configuration profile, we found there are t
 
 In the default demo configuration profile, Envoy is using 100% sampling as default tracing policy. How does that impact the performance?
 
-As shown in the figure below, using the **on-CPU profiling**, we found that it takes about **16%** of the CPU overhead. At a fixed consumption of **2 CPUs**, its QPS can reach **5.7K**. 
+As shown in the figure below, using the **on-CPU profiling**, we found that it takes about **16%** of the CPU overhead. At a fixed consumption of **2 CPUs**, its QPS can reach **5.7K**.
 
 ![Zipkin with 100% sampling](zipkin-sampling-100.png)
 
@@ -114,11 +115,11 @@ With the same CPU usage, we've discovered that Envoy performance greatly improve
 
 The table below illustrates how different Zipkin sampling percentages under the same CPU usage affect QPS.
 
-|Zipkin sampling %|QPS|CPUs|Note|
-|-----------------|---|----|----|
-|100% **(default)**|5.7K|2|16% used by Zipkin|
-|1%|8.1K|2|0.3% used by Zipkin|
-|disabled|9.2K|2|0% used by Zipkin|
+| Zipkin sampling %  | QPS  | CPUs | Note                |
+| ------------------ | ---- | ---- | ------------------- |
+| 100% **(default)** | 5.7K | 2    | 16% used by Zipkin  |
+| 1%                 | 8.1K | 2    | 0.3% used by Zipkin |
+| disabled           | 9.2K | 2    | 0% used by Zipkin   |
 
 ## Access Log Format
 
@@ -154,7 +155,7 @@ We provide data aggregation in two dimensions:
 
 ### Enable Write
 
-Using the same environment and settings as before in the on-CPU test, we performed off-CPU profiling. As shown below, we found that access log writes accounted for about **28%** of the total context switches. The "__write" shown below also indicates that this method is the Linux kernel method. 
+Using the same environment and settings as before in the on-CPU test, we performed off-CPU profiling. As shown below, we found that access log writes accounted for about **28%** of the total context switches. The "\_\_write" shown below also indicates that this method is the Linux kernel method.
 
 ![Enable Write Access Log](access-log-write-enable.png)
 
@@ -176,4 +177,3 @@ In this article, we've examined the insights Apache Skywalking's Trace Profiling
 
 1. **Continuous profiling**, helps you automatically profile without manual intervention. For example, when Rover detects that the CPU exceeds a configurable threshold, it automatically executes the on-CPU profiling task.
 2. More profiling types to enrich usage scenarios, such as network, and memory profiling.
-

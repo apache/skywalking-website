@@ -4,8 +4,8 @@ date: 2018-12-18
 author: 工匠小猪猪的技术世界（微信公众号）
 description: 本文纯粹介绍 Apache SkyWalking 如何使用，面对的群体包括了解和不了解 SkyWalking 原理的使用者和打算使用者。
 zh_tags:
-- User Manual
-- Web UI
+  - User Manual
+  - Web UI
 ---
 
 ## 版本选择
@@ -46,13 +46,13 @@ Apache SkyWalking 的监控界面由 Monitor 和 Trace 两者构成，Monitor �
 上图中需要解释两个概念：
 
 - cpm 代表每分钟请求次数
-- SLA=(TRANSACTION_CALLS- TRANSACTION_ERROR_CALLS ) * 10000 ) / TRANSACTION_CALLS
+- SLA=(TRANSACTION_CALLS- TRANSACTION_ERROR_CALLS ) \* 10000 ) / TRANSACTION_CALLS
 
 该页面主要支持四个跳转：
 
 一、在上图中，App 板块上的帮助选项是可以直接跳转到 Application 监控页面的。 ![img](0081Kckwly1gkkfatq9rrj31340bajs1.jpg)
 
-二、 Service 板块上的帮助选项是可以直接跳转到 Service 监控页面的。 
+二、 Service 板块上的帮助选项是可以直接跳转到 Service 监控页面的。
 
 ![image-20201110220524415](0081Kckwly1gkkfghp1izj30m6086t9a.jpg)
 
@@ -100,11 +100,11 @@ Apache SkyWalking 的监控界面由 Monitor 和 Trace 两者构成，Monitor �
 
 关于 Dependency Map 这张图我们再补充一下，鼠标悬停可以看到每个阶段的执行时间，这是 Service 下的功能 ![img](0081Kckwly1gkkfauwowgj31v00u0mzz.jpg)
 
-我们点开图中该图中 Top 20 Slow Traces 下面的被我马赛克掉的 trace 的按钮框，可以看到如下更加详细的信息： 
+我们点开图中该图中 Top 20 Slow Traces 下面的被我马赛克掉的 trace 的按钮框，可以看到如下更加详细的信息：
 
 ![image-20201110220444481](0081Kckwly1gkkfftbd4rj31k50u04qp.jpg)
 
-这些信息可以帮助我们知道每一个方法在哪个阶段那个具体实现耗时了多久。 
+这些信息可以帮助我们知道每一个方法在哪个阶段那个具体实现耗时了多久。
 
 ![image-20201110220427876](0081Kckwly1gkkffi442xj32060n67go.jpg)
 
@@ -140,11 +140,11 @@ Trace 是一个非常实用的功能，用户可以根据精确的 TraceId 去�
 
 ## 再回顾一遍
 
-一、首先我们进入首页： 
+一、首先我们进入首页：
 
 ![image-20201110220641793](0081Kckwly1gkkfhu2nboj31ca0ms15o.jpg)
 
-二、点击一下首页的 Slow Service 的 projectC，可以看到如下信息： 
+二、点击一下首页的 Slow Service 的 projectC，可以看到如下信息：
 
 ![image-20201110220700002](0081Kckwly1gkkfi5994yj31aq0pnk4q.jpg)
 
@@ -152,11 +152,11 @@ Trace 是一个非常实用的功能，用户可以根据精确的 TraceId 去�
 
 ![img](0081Kckwly1gkkfaroz97j31bl0kwta6.jpg)
 
-四、继续点进去右下角的这个 slow service 里的 Consumer，我们可以看到下图： 
+四、继续点进去右下角的这个 slow service 里的 Consumer，我们可以看到下图：
 
 ![img](0081Kckwly1gkkfawsvybj31ax0p6dl4.jpg)
 
-## 参考资料 
+## 参考资料
 
 - https://twitter.com/AsfSkyWalking/status/1013616673218179072
 - https://twitter.com/AsfSkyWalking/status/1013617100143800320

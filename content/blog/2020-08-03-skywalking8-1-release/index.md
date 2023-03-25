@@ -4,9 +4,9 @@ date: 2020-08-03
 author: Srinivasan Ramaswamy(Tetrate)
 description: " SpringSleuth metrics, endpoint dependency detection, Kafka transport traces and metrics."
 tags:
-- Release Blog
-- Kafka
-- Spring
+  - Release Blog
+  - Kafka
+  - Spring
 ---
 
 - Author: Sheng Wu, Hongtao Gao, and Tevah Platt(Tetrate)
@@ -18,11 +18,11 @@ Apache SkyWalking, the observability platform, and open-source application perfo
 
 ## Background
 
-SkyWalking is an observability platform and APM tool that works with or without a service mesh, providing automatic instrumentation for microservices, cloud-native and container-based applications. The top-level Apache project is supported by a global community and is used by Alibaba, Huawei, Tencent, Baidu, and scores of others. 
+SkyWalking is an observability platform and APM tool that works with or without a service mesh, providing automatic instrumentation for microservices, cloud-native and container-based applications. The top-level Apache project is supported by a global community and is used by Alibaba, Huawei, Tencent, Baidu, and scores of others.
 
 ## Transport traces
 
-For a long time, SkyWalking has used gRPC and HTTP to transport traces, metrics, and logs. They provide good performance and are quite lightweight, but people kept asking about the MQ as a transport layer because they want to keep the observability data continuously as much as possible. From SkyWalking’s perspective, the MQ based transport layer consumes more resources required in the deployment and the complexity of deployment and maintenance but brings more powerful throughput capacity between the agent and backend. 
+For a long time, SkyWalking has used gRPC and HTTP to transport traces, metrics, and logs. They provide good performance and are quite lightweight, but people kept asking about the MQ as a transport layer because they want to keep the observability data continuously as much as possible. From SkyWalking’s perspective, the MQ based transport layer consumes more resources required in the deployment and the complexity of deployment and maintenance but brings more powerful throughput capacity between the agent and backend.
 
 In 8.1.0, SkyWalking officially provides the typical MQ implementation, Kafka, to transport all observability data, including traces, metrics, logs, and profiling data. At the same time, the backend can support traditional gRPC and HTTP receivers, with the new Kafka consumer at the same time. Different users could choose the transport layer(s) according to their own requirements. Also, by referring to this [implementation](https://github.com/apache/skywalking/pull/4847), the community could contribute various transport plugins for Apache Pulsar, RabbitMQ.
 
@@ -38,7 +38,7 @@ In the Java field, the Spring ecosystem is one of the most widely used. [Microme
 
 ![](spring.png)
 
-## Notable enhancements 
+## Notable enhancements
 
 The Java agent core is enhanced in this release. It could work better in the concurrency class loader case and is more compatible with another agent solution, such as Alibaba’s Arthas.
 
@@ -46,7 +46,7 @@ The Java agent core is enhanced in this release. It could work better in the con
 1. GraphQL, InfluxDB Java Client, and Quasar fiber libs are supported to be observed automatically.
 1. Kubernetes Configmap can now for the first time be used as the dynamic configuration center– a more cloud-native solution for k8s deployment environments.
 1. OAP supports health checks, especially including the storage health status. If the storage (e.g., ElasticSearch) is not available, you could get the unhealth status with explicit reasons through the health status query.
-1. Opencensus receiver supports ingesting OpenTelemetry/OpenCensus agent metrics by meter-system. 
+1. Opencensus receiver supports ingesting OpenTelemetry/OpenCensus agent metrics by meter-system.
 
 ## Additional resources
 

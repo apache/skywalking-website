@@ -6,7 +6,6 @@ descriptions: "Download the SkyWalking releases."
 
 {{< downloads-block >}}
 
-
 <div class="container verify">
 
 ## Verify the releases
@@ -25,11 +24,13 @@ Download [PGP signatures KEYS](https://downloads.apache.org/skywalking/KEYS), an
 gpg --import KEYS
 gpg --verify apache-skywalking-apm-***.asc apache-skywalking-apm-***
 ```
+
 </div>
 
 <div>
 
 ##### Verify using SHA512
+
 Download the release with its .sha512 signature file. And then:
 
 ```shell
@@ -37,6 +38,7 @@ Download the release with its .sha512 signature file. And then:
 shasum -a 512 hadoop-X.Y.Z-src.tar.gz
 
 ```
+
 </div>
 
 </div>

@@ -4,8 +4,8 @@ author: "[Haochao Zhuang](https://github.com/dmsolr)"
 date: 2021-12-08
 description: "This paper mainly introduces two Apache APISIX integrated SkyWalking log plug-ins to provide a more convenient operation and environment for log processing in Apache APISIX."
 tags:
-- Observability
-- APISIX
+  - Observability
+  - APISIX
 ---
 
 In the field of observability, the three main directions of data collection and analysis, Metrics, Logger and Tracing, are usually used to achieve insight into the operational status of applications.
@@ -39,8 +39,7 @@ The above Content is the log content, where the Apache APISIX metadata configura
 When using this plugin, since the SkyWalking plugin is "not enabled" by default, you need to manually modify the `plugins` section in the `conf/default-apisix.yaml` file to enable the plugin.
 
 ```yaml
-plugins:
-  ...
+plugins: ...
   - error-log-logger
   ...
 ```
@@ -125,8 +124,7 @@ The main reason for the error log to be integrated into SkyWalking is to central
 Since the error-log-logger plugin is "not enabled" by default, you still need to enable the plugin in the way mentioned above.
 
 ```yaml
-plugins:
-  ...
+plugins: ...
   - error-log-logger
   ...
 ```
@@ -148,7 +146,7 @@ curl -X PUT 'http://192.168.0.108:9080/apisix/admin/plugin_metadata/error-log-lo
 }'
 ```
 
->Note that the `endpoint_addr` is the SkyWalking OAP Server address and needs to have the URI (i.e. `/v3/logs`).
+> Note that the `endpoint_addr` is the SkyWalking OAP Server address and needs to have the URI (i.e. `/v3/logs`).
 
 ##### Step 2: LAL Processing
 

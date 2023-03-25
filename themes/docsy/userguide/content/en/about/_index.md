@@ -15,15 +15,16 @@ Read on to find out more, or visit our [documentation](/docs/) to get started!
 {{% /blocks/cover %}}
 
 {{% blocks/section type="section" color="primary" %}}
+
 ## So what’s a technical documentation site?
 
-A technical documentation site is a website that your users can visit to find the documentation for your technical project.  Your documentation set contains all the information you think your users might need to engage with your project, from overviews that help them understand what the project is for, to instructions for specific tasks. Depending on the size of the project, a documentation set can be a page or two or an entire “book” with different types of information.
+A technical documentation site is a website that your users can visit to find the documentation for your technical project. Your documentation set contains all the information you think your users might need to engage with your project, from overviews that help them understand what the project is for, to instructions for specific tasks. Depending on the size of the project, a documentation set can be a page or two or an entire “book” with different types of information.
 
 **Most users don’t want to have to spend much time looking at docs - they want to try your great project!** So how do you make sure your technical documentation set gives users what they need to easily understand your project and get things done? We think a good technical documentation set should be:
 
-*   **Reliable**: Is it true?
-*   **Comprehensive**: Does it have all the information your target users might need?
-*   **Well-organized and navigable**: Can the user find the information they need? Are similar types of information (all the information about a feature, all your reference information) grouped together?
+- **Reliable**: Is it true?
+- **Comprehensive**: Does it have all the information your target users might need?
+- **Well-organized and navigable**: Can the user find the information they need? Are similar types of information (all the information about a feature, all your reference information) grouped together?
 
 If you have users around the world, you might also want to provide your content in multiple languages, and if you have an open source project, you’ll probably want your users to be able to contribute to the docs.
 
@@ -31,11 +32,12 @@ Once you have your content, you use a technical documentation site to publish yo
 {{% /blocks/section %}}
 
 {{% blocks/section type="section" color="white" %}}
+
 ## How does Docsy help?
 
 Particularly when working with open source projects, it can be difficult to figure out how to turn all your product knowledge into a website that helps and engages your users. **Enter Docsy!**
 
-Docsy gives you a theme for the [Hugo](https://gohugo.io/) static site generator, an established open source tool that builds ready-to-serve websites from a set of theme and content files. The Docsy theme provides you with useful stuff for a technical documentation site that *isn’t* your own content:
+Docsy gives you a theme for the [Hugo](https://gohugo.io/) static site generator, an established open source tool that builds ready-to-serve websites from a set of theme and content files. The Docsy theme provides you with useful stuff for a technical documentation site that _isn’t_ your own content:
 
 <table>
   <tr>
@@ -85,20 +87,20 @@ Docsy gives you a theme for the [Hugo](https://gohugo.io/) static site generator
 ### Simple authoring and publishing
 
 Author your content in the Markdown or HTML and then immediately test it with Hugo's local server. Once you are ready to
-publish, add that content to your project and deploy it to your site using any of Hugo’s supported options. 
+publish, add that content to your project and deploy it to your site using any of Hugo’s supported options.
 [Learn more...](/docs/deployment/)
 
 ### Built-in integration with common tools
 
 The Docsy template currently includes built-in integration with the following tools:
 
-* [**GitHub**](https://github.com): Get in-page links directly to your GitHub repo and provide your users with a
-   convenient pathway to providing feedback, opening issues, and even suggesting changes through Pull Requests.
-* [**Google Analytics**](https://analytics.google.com/analytics/web/): Easily connect your Google Analytics account to your 
-   site.
-* [**Google Custom Search**](https://cse.google.com/cse/): Use Google Custom Search for in-site search queries, or 
+- [**GitHub**](https://github.com): Get in-page links directly to your GitHub repo and provide your users with a
+  convenient pathway to providing feedback, opening issues, and even suggesting changes through Pull Requests.
+- [**Google Analytics**](https://analytics.google.com/analytics/web/): Easily connect your Google Analytics account to your
+  site.
+- [**Google Custom Search**](https://cse.google.com/cse/): Use Google Custom Search for in-site search queries, or
   configure your site to search the web.
-* [**Algolia Docsearch**](https://community.algolia.com/docsearch/): Let your users search your site with Algolia Docsearch.
+- [**Algolia Docsearch**](https://community.algolia.com/docsearch/): Let your users search your site with Algolia Docsearch.
 
 ### Make it your own
 
@@ -110,20 +112,19 @@ We believe a well-organized documentation set can really help your users find th
 
 Docsy also provides autogenerated site navigation based on how you organize your source files, so once you’ve organized your docs in folders in Github or other source control, you’ve got menus for your users to quickly reach the doc they need. [Learn more...](/docs/adding-content/navigation/)
 
-
 ### Keep up to date
 
-Spend time setting up your technical documentation site once, and then focus on what you do best. We work closely with 
-the Hugo team and have individuals actively maintaining the Docsy theme. You can easily get and 
-apply Docsy updates to your site, as well as open feature requests to improve the 
+Spend time setting up your technical documentation site once, and then focus on what you do best. We work closely with
+the Hugo team and have individuals actively maintaining the Docsy theme. You can easily get and
+apply Docsy updates to your site, as well as open feature requests to improve the
 template, or even add new behaviors. [Learn more...](/docs/updating/)
-
 
 ### Focus on great content
 
 Because Docsy helps you create and serve a well-organized, navigable technical documentation set, it frees you up to create and maintain great reliable, comprehensive content that your users can enjoy and trust.
 {{% /blocks/section %}}
 {{% blocks/section type="section" color="primary" %}}
+
 ## What's next for Docsy?
 
 Docsy is an open source project and we love getting patches and contributions to make Docsy and its docs even better. We hope to continue to make improvements to the theme along with the Docsy community.
@@ -132,7 +133,3 @@ Visit our [Issues](https://github.com/google/docsy/issues) to see what we're cur
 
 You can find out how to update your site to the latest version of Docsy in [Keeping the theme up to date](/docs/updating/).
 {{% /blocks/section %}}
-
-
-
-
