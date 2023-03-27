@@ -13,9 +13,9 @@ tags:
 As an application performance monitoring tool for distributed systems, Apache SkyWalking provides monitoring, tracing, diagnosing capabilities for distributed system in Cloud Native architecture.
 [Prometheus](https://prometheus.io/docs/introduction/overview/#what-is-prometheus) is an open-source systems monitoring and alerting toolkit with an active ecosystem.
 Especially Prometheus metrics receive widespread support through [exporters and integrations](https://prometheus.io/docs/instrumenting/exporters/#exporters-and-integrations).
-[PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/#querying-prometheus) as Prometheus Querying Language containing a set of expressions and expose HTTP API to read metrics.
+[PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/#querying-prometheus) as Prometheus Querying Language containing a set of expressions and expose HTTP APIs to read metrics.
 
-SkyWalking is support to ingest Prometheus metrics through [OpenTelemetry collector](https://opentelemetry.io/ecosystem/integrations/) and through the aggregate calculation of these metrics
+SkyWalking supports to ingest Prometheus metrics through [OpenTelemetry collector](https://opentelemetry.io/ecosystem/integrations/) and through the aggregate calculation of these metrics
 to provide a variety of systems monitoring, such as Linux Monitoring and Kubernetes monitoring.
 SkyWalking already provides [native UI](https://skywalking.apache.org/docs/main/next/en/ui/readme/) and [GraphQL API](https://skywalking.apache.org/docs/main/next/en/api/query-protocol/) for users.
 But as designed to provide wider ecological integration capabilities, since 9.4.0, it provides PromQL Service, the third-party systems or visualization platforms that already support PromQL (such as Grafana),
@@ -23,7 +23,7 @@ could obtain metrics through it. SkyWalking users will benefit from it when they
 
 ## What is PromQL Service in SkyWalking?
 PromQL Service is a query engine on the top of SkyWalking native GraphQL query, with additional query stage calculation capabilities powered by Prometheus expressions.
-It can accept PromQL HTTP API requests, parse Prometheus expression, and transform between Prometheus metrics and SkyWalking metrics.
+It can accept PromQL HTTP API requests, parse Prometheus expressions, and transform between Prometheus metrics and SkyWalking metrics.
 
 ![PromQL Service architecture](img_1.png#pic_left)
 
@@ -43,7 +43,7 @@ Unlike Prometheus, SkyWalking's metric mechanism is built around the following c
 - Service: Represents a set/group of workloads which provides the same behaviors for incoming requests.
 - Service Instance: An individual workload in the Service group.
 - Endpoint: A path in a service for incoming requests.
-- Process: An operating system process. In some scenarios, a Service Instance is not a process, such as a pod Kubernetes could contain multiple processes.
+- Process: An operating system process. In some scenarios, a `service instance` is not a process, such as a pod Kubernetes could contain multiple processes.
 
 The metric name and properties (labels) are configured by the SkyWalking OAP server based on the data source as well as OAL and MAL.
 SkyWalking provides the ability to down-sampling time series metrics, and generate different time bucket data (minute, hour, day).
@@ -52,12 +52,12 @@ The SkyWalking metric stream is as follows:
 
 ![SkyWalking metrics stream](img_3.png#pic_left)
 
-Traffic:
+### Traffic
 - The metadata of the
   Service/ServiceRelation/Instance/ServiceInstanceRelation/Endpoint/EndpointRelation/Process/ProcessRelation.
   Include names, layers, properties, relations between them, etc.
 
-Metric
+### Metric
 - Name: metric name, configuration from OAL and MAL.
 - Entity: represents the metrics' belonging and used for the query.
   An Entity will contain the following information depending on the `Scope`：
@@ -75,7 +75,7 @@ Metric
 | Process                 | Service, ServiceInstance, Process      |
 | ProcessRelation         | Process,  ServiceInstance, DestProcess |
 
-- Value:
+### Value:
 1. single value: long.
 2. labeled value: text, `label1,value1|label2,value2|...`, such as `L2 aggregation,5000 | L1 aggregation,8000`.
 
@@ -282,7 +282,7 @@ Here set the data source name `SkyWalking` in case there are multiple Prometheus
 
    ![dashboard.jpg](dashboard.jpg)
 
-This is an easy way to build, but need to know how it works if we want to customize it.
+This is an easy way to build, but we need to know how it works if we want to customize it.
 
 ### How the dashboard works
 
@@ -352,7 +352,7 @@ Let's look at what each variable does:
 
 
 #### Panel Configurations
-There several typical metrics panels on this dashboard, let's see how it's configured.
+There are several typical metrics panels on this dashboard, let's see how it's configured.
 ##### Common Value Metrics
 Select `Time series chart` panel `Service Apdex` and click `edit`.
 ![panel-common-value.jpg](panel-common-value.jpg)
@@ -400,4 +400,4 @@ Select `Time series chart` panel `Service Response Time Percentile` and click `e
 In this article, we introduced what is the PromQL Service in SkyWalking and its background.
 Detailed how to use PromQL Service and the basic concepts related to SkyWalking, and show how to use PromQL Service to build Grafana dashboards for SkyWalking.
 
-In the future, will more integration intro by leveraging this protocol, such as CI/CD, HPA(scaling), etc.
+In the future, there will be more integrations by leveraging this protocol, such as CI/CD, HPA (scaling), etc.
