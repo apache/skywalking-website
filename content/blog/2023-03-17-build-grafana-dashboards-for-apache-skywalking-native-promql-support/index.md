@@ -96,17 +96,17 @@ restAcceptQueueSize: ${SW_PROMQL_REST_QUEUE_SIZE:0}
 ```
 
 ### Use Prometheus expression
-PromQL is matched metric through the Prometheus expression, a typical Prometheus metric is as follows:
+PromQL matches metric through the Prometheus expression. Here is a typical Prometheus metric.
 
 ![Prometheus metric](img_2.png#pic_left)
 
 
-For the match, the Prometheus expression is as follows:
+To match the metric, the Prometheus expression is as follows:
 
 ![Prometheus expression](img_4.png#pic_left)
 
 
-So in the PromQL Service, the expression will be parsed to a metric name and entity info for query, the mapping is as follows:
+In the PromQL Service, these reserved labels would be parsed as the metric name and entity info fields with other labels for the query. The mappings are as follows.
 
 | SkyWalking Concepts | Prometheus expression   |
 |---------------------|-------------------------|
