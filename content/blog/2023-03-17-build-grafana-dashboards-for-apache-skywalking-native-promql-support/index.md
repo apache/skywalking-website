@@ -75,7 +75,7 @@ The SkyWalking metric stream is as follows:
 | Process                 | Service, ServiceInstance, Process      |
 | ProcessRelation         | Process,  ServiceInstance, DestProcess |
 
-### Value:
+- Value:
 1. single value: long.
 2. labeled value: text, `label1,value1|label2,value2|...`, such as `L2 aggregation,5000 | L1 aggregation,8000`.
 
@@ -120,9 +120,9 @@ So in the PromQL Service, the expression will be parsed to a metric name and ent
 For example, the following expressions are used to match query metrics: service_cpm, service_instance_cpm, endpoint_cpm
 
 ```text
-service_cpm{service='$service', layer='$layer'}
-service_instance_cpm{service='$service', service_instance='$service_instance', layer='$layer'}
-endpoint_cpm{service='$service', endpoint='$endpoint', layer='$layer'} 
+service_cpm{service='agent::songs', layer='GENERAL'}
+service_instance_cpm{service='agent::songs', service_instance='agent::songs_instance_1', layer='GENERAL'}
+endpoint_cpm{service='agent::songs', endpoint='GET:/songs', layer='GENERAL'} 
 ```
 
 ### Typical Query Example 
