@@ -1,7 +1,7 @@
 ---
 title: "SkyWalking's New Storage Feature Based on ShardingSphere-Proxy: MySQL-Sharding"
 date: 2022-12-06
-author: Kan Wan (tetrate.io)
+author: Kai Wan (tetrate.io)
 description: "Based on MySQL storage, SkyWalking v9.3.0 provides a new storage method: MySQL-Sharding. It supports database and table sharding features thanks to ShardingSphere-Proxy, which is a mature solution for dealing with relational databases’ massive amounts of data."
 tags:
 - Sharding-Sphere
