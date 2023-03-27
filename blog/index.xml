@@ -14,6 +14,403 @@
     
     
     <item>
+      <title>Blog: Build Grafana dashboards for Apache SkyWalking -- Native PromQL Support</title>
+      <link>/blog/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</link>
+      <pubDate>Thu, 16 Mar 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;As an application performance monitoring tool for distributed systems, Apache SkyWalking provides monitoring, tracing, diagnosing capabilities for distributed system in Cloud Native architecture.
+&lt;a href=&#34;https://prometheus.io/docs/introduction/overview/#what-is-prometheus&#34;&gt;Prometheus&lt;/a&gt; is an open-source systems monitoring and alerting toolkit with an active ecosystem.
+Especially Prometheus metrics receive widespread support through &lt;a href=&#34;https://prometheus.io/docs/instrumenting/exporters/#exporters-and-integrations&#34;&gt;exporters and integrations&lt;/a&gt;.
+&lt;a href=&#34;https://prometheus.io/docs/prometheus/latest/querying/basics/#querying-prometheus&#34;&gt;PromQL&lt;/a&gt; as Prometheus Querying Language containing a set of expressions and expose HTTP APIs to read metrics.&lt;/p&gt;
+&lt;p&gt;SkyWalking supports to ingest Prometheus metrics through &lt;a href=&#34;https://opentelemetry.io/ecosystem/integrations/&#34;&gt;OpenTelemetry collector&lt;/a&gt; and through the aggregate calculation of these metrics
+to provide a variety of systems monitoring, such as Linux Monitoring and Kubernetes monitoring.
+SkyWalking already provides &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;native UI&lt;/a&gt; and &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/&#34;&gt;GraphQL API&lt;/a&gt; for users.
+But as designed to provide wider ecological integration capabilities, since 9.4.0, it provides PromQL Service, the third-party systems or visualization platforms that already support PromQL (such as Grafana),
+could obtain metrics through it. SkyWalking users will benefit from it when they integrate with different systems.&lt;/p&gt;
+&lt;h2 id=&#34;what-is-promql-service-in-skywalking&#34;&gt;What is PromQL Service in SkyWalking?&lt;/h2&gt;
+&lt;p&gt;PromQL Service is a query engine on the top of SkyWalking native GraphQL query, with additional query stage calculation capabilities powered by Prometheus expressions.
+It can accept PromQL HTTP API requests, parse Prometheus expressions, and transform between Prometheus metrics and SkyWalking metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_1.png#pic_left&#34; alt=&#34;PromQL Service architecture&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The PromQL Service follows all PromQL&amp;rsquo;s protocols and grammar and users can use it as they would with PromQL.
+As SkyWalking is fundamentally different from Prometheus in terms of metric classification, format, storage, etc. PromQL Service doesn&amp;rsquo;t have to implement the full PromQL feature.
+Refer to the documentation for the &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#promql-service&#34;&gt;detail&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-basic-concepts&#34;&gt;SkyWalking Basic Concepts&lt;/h2&gt;
+&lt;p&gt;Here are some basic concepts and differences from Prometheus that users need to understand in order to use the PromQL service:
+Prometheus metrics specify the naming format and structure, the actual metric names and labels are determined by the client provider, and the details are stored.
+The user aggregates and calculates the metrics using the expression in PromQL.
+Unlike Prometheus, SkyWalking&amp;rsquo;s metric mechanism is built around the following core concepts with a hierarchical structure:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Layer: represents an abstract framework in computer science, such as Operating System(OS_LINUX layer), Kubernetes(k8s
+layer). This layer would be the owner of different services detected from different technologies. All Layers definitions can be found &lt;a href=&#34;https://github.com/apache/skywalking/blob/master/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java&#34;&gt;here&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Service: Represents a set/group of workloads which provides the same behaviors for incoming requests.&lt;/li&gt;
+&lt;li&gt;Service Instance: An individual workload in the Service group.&lt;/li&gt;
+&lt;li&gt;Endpoint: A path in a service for incoming requests.&lt;/li&gt;
+&lt;li&gt;Process: An operating system process. In some scenarios, a &lt;code&gt;service instance&lt;/code&gt; is not a process, such as a pod Kubernetes could contain multiple processes.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The metric name and properties (labels) are configured by the SkyWalking OAP server based on the data source as well as OAL and MAL.
+SkyWalking provides the ability to down-sampling time series metrics, and generate different time bucket data (minute, hour, day).&lt;/p&gt;
+&lt;p&gt;The SkyWalking metric stream is as follows:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_3.png#pic_left&#34; alt=&#34;SkyWalking metrics stream&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;traffic&#34;&gt;Traffic&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;The metadata of the
+Service/ServiceRelation/Instance/ServiceInstanceRelation/Endpoint/EndpointRelation/Process/ProcessRelation.
+Include names, layers, properties, relations between them, etc.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;metric&#34;&gt;Metric&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Name: metric name, configuration from OAL and MAL.&lt;/li&gt;
+&lt;li&gt;Entity: represents the metrics&#39; belonging and used for the query.
+An Entity will contain the following information depending on the &lt;code&gt;Scope&lt;/code&gt;：
+Scope represents the metrics level and in query stage represents the Scope catalog,
+Scope catalog provides high-dimension classifications for all scopes as a hierarchy structure.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Scope&lt;/th&gt;
+&lt;th&gt;Entity Info&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Service&lt;/td&gt;
+&lt;td&gt;Service(include layer info)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstance&lt;/td&gt;
+&lt;td&gt;Service, ServiceInstance&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Endpoint&lt;/td&gt;
+&lt;td&gt;Service, Endpoint&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceRelation&lt;/td&gt;
+&lt;td&gt;Service, DestService&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstanceRelation&lt;/td&gt;
+&lt;td&gt;ServiceInstance, DestServiceInstance&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;EndpointRelation&lt;/td&gt;
+&lt;td&gt;Endpoint, DestEndpoint&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process&lt;/td&gt;
+&lt;td&gt;Service, ServiceInstance, Process&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ProcessRelation&lt;/td&gt;
+&lt;td&gt;Process,  ServiceInstance, DestProcess&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;Value:&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol&gt;
+&lt;li&gt;single value: long.&lt;/li&gt;
+&lt;li&gt;labeled value: text, &lt;code&gt;label1,value1|label2,value2|...&lt;/code&gt;, such as &lt;code&gt;L2 aggregation,5000 | L1 aggregation,8000&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;TimeBucket: the time is accurate to minute, hour, day.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;how-to-use-promql-service&#34;&gt;How to use PromQL Service&lt;/h2&gt;
+&lt;h3 id=&#34;setup&#34;&gt;Setup&lt;/h3&gt;
+&lt;p&gt;PromQL Service is enabled by default after v9.4.0, so no additional configuration is required.
+The default ports, for example, can be configured by using OAP environment variables:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;restHost: ${SW_PROMQL_REST_HOST:0.0.0.0}
+restPort: ${SW_PROMQL_REST_PORT:9090}
+restContextPath: ${SW_PROMQL_REST_CONTEXT_PATH:/}
+restMaxThreads: ${SW_PROMQL_REST_MAX_THREADS:200}
+restIdleTimeOut: ${SW_PROMQL_REST_IDLE_TIMEOUT:30000}
+restAcceptQueueSize: ${SW_PROMQL_REST_QUEUE_SIZE:0}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;use-prometheus-expression&#34;&gt;Use Prometheus expression&lt;/h3&gt;
+&lt;p&gt;PromQL matches metric through the Prometheus expression. Here is a typical Prometheus metric.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_2.png#pic_left&#34; alt=&#34;Prometheus metric&#34;&gt;&lt;/p&gt;
+&lt;p&gt;To match the metric, the Prometheus expression is as follows:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_4.png#pic_left&#34; alt=&#34;Prometheus expression&#34;&gt;&lt;/p&gt;
+&lt;p&gt;In the PromQL Service, these reserved labels would be parsed as the metric name and entity info fields with other labels for the query. The mappings are as follows.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;SkyWalking Concepts&lt;/th&gt;
+&lt;th&gt;Prometheus expression&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Metric name&lt;/td&gt;
+&lt;td&gt;Metric name&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Layer&lt;/td&gt;
+&lt;td&gt;Label&lt;layer&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Service&lt;/td&gt;
+&lt;td&gt;Label&lt;service&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstance&lt;/td&gt;
+&lt;td&gt;Label&amp;lt;service_instance&amp;gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Endpoint&lt;/td&gt;
+&lt;td&gt;Label&lt;endpoint&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&amp;hellip;&lt;/td&gt;
+&lt;td&gt;&amp;hellip;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For example, the following expressions are used to match query metrics: service_cpm, service_instance_cpm, endpoint_cpm&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_cpm{service=&amp;#39;agent::songs&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;}
+service_instance_cpm{service=&amp;#39;agent::songs&amp;#39;, service_instance=&amp;#39;agent::songs_instance_1&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;}
+endpoint_cpm{service=&amp;#39;agent::songs&amp;#39;, endpoint=&amp;#39;GET:/songs&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;} 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;typical-query-example&#34;&gt;Typical Query Example&lt;/h3&gt;
+&lt;p&gt;At here, we take the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;SkyWalking Showcase&lt;/a&gt; deployment as the playground to demonstrate how to use PromQL for SkyWalking metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_5.png&#34; alt=&#34;Example Services&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The following examples can be used to query the metadata and metrics of services through PromQL Service.&lt;/p&gt;
+&lt;h4 id=&#34;get-metrics-names&#34;&gt;Get metrics names&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://localhost:9099/api/v1/label/__name__/values
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_mysql_instance_qps&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;envoy_cluster_up_rq_active&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;instance_jvm_class_loaded_class_count&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;k8s_cluster_memory_requests&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_used&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_apisix_sv_bandwidth_unmatched&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_total&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;...&lt;/span&gt;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;select-a-metric-and-get-the-labels&#34;&gt;Select a metric and get the labels&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://localhost:9099/api/v1/labels?match[]=service_cpm
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;top_n&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;order&amp;#34;&lt;/span&gt;
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;get-services-from-a-specific-layer&#34;&gt;Get services from a specific layer&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://127.0.0.1:9099/api/v1/series?match[]=service_traffic{layer=&amp;#39;GENERAL&amp;#39;}&amp;amp;start=1677479336&amp;amp;end=1677479636
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::recommendation&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::app&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::gateway&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::frontend&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        }
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;query-specific-metric-for-a-service&#34;&gt;Query specific metric for a service&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://127.0.0.1:9099/api/v1/query?query=service_cpm{service=&amp;#39;agent::songs&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: {
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;resultType&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;vector&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;result&amp;#34;&lt;/span&gt;: [
+      {
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;metric&amp;#34;&lt;/span&gt;: {
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;
+        },
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;value&amp;#34;&lt;/span&gt;: [
+          &lt;span style=&#34;color:#099&#34;&gt;1679559960&lt;/span&gt;,
+          &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;6&amp;#34;&lt;/span&gt;
+        ]
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;About the &lt;code&gt;range query&lt;/code&gt; and different &lt;code&gt;metrics type for query&lt;/code&gt; can refer to the document &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;build-grafana-dashboard&#34;&gt;Build Grafana Dashboard&lt;/h2&gt;
+&lt;p&gt;From the above, we know the mechanism and how to query from PromQL Service, now we can build the Grafana Dashboard for the above service example.
+&lt;strong&gt;Note&lt;/strong&gt;: All the following configurations are based on Grafana version 9.1.0.&lt;/p&gt;
+&lt;p&gt;SkyWalking Showcase provides dashboards files such as services of &lt;code&gt;General&lt;/code&gt; and &lt;code&gt;Service Mesh&lt;/code&gt; layers，
+we can quickly create a dashboard for the &lt;code&gt;General&lt;/code&gt; layer service by importing the dashboard JSON file.&lt;/p&gt;
+&lt;p&gt;After the Grafana application is deployed, follow the steps below:&lt;/p&gt;
+&lt;h3 id=&#34;configure-data-source&#34;&gt;Configure Data Source&lt;/h3&gt;
+&lt;p&gt;First, we need to create a data source:
+In the data source config panel, chose &lt;code&gt;Prometheus&lt;/code&gt; and set the URL to the OAP server address, the default port is &lt;code&gt;9090&lt;/code&gt;.
+Here set the data source name &lt;code&gt;SkyWalking&lt;/code&gt; in case there are multiple Prometheus data sources.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;datasource.jpg&#34; alt=&#34;datasource.jpg&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;import-dashboard-file&#34;&gt;Import Dashboard File&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Create a dashboard folder named &lt;code&gt;SkyWalking&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-folder.jpg&#34; alt=&#34;dashboard-folder.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Import the dashboard file into Grafana, there are two ways to get the file:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;From &lt;a href=&#34;https://github.com/apache/skywalking-showcase/tree/main/deploy/platform/config/promql/dashboards&#34;&gt;SkyWalking Showcase&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Go to SkyWaking Demo: &lt;a href=&#34;https://skywalking.apache.org/#demo&#34;&gt;Preview metrics on Grafana&lt;/a&gt;, and export it from the &lt;code&gt;General Service&lt;/code&gt; dashboard.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-import.jpg&#34; alt=&#34;dashboard-import.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Done! Now we can see the dashboard is working, the services are in the drop-down list and the metrics are displayed on the panels.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard.jpg&#34; alt=&#34;dashboard.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This is an easy way to build, but we need to know how it works if we want to customize it.&lt;/p&gt;
+&lt;h3 id=&#34;how-the-dashboard-works&#34;&gt;How the dashboard works&lt;/h3&gt;
+&lt;h4 id=&#34;dashboard-settings&#34;&gt;Dashboard Settings&lt;/h4&gt;
+&lt;p&gt;Open the &lt;code&gt;Settings-Variables&lt;/code&gt; we can see the following variables:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-variables.jpg&#34; alt=&#34;dashboard-variables.jpg&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Let&amp;rsquo;s look at what each variable does:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$DS_SkyWalking&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This is a data source ty variable that specifies the Prometheus data source which was defined earlier as &lt;code&gt;SkyWalking&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-DS_SkyWalking.jpg&#34; alt=&#34;v-DS_SkyWalking.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$layer&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This is a constant type because in the &amp;lsquo;General Service&amp;rsquo; dashboard, all services belong to the &amp;lsquo;GENERAL&amp;rsquo; layer, so they can be used directly in each query
+&lt;strong&gt;Note&lt;/strong&gt; When you customize other layers, this value must be defined in the &lt;code&gt;Layer&lt;/code&gt; mentioned above.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-layer.jpg&#34; alt=&#34;v-layer.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Query type variable, to get all service names under this layer for the drop-down list.&lt;/p&gt;
+&lt;p&gt;Query expression:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;label_values(service_traffic{layer=&amp;#39;$layer&amp;#39;}, service)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The query expression will query HTTP API &lt;code&gt;/api/v1/series&lt;/code&gt; for service metadata in &lt;code&gt;$layer&lt;/code&gt; and fetch the service name according to the label(service).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-service.jpg&#34; alt=&#34;v-service.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service_instance&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Same as the &lt;code&gt;$service&lt;/code&gt; is a query variable that is used to select all instances of the service in the drop-down list.&lt;/p&gt;
+&lt;p&gt;Query expression:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;label_values(instance_traffic{layer=&amp;#39;$layer&amp;#39;, service=&amp;#39;$service&amp;#39;}, service_instance)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The query expression here not only specifies the &lt;code&gt;$layer&lt;/code&gt; but also contains the variable &lt;code&gt;$service&lt;/code&gt;, which is used to correlate with the services for the drop-down list.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Same as the &lt;code&gt;$service&lt;/code&gt; is a query variable that is used to select all endpoints of the service in the drop-down list.&lt;/p&gt;
+&lt;p&gt;Query expression:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;label_values(endpoint_traffic{layer=&amp;#39;$layer&amp;#39;, service=&amp;#39;$service&amp;#39;, keyword=&amp;#39;$endpoint_keyword&amp;#39;, limit=&amp;#39;$endpoint_limit&amp;#39;}, endpoint)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The query expression here specifies the &lt;code&gt;$layer&lt;/code&gt; and &amp;lsquo;$service&amp;rsquo; which are used to correlate with the services for the drop-down list. And also
+accept variables &lt;code&gt;$endpoint_keyword&lt;/code&gt; and &lt;code&gt;$endpoint_limit&lt;/code&gt; as filtering condition.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_keyword&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;A text type variable that the user can input to filter the return value of &lt;code&gt;$endpoint&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_keyword.jpg&#34; alt=&#34;v-endpoint_keyword.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_limit&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Custom type, which the user can select to limit the maximum number of returned endpoints.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_limit.jpg&#34; alt=&#34;v-endpoint_limit.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;panel-configurations&#34;&gt;Panel Configurations&lt;/h4&gt;
+&lt;p&gt;There are several typical metrics panels on this dashboard, let&amp;rsquo;s see how it&amp;rsquo;s configured.&lt;/p&gt;
+&lt;h5 id=&#34;common-value-metrics&#34;&gt;Common Value Metrics&lt;/h5&gt;
+&lt;p&gt;Select &lt;code&gt;Time series chart&lt;/code&gt; panel &lt;code&gt;Service Apdex&lt;/code&gt; and click &lt;code&gt;edit&lt;/code&gt;.
+&lt;img src=&#34;panel-common-value.jpg&#34; alt=&#34;panel-common-value.jpg&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Query expression
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_apdex{service=&amp;#39;$service&amp;#39;, layer=&amp;#39;$layer&amp;#39;} / 10000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The metric scope is &lt;code&gt;Service&lt;/code&gt;, add labels &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;layer&lt;/code&gt; for the match, and the label value used the variables configured above.
+The calculation &lt;code&gt;Divided by 10000&lt;/code&gt; is used for matching the result units.
+The document for the query can refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#common-value-metrics&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;, because the metrics min time bucket in SkyWalking is 1m.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Connect null values --&amp;gt; Always&lt;/code&gt; and &lt;code&gt;Show points --&amp;gt; Always&lt;/code&gt; because when the query interval &amp;gt; 1 hour or 1 day SkyWalking returns
+the hour/day step metrics values.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h5 id=&#34;labeled-value-metrics&#34;&gt;Labeled Value Metrics&lt;/h5&gt;
+&lt;p&gt;Select &lt;code&gt;Time series chart&lt;/code&gt; panel &lt;code&gt;Service Response Time Percentile&lt;/code&gt; and click &lt;code&gt;edit&lt;/code&gt;.
+&lt;img src=&#34;panel-labeled-value.jpg&#34; alt=&#34;panel-labeled-value.jpg&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Query expression
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_percentile{service=&amp;#39;$service&amp;#39;, layer=&amp;#39;$layer&amp;#39;, labels=&amp;#39;0,1,2,3,4&amp;#39;, relabels=&amp;#39;P50,P75,P90,P95,P99&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The metric scope is &lt;code&gt;Service&lt;/code&gt;, add labels &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;layer&lt;/code&gt; for the match, and the label value used the variables configured above.
+Add &lt;code&gt;labels=&#39;0,1,2,3,4&#39;&lt;/code&gt; filter the result label, and add&lt;code&gt;relabels=&#39;P50,P75,P90,P95,P99&#39;&lt;/code&gt; rename the result label.
+The document for the query can refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#labeled-value-metrics&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;, because the metrics min time bucket in SkyWalking is 1m.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Connect null values --&amp;gt; Always&lt;/code&gt; and &lt;code&gt;Show points --&amp;gt; Always&lt;/code&gt; because when the query interval &amp;gt; 1 hour or 1 day SkyWalking returns
+the hour/day step metrics values.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Legend&lt;/code&gt; to &lt;code&gt;{{label}}&lt;/code&gt; for show up.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h5 id=&#34;sort-metrics&#34;&gt;Sort Metrics&lt;/h5&gt;
+&lt;p&gt;Select &lt;code&gt;Time series chart&lt;/code&gt; panel &lt;code&gt;Service Response Time Percentile&lt;/code&gt; and click &lt;code&gt;edit&lt;/code&gt;.
+&lt;img src=&#34;panel-sort-metric.jpg&#34; alt=&#34;panel-sort-metric.jpg&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Query expression
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_instance_cpm{parent_service=&amp;#39;$service&amp;#39;, layer=&amp;#39;$layer&amp;#39;, top_n=&amp;#39;10&amp;#39;, order=&amp;#39;DES&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The expression is used for query the sore metrics under service, so add labels &lt;code&gt;parent_service&lt;/code&gt; and &lt;code&gt;layer&lt;/code&gt; for the match.
+Add &lt;code&gt;top_n=&#39;10&#39;&lt;/code&gt; and &lt;code&gt;order=&#39;DES&#39;&lt;/code&gt; filter the result.
+The document for the query can refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#sort-metrics&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;, because the metrics min time bucket in SkyWalking is 1m.&lt;/li&gt;
+&lt;li&gt;Set the &lt;code&gt;Calculation --&amp;gt; Latest*&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Legend&lt;/code&gt; to &lt;code&gt;{{service_instance}}&lt;/code&gt; for show up.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we introduced what is the PromQL Service in SkyWalking and its background.
+Detailed how to use PromQL Service and the basic concepts related to SkyWalking, and show how to use PromQL Service to build Grafana dashboards for SkyWalking.&lt;/p&gt;
+&lt;p&gt;In the future, there will be more integrations by leveraging this protocol, such as CI/CD, HPA (scaling), etc.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Monitoring DynamoDB with SkyWalking</title>
       <link>/blog/2023-03-13-skywalking-aws-dynamodb/</link>
       <pubDate>Mon, 13 Mar 2023 00:00:00 +0000</pubDate>
@@ -7492,45 +7889,6 @@ try {
 &lt;p&gt;&lt;em&gt;Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.&lt;/em&gt;&lt;/p&gt;
 &lt;p&gt;&lt;em&gt;Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin&lt;/em&gt;&lt;/p&gt;
 &lt;p&gt;&lt;em&gt;Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer&lt;/em&gt;&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: SkyWalking hits 200 contributors mark</title>
-      <link>/blog/2020-01-20-celebrate-200th-contributor/</link>
-      <pubDate>Mon, 20 Jan 2020 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2020-01-20-celebrate-200th-contributor/</guid>
-      <description>
-        
-        
-        &lt;ul&gt;
-&lt;li&gt;Author: Wu Sheng, tetrate.io, SkyWalking original creator, SkyWalking V.P.&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;GitHub&lt;/a&gt;, &lt;a href=&#34;https://twitter.com/wusheng1108&#34;&gt;Twitter&lt;/a&gt;, &lt;a href=&#34;https://www.linkedin.com/in/wusheng1108&#34;&gt;Linkedin&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img src=&#34;200th-celebration.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;The SkyWalking project provides distributed tracing, topology map analysis, service mesh telemetry analysis, metrics analysis and a super cool visualization
-targeting distributed systems in k8s or traditional VM deployments.&lt;/p&gt;
-&lt;p&gt;The project is widely used in Alibaba, Huawei, Tencent, DiDi, xiaomi, Pingan, China’s top 3 telecom companies (China Mobile, China telecom, China Unicom), airlines, banks and more. It has over 140 company users listed on our &lt;a href=&#34;https://github.com/apache/skywalking/blob/master/docs/powered-by.md&#34;&gt;powered by&lt;/a&gt; page.&lt;/p&gt;
-&lt;p&gt;Today, we welcome and celebrate reaching 200 code contributors on our main repo. We hereby mark this milestone as official today, : &lt;strong&gt;Jan. 20th 2020&lt;/strong&gt;.&lt;/p&gt;
-&lt;p&gt;At this great moment, I would like to share SkyWalking’s 4-year open source journey.&lt;/p&gt;
-&lt;p&gt;I wrote the first line on Nov. 1st, 2015, guiding people to understand a distributed system just as  micro-services and distributed architecture were becoming popular.
-In the first 2 years, I never thought it would become such a big and active community. I didn’t even expect it would be an open source project.
-Initially, the goal was primarily to teach others about distributed tracing and analysis.&lt;/p&gt;
-&lt;p&gt;It was a typical open source project in obscurity in its first two years. But
-people still showed up, asked questions, and tried to improve the project. I got several invitations to share the project at local meetups.All these made me realize people really needed a good open source APM project.&lt;/p&gt;
-&lt;p&gt;In 2017, I decided to dedicate myself as much as possible to make the project successful, and it became my day job. To be honest, I had no clue about how to do that; at that time in China, it was rare to have this kind of job.
-So, I began to ask friends around me, “Do you want to collaborate on the open source APM with me?” Most people were busy and gave a clear &lt;strong&gt;NO&lt;/strong&gt;, but two of them agreed to help: Xin Zhang and Yongsheng Peng. We built SkyWalking 3.x and shared the 3.2 release at GOPS Shanghai, China.&lt;/p&gt;
-&lt;p&gt;It became the first adoption version used in production&lt;/p&gt;
-&lt;p&gt;Compared to today&amp;rsquo;s SkyWalking, it was a toy prototype, but it had the same tracing design, protocol and analysis method.&lt;/p&gt;
-&lt;p&gt;That year the contributor team was 15-20, and the project had obvious potential to expand. I began to consider bringing the project into a worldwide, top-level open source foundation. Thanks to our initial incubator mentors, Michael Semb Wever, William Jiang, and Luke Han, this really worked.
-At the end of 2017, SkyWalking joined the Apache Incubator, and kept following the Apache Way to build community. More contributors joined the community.&lt;/p&gt;
-&lt;p&gt;With more people spending time on the project collaborations, including codes, tests, blogs, conference talks, books and uses of the project, a chemical reaction happens. New developers begin to provide bug fixes, new feature requirements and new proposals.
-At the moment of graduation in spring 2019, the project had 100 contributors. Now, only 9 months later, it’s surged to 200 super quickly. They enhance the project and extend it to frontiers we never imaged: 5 popular language agents, service mesh adoption, CLI tool, super cool visualization. We are even moving on thread profiling, browser performance and Nginx tracing NOW.&lt;/p&gt;
-&lt;p&gt;Over the whole 4+ years open source journey, we have had supports from leaders in the tracing open source community around the world, including Adrian Cole, William Jiang, Luke Han, Michael Semb Wever, Ben Sigelman, and Jonah Kowall. And we’ve had critical  foundations&#39; help, especially Apache Software Foundation and the Cloud Native Computing Foundation.&lt;/p&gt;
-&lt;p&gt;Our contributors also have their support from their employers, including, to the best of my knowledge, Alibaba, Huawei, China Mobile, ke.com, DaoCloud, Lizhi.fm, Yonghui Supermarket, and dangdang.com. I also have support from my employers, &lt;a href=&#34;https://www.tetrate.io/&#34;&gt;tetrate.io&lt;/a&gt;, Huawei, and OneAPM.&lt;/p&gt;
-&lt;p&gt;Thanks to our 200+ contributors and the companies behind them. You make this magic happen.&lt;/p&gt;
 
       </description>
     </item>
