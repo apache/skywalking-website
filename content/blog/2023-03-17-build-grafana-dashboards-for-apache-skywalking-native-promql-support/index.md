@@ -2,7 +2,7 @@
 title: "Build Grafana dashboards for Apache SkyWalking -- Native PromQL Support"
 date: 2023-03-16
 author: "Kai Wan"
-description: "."
+description: "Introduce what is PromQL Service in SkyWalking and how to use it to build Grafana dashboards."
 tags:
 - PromQL
 - Metric
@@ -27,11 +27,9 @@ It can accept PromQL HTTP API requests, parse Prometheus expressions, and transf
 
 ![PromQL Service architecture](img_1.png#pic_left)
 
-As SkyWalking is fundamentally different from Prometheus in terms of metric classification, format, storage, etc.
-The PromQL Service supported will be a subset of the full PromQL.
-Refer to the documentation for specific [compatibility](https://skywalking.apache.org/docs/main/next/en/api/promql-service/#promql-service).
-
-![PromQL Service compatibility](img.png#pic_left)
+The PromQL Service follows all PromQL's protocols and grammar and users can use it as they would with PromQL.
+As SkyWalking is fundamentally different from Prometheus in terms of metric classification, format, storage, etc. PromQL Service doesn't have to implement the full PromQL feature.
+Refer to the documentation for the [detail](https://skywalking.apache.org/docs/main/next/en/api/promql-service/#promql-service).
 
 ## SkyWalking Basic Concepts
 Here are some basic concepts and differences from Prometheus that users need to understand in order to use the PromQL service:
@@ -126,11 +124,11 @@ endpoint_cpm{service='agent::songs', endpoint='GET:/songs', layer='GENERAL'}
 ```
 
 ### Typical Query Example 
-Using the following services observed by SkyWalking as the example (deployment from [SkyWalking Showcase](https://skywalking.apache.org/docs/skywalking-showcase/next/readme/)),
+At here, we take the [SkyWalking Showcase](https://skywalking.apache.org/docs/skywalking-showcase/next/readme/) deployment as the playground to demonstrate how to use PromQL for SkyWalking metrics.
 
 ![Example Services](img_5.png)
 
-The following examples can be used to query the metadata and metrics from PromQL Service: 
+The following examples can be used to query the metadata and metrics of services through PromQL Service.
 
 #### Get metrics names
 Query:
