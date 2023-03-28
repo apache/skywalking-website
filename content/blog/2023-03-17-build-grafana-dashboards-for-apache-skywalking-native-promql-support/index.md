@@ -333,7 +333,7 @@ Let's look at what each variable does:
    ```text
    label_values(endpoint_traffic{layer='$layer', service='$service', keyword='$endpoint_keyword', limit='$endpoint_limit'}, endpoint)
    ```
-   The query expression here specifies the `$layer` and '$service' which are used to correlate with the services for the drop-down list. And also
+   The query expression here specifies the `$layer` and `$service` which are used to correlate with the services for the drop-down list. And also
    accept variables `$endpoint_keyword` and `$endpoint_limit` as filtering condition.
 
 6. **$endpoint_keyword**
