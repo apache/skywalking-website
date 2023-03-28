@@ -14,6 +14,390 @@
     
     
     <item>
+      <title>Zh: 为 Apache SkyWalking 构建 Grafana Dashboard —— 原生 PromQL 支持</title>
+      <link>/zh/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</link>
+      <pubDate>Thu, 16 Mar 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 作为分布式系统的应用性能监控工具，提供了对云原生架构下的分布式系统的监控、跟踪、诊断能力。&lt;a href=&#34;https://prometheus.io/docs/introduction/overview/#what-is-prometheus&#34;&gt;Prometheus&lt;/a&gt; 是一个开源系统监控和警报工具包，具有活跃的生态系统。特别是 Prometheus 指标通过 &lt;a href=&#34;https://prometheus.io/docs/instrumenting/exporters/#exporters-and-integrations&#34;&gt;导出器和集成&lt;/a&gt; 得到广泛支持。 &lt;a href=&#34;https://prometheus.io/docs/prometheus/latest/querying/basics/#querying-prometheus&#34;&gt;PromQL&lt;/a&gt; 作为 Prometheus 查询语言，包含一组表达式并公开 HTTP API 以读取指标。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://opentelemetry.io/ecosystem/integrations/&#34;&gt;SkyWalking 支持通过 OpenTelemetry 收集器&lt;/a&gt; 摄取 Prometheus 指标，并通过这些指标的聚合计算提供多种系统监控，例如 Linux 监控和 Kubernetes 监控。SkyWalking 已经为用户提供了 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;原生 UI&lt;/a&gt; 和 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/&#34;&gt;GraphQL API&lt;/a&gt;。但为了提供更广泛的生态整合能力，从 9.4.0 开始，它提供了 PromQL 服务，已经支持 PromQL 的第三方系统或可视化平台（如 Grafana），可以通过它获取指标。SkyWalking 用户在与不同系统集成时将从中受益。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-中的-promql-服务是什么&#34;&gt;SkyWalking 中的 PromQL 服务是什么？&lt;/h2&gt;
+&lt;p&gt;PromQL 服务是 SkyWalking 原生 GraphQL 查询之上的查询引擎，具有由 Prometheus 表达式提供支持的附加查询阶段计算能力。它可以接受 PromQL HTTP API 请求，解析 Prometheus 表达式，并在 Prometheus 指标和 SkyWalking 指标之间进行转换。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_1.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;PromQL 服务遵循 PromQL 的所有协议和语法，用户可以像使用 PromQL 一样使用它。由于 SkyWalking 在度量分类、格式、存储等方面与 Prometheus 有根本不同，因此 PromQL 服务不必实现完整的 PromQL 功能。&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#promql-service&#34;&gt;有关详细信息&lt;/a&gt;，请参阅文档。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-基本概念&#34;&gt;SkyWalking 基本概念&lt;/h2&gt;
+&lt;p&gt;以下是用户使用 PromQL 服务需要了解的一些基本概念和与 Prometheus 的区别： Prometheus 指标指定命名格式和结构，实际指标名称和标签由客户端提供商确定，并存储详细信息。用户使用 PromQL 中的表达式聚合和计算指标。与 Prometheus 不同，SkyWalking 的度量机制是围绕以下具有层次结构的核心概念构建的：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;层（Layer）：表示计算机科学中的一个抽象框架，如 Operating System（OS_LINUX 层）、Kubernetes（k8s 层）。该层将是从不同技术检测到的不同服务的所有者。&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java&#34;&gt;可以在此处&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;找到所有层定义。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;服务：表示一组 / 一组工作负载，它为传入请求提供相同的行为。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;服务实例：服务组中的单个工作负载。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;端点：传入请求的服务路径。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;进程：操作系统进程。在某些场景下，&lt;code&gt;service instance&lt;/code&gt; 不是一个进程，比如一个 Kubernetes Pod 可能包含多个进程。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Metric 名称和属性（标签）由 SkyWalking OAP 服务器根据数据源以及 OAL 和 MAL 配置。SkyWalking 提供了对时间序列指标进行下采样（down-sampling），并生成不同时间段数据（分钟、小时、天）的能力。&lt;/p&gt;
+&lt;p&gt;SkyWalking 指标流如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_3.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;流量&#34;&gt;流量&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Service/ServiceRelation/Instance/ServiceInstanceRelation/Endpoint/EndpointRelation/Process/ProcessRelation 的元数据。包括名称、层、属性、它们之间的关系等。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;指标&#34;&gt;指标&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;名称（Name）：指标名称，来自 OAL 和 MAL 的配置。&lt;/li&gt;
+&lt;li&gt;实体（Entity）：表示指标的归属，用于查询。一个 Entity 根据 &lt;code&gt;Scope&lt;/code&gt; 不同会包含如下信息： Scope 代表指标级别，在查询阶段代表 Scope catalog，Scope catalog 为所有的 scope 提供了高维的分类，层次结构。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Scope&lt;/th&gt;
+&lt;th&gt;实体信息&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Service&lt;/td&gt;
+&lt;td&gt;服务（包括图层信息）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstance&lt;/td&gt;
+&lt;td&gt;服务、服务实例&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Endpoint&lt;/td&gt;
+&lt;td&gt;服务、端点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceRelation&lt;/td&gt;
+&lt;td&gt;服务，目标服务&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstanceRelation&lt;/td&gt;
+&lt;td&gt;服务实例、目标服务实例&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;EndpointRelation&lt;/td&gt;
+&lt;td&gt;端点、目标端点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process&lt;/td&gt;
+&lt;td&gt;服务、服务实例、流程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ProcessRelation&lt;/td&gt;
+&lt;td&gt;进程、服务实例、DestProcess&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;值：&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol&gt;
+&lt;li&gt;单值：long&lt;/li&gt;
+&lt;li&gt;标签值：文本，&lt;code&gt;label1,value1|label2,value2|...&lt;/code&gt; ，例如 &lt;code&gt;L2 aggregation,5000 | L1 aggregation,8000&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;TimeBucket：时间精确到分钟、小时、天&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;如何使用-promql-服务&#34;&gt;如何使用 PromQL 服务&lt;/h2&gt;
+&lt;h3 id=&#34;设置&#34;&gt;设置&lt;/h3&gt;
+&lt;p&gt;PromQL 服务在 v9.4.0 之后默认开启，不需要额外配置。例如，可以使用 OAP 环境变量配置默认端口：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;restHost: ${SW_PROMQL_REST_HOST:0.0.0.0}
+restPort: ${SW_PROMQL_REST_PORT:9090}
+restContextPath: ${SW_PROMQL_REST_CONTEXT_PATH:/}
+restMaxThreads: ${SW_PROMQL_REST_MAX_THREADS:200}
+restIdleTimeOut: ${SW_PROMQL_REST_IDLE_TIMEOUT:30000}
+restAcceptQueueSize: ${SW_PROMQL_REST_QUEUE_SIZE:0}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;使用-prometheus-表达式&#34;&gt;使用 Prometheus 表达式&lt;/h3&gt;
+&lt;p&gt;PromQL 通过 Prometheus 表达式匹配指标。这是一个典型的 Prometheus 指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_2.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;为了匹配指标，Prometheus 表达式如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_4.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;在 PromQL 服务中，这些保留的标签将被解析为度量名称和实体信息字段以及用于查询的其他标签。映射如下。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;SkyWalking 概念&lt;/th&gt;
+&lt;th&gt;Prometheus 表达&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;指标名称&lt;/td&gt;
+&lt;td&gt;指标名称&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;层&lt;/td&gt;
+&lt;td&gt;标签&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;服务&lt;/td&gt;
+&lt;td&gt;标签&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;服务实例&lt;/td&gt;
+&lt;td&gt;标签 &amp;lt;服务实例&amp;gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;端点&lt;/td&gt;
+&lt;td&gt;标签&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;……&lt;/td&gt;
+&lt;td&gt;……&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;例如，以下表达式用于匹配查询指标：service_cpm、service_instance_cpm、endpoint_cpm&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_cpm {service=&#39;agent::songs&#39;, layer=&#39;GENERAL&#39;}
+service_instance_cpm {service=&#39;agent::songs&#39;, service_instance=&#39;agent::songs_instance_1&#39;, layer=&#39;GENERAL&#39;}
+endpoint_cpm {service=&#39;agent::songs&#39;, endpoint=&#39;GET:/songs&#39;, layer=&#39;GENERAL&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;典型查询示例&#34;&gt;典型查询示例&lt;/h3&gt;
+&lt;p&gt;在这里，我们将 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;SkyWalking Showcase&lt;/a&gt; 部署作为 Playground 来演示如何使用 PromQL 获取 SkyWalking 指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_5.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;以下示例可用于通过 PromQL 服务查询服务的元数据和指标。&lt;/p&gt;
+&lt;h3 id=&#34;获取指标名称&#34;&gt;获取指标名称&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://localhost:9099/api/v1/label/__name__/values
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_mysql_instance_qps&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;envoy_cluster_up_rq_active&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;instance_jvm_class_loaded_class_count&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;k8s_cluster_memory_requests&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_used&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_apisix_sv_bandwidth_unmatched&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_total&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;...&lt;/span&gt;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;选择一个指标并获取标签&#34;&gt;选择一个指标并获取标签&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://localhost:9099/api/v1/labels?match []=service_cpm
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;top_n&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;order&amp;#34;&lt;/span&gt;
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;从特定层获取服务&#34;&gt;从特定层获取服务&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://127.0.0.1:9099/api/v1/series?match []=service_traffic {layer=&#39;GENERAL&#39;}&amp;amp;start=1677479336&amp;amp;end=1677479636
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::recommendation&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::app&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::gateway&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::frontend&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        }
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;查询服务的特定指标&#34;&gt;查询服务的特定指标&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://127.0.0.1:9099/api/v1/query?query=service_cpm {service=&#39;agent::songs&#39;, layer=&#39;GENERAL&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: {
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;resultType&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;vector&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;result&amp;#34;&lt;/span&gt;: [
+      {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;metric&amp;#34;&lt;/span&gt;: {
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;
+        },&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;value&amp;#34;&lt;/span&gt;: [
+          &lt;span style=&#34;color:#099&#34;&gt;1679559960&lt;/span&gt;,
+          &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;6&amp;#34;&lt;/span&gt;
+        ]
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;关于&lt;code&gt;range query&lt;/code&gt;和不同的&lt;code&gt;metrics type for query&lt;/code&gt; 可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service&#34;&gt;这里的&lt;/a&gt; 文档。&lt;/p&gt;
+&lt;h2 id=&#34;构建-grafana-dashboard&#34;&gt;构建 Grafana Dashboard&lt;/h2&gt;
+&lt;p&gt;从上面我们知道了 PromQL 服务的机制和查询方式，现在我们可以为上面的服务示例构建 Grafana Dashboard。&lt;strong&gt;注&lt;/strong&gt;：以下所有配置均基于 Grafana 9.1.0 版本。&lt;/p&gt;
+&lt;p&gt;SkyWalking Showcase 提供了 &lt;code&gt;General Service&lt;/code&gt; 和 &lt;code&gt;Service Mesh&lt;/code&gt; 层等 Dashboard 文件，我们可以通过导入 Dashboard JSON 文件快速为层服务创建 Dashboard。&lt;/p&gt;
+&lt;p&gt;部署 Grafana 应用程序后，请按照以下步骤操作：&lt;/p&gt;
+&lt;h3 id=&#34;配置数据源&#34;&gt;配置数据源&lt;/h3&gt;
+&lt;p&gt;首先，我们需要创建一个数据源： 在数据源配置面板中，选择 &lt;code&gt;Prometheus&lt;/code&gt; 并设置 URL 为 OAP 服务器地址，默认端口为 &lt;code&gt;9090&lt;/code&gt;。 &lt;code&gt;SkyWalking&lt;/code&gt; 如果有多个 Prometheus 数据源，请在此处设置数据源名称。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;datasource.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;导入-dashboard-文件&#34;&gt;导入 Dashboard 文件&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;创建一个名为 &lt;code&gt;SkyWalking&lt;/code&gt; 的 Dashboard 文件夹。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-folder.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;将 Dashboard 文件导入到 Grafana 中，有两种获取文件的方式：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;来自 &lt;a href=&#34;https://github.com/apache/skywalking-showcase/tree/main/deploy/platform/config/promql/dashboards&#34;&gt;SkyWalking Showcase&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;转到 SkyWaking Demo：&lt;a href=&#34;https://skywalking.apache.org/#demo&#34;&gt;在 Grafana 上预览指标&lt;/a&gt;，并将其从 &lt;code&gt;General Service&lt;/code&gt; Dashboard 导出。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-import.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;完毕！现在我们可以看到 Dashboard 正在运行，服务位于下拉列表中，指标显示在面板上。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这是一种简单的构建方式，但是如果我们想要自定义它，我们需要知道它是如何工作的。&lt;/p&gt;
+&lt;h3 id=&#34;dashboard-的工作原理&#34;&gt;Dashboard 的工作原理&lt;/h3&gt;
+&lt;h3 id=&#34;dashboard-设置&#34;&gt;Dashboard 设置&lt;/h3&gt;
+&lt;p&gt;打开 &lt;code&gt;Settings-Variables&lt;/code&gt; 我们可以看到如下变量：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-variables.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;让我们看看每个变量的作用：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$DS_SkyWalking&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这是一个数据源 ty 变量，它指定了之前定义为 &lt;code&gt;SkyWalking&lt;/code&gt; 的 Prometheus 数据源。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-DS_SkyWalking.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$layer&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这是一个常量类型，因为在 &amp;lsquo;General Service&amp;rsquo; Dashboard 中，所有服务都属于 &amp;lsquo;GENERAL&amp;rsquo; 层，因此可以在每个查询中直接使用它们。注意，当您自定义其他层时，必须在 &lt;code&gt;Layer&lt;/code&gt; 上面定义该值。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-layer.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;查询类型变量，为下拉列表获取该层下的所有服务名称。&lt;/p&gt;
+&lt;p&gt;查询表达式：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;label_values (service_traffic {layer=&#39;$layer&#39;}, service)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;查询表达式将查询 HTTP API &lt;code&gt;/api/v1/series&lt;/code&gt;，以获取 &lt;code&gt;$layer&lt;/code&gt; 中服务元数据，并根据标签（服务）提取服务名称。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-service.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service_instance&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;与 &lt;code&gt;$service&lt;/code&gt; 一样，是一个查询变量，用于在下拉列表中选择服务的所有实例。&lt;/p&gt;
+&lt;p&gt;查询表达式：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;label_values (instance_traffic {layer=&#39;$layer&#39;, service=&#39;$service&#39;}, service_instance)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;这里的查询表达式不仅指定了 &lt;code&gt;$layer&lt;/code&gt; 还包含 &lt;code&gt;$service&lt;/code&gt; 变量，用于关联下拉列表的服务。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;与 &lt;code&gt;$service&lt;/code&gt; 一样，是一个查询变量，用于在下拉列表中选择服务的所有端点。&lt;/p&gt;
+&lt;p&gt;查询表达式：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;label_values (endpoint_traffic {layer=&#39;$layer&#39;, service=&#39;$service&#39;, keyword=&#39;$endpoint_keyword&#39;, limit=&#39;$endpoint_limit&#39;}, endpoint)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;此处的查询表达式指定 &lt;code&gt;$layer&lt;/code&gt; 和 &lt;code&gt;$service&lt;/code&gt; 用于与下拉列表的服务相关联的。并且还接受 &lt;code&gt;$endpoint_keyword&lt;/code&gt; 和 &lt;code&gt;$endpoint_limit&lt;/code&gt; 变量作为过滤条件。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_keyword&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;一个文本类型的变量，用户可以输入它来过滤 &lt;code&gt;$endpoint&lt;/code&gt; 的返回值。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_keyword.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_limit&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;自定义类型，用户可以选择它以限制返回端点的最大数量。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_limit.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;dashboard-配置&#34;&gt;Dashboard 配置&lt;/h3&gt;
+&lt;p&gt;这个 Dashboard 上有几个典型的指标面板，让我们看看它是如何配置的。&lt;/p&gt;
+&lt;h3 id=&#34;普通值指标&#34;&gt;普通值指标&lt;/h3&gt;
+&lt;p&gt;选择 &lt;code&gt;Time series chart&lt;/code&gt; 面板 &lt;code&gt;Service Apdex&lt;/code&gt; 并单击 &lt;code&gt;edit。&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;panel-common-value.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;查询表达式&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_apdex {service=&#39;$service&#39;, layer=&#39;$layer&#39;} / 10000
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;指标范围为 &lt;code&gt;Service&lt;/code&gt;，添加 &lt;code&gt;service&lt;/code&gt; 和 &lt;code&gt;layer&lt;/code&gt; 标签用于匹配，label 值使用上面配置的变量。该计算 &lt;code&gt;Divided by 10000&lt;/code&gt; 用于匹配结果单位。查询文档可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#common-value-metrics&#34;&gt;这里&lt;/a&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;，因为 SkyWalking 中的指标最小时间段是 1m。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Connect null values --&amp;gt; AlwaysShow points --&amp;gt; Always&lt;/code&gt;，因为当查询间隔大于 1 小时或 1 天时，SkyWalking 返回小时 / 天步长指标值。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;标签值指标&#34;&gt;标签值指标&lt;/h3&gt;
+&lt;p&gt;选择 &lt;code&gt;Time series chart&lt;/code&gt; 面板 &lt;code&gt;Service Response Time Percentile&lt;/code&gt; 并单击 &lt;code&gt;edit&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;panel-labeled-value.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;查询表达式&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_percentile {service=&#39;$service&#39;, layer=&#39;$layer&#39;, labels=&#39;0,1,2,3,4&#39;, relabels=&#39;P50,P75,P90,P95,P99&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;指标范围为 &lt;code&gt;Service&lt;/code&gt;，添加 &lt;code&gt;service&lt;/code&gt; 和 &lt;code&gt;layer&lt;/code&gt; 标签用于匹配，label 值使用上面配置的变量。添加 &lt;code&gt;labels=&#39;0,1,2,3,4&#39;&lt;/code&gt; 过滤结果标签，并添加 &lt;code&gt;relabels=&#39;P50,P75,P90,P95,P99&#39;&lt;/code&gt; 重命名结果标签。查询文档可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#labeled-value-metrics&#34;&gt;这里&lt;/a&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;，因为 SkyWalking 中的指标最小时间段是 1m。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Connect null values --&amp;gt; AlwaysShow points --&amp;gt; Always&lt;/code&gt;，因为当查询间隔 &amp;gt; 1 小时或 1 天时，SkyWalking 返回小时 / 天步长指标值。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Legend&lt;/code&gt; 为 &lt;code&gt;{{label}}&lt;/code&gt; 来展示。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;排序指标&#34;&gt;排序指标&lt;/h3&gt;
+&lt;p&gt;选择 &lt;code&gt;Time series chart&lt;/code&gt; 面板 &lt;code&gt;Service Response Time Percentile&lt;/code&gt; 并单击 &lt;code&gt;edit&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;panel-sort-metric.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;查询表达式&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_instance_cpm {parent_service=&#39;$service&#39;, layer=&#39;$layer&#39;, top_n=&#39;10&#39;, order=&#39;DES&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;该表达式用于查询服务下的排序指标，因此添加标签 &lt;code&gt;parent_service&lt;/code&gt; 和 &lt;code&gt;layer&lt;/code&gt; 进行匹配。添加 &lt;code&gt;top_n=&#39;10&#39;&lt;/code&gt; 和 &lt;code&gt;order=&#39;DES&#39;&lt;/code&gt; 过滤结果。查询文档可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#sort-metrics&#34;&gt;这里&lt;/a&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;，因为 SkyWalking 中的指标最小时间段是 1m。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Calculation --&amp;gt; Latest*&lt;/code&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Legend&lt;/code&gt; 为 &lt;code&gt;{{service_instance}}&lt;/code&gt; 来展示。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;在这篇文章中，我们介绍了 SkyWalking 中的 PromQL 服务是什么以及它的背景。详细介绍了 PromQL 服务的使用方法和 SkyWalking 相关的基本概念，展示了如何使用 PromQL 服务为 SkyWalking 构建 Grafana Dashboard。&lt;/p&gt;
+&lt;p&gt;未来，将会有更多的集成利用这个协议，比如 CI/CD、HPA（缩放）等。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Zh: 使用SkyWalking监控DynamoDB</title>
       <link>/zh/2023-03-13-skywalking-aws-dynamodb/</link>
       <pubDate>Mon, 13 Mar 2023 00:00:00 +0000</pubDate>
@@ -6616,68 +7000,6 @@ Use module classpath需要选择oap-server&lt;/p&gt;
 &lt;p&gt;答：只要skywalking的探针支持的应该都是可以的。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;问9：sw对于商用的web中间件，如bes、tongweb、websphere、weblogic的支持如何？&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;答：商业组件支持的比较少，因为涉及到相关license的问题，sw项目组需要获得他们的支持来进行数据上报，据我了解，支持不是很好。&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Zh: 关于 ElastiSsearch 因 basic 认证导致 SkyWalking 无法正常调用接口问题</title>
-      <link>/zh/2019-01-02-skywalking-elasticsearch-basic/</link>
-      <pubDate>Wed, 02 Jan 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/zh/2019-01-02-skywalking-elasticsearch-basic/</guid>
-      <description>
-        
-        
-        &lt;p&gt;SkyWalking 依赖 elasticsearch 集群，如果 elasticsearch 安装有 x-pack 插件的话，那么就会存在一个 Basic 认证，导致 skywalking 无法调用 elasticsearch, 解决方法是使用 nginx 做代理，让 nginx 来做这个 Basic 认证，那么这个问题就自然解决了。&lt;/p&gt;
-&lt;p&gt;方法如下:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;安装 nginx&lt;/li&gt;
-&lt;/ol&gt;
-&lt;blockquote&gt;
-&lt;p&gt;yum install -y nginx&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;ol start=&#34;2&#34;&gt;
-&lt;li&gt;配置 nginx&lt;/li&gt;
-&lt;/ol&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;server {
-        listen       9200 default_server;
-        server_name  _;
-        
-        location / {
-                 proxy_set_header Host $host;
-                 proxy_set_header X-Real-IP $remote_addr;
-                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                 proxy_pass http://localhost:9200;
-                 #Basic字符串就是使用你的用户名(admin),密码(12345)编码后的值
-                 #注意:在进行Basic加密的时候要使用如下格式如:admin:123456 注意中间有个冒号
-                 proxy_set_header Authorization &amp;#34;Basic YWRtaW4gMTIzNDU2&amp;#34;;
-        }
-    }
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
-&lt;li&gt;验证&lt;/li&gt;
-&lt;/ol&gt;
-&lt;blockquote&gt;
-&lt;p&gt;curl localhost:9200&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;{
-  &amp;#34;name&amp;#34; : &amp;#34;Yd0rCp9&amp;#34;,
-  &amp;#34;cluster_name&amp;#34; : &amp;#34;es-cn-4590xv9md0009doky&amp;#34;,
-  &amp;#34;cluster_uuid&amp;#34; : &amp;#34;jAPLrqY5R6KWWgHnGCWOAA&amp;#34;,
-  &amp;#34;version&amp;#34; : {
-    &amp;#34;number&amp;#34; : &amp;#34;6.3.2&amp;#34;,
-    &amp;#34;build_flavor&amp;#34; : &amp;#34;default&amp;#34;,
-    &amp;#34;build_type&amp;#34; : &amp;#34;tar&amp;#34;,
-    &amp;#34;build_hash&amp;#34; : &amp;#34;053779d&amp;#34;,
-    &amp;#34;build_date&amp;#34; : &amp;#34;2018-07-20T05:20:23.451332Z&amp;#34;,
-    &amp;#34;build_snapshot&amp;#34; : false,
-    &amp;#34;lucene_version&amp;#34; : &amp;#34;7.3.1&amp;#34;,
-    &amp;#34;minimum_wire_compatibility_version&amp;#34; : &amp;#34;5.6.0&amp;#34;,
-    &amp;#34;minimum_index_compatibility_version&amp;#34; : &amp;#34;5.0.0&amp;#34;
-  },
-  &amp;#34;tagline&amp;#34; : &amp;#34;You Know, for Search&amp;#34;
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;看到如上结果那么恭喜你成功了。&lt;/p&gt;
 
       </description>
     </item>
