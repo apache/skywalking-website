@@ -1,6 +1,6 @@
 ---
 title: "Release Apache SkyWalking Rust 0.7.0"
-date: 2023-03-11
+date: 2023-05-27
 author: SkyWalking Team
 description: "Release Apache SkyWalking Rust 0.7.0."
 ---
