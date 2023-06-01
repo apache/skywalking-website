@@ -24,7 +24,7 @@ This demonstration will consist of the following steps:
 1. **Deploy SkyWalking**: This involves setting up the SkyWalking backend and UI programs, enabling you to see the final effect.
 2. **Compile Golang with SkyWalking Go**: Here, you'll compile the SkyWalking Go Agent into the Golang program you wish to monitor.
 3. **Application Deployment**: You'll export environment variables and deploy the application to facilitate communication between your service and the SkyWalking backend.
-4. **View Results**: Finally, you'll send requests and observe the effects within the SkyWalking UI.
+4. **Visualization on SkyWalking UI**: Finally, you'll send requests and observe the effects within the SkyWalking UI.
 
 ## Deploy SkyWalking
 
@@ -74,6 +74,7 @@ package main
 import (
 	"net/http"
 
+    // This is an important step. DON'T MISS IT.
 	_ "github.com/apache/skywalking-go"
 )
 
@@ -119,7 +120,7 @@ Next, you can start the application:
 > ./test
 ```
 
-## View Results
+## Visualization on SkyWalking UI
 
 Now, you can send a request to the application and observe the results in the SkyWalking UI.
 
