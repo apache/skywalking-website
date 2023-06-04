@@ -68,7 +68,7 @@ go get github.com/apache/skywalking-go
 
 Also, include it in the `main` package of the project. After the inclusion, the code will update to:
 
-```shell
+```go
 package main
 
 import (
@@ -89,7 +89,7 @@ func main() {
 }
 ```
 
-Next, please download the [Go Agent program from the official SkyWalking website](https://skywalking.apache.org/downloads/#SkyWalkingGo). 
+Next, please download the [Go Agent program from the official SkyWalking website](https://skywalking.apache.org/downloads/#GoAgent). 
 When you compile with the go build command, find the agent program that matches your current operating system in the **bin** directory, 
 and add the `-toolexec="/path/to/go-agent -a` parameter. For example, use the following command:
 
