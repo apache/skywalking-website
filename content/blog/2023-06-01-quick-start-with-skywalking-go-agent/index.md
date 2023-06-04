@@ -1,9 +1,9 @@
 ---
 title: "Quick start with SkyWalking Go Agent"
-data: 2023-06-01
+date: 2023-06-01
 author: "Han Liu"
-description: "This post explains how SkyWalking Profiling manages to perform profiling operations when the service executes in a multi-threaded environment."
-tags: 
+description: "Demonstrates how to integrate your application with SkyWalking Go and view the results in the SkyWalking UI."
+tags:
 - Golang
 - Agent
 - Tracing
