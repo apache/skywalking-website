@@ -5,7 +5,7 @@ author: "Apache SkyWalking"
 description: "The Apache SkyWalking community is thrilled to reach the milestone of 22k stars on GitHub!"
 startTime: 2023-06-13T00:00:00Z
 endTime: 2023-06-30T10:00:00Z
-poster: /images/500-mark.png
+poster: ./skywalking-22k-post.gif
 ---
 
 # Celebrating 22k Stars!
