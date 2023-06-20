@@ -106,7 +106,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Yueqin Zhang      | yswdqz      |                                                  |
 | Yuntao Li         | liyuntao    |                                                  |
 | Zhusheng Xu       | aderm       |                                                  |
-
+| Qiang Xu          | xuqiang     |                                                  |
 </div>
 </div>
 
