@@ -1,8 +1,8 @@
 ---
-title: "Activating Performance Analysis Tools with SkyWalking and eBPF under Threshold Conditions -- Continuous Profiling"
+title: "Activating Automatical Performance Analysis -- Continuous Profiling"
 date: 2023-06-25
 author: "Han Liu"
-description: "Introduce and demonstrate how SkyWalking and eBPF implement process monitoring with low energy consumption. It will also detail how, when certain conditions are met, these tools initiate more complex performance tasks to monitor programs."
+description: "Introduce and demonstrate how SkyWalking implements eBPF-based process monitoring with few manual engagements. The profiling could be automatically activated driven by the preset conditions."
 tags:
 - eBPF
 - Profiling
@@ -14,13 +14,16 @@ tags:
 In previous articles, We have discussed how to use SkyWalking and eBPF for performance problem detection within [processes](/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf) and [networks](blog/diagnose-service-mesh-network-performance-with-ebpf). 
 However, there are still two outstanding issues:
 
-1. **Task initiation time**: It's often challenging to quickly determine which processes require performance monitoring when problems occur. 
-Typically, manual intervention is required to identify processes and the types of performance analysis necessary. 
-We need a faster way to detect which processes require performance analysis.
-2. **Resource consumption of tasks**: When tasks are initiated, they may consume more system resources to analyze more extensive performance issues. 
+1. **The timing of the task initiation**: It's always challenging to address the processes that require performance monitoring when problems occur.
+Typically, manual engagement is required to identify processes and the types of performance analysis necessary, which cause extra time during the crash recovery.
+The root cause locating and the time of crash recovery conflict with each other from time to time. 
+In the real case, rebooting would be the first choice of recovery, meanwhile, it destroys the site of crashing.
+2. **Resource consumption of tasks**: The difficulties to determine the profiling scope. Wider profiling causes more resources than it should. 
 We need a method to manage resource consumption and understand which processes necessitate performance analysis.
+3. **Engineer capabilities**: On-call is usually covered by the whole team, which have junior and senior engineers, even senior engineers have their understanding limitation of the complex distributed system, 
+it is nearly impossible to understand the whole system by a single one person.
 
-In this article, we will delve into how we tackle these issues through continuous profiling.
+The **Continuous Profiling** is a new created mechanism to resolve the above issues.
 
 # Mechanism
 
