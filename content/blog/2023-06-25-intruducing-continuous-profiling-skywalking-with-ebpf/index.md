@@ -27,9 +27,8 @@ The **Continuous Profiling** is a new created mechanism to resolve the above iss
 
 # Mechanism
 
-If profiling tasks consume a significant amount of system resources, can we find alternative ways to monitor processes that use fewer system resources? The answer is yes. 
-Currently, SkyWalking establishes policy rules for specified target services, which are then monitored by the eBPF Agent in a low-energy manner. 
-When a policy match occurs, a profiling task is automatically triggered.
+As profiling tasks consume a significant amount of system resources, can we find alternative ways to monitor processes that use fewer system resources? The answer is yes.
+Currently, SkyWalking supports establishing policy rules for specific services to be monitored by the eBPF Agent in a low-energy manner, and run profiling when necessary automatically.
 
 ## Policy
 
@@ -67,8 +66,7 @@ and the user-space program can parse the data content with less system resource 
 
 #### Metrics collector
 
-When the eBPF Agent is monitoring a target process, it would report the collected data to the SkyWalking backend in the form of metrics. 
-This allows users to understand real-time execution status promptly.
+The eBPF agent would report metrics of processes periodically as follows to indicate the process performance in time.
 
 | Name                   | Unit     | Description                                                               |
 |------------------------|----------|---------------------------------------------------------------------------|
@@ -107,9 +105,11 @@ The main reason for this is to prevent frequent task creation due to low thresho
 
 ## Data Flow
 
-The following figure illustrates the data flow of the continuous profiling feature:
+The figure 1 illustrates the data flow of the continuous profiling feature:
 
-![Data Flow](./data-flow.png)
+![Figure 1: Data Flow of Continuous Profiling](./data-flow.png)
+
+*Figure 1: Data Flow of Continuous Profiling*
 
 ### eBPF Agent with Process
 
@@ -119,9 +119,11 @@ it immediately triggers the profiling task for the target process, thereby reduc
 
 #### Sliding window
 
-The sliding window plays a crucial role in the eBPF Agent's threshold determination process, as illustrated in the following figure:
+The sliding window plays a crucial role in the eBPF Agent's threshold determination process, as illustrated in the figure 2:
 
-![Sliding Window](./sliding-window.png)
+![Figure 2: Sliding Window in eBPF Agent](./sliding-window.png)
+
+*Figure 2: Sliding Window in eBPF Agent*
 
 Each element in the array represents the data value for a specified second in time.
 When the sliding window needs to verify whether it is responsible for a rule,
@@ -173,15 +175,19 @@ kubectl port-forward svc/ui 8080:8080 --namespace default
 
 ## Create Continuous Profiling Policy
 
-Currently, we can select the specific service that we wish to monitoring by clicking the **Services** item in the **Service Mesh** panel.
+Currently, continues profiling feature is set by default in the **Service Mesh** panel at the **Service** level.
 
-![Continuous Profiling](./continuous-profiling.png)
+![Figure 3: Continuous Policy Tab](./continuous-profiling.png)
 
-By clicking on the edit button in the above figure, we can edit the continuous analysis configuration for this service.
+*Figure 3: Continuous Policy Tab*
 
-![Edit Continuous Profiling Policy](./edit-continuous-profiling-policy.png)
+By clicking on the edit button aside from the `Policy List`, the polices of current service could be created or updated.
 
-The following configuration are support:
+![Figure 4: Edit Continuous Profiling Policy](./edit-continuous-profiling-polocy.png)
+
+*Figure 4: Edit Continuous Profiling Policy*
+
+Multiple polices are supported. Every policy has the following configurations.
 
 1. **Target Type**: Specifies the type of profiling task to be triggered when the threshold determination is met.
 2. **Items**: For profiling task of the same target, one or more validation items can be specified. 
@@ -194,35 +200,39 @@ As long as one validation item meets the threshold determination, the correspond
 
 ## Done
 
-After clicking the save button, you can see the currently created monitoring rules, as shown in the figure below:
+After clicking the save button, you can see the currently created monitoring rules, as shown in the figure 5:
 
-![Continuous Profiling Monitoring Processes](./continuous-profiling-monitoring.png)
+![Figure 5: Continuous Profiling Monitoring Processes](./continuous-profiling-monitoring.png)
+
+*Figure 5: Continuous Profiling Monitoring Processes*
 
 The data can be divided into the following parts:
 
-1. **Rule list**: On the left, you can see the rule list you have created.
+1. **Policy list**: On the left, you can see the rule list you have created.
 2. **Monitoring Summary List**: Once a rule is selected, you can see which pods and processes would be monitored by this rule. 
 It also summarizes how many profiling tasks have been triggered in the **last 48 hours** by the current pod or process, as well as the last trigger time. 
 This list is also sorted in descending order by the number of triggers to facilitate your quick review.
 
-When you click on a specific process, you can see the data displayed as shown in the figure below:
+When you click on a specific process, a new dashboard would show to list metrics and triggered profiling results.
 
-![Continuous Profiling Triggered Tasks](./continuous-profiling-tasks.png)
+![Figure 6: Continuous Profiling Triggered Tasks](./continuous-profiling-tasks.png)
+
+*Figure 6: Continuous Profiling Triggered Tasks*
 
 The current figure contains the following data contents:
 
-1. **Task Timeline**: It shows when the current process has triggered performance analysis tasks in the **past 48 hours**. And when the mouse hovers over a task, it would also display detailed information: 
+1. **Task Timeline**: It lists all profiling tasks in the **past 48 hours**. And when the mouse hovers over a task, it would also display detailed information:
    1. **Task start and end time**: It indicates when the current performance analysis task was triggered.
-   2. **Trigger reason**: It would display the reason why the current process was triggered and list out what the monitoring indicator was at the time it exceeded the threshold, 
+   2. **Trigger reason**: It would display the reason why the current process was profiled and list out the value of the metric exceeding the threshold when the profiling was triggered.
    so you can quickly understand the reason.
-2. **Task Detail**: Similar to the CPU Profiling and Network Profiling introduced in previous articles, this would display the flame graph or process topology map of the current task, 
-depending on the target type you created.
+2. **Task Detail**: Similar to the CPU Profiling and Network Profiling introduced in previous articles, this would display the flame graph or process topology map of the current task,
+depending on the profiling type.
 
-When you click on the **Metrics** tab, it would display the metric content related to the profiling of the current process, as shown in the figure below.
-Here, only the metrics you have configured for the current process would be collected, other metric information would not be collected. 
-Based on the collected metrics, you can get a comprehensive understanding of the monitoring status of the current process.
+Meanwhile, on the **Metrics** tab, metrics relative to profiling policies are collected to retrieve the historical trend, in order to provide a comprehensive explanation of the trigger point about the profiling.
 
-![Continuous Profiling Metrics](./continuous-profiling-metrics.png)
+![Figure 7: Continuous Profiling Metrics](./continuous-profiling-metrics.png)
+
+*Figure 7: Continuous Profiling Metrics*
 
 # Conclusion
 
@@ -232,4 +242,7 @@ and monitoring the target process with low resource consumption. When it meets t
 it would initiate more complex CPU Profiling and Network Profiling tasks.
 
 In the future, we will offer even more features. Stay tuned!
+* Twitter, [ASFSkyWalking](https://twitter.com/AsfSkyWalking)
+* Slack. Send `Request to join SkyWalking slack` mail to the mail list(`dev@skywalking.apache.org`), we will invite you in.
+* Subscribe to our [medium list](https://medium.com/@AsfSkyWalking).
 
