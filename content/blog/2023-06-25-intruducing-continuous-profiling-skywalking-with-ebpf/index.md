@@ -11,8 +11,8 @@ tags:
 
 # Background
 
-In previous articles, We have discussed how to use SkyWalking and eBPF for performance problem detection within [processes](/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf) and [networks](blog/diagnose-service-mesh-network-performance-with-ebpf). 
-However, there are still two outstanding issues:
+In previous articles, We have discussed how to use SkyWalking and eBPF for performance problem detection within [processes](/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf) and [networks](blog/diagnose-service-mesh-network-performance-with-ebpf).
+They are good methods to locate issues, but still there are some challenges:
 
 1. **The timing of the task initiation**: It's always challenging to address the processes that require performance monitoring when problems occur.
 Typically, manual engagement is required to identify processes and the types of performance analysis necessary, which cause extra time during the crash recovery.
@@ -25,10 +25,10 @@ it is nearly impossible to understand the whole system by a single one person.
 
 The **Continuous Profiling** is a new created mechanism to resolve the above issues.
 
-# Mechanism
+# Automate Profiling
 
-As profiling tasks consume a significant amount of system resources, can we find alternative ways to monitor processes that use fewer system resources? The answer is yes.
-Currently, SkyWalking supports establishing policy rules for specific services to be monitored by the eBPF Agent in a low-energy manner, and run profiling when necessary automatically.
+As profiling is resource costing and high experience required, how about introducing a method to narrow the scope and automate the profiling driven by polices creates by senior SRE engineer?
+So, in 9.5.0, SkyWalking first introduced preset policy rules for specific services to be monitored by the eBPF Agent in a low-energy manner, and run profiling when necessary automatically.
 
 ## Policy
 
