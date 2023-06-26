@@ -267,6 +267,221 @@ it would initiate more complex CPU Profiling and Network Profiling tasks.&lt;/p&
     </item>
     
     <item>
+      <title>Zh: 自动化性能分析——持续剖析</title>
+      <link>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
+&lt;p&gt;在之前的文章中，我们讨论了如何使用 SkyWalking 和 eBPF 来检测性能问题，包括&lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;进程&lt;/a&gt;和&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络&lt;/a&gt;。这些方法可以很好地定位问题，但仍然存在一些挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务启动的时间&lt;/strong&gt;: 当需要进行性能监控时，解决需要性能监控的进程始终是一个挑战。通常需要手动参与，以标识进程和所需的性能分析类型，这会在崩溃恢复期间耗费额外的时间。根本原因定位和崩溃恢复时间有时会发生冲突。在实际情况中，重新启动可能是恢复的第一选择，同时也会破坏崩溃的现场。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务的资源消耗&lt;/strong&gt;: 确定分析范围的困难。过宽的分析范围会导致需要更多的资源。我们需要一种方法来管理资源消耗并了解哪些进程需要性能分析。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;工程师能力&lt;/strong&gt;: 通常由整个团队负责呼叫，其中有初级和高级工程师，即使是高级工程师也对复杂的分布式系统有其理解限制，单个人几乎无法理解整个系统。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;持续剖析（Continuous Profiling）&lt;/strong&gt; 是解决上述问题的新机制。&lt;/p&gt;
+&lt;h1 id=&#34;自动剖析&#34;&gt;自动剖析&lt;/h1&gt;
+&lt;p&gt;由于性能分析的资源消耗和高经验要求，因此引入一种方法以缩小范围并由高级 SRE 工程师创建策略自动剖析。因此，在 9.5.0 中，SkyWalking 首先引入了预设策略规则，以低功耗方式监视特定服务的 eBPF 代理，并在必要时自动运行剖析。&lt;/p&gt;
+&lt;h2 id=&#34;策略&#34;&gt;策略&lt;/h2&gt;
+&lt;p&gt;策略规则指定了如何监视目标进程并确定在满足某些阈值条件时应启动何种类型的分析任务。&lt;/p&gt;
+&lt;p&gt;这些策略规则主要包括以下配置信息：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;监测类型&lt;/strong&gt;: 这指定了应在目标进程上实施什么样的监测。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;阈值确定&lt;/strong&gt;: 这定义了如何确定目标进程是否需要启动分析任务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发任务&lt;/strong&gt;: 这指定了应启动什么类型的性能分析任务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;监测类型&#34;&gt;监测类型&lt;/h3&gt;
+&lt;p&gt;监测类型是通过观察指定进程的数据值来生成相应的指标来确定的。这些指标值可以促进后续的阈值判断操作。在 eBPF 观测中，我们认为以下指标最能直接反映程序的当前性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;监测类型&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;系统负载&lt;/td&gt;
+&lt;td&gt;负载&lt;/td&gt;
+&lt;td&gt;在指定时间段内的系统负载平均值。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程 CPU&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;进程的 CPU 使用率百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程线程计数&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 错误率&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;导致错误响应（例如，4xx 或 5xx 状态代码）的 HTTP 请求的百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 平均响应时间&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;HTTP 请求的平均响应时间。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;相关网络监测&#34;&gt;相关网络监测&lt;/h3&gt;
+&lt;p&gt;监测网络类型的指标不像获取基本进程信息那么简单。它需要启动 eBPF 程序并将其附加到目标进程以进行观测。这类似于我们在先前文章中介绍的&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络分析任务&lt;/a&gt;，不同的是我们不再收集数据包的完整内容。相反，我们仅收集与指定 HTTP 前缀匹配的消息的内容。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，我们可以大大减少内核向用户空间发送数据的次数，用户空间程序可以使用更少的系统资源来解析数据内容。这最终有助于节省系统资源。&lt;/p&gt;
+&lt;h3 id=&#34;指标收集器&#34;&gt;指标收集器&lt;/h3&gt;
+&lt;p&gt;eBPF 代理会定期报告以下进程度量，以指示进程性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;CPU 使用率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;最近一分钟的平均系统负载，每个进程的值相同&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;网络请求错误率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;网络平均响应持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;阈值确定&#34;&gt;阈值确定&lt;/h3&gt;
+&lt;p&gt;对于阈值的确定，eBPF 代理是基于其自身内存中的目标监测进程进行判断，而不是依赖于 SkyWalking 后端执行的计算。这种方法的优点在于，它不必等待复杂后端计算的结果，减少了复杂交互所带来的潜在问题。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，eBPF 代理可以在条件满足后立即启动任务，而无需任何延迟。&lt;/p&gt;
+&lt;p&gt;它包括以下配置项：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;阈值&lt;/strong&gt;: 检查监测值是否符合指定的期望值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;周期&lt;/strong&gt;: 监控数据的时间周期（秒），也可以理解为最近的持续时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;计数&lt;/strong&gt;: 检测期间触发阈值的次数（秒），也可以理解为最近持续时间内指定阈值规则触发的总次数（秒）。一旦满足计数检查，指定的分析任务将被开始。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;触发任务&#34;&gt;触发任务&lt;/h3&gt;
+&lt;p&gt;当 eBPF Agent 检测到指定策略中的阈值决策符合规则时，根据预配置的规则可以启动相应的任务。对于每个不同的目标性能任务，它们的任务启动参数都不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: 它会自动对符合条件的进程进行性能分析，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: 它会对当前机器上同一 &lt;strong&gt;Service Instance&lt;/strong&gt; 中的所有进程进行网络性能分析，以防问题的原因因被收集进程太少而无法实现，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;一旦任务启动，当前进程将在一定时间内不会启动新的剖析任务。主要原因是为了防止因低阈值设置而频繁创建任务，从而影响程序执行。缺省时间为 &lt;code&gt;20&lt;/code&gt; 分钟。&lt;/p&gt;
+&lt;h2 id=&#34;数据流&#34;&gt;数据流&lt;/h2&gt;
+&lt;p&gt;图 1 展示了持续剖析功能的数据流：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;data-flow.png&#34; alt=&#34;图 1: 持续剖析的数据流&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1: 持续剖析的数据流&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;带进程的-ebpf-agent&#34;&gt;带进程的 eBPF Agent&lt;/h3&gt;
+&lt;p&gt;首先，我们需要确保 eBPF Agent 和要监测的进程部署在同一台主机上，以便我们可以从进程中收集相关数据。当 eBPF Agent 检测到符合策略的阈值验证规则时，它会立即为目标进程触发剖析任务，从而减少任何中间步骤并加速定位性能问题的能力。&lt;/p&gt;
+&lt;h3 id=&#34;滑动窗口&#34;&gt;滑动窗口&lt;/h3&gt;
+&lt;p&gt;滑动窗口在 eBPF Agent 的阈值决策过程中发挥着至关重要的作用，如图 2 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sliding-window.png&#34; alt=&#34;图 2: eBPF Agent 中的滑动窗口&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2: eBPF Agent 中的滑动窗口&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数组中的每个元素表示指定时间内的数据值。当滑动窗口需要验证是否负责某个规则时，它从最近的一定数量的元素 (period 参数) 中获取每个元素的内容。如果一个元素超过了阈值，则标记为红色并计数。如果红色元素的数量超过一定数量，则被认为触发了任务。&lt;/p&gt;
+&lt;p&gt;使用滑动窗口具有以下两个优点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;快速检索最近的内容&lt;/strong&gt;：使用滑动窗口，无需进行复杂的计算。你可以通过简单地读取一定数量的最近数组元素来了解数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解决数据峰值问题&lt;/strong&gt;：通过计数进行验证，可以避免数据点突然增加然后快速返回正常的情况。使用多个值进行验证可以揭示超过阈值是频繁还是偶然发生的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;带-skywalking-后端的-ebpf-agent&#34;&gt;带 SkyWalking 后端的 eBPF Agent&lt;/h3&gt;
+&lt;p&gt;eBPF Agent 定期与 SkyWalking 后端通信，涉及三个最关键的操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略同步&lt;/strong&gt;：通过定期的策略同步，eBPF Agent 可以尽可能地让本地机器上的进程与最新的策略规则保持同步。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;指标发送&lt;/strong&gt;：对于已经被监视的进程，eBPF Agent 定期将收集到的数据发送到后端程序。这就使用户能够实时查询当前数据值，用户也可以在出现问题时将此数据与历史值或阈值进行比较。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;剖析任务报告&lt;/strong&gt;：当 eBPF 检测到某个进程触发了策略规则时，它会自动启动性能任务，从当前进程收集相关信息，并将其报告给 SkyWalking 后端。这使用户可以从界面了解&lt;strong&gt;何时、为什么和触发了什么类型的剖析任务&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;演示&#34;&gt;演示&lt;/h1&gt;
+&lt;p&gt;接下来，让我们快速演示持续剖析功能，以便你更具体地了解它的功能。&lt;/p&gt;
+&lt;h2 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase 包含完整的示例服务，并可以使用 SkyWalking 进行监视。有关详细信息，请查看&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在此演示中，我们只部署服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，请运行以下脚本以打开 SkyWalking UI：http://localhost:8080/。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;创建持续剖析策略&#34;&gt;创建持续剖析策略&lt;/h2&gt;
+&lt;p&gt;目前，持续剖析功能在 &lt;strong&gt;Service Mesh&lt;/strong&gt; 面板的 &lt;strong&gt;Service&lt;/strong&gt; 级别中默认设置。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling.png&#34; alt=&#34;图 3: 持续策略选项卡&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3: 持续策略选项卡&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;通过点击 &lt;code&gt;Policy List&lt;/code&gt; 旁边的编辑按钮，可以创建或更新当前服务的策略。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;edit-continuous-profiling-polocy.png&#34; alt=&#34;图 4: 编辑持续剖析策略&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4: 编辑持续剖析策略&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;支持多个策略。每个策略都有以下配置。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;：指定符合阈值决策时要触发的剖析任务的类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;：对于相同目标的剖析任务，可以指定一个或多个验证项目。只要一个验证项目符合阈值决策，就会启动相应的性能分析任务。
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;：指定要为目标进程执行的监视类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;：根据监视类型的不同，需要填写相应的阈值才能完成验证工作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;：指定你要监测的最近几秒钟的数据数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;：确定最近时间段内触发的总秒数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI 正则表达式/列表&lt;/strong&gt;：这适用于 HTTP 监控类型，允许 URL 过滤。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;完成&#34;&gt;完成&lt;/h2&gt;
+&lt;p&gt;单击保存按钮后，你可以看到当前已创建的监控规则，如图 5 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-monitoring.png&#34; alt=&#34;图 5: 持续剖析监控进程&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5: 持续剖析监控进程&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数据可以分为以下几个部分：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略列表&lt;/strong&gt;：在左侧，你可以看到已创建的规则列表。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;监测摘要列表&lt;/strong&gt;：选择规则后，你可以看到哪些 pod 和进程将受到该规则的监视。它还总结了当前 pod 或进程在&lt;strong&gt;过去 48 小时&lt;/strong&gt;内触发的性能分析任务数量，以及最后一个触发时间。该列表还按触发次数降序排列，以便你快速查看。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;当你单击特定进程时，将显示一个新的仪表板以列出指标和触发的剖析结果。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-tasks.png&#34; alt=&#34;图 6: 持续剖析触发的任务&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6: 持续剖析触发的任务&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当前图包含以下数据内容：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;任务时间轴：它列出了过去 48 小时的所有剖析任务。当鼠标悬停在任务上时，它还会显示详细信息：
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务的开始和结束时间&lt;/strong&gt;：它指示当前性能分析任务何时被触发。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发原因&lt;/strong&gt;：它会显示为什么会对当前进程进行剖析，并列出当剖析被触发时超过阈值的度量值，以便你快速了解原因。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务详情&lt;/strong&gt;：与前几篇文章介绍的 CPU 剖析和网络剖析类似，它会显示当前任务的火焰图或进程拓扑图，具体取决于剖析类型。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;同时，在 &lt;strong&gt;Metrics&lt;/strong&gt; 选项卡中，收集与剖析策略相关的指标以检索历史趋势，以便在剖析的触发点提供全面的解释。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-metrics.png&#34; alt=&#34;图 7: 持续剖析指标&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7: 持续剖析指标&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;结论&#34;&gt;结论&lt;/h1&gt;
+&lt;p&gt;在本文中，我详细介绍了 SkyWalking 和 eBPF 中持续剖析功能的工作原理。通常情况下，它涉及将 eBPF Agent 服务部署在要监视的进程所在的同一台计算机上，并以低资源消耗监测目标进程。当它符合阈值条件时，它会启动更复杂的 CPU 剖析和网络剖析任务。&lt;/p&gt;
+&lt;p&gt;在未来，我们将提供更多功能。敬请期待！&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter：&lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack：向邮件列表 (&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;) 发送“Request to join SkyWalking Slack”，我们会邀请你加入。&lt;/li&gt;
+&lt;li&gt;订阅我们的 &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;Medium 列表&lt;/a&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: eBPF enhanced HTTP observability - L7 metrics and tracing</title>
       <link>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
       <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
