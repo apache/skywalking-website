@@ -145,7 +145,7 @@ async function traverseDocsList(result) {
         continue;
       }
       for (const doc of item.docs) {
-        const {repo, repoUrl, docs, description, icon} = item;
+        const {name, repo, repoUrl, docs, description, icon} = item;
         if (!repoUrl) continue;
         let {version, commitId} = doc;
         version = version.toLowerCase();
@@ -158,7 +158,7 @@ async function traverseDocsList(result) {
                   <div class="description-wrapper">
                     <h5>
                     <img width="26" height="26" src="/images/project/${icon}.svg">
-                    ${repo}
+                    ${name}
                     </h5>
                     <p>${description}</p>
                   </div>
