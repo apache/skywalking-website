@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking BanyanDB 0.4.0
-date: 2023-06-02
+date: 2023-07-02
 author: SkyWalking Team
 ---
 
