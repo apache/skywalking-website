@@ -54,7 +54,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Lang Li                          | lilang       |                                                |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
-| Sheng Wu (V.P. and Chair of PMC) | wusheng      | <i class="iconfont icon-twitter"></i> [wusheng1108](https://twitter.com/wusheng1108) |
+| Sheng Wu (Project V.P.)         | wusheng      | <i class="iconfont icon-twitter"></i> [wusheng1108](https://twitter.com/wusheng1108) |
 | Shinn Zhang                      | zhangxin     | <i class="iconfont icon-twitter"></i> [ascrutae](https://twitter.com/ascrutae)       |
 | Wei Zhang                        | zhangwei24   |                                                |
 | Wenbing Wang                     | wangwenbin   |                                                |
