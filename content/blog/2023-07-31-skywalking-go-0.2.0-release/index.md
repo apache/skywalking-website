@@ -20,7 +20,7 @@ The logs are organized and sent to the SkyWalking backend for visualization. You
 ![Reported Logging](reported_logging.png)
 
 ## Making Logs Searchable
-You can configure certain log fields to make them searchable in SkyWalking. Set the SW_AGENT_LOG_REPORTER_LABEL_KEYS environment variable to include additional fields beyond the default log level.
+You can configure certain log fields to make them searchable in SkyWalking. Set the `SW_AGENT_LOG_REPORTER_LABEL_KEYS` environment variable to include additional fields beyond the default log level.
 
 For example, with logrus:
 
@@ -30,12 +30,20 @@ logrus.WithField("module", "test-service").Info("test log")
 ```
 
 ## Metrics Reporting
-The agent can now collect and report custom metrics data from runtime/metrics to the backend. Supported metrics are documented [here](https://pkg.go.dev/runtime/metrics#hdr-Metric_key_format).
+The agent can now collect and report custom metrics data from `runtime/metrics` to the backend. Supported metrics are documented [here](https://pkg.go.dev/runtime/metrics#hdr-Metric_key_format).
 
 ![Runtime Metrics](metrics.png)
 
 # Automatic Instrumentation
-In 0.1.0, you had to manually integrate the agent into your apps. Now, the new commands can automatically analyze and instrument projects at a specified path, no code changes needed! Or you can still use the original manual [approach](https://github.com/apache/skywalking-go/blob/main/docs/en/setup/gobuild.md#22-code-dependency) if preferred.
+In 0.1.0, you had to manually integrate the agent into your apps. Now, the new commands can automatically analyze and instrument projects at a specified path, no code changes needed!
+Try using the following command to import `skywalking-go` into your project:
+
+```shell
+# inject to project at current path
+skywalking-go-agent -inject=./ -all
+```
+
+Or you can still use the original manual [approach](https://github.com/apache/skywalking-go/blob/main/docs/en/setup/gobuild.md#22-code-dependency) if preferred.
 
 # Get It Now!
 
