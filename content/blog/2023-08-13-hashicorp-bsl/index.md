@@ -138,8 +138,14 @@ _The GitHub ID is listed about the PMC members did the evaluations._
 ### If I am using Consule to manage SkyWalking Cluster, does this license change bring an implication?
 
 **YES**, anyone using their server sides would be affected once you upgrade to later released versions after Aug. 10th, 2023.
-But, notice that, the implication about whether voilating BSL 1.1 is determined by the HashiCorp Inc. We can't provide any suggestions.
+
+This is HashiCorp's statement
+> End users can continue to copy, modify, and redistribute the code for all non-commercial and commercial use, except where providing a competitive offering to HashiCorp. Partners can continue to build integrations for our joint customers. We will continue to work closely with the cloud service providers to ensure deep support for our mutual technologies. Customers of enterprise and cloud-managed HashiCorp products will see no change as well.
+Vendors who provide competitive services built on our community products will no longer be able to incorporate future releases, bug fixes, or security patches contributed to our products.
+
+So, notice that, the implication about whether voilating BSL 1.1 is determined by the HashiCorp Inc about the status of the identified competitive relationship. We can't provide any suggestions.
 Please refer to [FAQs and contacts](https://www.hashicorp.com/license-faq) for the official explanations.
+
 
 ### Will SkyWalking continoue to use HashiCorp Consul as an optional cluster coordinator and/or an optional dynamic configuration server?
 
