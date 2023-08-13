@@ -135,7 +135,7 @@ SkyWalking community have found out all following dependencies of all relative r
 _The GitHub ID is listed about the PMC members did the evaluations._
 
 ## FAQ
-### If I am using Consule to manage SkyWalking Cluster, does this license change bring an implication?
+### If I am using Consul to manage SkyWalking Cluster or configurations, does this license change bring an implication?
 
 **YES**, anyone using their server sides would be affected once you upgrade to later released versions after Aug. 10th, 2023.
 
