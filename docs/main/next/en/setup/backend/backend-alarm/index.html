@@ -40,7 +40,7 @@ The alerting core is driven by a collection of rules defined in config/alarm-set
 The alerting core is driven by a collection of rules defined in config/alarm-settings.yml. There are three parts to alerting rule definitions.
  alerting rules. They define how metrics alerting should be triggered and what conditions should be considered. hooks. The list of hooks, which should be called after an alerting is triggered.">
 
-<meta itemprop="wordCount" content="2428">
+<meta itemprop="wordCount" content="2066">
 
 
 
@@ -2212,7 +2212,7 @@ if (!doNotTrack) {
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: a96d9a1</div>
+                  <div class="commit-id">Commit Id: 8763359</div>
                 
 
 
@@ -2284,35 +2284,27 @@ There are three parts to alerting rule definitions.</p>
 <li><strong>Endpoint Relation</strong>: {Source endpoint name} in {Source Service name} to {Dest endpoint name} in {Dest service name}</li>
 </ul>
 <h2 id="rules">Rules</h2>
-<p><strong>There are two types of rules: individual rules and composite rules. A composite rule is a combination of individual rules.</strong></p>
-<h3 id="individual-rules">Individual rules</h3>
 <p>An alerting rule is made up of the following elements:</p>
 <ul>
 <li><strong>Rule name</strong>. A unique name shown in the alarm message. It must end with <code>_rule</code>.</li>
-<li><strong>Metrics name</strong>. This is also the metrics name in the OAL script. Only long, double, int types are supported. See the
-<a href="#list-of-all-potential-metrics-name">list of all potential metrics name</a>. Events can also be configured as the source
-of Alarm. Please refer to <a href="../../../concepts-and-designs/event">the event doc</a> for more details.</li>
+<li><strong>Expression</strong>. A <a href="../../../api/metrics-query-expression">MQE</a> expression that defines the conditions of the rule.
+The result type must be <code>SINGLE_VALUE</code> and the root operation of the expression must be a <a href="../../../api/metrics-query-expression#compare-operation">Compare Operation</a> which provides <code>1</code>(true) or <code>0</code>(false) result.
+When the result is <code>1</code>(true), the alarm will be triggered.
+For example, <code>avg(service_resp_time / 1000) &gt; 1</code> is a valid expression to indicate the request latency is slower than 1s. The typical illegal expressions are
+<ul>
+<li><code>avg(service_resp_time &gt; 1000) + 1</code> expression doesn&rsquo;t use <code>compare operation</code></li>
+<li><code>service_resp_time &gt; 1000</code> expression return a <code>TIME_SERIES_VALUES</code> type of values rather than a <code>SINGLE_VALUE</code> value.</li>
+</ul>
+</li>
+</ul>
+<p>The metrics names in the expression could be found in the <a href="#list-of-all-potential-metrics-name">list of all potential metrics name</a> doc.</p>
+<ul>
 <li><strong>Include names</strong>. Entity names that are included in this rule. Please follow the <a href="#entity-name">entity name definitions</a>.</li>
 <li><strong>Exclude names</strong>. Entity names that are excluded from this rule. Please follow the <a href="#entity-name">entity name definitions</a>.</li>
 <li><strong>Include names regex</strong>. A regex that includes entity names. If both include-name list and include-name regex are set, both rules will take effect.</li>
 <li><strong>Exclude names regex</strong>. A regex that excludes entity names. Both rules will take effect if both include-label list and include-label regex are set.</li>
-<li><strong>Include labels</strong>. Metric labels that are included in this rule.</li>
-<li><strong>Exclude labels</strong>. Metric labels that are excluded from this rule.</li>
-<li><strong>Include labels regex</strong>. A regex that includes labels. If both include-label list and include-label regex are set, both rules will take effect.</li>
-<li><strong>Exclude labels regex</strong>. A regex that excludes labels. Both rules will take effect if both exclude-label list and exclude-label regex are set.</li>
 <li><strong>Tags</strong>. Tags are key/value pairs that are attached to alarms. Tags are used to specify distinguishing attributes of alarms that are meaningful and relevant to users. If you want to make these tags searchable on the SkyWalking UI, you may set the tag keys in <code>core/default/searchableAlarmTags</code> or through the system environment variable <code>SW_SEARCHABLE_ALARM_TAG_KEYS</code>. The key <code>level</code> is supported by default.</li>
-</ul>
-<p><em>Label settings are required by the meter system. They are used to store metrics from the label-system platform, such as Prometheus, Micrometer, etc.
-The four label settings mentioned above must implement <code>LabeledValueHolder</code>.</em></p>
-<ul>
-<li><strong>Threshold</strong>. The target value.
-For multiple-value metrics, such as <strong>percentile</strong>, the threshold is an array. It is described as:  <code>value1, value2, value3, value4, value5</code>.
-Each value may serve as the threshold for each value of the metrics. Set the value to <code>-</code> if you do not wish to trigger the Alarm by one or more of the values.<br>
-For example, in <strong>percentile</strong>, <code>value1</code> is the threshold of P50, and <code>-, -, value3, value4, value5</code> means that there is no threshold for P50 and P75 in the percentile alarm rule.</li>
-<li><strong>OP</strong>. The operator. It supports <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>==</code>, <code>!=</code>. We welcome contributions of all OPs.</li>
 <li><strong>Period</strong>. The size of metrics cache in minutes for checking the alarm conditions. This is a time window that corresponds to the backend deployment env time.</li>
-<li><strong>Count</strong>. Within a period window, if the number of times which <strong>value</strong> goes over the threshold (based on OP) reaches <code>count</code>, then an alarm will be sent.</li>
-<li><strong>Only as condition</strong>. Indicates if the rule can send notifications or if it simply serves as a condition of the composite rule.</li>
 <li><strong>Hooks</strong>. Binding the specific names of the hooks when the alarm is triggered.
 The name format is <code>{hookType}.{hookName}</code> (slack.custom1 e.g.) and must be defined in the <code>hooks</code> section of the <code>alarm-settings.yml</code> file.
 If the hook name is not specified, the global hook will be used.</li>
@@ -2347,82 +2339,52 @@ By default, it works in the same manner as <strong>period</strong>. The same Ala
 <ul>
 <li><code>Period</code>(Time point T1 ~ T7) are continuous data points for minutes. Notice, alerts are not supported above minute-by-minute periods as they would not be efficient.</li>
 <li>Values(Value1 ~ Value7) are the values or labeled values for every time point.</li>
-<li><code>Count</code>&rsquo;s value(N) represents there are N values in the window matched the operator and threshold.</li>
+<li><code>Expression</code> is calculated based on the metric values(Value1 ~ Value7).
+For example, expression <code>avg(service_resp_time) &gt; 1000</code>, if the value are <code>1001, 1001, 1001, 1001, 1001, 1001, 1001</code>,
+the calculation is <code>((1001 + 10001 + ... + 1001) / 7) &gt; 1000</code> and the result would be <code>1</code>(true). Then the alarm would be triggered.</li>
 <li>In every minute, the window would shift automatically. At T8, Value8 would be cached, and T1/Value1 would be removed from the window.</li>
 </ul>
-<h3 id="composite-rules">Composite rules</h3>
-<p><strong>NOTE</strong>: Composite rules are only applicable to alerting rules targeting the same entity level, such as service-level alarm rules (<code>service_percent_rule &amp;&amp; service_resp_time_percentile_rule</code>). Do not compose alarm rules of different entity levels, such as an alarm rule of the service metrics with another rule of the endpoint metrics.</p>
-<p>A composite rule is made up of the following elements:</p>
-<ul>
-<li><strong>Rule name</strong>. A unique name shown in the alarm message. Must end with <code>_rule</code>.</li>
-<li><strong>Expression</strong>. Specifies how to compose rules, and supports <code>&amp;&amp;</code>, <code>||</code>, and <code>()</code>.</li>
-<li><strong>Message</strong>. The notification message to be sent out when the rule is triggered.</li>
-<li><strong>Tags</strong>. Tags are key/value pairs that are attached to alarms. Tags are used to specify distinguishing attributes of alarms that are meaningful and relevant to users.</li>
-<li><strong>Hooks</strong>. Binding the specific names of the hooks when the alarm is triggered.
-The name format is <code>{hookType}.{hookName}</code> (slack.custom1 e.g.) and must be defined in the <code>hooks</code> section of the <code>alarm-settings.yml</code> file.
-If the hook name is not specified, the global hooks will be used.</li>
-</ul>
+<p>Notice: If the expression include labeled metrics and result has multiple labeled value(e.g. <code>sum(service_percentile{_='0,1'} &gt; 1000) &gt;= 3</code>), the alarm will be triggered if any of the labeled value result matches 3 times of the condition(P50 &gt; 1000 or P75 &gt; 1000).</p>
 <div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">rules</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#998;font-style:italic"># Rule unique name, must be ended with `_rule`.</span><span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#000080">endpoint_percent_rule</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Metrics value need to be long, double or int</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">metrics-name</span>:<span style="color:#bbb"> </span>endpoint_percent<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">threshold</span>:<span style="color:#bbb"> </span><span style="color:#099">75</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">op</span>:<span style="color:#bbb"> </span>&lt;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># A MQE expression and the root operation of the expression must be a Compare Operation.</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">expression</span>:<span style="color:#bbb"> </span>sum((endpoint_sla / 100) &lt; 75) &gt;= 3<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># The length of time to evaluate the metrics</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">period</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># How many times after the metrics match the condition, will trigger alarm</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">count</span>:<span style="color:#bbb"> </span><span style="color:#099">3</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># How many times of checks, the alarm keeps silence after alarm triggered, default as same as period.</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">silence-period</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Specify if the rule can send notification or just as an condition of composite rule</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">only-as-condition</span>:<span style="color:#bbb"> </span><span style="color:#000;font-weight:bold">false</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>Successful rate of endpoint {name} is lower than 75%<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">tags</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">      </span><span style="color:#000080">level</span>:<span style="color:#bbb"> </span>WARNING<span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#000080">service_percent_rule</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">metrics-name</span>:<span style="color:#bbb"> </span>service_percent<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">expression</span>:<span style="color:#bbb"> </span>sum((service_sla / 100) &lt; 85) &gt;= 4<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># [Optional] Default, match all services in this metrics</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">include-names</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">      </span>- service_a<span style="color:#bbb">
 </span><span style="color:#bbb">      </span>- service_b<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">exclude-names</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">      </span>- service_c<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Single value metrics threshold.</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">threshold</span>:<span style="color:#bbb"> </span><span style="color:#099">85</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">op</span>:<span style="color:#bbb"> </span>&lt;<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">period</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">count</span>:<span style="color:#bbb"> </span><span style="color:#099">4</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">only-as-condition</span>:<span style="color:#bbb"> </span><span style="color:#000;font-weight:bold">false</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>Service {name} successful rate is less than 85%<span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#000080">service_resp_time_percentile_rule</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Metrics value need to be long, double or int</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">metrics-name</span>:<span style="color:#bbb"> </span>service_percentile<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">op</span>:<span style="color:#bbb"> </span><span style="color:#d14">&#34;&gt;&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Multiple value metrics threshold. Thresholds for P50, P75, P90, P95, P99.</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">threshold</span>:<span style="color:#bbb"> </span><span style="color:#099">1000</span>,<span style="color:#099">1000</span>,<span style="color:#099">1000</span>,<span style="color:#099">1000</span>,<span style="color:#099">1000</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">expression</span>:<span style="color:#bbb"> </span>sum(service_percentile{_=&#39;0,1,2,3,4&#39;} &gt; 1000) &gt;= 3<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">period</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">count</span>:<span style="color:#bbb"> </span><span style="color:#099">3</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">silence-period</span>:<span style="color:#bbb"> </span><span style="color:#099">5</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>Percentile response time of service {name} alarm in 3 minutes of last 10 minutes, due to more than one condition of p50 &gt; 1000, p75 &gt; 1000, p90 &gt; 1000, p95 &gt; 1000, p99 &gt; 1000<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">only-as-condition</span>:<span style="color:#bbb"> </span><span style="color:#000;font-weight:bold">false</span><span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#000080">meter_service_status_code_rule</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">metrics-name</span>:<span style="color:#bbb"> </span>meter_status_code<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">exclude-labels</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;200&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">op</span>:<span style="color:#bbb"> </span><span style="color:#d14">&#34;&gt;&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">threshold</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">expression</span>:<span style="color:#bbb"> </span>sum(aggregate_labels(meter_status_code{_=&#39;4xx,5xx&#39;},sum) &gt; 10) &gt; 3<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">period</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">count</span>:<span style="color:#bbb"> </span><span style="color:#099">3</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">silence-period</span>:<span style="color:#bbb"> </span><span style="color:#099">5</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>The request number of entity {name} non-200 status is more than expected.<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">only-as-condition</span>:<span style="color:#bbb"> </span><span style="color:#000;font-weight:bold">false</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>The request number of entity {name} 4xx and 5xx status is more than expected.<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">hooks</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;slack.custom1&#34;</span><span style="color:#bbb">
 </span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;pagerduty.custom1&#34;</span><span style="color:#bbb">
-</span><span style="color:#bbb"></span><span style="color:#000080">composite-rules</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#000080">comp_rule</span>:<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Must satisfied percent rule and resp time rule </span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">expression</span>:<span style="color:#bbb"> </span>service_percent_rule &amp;&amp; service_resp_time_percentile_rule<span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>Service {name} successful rate is less than 80% and P50 of response time is over 1000ms<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">expression</span>:<span style="color:#bbb"> </span>(avg(service_sla / 100) &gt; 80) * (avg(service_percentile{_=&#39;0&#39;}) &gt; 1000) == 1<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">period</span>:<span style="color:#bbb"> </span><span style="color:#099">10</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">message</span>:<span style="color:#bbb"> </span>Service {name} avg successful rate is less than 80% and P50 of avg response time is over 1000ms in last 10 minutes.<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">tags</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">      </span><span style="color:#000080">level</span>:<span style="color:#bbb"> </span>CRITICAL<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">hooks</span>:<span style="color:#bbb">
@@ -2441,9 +2403,7 @@ If the hook name is not specified, the global hooks will be used.</li>
 <li>Endpoint relation average response time over 1s in the last 2 minutes.</li>
 </ol>
 <h3 id="list-of-all-potential-metrics-name">List of all potential metrics name</h3>
-<p>The metrics names are defined in the official <a href="../../../guides/backend-oal-scripts">OAL scripts</a> and
-<a href="../../../concepts-and-designs/mal">MAL scripts</a>, the <a href="../../../concepts-and-designs/event">Event</a> names can also serve
-as the metrics names, all possible event names can be also found in <a href="../../../concepts-and-designs/event">the Event doc</a>.</p>
+<p>The metrics names are defined in the official <a href="../../../guides/backend-oal-scripts">OAL scripts</a> and <a href="../../../concepts-and-designs/mal">MAL scripts</a>.</p>
 <p>Currently, metrics from the <strong>Service</strong>, <strong>Service Instance</strong>, <strong>Endpoint</strong>, <strong>Service Relation</strong>, <strong>Service Instance Relation</strong>, <strong>Endpoint Relation</strong> scopes could be used in Alarm, and the <strong>Database access</strong> scope is the same as <strong>Service</strong>.</p>
 <p>Submit an issue or a pull request if you want to support any other scopes in Alarm.</p>
 <h2 id="hooks">Hooks</h2>
@@ -2652,7 +2612,7 @@ The alarm message will be sent through HTTP post by <code>application/json</code
 <p>Since 6.5.0, the alerting settings can be updated dynamically at runtime by <a href="../dynamic-config">Dynamic Configuration</a>,
 which will override the settings in <code>alarm-settings.yml</code>.</p>
 <p>In order to determine whether an alerting rule is triggered or not, SkyWalking needs to cache the metrics of a time window for
-each alerting rule. If any attribute (<code>metrics-name</code>, <code>op</code>, <code>threshold</code>, <code>period</code>, <code>count</code>, etc.) of a rule is changed,
+each alerting rule. If any attribute (<code>expression</code>, <code>period</code>, etc.) of a rule is changed,
 the sliding window will be destroyed and re-created, causing the Alarm of this specific rule to restart again.</p>
 <h3 id="keys-with-data-types-of-alerting-rule-configuration-file">Keys with data types of alerting rule configuration file</h3>
 <table>
@@ -2665,6 +2625,12 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>Expression</td>
+<td>expression</td>
+<td>string</td>
+<td>MQE expression</td>
+</tr>
 <tr>
 <td>Include names</td>
 <td>include-names</td>
@@ -2690,63 +2656,15 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
 <td>Java regex Pattern</td>
 </tr>
 <tr>
-<td>Include labels</td>
-<td>include-labels</td>
-<td>string array</td>
-<td></td>
-</tr>
-<tr>
-<td>Exclude labels</td>
-<td>exclude-labels</td>
-<td>string array</td>
-<td></td>
-</tr>
-<tr>
-<td>Include labels regex</td>
-<td>include-labels-regex</td>
-<td>string</td>
-<td>Java regex Pattern</td>
-</tr>
-<tr>
-<td>Exclude labels regex</td>
-<td>exclude-labels-regex</td>
-<td>string</td>
-<td>Java regex Pattern</td>
-</tr>
-<tr>
 <td>Tags</td>
 <td>tags</td>
 <td>key-value pair</td>
 <td></td>
 </tr>
 <tr>
-<td>Threshold</td>
-<td>threshold</td>
-<td>number</td>
-<td></td>
-</tr>
-<tr>
-<td>OP</td>
-<td>op</td>
-<td>operator</td>
-<td>example: <code>&gt;</code>, <code>&gt;=</code></td>
-</tr>
-<tr>
 <td>Period</td>
 <td>Period</td>
 <td>int</td>
-<td></td>
-</tr>
-<tr>
-<td>Count</td>
-<td>count</td>
-<td>int</td>
-<td></td>
-</tr>
-<tr>
-<td>Only as condition</td>
-<td>only-as-condition</td>
-<td>boolean</td>
 <td></td>
 </tr>
 <tr>
@@ -2809,8 +2727,6 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
         <li><a href="#entity-name">Entity name</a></li>
         <li><a href="#rules">Rules</a>
           <ul>
-            <li><a href="#individual-rules">Individual rules</a></li>
-            <li><a href="#composite-rules">Composite rules</a></li>
             <li><a href="#default-alarm-rules">Default alarm rules</a></li>
             <li><a href="#list-of-all-potential-metrics-name">List of all potential metrics name</a></li>
           </ul>
@@ -7461,6 +7377,12 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
 
 
 
+
+
+
+
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -7474,6 +7396,8 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
         </div>
 
         <div class="content-box">
+            
+            
             
             
             
@@ -7497,6 +7421,10 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
                     
                 </a>
             </div>
+            
+            
+            
+            
             
             
             
