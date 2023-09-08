@@ -3,7 +3,7 @@ title: "SkyWalking Summit 2023 @ Shanghai China"
 date: 2023-09-07
 author: SkyWalking Team
 description:  SkyWalking community hosts SkyWalking Summit 2023 @ Shanghai on Nov. 4th. sponsored by ZMOps and Tetrate.
-endTime: 2023-11-04T24:00:00Z
+endTime: 2023-11-04T23:00:00Z
 poster: /events/summit-23-cn/banner.jpg
 ---
 
