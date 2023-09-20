@@ -14,6 +14,420 @@
     
     
     <item>
+      <title>Zh: 将 Apache SkyWalking 与 Arthas 集成</title>
+      <link>/zh/2023-09-17-integrating-skywalking-with-arthas/</link>
+      <pubDate>Sun, 17 Sep 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-09-17-integrating-skywalking-with-arthas/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;Arthas 是一款常用的 Java 诊断工具，我们可以在 SkyWalking 监控到服务异常后，通过 Arthas 进一步分析和诊断以快速定位问题。&lt;/p&gt;
+&lt;p&gt;在 Arthas 实际使用中，通常由开发人员拷贝或者下载安装包到服务对应的VM或者容器中，attach 到对应的 Java 进程进行问题排查。这一过程不可避免的会造成服务器敏感运维信息的扩散，
+而且在分秒必争的问题排查过程中，这些繁琐的操作无疑会浪费大量时间。&lt;/p&gt;
+&lt;p&gt;SkyWalking Java Agent 伴随 Java 服务一起启动，并定期上报服务、实例信息给OAP Server。我们可以借助 SkyWalking Java Agent 的插件化能力，开发一个 Arthas 控制插件，
+由该插件管理 Arthas 运行生命周期，通过页面化的方式，完成Arthas的启动与停止。最终实现效果可以参考下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-x-arthas-ui.png&#34; alt=&#34;skywalking-x-arthas&#34;&gt;&lt;/p&gt;
+&lt;p&gt;要完成上述功能，我们需要实现以下几个关键点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;开发 agent arthas-control-plugin，执行 arthas 的启动与停止命令&lt;/li&gt;
+&lt;li&gt;开发 oap arthas-controller-module ，下发控制命令给 arthas agent plugin&lt;/li&gt;
+&lt;li&gt;定制 skywalking-ui, 连接 arthas-tunnel-server，发送 arthas 命令并获取执行结果&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;以上各个模块之间的交互流程如下图所示：&lt;/p&gt;
+&lt;h3 id=&#34;connect&#34;&gt;connect&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;connect-sequence.png&#34; alt=&#34;skywalking-x-arthas&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disconnect&#34;&gt;disconnect&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;disconnect-sequence.png&#34; alt=&#34;skywalking-x-arthas&#34;&gt;&lt;/p&gt;
+&lt;p&gt;本文涉及的所有代码均已发布在 github &lt;a href=&#34;https://github.com/weixiang1862/skywalking-x-arthas&#34;&gt;skywalking-x-arthas&lt;/a&gt; 上，如有需要，大家可以自行下载代码测试。
+文章后半部分将主要介绍代码逻辑及其中包含的SkyWalking扩展点。&lt;/p&gt;
+&lt;h2 id=&#34;agent-arthas-control-plugin&#34;&gt;agent arthas-control-plugin&lt;/h2&gt;
+&lt;p&gt;首先在 skywalking-java/apm-sniffer/apm-sdk-plugin 下创建一个 arthas-control-plugin，
+该模块在打包后会成为 skywalking-agent/plugins 下的一个插件， 其目录结构如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;arthas-control-plugin/
+├── pom.xml
+└── src
+    └── main
+        ├── java
+        │   └── org
+        │       └── apache
+        │           └── skywalking
+        │               └── apm
+        │                   └── plugin
+        │                       └── arthas
+        │                           ├── config
+        │                           │   └── ArthasConfig.java    # 模块配置
+        │                           ├── service
+        │                           │   └── CommandListener.java # boot service，监听 oap command
+        │                           └── util
+        │                               ├── ArthasCtl.java       # 控制 arthas 的启动与停止
+        │                               └── ProcessUtils.java
+        ├── proto
+        │   └── ArthasCommandService.proto                       # 与oap server通信的 grpc 协议定义
+        └── resources
+            └── META-INF
+                └── services                                     # boot service spi service
+                    └── org.apache.skywalking.apm.agent.core.boot.BootService
+
+16 directories, 7 files
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;在 ArthasConfig.java 中，我们定义了以下配置，这些参数将在 arthas 启动时传递。&lt;/p&gt;
+&lt;p&gt;以下的配置可以通过 agent.config 文件、system prop、env variable指定。
+关于 skywalking-agent 配置的初始化的具体流程，大家可以参考 &lt;a href=&#34;https://github.com/apache/skywalking-java/blob/main/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/conf/SnifferConfigInitializer.java&#34;&gt;SnifferConfigInitializer&lt;/a&gt; 。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ArthasConfig&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Plugin&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@PluginConfig&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;root &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; ArthasConfig&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Arthas&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// arthas 目录
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; String ARTHAS_HOME&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// arthas 启动时连接的tunnel server
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; String TUNNEL_SERVER&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// arthas 会话超时时间
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; Long SESSION_TIMEOUT&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 禁用的 arthas command
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; String DISABLED_COMMANDS&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接着，我们看下 CommandListener.java 的实现，CommandListener 实现了 BootService 接口，
+并通过 resources/META-INF/services 下的文件暴露给 ServiceLoader。&lt;/p&gt;
+&lt;p&gt;BootService 的定义如下，共有prepare()、boot()、onComplete()、shutdown()几个方法，这几个方法分别对应插件生命周期的不同阶段。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;interface&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;BootService&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;prepare&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; Throwable&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+
+    &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;boot&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; Throwable&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+
+    &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;onComplete&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; Throwable&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+
+    &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;shutdown&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; Throwable&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;default&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;int&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;priority&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; 0&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在 &lt;a href=&#34;https://github.com/apache/skywalking-java/blob/main/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/boot/ServiceManager.java&#34;&gt;ServiceManager&lt;/a&gt; 类的 boot() 方法中，
+定义了BootService 的 load 与启动流程，该方法 由SkyWalkingAgent 的 premain 调用，在主程序运行前完成初始化与启动：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;enum&lt;/span&gt; ServiceManager &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    INSTANCE&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;boot&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        bootedServices &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; loadAllServices&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+
+        prepare&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+        startup&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+        onComplete&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;回到我们 CommandListener 的 boot 方法，该方法在 agent 启动之初定义了一个定时任务，这个定时任务会轮询 oap ，查询是否需要启动或者停止arthas:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;CommandListener&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;implements&lt;/span&gt; BootService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; GRPCChannelListener &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;boot&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; Throwable &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        getCommandFuture &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; Executors&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;newSingleThreadScheduledExecutor&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; DefaultNamedThreadFactory&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;CommandListener&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;).&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;scheduleWithFixedDelay&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; RunnableWithExceptionProtection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+                &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;this&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;::&lt;/span&gt;getCommand&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+                t &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&amp;gt;&lt;/span&gt; LOGGER&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;error&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;get arthas command error.&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; t&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;),&lt;/span&gt; 0&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; 2&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; TimeUnit&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SECONDS&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;getCommand方法中定义了start、stop的处理逻辑，分别对应页面上的 connect 和 disconnect 操作。
+这两个 command 有分别转给 ArthasCtl 的 startArthas 和 stopArthas 两个方法处理，用来控制 arthas 的启停。&lt;/p&gt;
+&lt;p&gt;在 startArthas 方法中，启动arthas-core.jar 并使用 skywalking-agent 的 serviceName 和 instanceName 注册连接至配置文件中指定的arthas-tunnel-server。&lt;/p&gt;
+&lt;p&gt;ArthasCtl 逻辑参考自 Arthas 的  &lt;a href=&#34;https://github.com/alibaba/arthas/blob/master/boot/src/main/java/com/taobao/arthas/boot/Bootstrap.java&#34;&gt;BootStrap.java&lt;/a&gt; ，由于不是本篇文章的重点，这里不再赘述，感兴趣的小伙伴可以自行查看。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;switch&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;commandResponse&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getCommand&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;())&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;case&lt;/span&gt; START&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;alreadyAttached&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;())&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            LOGGER&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;warn&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;arthas already attached, no need start again&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;try&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            arthasTelnetPort &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; SocketUtils&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;findAvailableTcpPort&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+            ArthasCtl&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;startArthas&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;PidUtils&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;currentLongPid&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(),&lt;/span&gt; arthasTelnetPort&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;catch&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;Exception e&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            LOGGER&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;info&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;error when start arthas&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; e&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;break&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;case&lt;/span&gt; STOP&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(!&lt;/span&gt;alreadyAttached&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;())&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            LOGGER&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;warn&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;no arthas attached, no need to stop&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;try&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            ArthasCtl&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;stopArthas&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;arthasTelnetPort&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+            arthasTelnetPort &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;catch&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;Exception e&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            LOGGER&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;info&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;error when stop arthas&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; e&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;break&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;看完 arthas 的启动与停止控制逻辑，我们回到 CommandListener 的 statusChanged 方法，
+由于要和 oap 通信，这里我们按照惯例监听 grpc channel 的状态，只有状态正常时才会执行上面的getCommand轮询。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;CommandListener&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;implements&lt;/span&gt; BootService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; GRPCChannelListener &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;statusChanged&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; GRPCChannelStatus status&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;GRPCChannelStatus&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;CONNECTED&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;equals&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;status&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;))&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            Object channel &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; ServiceManager&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;INSTANCE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;findService&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;GRPCChannelManager&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;).&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getChannel&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// DO NOT REMOVE Channel CAST, or it will throw `incompatible types: org.apache.skywalking.apm.dependencies.io.grpc.Channel
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;            &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// cannot be converted to io.grpc.Channel` exception when compile due to agent core&amp;#39;s shade of grpc dependencies.
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;            commandServiceBlockingStub &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; ArthasCommandServiceGrpc&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;newBlockingStub&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;((&lt;/span&gt;Channel&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; channel&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;else&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+            commandServiceBlockingStub &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;this&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;status&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; status&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;上面的代码，细心的小伙伴可能会发现，getChannel() 的返回值被向上转型成了 Object, 而在下面的 newBlockingStub 方法中，又强制转成了 Channel。&lt;/p&gt;
+&lt;p&gt;看似有点多此一举，其实不然，我们将这里的转型去掉,尝试编译就会收到下面的错误：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.10.1:compile (default-compile) on project arthas-control-plugin: Compilation failure
+[ERROR] .../CommandListener.java:[59,103] 不兼容的类型: org.apache.skywalking.apm.dependencies.io.grpc.Channel无法转换为io.grpc.Channel
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;上面的错误提示 ServiceManager.INSTANCE.findService(GRPCChannelManager.class).getChannel() 的返回值类型是 org.apache.skywalking.apm.dependencies.io.grpc.Channel，无法被赋值给 io.grpc.Channel 引用。&lt;/p&gt;
+&lt;p&gt;我们查看GRPCChannelManager的getChannel()方法代码会发现，方法定义的返回值明明是 io.grpc.Channel，为什么编译时会报上面的错误？&lt;/p&gt;
+&lt;p&gt;其实这是skywalking-agent的一个小魔法，由于 agent-core 最终会被打包进 skywalking-agent.jar，启动时由系统类装载器（或者其他父级类装载器）直接装载，
+为了防止所依赖的类库和被监控服务的类发生版本冲突，agent 核心代码在打包时使用了maven-shade-plugin, 该插件会在 maven package 阶段改变 grpc 依赖的包名，
+我们在源代码里看到的是 io.grpc.Channel，其实在真正运行时已经被改成了 org.apache.skywalking.apm.dependencies.io.grpc.Channel，这便可解释上面编译报错的原因。&lt;/p&gt;
+&lt;p&gt;除了grpc以外，其他一些 well-known 的 dependency 也会进行 shade 操作，详情大家可以参考 &lt;a href=&#34;https://github.com/apache/skywalking-java/blob/main/apm-sniffer/apm-agent-core/pom.xml&#34;&gt;apm-agent-core pom.xml&lt;/a&gt; ：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;plugin&amp;gt;&lt;/span&gt;
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;artifactId&amp;gt;&lt;/span&gt;maven-shade-plugin&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/artifactId&amp;gt;&lt;/span&gt;
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;executions&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;execution&amp;gt;&lt;/span&gt;
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;phase&amp;gt;&lt;/span&gt;package&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/phase&amp;gt;&lt;/span&gt;
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;goals&amp;gt;&lt;/span&gt;
+                &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;goal&amp;gt;&lt;/span&gt;shade&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/goal&amp;gt;&lt;/span&gt;
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/goals&amp;gt;&lt;/span&gt;
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;configuration&amp;gt;&lt;/span&gt;
+                ...
+                ...
+                &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocations&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocation&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;pattern&amp;gt;&lt;/span&gt;${shade.com.google.source}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/pattern&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;shadedPattern&amp;gt;&lt;/span&gt;${shade.com.google.target}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/shadedPattern&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocation&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocation&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;pattern&amp;gt;&lt;/span&gt;${shade.io.grpc.source}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/pattern&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;shadedPattern&amp;gt;&lt;/span&gt;${shade.io.grpc.target}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/shadedPattern&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocation&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocation&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;pattern&amp;gt;&lt;/span&gt;${shade.io.netty.source}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/pattern&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;shadedPattern&amp;gt;&lt;/span&gt;${shade.io.netty.target}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/shadedPattern&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocation&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocation&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;pattern&amp;gt;&lt;/span&gt;${shade.io.opencensus.source}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/pattern&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;shadedPattern&amp;gt;&lt;/span&gt;${shade.io.opencensus.target}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/shadedPattern&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocation&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocation&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;pattern&amp;gt;&lt;/span&gt;${shade.io.perfmark.source}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/pattern&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;shadedPattern&amp;gt;&lt;/span&gt;${shade.io.perfmark.target}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/shadedPattern&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocation&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;relocation&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;pattern&amp;gt;&lt;/span&gt;${shade.org.slf4j.source}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/pattern&amp;gt;&lt;/span&gt;
+                        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;shadedPattern&amp;gt;&lt;/span&gt;${shade.org.slf4j.target}&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/shadedPattern&amp;gt;&lt;/span&gt;
+                    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocation&amp;gt;&lt;/span&gt;
+                &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/relocations&amp;gt;&lt;/span&gt;
+                ...
+                ...
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/configuration&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/execution&amp;gt;&lt;/span&gt;
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/executions&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/plugin&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;除了上面的注意点以外，我们来看一下另一个场景，假设我们需要在 agent plugin 的 interceptor 中使用 plugin 中定义的 BootService 会发生什么？&lt;/p&gt;
+&lt;p&gt;我们回到 BootService 的加载逻辑，为了加载到 plugin 中定义的BootService，ServiceLoader 指定了类装载器为AgentClassLoader.getDefault()，
+（这行代码历史非常悠久，可以追溯到2018年：&lt;a href=&#34;https://github.com/apache/skywalking/pull/1111&#34;&gt;Allow use SkyWalking plugin to override service in Agent core. #1111&lt;/a&gt; ），
+由此可见，plugin 中定义的 BootService 的 classloader 是 AgentClassLoader.getDefault()：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;load&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;List&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;lt;&lt;/span&gt;BootService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;gt;&lt;/span&gt; allServices&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; BootService bootService &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; ServiceLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;load&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;BootService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; AgentClassLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getDefault&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()))&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        allServices&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;add&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;bootService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;再来看下 interceptor 的加载逻辑，&lt;a href=&#34;https://github.com/apache/skywalking-java/blob/main/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/plugin/loader/InterceptorInstanceLoader.java&#34;&gt;InterceptorInstanceLoader.java&lt;/a&gt;
+的 load 方法规定了如果父加载器相同，plugin 中的 interceptor 将使用一个新创建的 AgentClassLoader （在绝大部分简单场景中，plugin 的 interceptor 都由同一个 AgentClassLoader 加载）：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;lt;&lt;/span&gt;T&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;gt;&lt;/span&gt; T &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;load&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;String className&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+    ClassLoader targetClassLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; IllegalAccessException&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; InstantiationException&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; ClassNotFoundException&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; AgentPackageNotFoundException &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    pluginLoader &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; EXTEND_PLUGIN_CLASSLOADERS&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;get&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;targetClassLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;pluginLoader &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;==&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        pluginLoader &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; AgentClassLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;targetClassLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        EXTEND_PLUGIN_CLASSLOADERS&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;put&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;targetClassLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; pluginLoader&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;...&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;按照类装载器的委派机制，interceptor 中如果用到了 BootService，也会由当前的类的装载器去装载。
+所以 ServiceManager 中装载的 BootService 和 interceptor 装载的 BootService 并不是同一个 （一个 class 文件被不同的 classloader 装载了两次），如果在 interceptor 中 调用 BootService 方法，同样会发生 cast 异常。
+由此可见，目前的实现并不支持我们在interceptor中直接调用 plugin 中 BootService 的方法，如果需要调用，只能将 BootService 放到 agent-core 中，由更高级别的类装载器优先装载。&lt;/p&gt;
+&lt;p&gt;这其实并不是 skywalking-agent 的问题，skywalking agent plugin 专注于自己的应用场景，只需要关注 trace、meter 以及默认 BootService 的覆盖就可以了。
+只是我们如果有扩展 skywalking-agent 的需求，要对其类装载机制做到心中有数，否则可能会出现一些意想不到的问题。&lt;/p&gt;
+&lt;h2 id=&#34;oap-arthas-controller-module&#34;&gt;oap arthas-controller-module&lt;/h2&gt;
+&lt;p&gt;看完 agent-plugin 的实现，我们再来看看 oap 部分的修改，oap 同样是模块化的设计，我们可以很轻松的增加一个新的模块，在 /oap-server/ 目录下新建 arthas-controller 子模块：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;arthas-controller/
+├── pom.xml
+└── src
+    └── main
+        ├── java
+        │   └── org
+        │       └── apache
+        │           └── skywalking
+        │               └── oap
+        │                   └── arthas
+        │                       ├── ArthasControllerModule.java      # 模块定义
+        │                       ├── ArthasControllerProvider.java    # 模块逻辑实现者
+        │                       ├── CommandQueue.java
+        │                       └── handler
+        │                           ├── CommandGrpcHandler.java      # grpc handler,供 plugin 通信使用
+        │                           └── CommandRestHandler.java      # http handler,供 skywalking-ui 通信使用
+        ├── proto
+        │   └── ArthasCommandService.proto
+        └── resources
+            └── META-INF
+                └── services                                         # 模块及模块实现的 spi service
+                    ├── org.apache.skywalking.oap.server.library.module.ModuleDefine
+                    └── org.apache.skywalking.oap.server.library.module.ModuleProvider
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;模块的定义非常简单，只包含一个模块名，由于我们新增的模块并不需要暴露service给其他模块调用，services 我们返回一个空数组&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ArthasControllerModule&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;extends&lt;/span&gt; ModuleDefine &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;static&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; String NAME &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;arthas-controller&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ArthasControllerModule&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;super&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;NAME&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; Class&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;lt;?&amp;gt;[]&lt;/span&gt; services&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; Class&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;0&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;];&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接着是模块实现者，实现者取名为 default，module 指定该 provider 所属模块，由于没有模块的自定义配置，newConfigCreator 我们返回null即可。
+start 方法分别向 CoreModule 的 grpc 服务和 http 服务注册了两个 handler，grpc 服务和 http 服务就是我们熟知的 11800 和 12800 端口：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ArthasControllerProvider&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;extends&lt;/span&gt; ModuleProvider &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; String &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;default&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; Class&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;lt;?&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;extends&lt;/span&gt; ModuleDefine&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;gt;&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;module&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; ArthasControllerModule&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; ConfigCreator&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;lt;?&amp;gt;&lt;/span&gt; newConfigCreator&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;null&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;prepare&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; ServiceNotProvidedException &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;start&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; ServiceNotProvidedException&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; ModuleStartException &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// grpc service for agent
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;        GRPCHandlerRegister grpcService &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; getManager&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;().&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;find&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;CoreModule&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+                                                      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;provider&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+                                                      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getService&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;GRPCHandlerRegister&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        grpcService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;addHandler&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; CommandGrpcHandler&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+
+        &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// rest service for ui
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;        HTTPHandlerRegister restService &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; getManager&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;().&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;find&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;CoreModule&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+                                                      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;provider&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+                                                      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getService&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;HTTPHandlerRegister&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+        restService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;addHandler&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; CommandRestHandler&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(),&lt;/span&gt;
+            Collections&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;singletonList&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;HttpMethod&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;POST&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;notifyAfterCompleted&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;throws&lt;/span&gt; ServiceNotProvidedException &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@Override&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;public&lt;/span&gt; String&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[]&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;requiredModules&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; String&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;0&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;];&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;最后在配置文件中注册本模块及模块实现者，下面的配置表示 arthas-controller 这个 module 由 default provider 提供实现：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;arthas-controller&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;default&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;CommandGrpcHandler 和 CommandHttpHandler 的逻辑非常简单，CommandHttpHandler 定义了 connect 和 disconnect 接口，
+收到请求后会放到一个 Queue 中供 CommandGrpcHandler 消费，Queue 的实现如下，这里不再赘述：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;public class CommandQueue {
+
+    private static final Map&amp;lt;String, Command&amp;gt; COMMANDS = new ConcurrentHashMap&amp;lt;&amp;gt;();
+
+    // produce by connect、disconnect
+    public static void produceCommand(String serviceName, String instanceName, Command command) {
+        COMMANDS.put(serviceName + instanceName, command);
+    }
+
+    // consume by agent getCommand task
+    public static Optional&amp;lt;Command&amp;gt; consumeCommand(String serviceName, String instanceName) {
+        return Optional.ofNullable(COMMANDS.remove(serviceName + instanceName));
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;skywalking-ui-arthas-console&#34;&gt;skywalking-ui arthas console&lt;/h2&gt;
+&lt;p&gt;完成了 agent 和 oap 的开发，我们再看下 ui 部分：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;connect：调用oap server connect 接口，并连接 arthas-tunnel-server&lt;/li&gt;
+&lt;li&gt;disconnect：调用oap server disconnect 接口，并与 arthas-tunnel-server 断开连接&lt;/li&gt;
+&lt;li&gt;arthas 命令交互，这部分代码主要参考 arthas，大家可以查看 &lt;a href=&#34;https://github.com/alibaba/arthas/blob/master/web-ui/arthasWebConsole/all/share/component/Console.vue&#34;&gt;web-ui console&lt;/a&gt; 的实现&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;修改完skywalking-ui的代码后，我们可以直接通过 &lt;code&gt;npm run dev&lt;/code&gt; 测试了。&lt;/p&gt;
+&lt;p&gt;如果需要通过主项目打包，别忘了在apm-webapp 的 &lt;a href=&#34;https://github.com/apache/skywalking/blob/master/apm-webapp/src/main/java/org/apache/skywalking/oap/server/webapp/ApplicationStartUp.java&#34;&gt;ApplicationStartUp.java&lt;/a&gt; 类中添加一条 arthas 的路由：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;Server
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;builder&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;port&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;port&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; SessionProtocol&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;HTTP&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;service&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/arthas&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; oap&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;service&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/graphql&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; oap&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;service&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/internal/l7check&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; HealthCheckService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;())&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;service&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/zipkin/config.json&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; zipkin&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;serviceUnder&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/zipkin/api&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; zipkin&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;serviceUnder&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/zipkin&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        FileService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+            ApplicationStartUp&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getClassLoader&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(),&lt;/span&gt;
+            &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/zipkin-lens&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;orElse&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;zipkinIndexPage&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;))&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;serviceUnder&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        FileService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+            ApplicationStartUp&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;class&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;getClassLoader&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(),&lt;/span&gt;
+            &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/public&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+            &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;orElse&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;indexPage&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;))&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;build&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;start&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;join&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;BootService 启动及停止流程&lt;/li&gt;
+&lt;li&gt;如何利用 BootService 实现自定义逻辑&lt;/li&gt;
+&lt;li&gt;Agent Plugin 的类装载机制&lt;/li&gt;
+&lt;li&gt;maven-shade-plugin 的使用与注意点&lt;/li&gt;
+&lt;li&gt;如何利用 ModuleDefine 与 ModuleProvider 定义新的模块&lt;/li&gt;
+&lt;li&gt;如何向 GRPC、HTTP Service 添加新的 handler&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;如果你还有任何的疑问，&lt;a href=&#34;https://github.com/weixiang1862/skywalking-x-arthas/issues&#34;&gt;欢迎大家与我交流&lt;/a&gt; 。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Zh: [视频] 在Go语言中使用自动增强探针完成链路追踪以及监控 - COSCUP Taiwan 2023</title>
       <link>/zh/2023-07-30-complete-auto-instrumentation-go-agent-for-distributed-tracing-and-monitoring/</link>
       <pubDate>Sun, 30 Jul 2023 00:00:00 +0000</pubDate>
@@ -6360,461 +6774,6 @@ local/skywalking 	0.1.0        	6.3.0      	Apache SkyWalking APM System&lt;/p&g
 &lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;以上是挂载 sidecar 的 deployment.yaml 文件，以nginx 作为服务为例，主要是通过共享 volume 的方式挂载 agent，首先 initContainers 通过 sw-agent 卷挂载了 sw-agent-sidecar 中的 /skywalking/agent ，并且将上面构建好的镜像中的 agent 目录 cp 到了 /skywalking/agent 目录，完成之后 nginx 启动时也挂载了 sw-agent 卷，并将其挂载到了容器的 /usr/skywalking/agent 目录，这样就完成了共享过程。&lt;/p&gt;
 &lt;h4 id=&#34;总结&#34;&gt;总结&lt;/h4&gt;
 &lt;p&gt;这样除去 ServiceMesh 以外，我能想到的方式就介绍完了，希望可以帮助到你。最后给 &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Skywalking 一个 Star 吧&lt;/a&gt;，国人的骄傲。&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Zh: SkyWalking调研与初步实践</title>
-      <link>/zh/2019-03-29-introduction-of-skywalking-and-simple-practice/</link>
-      <pubDate>Sat, 23 Mar 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/zh/2019-03-29-introduction-of-skywalking-and-simple-practice/</guid>
-      <description>
-        
-        
-        &lt;h2 id=&#34;apm和调用链跟踪&#34;&gt;APM和调用链跟踪&lt;/h2&gt;
-&lt;p&gt;随着企业经营规模的扩大，以及对内快速诊断效率和对外SLA（服务品质协议，service-level agreement)的追求，对于业务系统的掌控度的要求越来越高，主要体现在：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;对于第三方依赖的监控，实时/准实时了解第三方的健康状况/服务品质，降低第三方依赖对于自身系统的扰动（服务降级、故障转移）&lt;/li&gt;
-&lt;li&gt;对于容器的监控，实时/准实时的了解应用部署环境（CPU、内存、进程、线程、网络、带宽）情况，以便快速扩容/缩容、流量控制、业务迁移&lt;/li&gt;
-&lt;li&gt;业务方对于自己的调用情况，方便作容量规划，同时对于突发的请求也能进行异常告警和应急准备&lt;/li&gt;
-&lt;li&gt;自己业务的健康、性能监控，实时/准实时的了解自身的业务运行情况，排查业务瓶颈，快速诊断和定位异常，增加对自己业务的掌控力&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;同时，对于企业来说，能够更精确的了解资源的使用情况，对于成本核算和控制也有非常大的裨益。&lt;/p&gt;
-&lt;p&gt;在这种情况下，一般都会引入APM（Application Performance Management &amp;amp; Monitoring）系统，通过各种探针采集数据，收集关键指标，同时搭配数据呈现和监控告警，能够解决上述的大部分问题。&lt;/p&gt;
-&lt;p&gt;然而随着RPC框架、微服务、云计算、大数据的发展，同时业务的规模和深度相比过往也都增加了很多，一次业务可能横跨多个模块/服务/容器，依赖的中间件也越来越多，其中任何一个节点出现异常，都可能导致业务出现波动或者异常，这就导致服务质量监控和异常诊断/定位变得异常复杂，于是催生了新的业务监控模式：调用链跟踪&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;能够分布式的抓取多个节点的业务记录，并且通过统一的业务id（traceId，messageId，requestId等）将一次业务在各个节点的记录串联起来，方便排查业务的瓶颈或者异常点&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;产品对比&#34;&gt;产品对比&lt;/h4&gt;
-&lt;p&gt;APM和调用链跟踪均不是新诞生事务，很多公司已经有了大量的实践，不过开源的并且能够开箱即用的产品并不多，这里主要选取了Pinpoint，Skywalking，CAT来进行对比（当然也有其他的例如Zipkin，Jaeger等产品，不过总体来说不如前面选取的3个完成度高），了解一下APM和调用链跟踪在开源方面的发展状态。&lt;/p&gt;
-&lt;h6 id=&#34;pinpoint&#34;&gt;Pinpoint&lt;/h6&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/naver/pinpoint&#34;&gt;Pinpoint&lt;/a&gt;是一个比较早并且成熟度也非常高的APM+调用链监控的项目，在全世界范围内均有用户使用，支持Java和PHP的探针，数据容器为HBase，其界面参考：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q40u9jj316z0q7gpl.jpg&#34; alt=&#34;pinpoint_server-map&#34;&gt;&lt;/p&gt;
-&lt;h6 id=&#34;skywalking&#34;&gt;Skywalking&lt;/h6&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;Skywalking&lt;/a&gt;是一个新晋的项目，最近一两年发展非常迅猛，本身支持OpenTracing规范，优秀的设计提供了良好的扩展性，支持Java、PHP、.Net、NodeJs探针，数据容器为ElasticSearch，其界面参考：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4qcx4bzj31h10qjtcv.jpg&#34; alt=&#34;skywalking-dashboard&#34;&gt;&lt;/p&gt;
-&lt;h6 id=&#34;cat&#34;&gt;CAT&lt;/h6&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/dianping/cat&#34;&gt;CAT&lt;/a&gt;是由美团开源的一个APM项目，也历经了多年的迭代升级，拥有大量的企业级用户，对于监控和报警整合比较紧密，支持Java、C/C++、.Net、Python、Go、NodeJs，不过CAT目前主要通过侵入性的方式接入，数据容器包括HDFS（存储原始数据）和mysql（二次统计），其界面参考：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q862ehj31go0os0vv.jpg&#34; alt=&#34;CAT&#34;&gt;&lt;/p&gt;
-&lt;h6 id=&#34;横向对比&#34;&gt;横向对比&lt;/h6&gt;
-&lt;p&gt;上面只是做了一个简介，那这三个项目各自有什么特色或者优势/劣势呢（三者的主要产品均针对Java，这里也主要针对Java的特性）？&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Pinpoint
-&lt;ul&gt;
-&lt;li&gt;优势
-&lt;ul&gt;
-&lt;li&gt;大企业/长时间验证，稳定性和完成度高&lt;/li&gt;
-&lt;li&gt;探针收集的数据粒度比较细&lt;/li&gt;
-&lt;li&gt;HBase的数据密度较大，支持PB级别下的数据查询&lt;/li&gt;
-&lt;li&gt;代码设计考虑的扩展性较弱，二次开发难度较大（探针为插件式，开发比较简单）&lt;/li&gt;
-&lt;li&gt;拥有完整的APM和调用链跟踪功能&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;劣势
-&lt;ul&gt;
-&lt;li&gt;代码针对性强，扩展较难&lt;/li&gt;
-&lt;li&gt;容器为HBase，查询功能较弱（主要为时间维度）&lt;/li&gt;
-&lt;li&gt;探针的额外消耗较多（探针采集粒度细，大概10%~20%）&lt;/li&gt;
-&lt;li&gt;项目趋于成熟，而扩展难度较大，目前社区活跃度偏低，基本只进行探针的增加或者升级&lt;/li&gt;
-&lt;li&gt;缺少自定义指标的设计&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Skywalking
-&lt;ul&gt;
-&lt;li&gt;优势
-&lt;ul&gt;
-&lt;li&gt;数据容器为ES，查询支持的维度较多并且扩展潜力大&lt;/li&gt;
-&lt;li&gt;项目设计采用微内核+插件，易读性和扩展性都比较强&lt;/li&gt;
-&lt;li&gt;主要的研发人员为华人并且均比较活跃，能够进行更加直接的沟通&lt;/li&gt;
-&lt;li&gt;拥有完整的APM和调用链跟踪功能&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;劣势
-&lt;ul&gt;
-&lt;li&gt;项目发展非常快，稳定性有待验证&lt;/li&gt;
-&lt;li&gt;ES数据密度较小，在PB级别可能会有性能压力&lt;/li&gt;
-&lt;li&gt;缺少自定义指标的设计&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;CAT
-&lt;ul&gt;
-&lt;li&gt;优势
-&lt;ul&gt;
-&lt;li&gt;大企业/长时间验证，稳定性和完成度高&lt;/li&gt;
-&lt;li&gt;采用手动数据埋点而不是探针，数据采集的灵活性更强&lt;/li&gt;
-&lt;li&gt;支持自定义指标&lt;/li&gt;
-&lt;li&gt;代码设计考虑的扩展性较弱，并且数据结构复杂，二次开发难度较大&lt;/li&gt;
-&lt;li&gt;拥有完善的监控告警机制&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;劣势
-&lt;ul&gt;
-&lt;li&gt;代码针对性强，扩展较难&lt;/li&gt;
-&lt;li&gt;需要手动接入埋点，代码侵入性强&lt;/li&gt;
-&lt;li&gt;APM功能完善，但是不支持调用链跟踪&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;基本组件&#34;&gt;基本组件&lt;/h4&gt;
-&lt;p&gt;如果分别去看Pinpoint/Skywalking/CAT的整体设计，我们会发现三者更像是一个规范的三种实现，虽然各自有不同的机制和特性，但是从模块划分和功能基本是一致的：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4qa2gf2j30no0gvwfd.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;当然也有一些微小的区别：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Pinpoint基本没有aggregator，同时query和alarm集成在了web中，只有agent，collector和web&lt;/li&gt;
-&lt;li&gt;Skywalking则是把collector、aggregator、alarm集成为OAP（Observability Analysis Platform），并且可以通过集群部署，不同的实例可以分别承担collector或者aggregator+alarm的角色&lt;/li&gt;
-&lt;li&gt;CAT则和Skywalking类似，把collector、aggregator、alarm集成为cat-consumer，而由于CAT有比较复杂的配置管理，所以query和配置一起集成为cat-home&lt;/li&gt;
-&lt;li&gt;当然最大的区别是Pinpoint和Skywalking均是通过javaagent做字节码的扩展，通过切面编程采集数据，类似于探针，而CAT的agent则更像是一个工具集，用于手动埋点&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2 id=&#34;skywalking-1&#34;&gt;Skywalking&lt;/h2&gt;
-&lt;p&gt;前戏这么多，终于开始进入主题，介绍今天的主角：Skywalking，不过通过之前的铺垫，我们基本都知道了Skywalking期望解决的问题以及总体的结构，下面我们则从细节来看Skywalking是怎么一步一步实现的。&lt;/p&gt;
-&lt;h4 id=&#34;模块构成&#34;&gt;模块构成&lt;/h4&gt;
-&lt;p&gt;首先，Skywalking进行了精准的领域模型划分：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4qcfso8j31ol0u0te6.jpg&#34; alt=&#34;integration&#34;&gt;&lt;/p&gt;
-&lt;p&gt;整个系统分为三部分：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;agent：采集tracing（调用链数据）和metric（指标）信息并上报&lt;/li&gt;
-&lt;li&gt;OAP：收集tracing和metric信息通过analysis core模块将数据放入持久化容器中（ES，H2（内存数据库），mysql等等），并进行二次统计和监控告警&lt;/li&gt;
-&lt;li&gt;webapp：前后端分离，前端负责呈现，并将查询请求封装为graphQL提交给后端，后端通过ribbon做负载均衡转发给OAP集群，再将查询结果渲染展示&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;而整个Skywalking（包括agent和OAP，而webapp后端业务非常简单主要就是认证和请求转发）均通过微内核+插件式的模式进行编码，代码结构和扩展性均非常强，具体设计可以参考： &lt;a href=&#34;https://linz.ink/skywalking/microcore/2018/11/26/how-to-build-micro-core-project-by-skywalking-style.html&#34;&gt;从Skywalking看如何设计一个微核+插件式扩展的高扩展框架&lt;/a&gt; ，Spring Cloud Gateway的GatewayFilterFactory的扩展也是通过这种plugin define的方式来实现的。&lt;/p&gt;
-&lt;p&gt;Skywalking也提供了其他的一些特性：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;配置重载：支持通过jvm参数覆写默认配置，支持动态配置管理&lt;/li&gt;
-&lt;li&gt;集群管理：这个主要体现在OAP，通过集群部署分担数据上报的流量压力和二次计算的计算压力，同时集群也可以通过配置切换角色，分别面向数据采集（collector）和计算（aggregator，alarm），需要注意的是agent目前不支持多collector负载均衡，而是随机从集群中选择一个实例进行数据上报&lt;/li&gt;
-&lt;li&gt;支持k8s和mesh&lt;/li&gt;
-&lt;li&gt;支持数据容器的扩展，例如官方主推是ES，通过扩展接口，也可以实现插件去支持其他的数据容器&lt;/li&gt;
-&lt;li&gt;支持数据上报receiver的扩展，例如目前主要是支持gRPC接受agent的上报，但是也可以实现插件支持其他类型的数据上报（官方默认实现了对Zipkin，telemetry和envoy的支持）&lt;/li&gt;
-&lt;li&gt;支持客户端采样和服务端采样，不过服务端采样最有意义&lt;/li&gt;
-&lt;li&gt;官方制定了一个数据查询脚本规范：OAL（Observability Analysis Language），语法类似Linq，以简化数据查询扩展的工作量&lt;/li&gt;
-&lt;li&gt;支持监控预警，通过OAL获取数据指标和阈值进行对比来触发告警，支持webhook扩展告警方式，支持统计周期的自定义，以及告警静默防止重复告警&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;数据容器&#34;&gt;数据容器&lt;/h4&gt;
-&lt;p&gt;由于Skywalking并没有自己定制的数据容器或者使用多种数据容器增加复杂度，而是主要使用ElasticSearch（当然开源的基本上都是这样来保持简洁，例如Pinpoint也只使用了HBase），所以数据容器的特性以及自己数据结构基本上就限制了业务的上限，以ES为例：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;ES查询功能异常强大，在数据筛选方面碾压其他所有容器，在数据筛选潜力巨大（Skywalking默认的查询维度就比使用HBase的Pinpoint强很多）&lt;/li&gt;
-&lt;li&gt;支持sharding分片和replicas数据备份，在高可用/高性能/大数据支持都非常好&lt;/li&gt;
-&lt;li&gt;支持批量插入，高并发下的插入性能大大增强&lt;/li&gt;
-&lt;li&gt;数据密度低，源于ES会提前构建大量的索引来优化搜索查询，这是查询功能强大和性能好的代价，但是链路跟踪往往有非常多的上下文需要记录，所以Skywalking把这些上下文二进制化然后通过Base64编码放入data_binary字段并且将字段标记为&lt;strong&gt;not_analyzed&lt;/strong&gt;来避免进行预处理建立查询索引&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;总体来说，Skywalking尽量使用ES在大数据和查询方面的优势，同时尽量减少ES数据密度低的劣势带来的影响，从目前来看，ES在调用链跟踪方面是不二的数据容器，而在数据指标方面，ES也能中规中矩的完成业务，虽然和时序数据库相比要弱一些，但在PB级以下的数据支持也不会有太大问题。&lt;/p&gt;
-&lt;h4 id=&#34;数据结构&#34;&gt;数据结构&lt;/h4&gt;
-&lt;p&gt;如果说数据容器决定了上限，那么数据结构则决定了实际到达的高度。Skywalking的数据结构主要为：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;数据维度（ES索引为skywalking_*_inventory)
-&lt;ul&gt;
-&lt;li&gt;service：服务&lt;/li&gt;
-&lt;li&gt;instance：实例&lt;/li&gt;
-&lt;li&gt;endpoint：接口&lt;/li&gt;
-&lt;li&gt;network_adress：外部依赖&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;数据内容
-&lt;ul&gt;
-&lt;li&gt;原始数据
-&lt;ul&gt;
-&lt;li&gt;调用链跟踪数据（调用链的trace信息，ES索引为skywalking_segment，Skywalking主要的数据消耗都在这里）&lt;/li&gt;
-&lt;li&gt;指标（主要是jvm或者envoy的运行时指标，例如ES索引skywalking_instance_jvm_cpu）&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;二次统计指标
-&lt;ul&gt;
-&lt;li&gt;指标（按维度/时间二次统计出来的例如pxx、sla等指标，例如ES索引skywalking_database_access_p75_month）&lt;/li&gt;
-&lt;li&gt;数据库慢查询记录（数据库索引：skywalking_top_n_database_statement）&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;关联关系（维度/指标之间的关联关系，ES索引为skywalking_*_relation_*)&lt;/li&gt;
-&lt;li&gt;特别记录
-&lt;ul&gt;
-&lt;li&gt;告警信息（ES索引为skywalking_alarm_record）&lt;/li&gt;
-&lt;li&gt;并发控制（ES索引为skywalking_register_lock）&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;其中数量占比最大的就是调用链跟踪数据和各种指标，而这些数据均可以通过OAP设置过期时间，以降低历史数据的对磁盘占用和查询效率的影响。&lt;/p&gt;
-&lt;h6 id=&#34;调用链跟踪数据&#34;&gt;调用链跟踪数据&lt;/h6&gt;
-&lt;p&gt;作为Skywalking的核心数据，调用链跟踪数据（skywalking_segment）基本上奠定了整个系统的基础，而如果要详细的了解调用链跟踪的话，就不得不提到&lt;a href=&#34;https://opentracing.io/&#34;&gt;openTracing&lt;/a&gt;。&lt;/p&gt;
-&lt;p&gt;openTracing基本上是目前开源调用链跟踪系统的一个事实标准，它制定了调用链跟踪的基本流程和基本的数据结构，同时也提供了各个语言的实现。如果用一张图来表现openTracing，则是如下：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q9qhwaj30ms0fdjrl.jpg&#34; alt=&#34;openTracing基本结构&#34;&gt;&lt;/p&gt;
-&lt;p&gt;其中：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;SpanContext：一个类似于MDC（Slfj)或者ThreadLocal的组件，负责整个调用链数据采集过程中的上下文保持和传递&lt;/li&gt;
-&lt;li&gt;Trace：一次调用的完整记录
-&lt;ul&gt;
-&lt;li&gt;Span：一次调用中的某个节点/步骤，类似于一层堆栈信息，Trace是由多个Span组成，Span和Span之间也有父子或者并列的关系来标志这个节点/步骤在整个调用中的位置
-&lt;ul&gt;
-&lt;li&gt;Tag：节点/步骤中的关键信息&lt;/li&gt;
-&lt;li&gt;Log：节点/步骤中的详细记录，例如异常时的异常堆栈&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Baggage：和SpanContext一样并不属于数据结构而是一种机制，主要用于跨Span或者跨实例的上下文传递，Baggage的数据更多是用于运行时，而不会进行持久化&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;以一个Trace为例：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q8omk9j30kg0bgabj.jpg&#34; alt=&#34;span间的关系&#34;&gt;&lt;/p&gt;
-&lt;p&gt;首先是外部请求调用A，然后A依次同步调用了B和C，而B被调用时会去同步调用D，C被调用的时候会依次同步调用E和F，F被调用的时候会通过异步调用G，G则会异步调用H，最终完成一次调用。&lt;/p&gt;
-&lt;p&gt;上图是通过Span之间的依赖关系来表现一个Trace，而在时间线上，则可以有如下的表达：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q960foj30q009674i.jpg&#34; alt=&#34;span的调用顺序&#34;&gt;&lt;/p&gt;
-&lt;p&gt;当然，如果是同步调用的话，父Span的时间占用是包括子Span的时间消耗的。&lt;/p&gt;
-&lt;p&gt;而落地到Skywalking中，我们以一条skywalking_segment的记录为例：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;{
-	&amp;quot;trace_id&amp;quot;: &amp;quot;52.70.15530767312125341&amp;quot;,
-	&amp;quot;endpoint_name&amp;quot;: &amp;quot;Mysql/JDBI/Connection/commit&amp;quot;,
-	&amp;quot;latency&amp;quot;: 0,
-	&amp;quot;end_time&amp;quot;: 1553076731212,
-	&amp;quot;endpoint_id&amp;quot;: 96142,
-	&amp;quot;service_instance_id&amp;quot;: 52,
-	&amp;quot;version&amp;quot;: 2,
-	&amp;quot;start_time&amp;quot;: 1553076731212,
-	&amp;quot;data_binary&amp;quot;: &amp;quot;CgwKCjRGnPvp5eikyxsSXhD///////////8BGMz62NSZLSDM+tjUmS0wju8FQChQAVgBYCF6DgoHZGIudHlwZRIDc3FsehcKC2RiLmluc3RhbmNlEghyaXNrZGF0YXoOCgxkYi5zdGF0ZW1lbnQYAiA0&amp;quot;,
-	&amp;quot;service_id&amp;quot;: 2,
-	&amp;quot;time_bucket&amp;quot;: 20190320181211,
-	&amp;quot;is_error&amp;quot;: 0,
-	&amp;quot;segment_id&amp;quot;: &amp;quot;52.70.15530767312125340&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;其中：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;trace_id：本次调用的唯一id，通过snowflake模式生成&lt;/li&gt;
-&lt;li&gt;endpoint_name：被调用的接口&lt;/li&gt;
-&lt;li&gt;latency：耗时&lt;/li&gt;
-&lt;li&gt;end_time：结束时间戳&lt;/li&gt;
-&lt;li&gt;endpoint_id：被调用的接口的唯一id&lt;/li&gt;
-&lt;li&gt;service_instance_id：被调用的实例的唯一id&lt;/li&gt;
-&lt;li&gt;version：本数据结构的版本号&lt;/li&gt;
-&lt;li&gt;start_time：开始时间戳&lt;/li&gt;
-&lt;li&gt;data_binary：里面保存了本次调用的所有Span的数据，序列化并用Base64编码，不会进行分析和用于查询&lt;/li&gt;
-&lt;li&gt;service_id：服务的唯一id&lt;/li&gt;
-&lt;li&gt;time_bucket：调用所处的时段&lt;/li&gt;
-&lt;li&gt;is_error：是否失败&lt;/li&gt;
-&lt;li&gt;segment_id：数据本身的唯一id，类似于主键，通过snowflake模式生成&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;这里可以看到，目前Skywalking虽然相较于Pinpoint来说查询的维度要多一些，但是也很有限，而且除了endPoint，并没有和业务有关联的字段，只能通过时间/服务/实例/接口/成功标志/耗时来进行非业务相关的查询，如果后续要增强业务相关的搜索查询的话，应该还需要增加一些用于保存动态内容（如messageId，orderId等业务关键字）的字段用于快速定位。&lt;/p&gt;
-&lt;h6 id=&#34;指标&#34;&gt;指标&lt;/h6&gt;
-&lt;p&gt;指标数据相对于Tracing则要简单得多了，一般来说就是指标标志、时间戳、指标值，而Skywalking中的指标有两种：一种是采集的原始指标值，例如jvm的各种运行时指标（例如cpu消耗、内存结构、GC信息等）；一种是各种二次统计指标（例如tp性能指标、SLA等，当然也有为了便于查询的更高时间维度的指标，例如基于分钟、小时、天、周、月）&lt;/p&gt;
-&lt;p&gt;例如以下是索引skywalking_endpoint_cpm_hour中的一条记录，用于标志一个小时内某个接口的cpm指标：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;{
-	&amp;quot;total&amp;quot;: 8900,
-	&amp;quot;service_id&amp;quot;: 5,
-	&amp;quot;time_bucket&amp;quot;: 2019031816,
-	&amp;quot;service_instance_id&amp;quot;: 5,
-	&amp;quot;entity_id&amp;quot;: &amp;quot;7&amp;quot;,
-	&amp;quot;value&amp;quot;: 148
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;各个字段的释义如下：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;total：一分钟内的调用总量&lt;/li&gt;
-&lt;li&gt;service_id：所属服务的唯一id&lt;/li&gt;
-&lt;li&gt;time_bucket：统计的时段&lt;/li&gt;
-&lt;li&gt;service_instance_id：所属实例的唯一id&lt;/li&gt;
-&lt;li&gt;entity_id：接口（endpoint）的唯一id&lt;/li&gt;
-&lt;li&gt;value：cpm的指标值（cpm=call per minute，即total/60）&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;工程实现&#34;&gt;工程实现&lt;/h4&gt;
-&lt;p&gt;Skywalking的工程实现堪比Dubbo，框架设计和代码质量都达到非常高的水准，以dubbo为例，即使2012年发布的老版本放到当今，其设计和编码看起来也依然赏心悦目，设计简洁但是覆盖了所有的核心需求，同时又具备非常强的扩展性，二次开发非常简单，然而却又不会像Spring那样过度封装（当然Spring作为一个更加高度通用的框架，更高的封装也是有必要的）导致代码阅读异常困难。&lt;/p&gt;
-&lt;h6 id=&#34;agent&#34;&gt;agent&lt;/h6&gt;
-&lt;p&gt;agent（apm-sniffer）是Skywalking的Java探针实现，主要负责：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;采集应用实例的jvm指标&lt;/li&gt;
-&lt;li&gt;通过切向编程进行数据埋点，采集调用链数据&lt;/li&gt;
-&lt;li&gt;通过RPC将采集的数据上报&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;当然，agent还实现了客户端采样，不过在APM监控系统里进行客户端数据采样都是没有灵魂的，所以这里就不再赘述了。&lt;/p&gt;
-&lt;p&gt;首先，agent通过 &lt;em&gt;org.apache.skywalking.apm.agent.core.boot.BootService&lt;/em&gt; 实现了整体的插件化，agent启动会加载所有的BootService实现，并通过 &lt;em&gt;ServiceManager&lt;/em&gt; 来管理这些插件的生命周期，采集jvm指标、gRPC连接管理、调用链数据维护、数据上报OAP这些服务均是通过这种方式扩展。&lt;/p&gt;
-&lt;p&gt;然后，agent还通过bytebuddy以javaagent的模式，通过字节码增强的机制来构造AOP环境，再提供PluginDefine的规范方便探针的开发，最终实现非侵入性的数据埋点，采集调用链数据。&lt;/p&gt;
-&lt;p&gt;最终落地到代码上则异常清晰：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;//通过bytebuddy的AgentBuilder构造javaagent增强classLoader
-new AgentBuilder.Default(byteBuddy)
-    .ignore( //忽略这些包的内容，不进行增强
-        nameStartsWith(&amp;quot;net.bytebuddy.&amp;quot;)
-        .or(nameStartsWith(&amp;quot;org.slf4j.&amp;quot;))
-        .or(nameStartsWith(&amp;quot;org.apache.logging.&amp;quot;))
-        .or(nameStartsWith(&amp;quot;org.groovy.&amp;quot;))
-        .or(nameContains(&amp;quot;javassist&amp;quot;))
-        .or(nameContains(&amp;quot;.asm.&amp;quot;))
-        .or(nameStartsWith(&amp;quot;sun.reflect&amp;quot;))
-        .or(allSkyWalkingAgentExcludeToolkit())
-        .or(ElementMatchers.&amp;lt;TypeDescription&amp;gt;isSynthetic()))
-    //通过pluginFinder加载所有的探针扩展，并获取所有可以增强的class
-    .type(pluginFinder.buildMatch())
-    //按照pluginFinder的实现，去改变字节码增强类
-    .transform(new Transformer(pluginFinder))
-    //通过listener订阅增强的操作记录，方便调试
-    .with(new Listener())
-    .installOn(instrumentation);
-
-try {
-    //加载所有的service实现并启动
-    ServiceManager.INSTANCE.boot();
-} catch (Exception e) {
-    logger.error(e, &amp;quot;Skywalking agent boot failure.&amp;quot;);
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;agent也提供了非常简单的扩展实现机制，以增强一个普通类的方法为例，首先你需要定义一个切向点：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;public interface InstanceMethodsInterceptPoint {
-
-    //定义切向方法的适配器，符合适配器的class将被增强
-    ElementMatcher&amp;lt;MethodDescription&amp;gt; getMethodsMatcher();
-
-    //增强的具体实现类，classReference
-    String getMethodsInterceptor();
-
-    //是否重写参数
-    boolean isOverrideArgs();
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;然后你还需要一个增强的实现类：&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;public interface InstanceMethodsAroundInterceptor {
-
-    //方法真正执行前执行
-    void beforeMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class&amp;lt;?&amp;gt;[] argumentsTypes,
-        MethodInterceptResult result) throws Throwable;
-
-    //方法真正执行后执行
-    Object afterMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class&amp;lt;?&amp;gt;[] argumentsTypes,
-        Object ret) throws Throwable;
-
-    //当异常发生时执行
-    void handleMethodException(EnhancedInstance objInst, Method method, Object[] allArguments,
-        Class&amp;lt;?&amp;gt;[] argumentsTypes,
-        Throwable t);
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;一般在执行前和执行后进行数据埋点，就可以采集到想要的数据，当然实际编程要稍微复杂一点，不过官方也实现了对应的abstract类和数据埋点工具类，所以探针的二次开发在Skywalking这个级别确实是非常简单，只需要处理好资源占用和并发问题即可。真正的难点是要对需要增强的对象非常了解，熟悉其运作机制，才能找准切向点，既要所有的流程都需要经过这个点，又可以抓取到期望抓取的上下文信息。同时，多版本的适配和测试也是非常大的工作量，官方虽然提供witness的机制（通过验证某个class是否存在来验证版本），但是作为影响全局的探针，开发和测试都是需要慎之又慎的。&lt;/p&gt;
-&lt;h6 id=&#34;oap&#34;&gt;OAP&lt;/h6&gt;
-&lt;p&gt;同agent类似，OAP作为Skywalking最核心的模块，也实现了自己的扩展机制，不过在这里叫做Module，具体可以参考library-module，在module的机制下，Skywalking实现了自己必须核心组件：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;core：整个OAP核心业务（remoting、cluster、storage、analysis、query、alarm）的规范和接口&lt;/li&gt;
-&lt;li&gt;cluster：集群管理的具体实现&lt;/li&gt;
-&lt;li&gt;storage：数据容器的具体实现&lt;/li&gt;
-&lt;li&gt;query：为前端提供的查询接口的具体实现&lt;/li&gt;
-&lt;li&gt;receiver：接收探针上报数据的接收器的具体实现&lt;/li&gt;
-&lt;li&gt;alarm：监控告警的具体实现&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;以及一个可选组件：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;telemetry：用于监控OAP自身的健康状况&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;而前面提到的OAP的高扩展性则体现在核心业务的规范均定义在了core中，如果有需要自己扩展的，只需要自己单独做自己的实现，而不需要做侵入式的改动，最典型的示例则是官方支持的storage，不仅支持单机demo的内存数据库H2和经典的ES，连目前开源的Tidb都可以接入。&lt;/p&gt;
-&lt;h2 id=&#34;初步实践&#34;&gt;初步实践&lt;/h2&gt;
-&lt;p&gt;对于Skywalking的实践我们经历了三个阶段&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;线下测试&lt;/li&gt;
-&lt;li&gt;第一次生产环境小规模测试&lt;/li&gt;
-&lt;li&gt;第二次生产环境小规模测试+全量接入&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;线下测试&#34;&gt;线下测试&lt;/h4&gt;
-&lt;h6 id=&#34;环境&#34;&gt;环境&lt;/h6&gt;
-&lt;p&gt;由于是线下测试，所以我们直接使用物理机（E5-2680v2 x2, 128G)虚拟了一个集群（实际性能相比云服务器应该偏好一些）：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;ES：单机实例，v6.5，4C8G，jvm内存分配为4G&lt;/li&gt;
-&lt;li&gt;OAP：单机实例，v6.1.0-SNAPSHOT，4C8G，jvm内存分配为4G&lt;/li&gt;
-&lt;li&gt;应用：基于SpringCloud的4个测试实例,调用关系为A-&amp;gt;B-&amp;gt;C-&amp;gt;D，QPS为200&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h6 id=&#34;测试结果&#34;&gt;测试结果&lt;/h6&gt;
-&lt;p&gt;拓扑图：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q5cqinj30o90dx3za.jpg&#34; alt=&#34;测试拓扑图&#34;&gt;&lt;/p&gt;
-&lt;p&gt;OAP机器监控：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4qanxy5j30fn0gb750.jpg&#34; alt=&#34;OAP监控&#34;&gt;&lt;/p&gt;
-&lt;p&gt;ES机器监控：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4qbzgx2j30fn0js3zn.jpg&#34; alt=&#34;es机器监控&#34;&gt;&lt;/p&gt;
-&lt;p&gt;服务监控面板：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q0e7zwj30t20ta0vh.jpg&#34; alt=&#34;服务面板&#34;&gt;&lt;/p&gt;
-&lt;p&gt;其中一个调用链记录：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q60h0uj30oo0dt0u5.jpg&#34; alt=&#34;测试调用链&#34;&gt;&lt;/p&gt;
-&lt;p&gt;可以看出，Skywalking非常依赖CPU（不论是OAP还是ES），同时对于网络IO也有一定的要求，至于ES的文件IO在可接受范围内，毕竟确实有大量内容需要持久化。测试结果也基本达到预期要求，调用链和各个指标的监控都工作良好。&lt;/p&gt;
-&lt;h4 id=&#34;第一次生产环境测试&#34;&gt;第一次生产环境测试&lt;/h4&gt;
-&lt;p&gt;在线下测试之后，我们再进行了一次基于实际业务针对探针的测试，测试没有发现探针的异常问题，也没有影响业务的正常运作，同时对于jvm实例影响也不是很大，CPU大概提高了5%左右，并不很明显。在这个基础上我们选择了线上的一台服务器，进行了我们第一次生产环境的测试。&lt;/p&gt;
-&lt;h6 id=&#34;环境-1&#34;&gt;环境&lt;/h6&gt;
-&lt;ul&gt;
-&lt;li&gt;ES：基于现有的一个ES集群，node x 3，v6.0&lt;/li&gt;
-&lt;li&gt;OAP：2C4G x 2，v6.1.0-SNAPSHOT，jvm内存分配为2G&lt;/li&gt;
-&lt;li&gt;应用：两个jvm实例&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;测试时间：03.11-03.16&lt;/p&gt;
-&lt;h6 id=&#34;测试结果-1&#34;&gt;测试结果&lt;/h6&gt;
-&lt;p&gt;业务机器负载情况：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q7aczcj30s20ht77p.jpg&#34; alt=&#34;dp1-cpu&#34;&gt;&lt;/p&gt;
-&lt;p&gt;从最敏感的CPU指标上来看，增加agent并没有导致可见的CPU使用率的变化，而其他的内存、网络IO、连接数也基本没有变化。&lt;/p&gt;
-&lt;p&gt;OAP负载情况：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4qbjk28j30rz0httax.jpg&#34; alt=&#34;第一次测试CPU&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q6jo3sj30rs0lfq5n.jpg&#34; alt=&#34;第一次测试网络&#34;&gt;&lt;/p&gt;
-&lt;p&gt;可以看到机器的CPU和网络均有较大的波动，但是也都没有真正打爆服务器，但是我们的实例却经常出现两种日志：&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;One trace segment has been abandoned, cause by buffer is full.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;blockquote&gt;
-&lt;p&gt;Collector traceSegment service doesn&amp;rsquo;t response in xxx seconds.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;通过阅读源码发现：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;agent和OAP只会使用一个长连接阻塞式的交换数据，如果某次数据交换没有得到响应，则会阻塞后续的上报流程（一般长连接的RPC请求会在数据传输期间互相阻塞，但是不会在等待期间互相阻塞，当然这也是源于agent并没有并发上报的机制），所以一旦OAP在接收数据的过程中发生阻塞，就会导致agent本地的缓冲区满，最终只能将监控数据直接丢弃防止内存泄漏&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;而导致OAP没有及时响应的一方面是OAP本身性能不够（OAP需要承担大量的二次统计工作，通过Jstack统计，长期有超过几十个线程处于RUNNABLE状态，据吴晟描述目前OAP都是高性能模式，后续将会提供配置来支持低性能模式），另一方面可能是ES批量插入效率不够，因此我们修改了OAP的批量插入参数来增加插入频率，降低单次插入数量：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;bulkActions: ${SW_STORAGE_ES_BULK_ACTIONS:2000 -&amp;gt; 20} # Execute the bulk every 2000 requests&lt;/li&gt;
-&lt;li&gt;bulkSize: ${SW_STORAGE_ES_BULK_SIZE:20 -&amp;gt; 2} # flush the bulk every 20mb&lt;/li&gt;
-&lt;li&gt;flushInterval: ${SW_STORAGE_ES_FLUSH_INTERVAL:10 -&amp;gt; 2} # flush the bulk every 10 seconds whatever the number of requests&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;虽然 &lt;em&gt;service doesn&amp;rsquo;t response&lt;/em&gt; 出现的频率明显降低，但是依然还是会偶尔出现，而每一次出现都会伴随大量的  &lt;em&gt;trace segment has been abandoned&lt;/em&gt; ，推测OAP和ES可能都存在性能瓶颈（应该进行更进一步的诊断确定问题，不过当时直接和吴晟沟通，确认确实OAP非常消耗CPU资源，考虑到当时部署只是2C，并且还部署有其他业务，就没有进一步的测试）。&lt;/p&gt;
-&lt;p&gt;同时，在频繁的数据丢弃过程中，也偶发了一个bug：当agent上报数据超时并且大量丢弃数据之后，即使后续恢复正常也能通过日志看到数据正常上报，在查询界面查询的时候，会查不到这个实例上报的数据，不过在重启OAP和agent之后，之前上报的数据又能查询到，这个也和吴晟沟通过，没有其他的案例，后续想重现却也一直没有成功。&lt;/p&gt;
-&lt;p&gt;而同时还发现两个更加严重的问题：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;我们使用的是线上已经部署好的ES集群，其版本只有6.0，而新的Skywalking使用了6.3的查询特性，导致很多查询执行报错，只能使用最简单的查询&lt;/li&gt;
-&lt;li&gt;我们的kafka集群版本也非常古老，不支持v1或者更高版本的header，而kafka的探针强依赖header来传输上下文信息，导致kafka客户端直接报错影响业务，所以也立即移除了kafka的探针&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;在这一次测试中，我们基本确认了agent对于应用的影响，同时也发现了一些我们和Skywalking的一些问题，留待后续测试确认。&lt;/p&gt;
-&lt;h4 id=&#34;第二次生产环境测试&#34;&gt;第二次生产环境测试&lt;/h4&gt;
-&lt;p&gt;为了排除性能和ES版本的影响，测试Skywalking本身的可用性，参考吴晟的建议（这也是在最初技术选型的时候没有选择Pinpoint和CAT的部分原因：一方面Skywalking的功能符合我们的要求，更重要的是有更加直接和效率的和项目维护者直接沟通的渠道），所以这一次我们新申请了ES集群和OAP机器。&lt;/p&gt;
-&lt;h6 id=&#34;环境-2&#34;&gt;环境&lt;/h6&gt;
-&lt;ul&gt;
-&lt;li&gt;ES：腾讯云托管ES集群，4C16G x 3 SSD，v6.4&lt;/li&gt;
-&lt;li&gt;OAP：16C32G，standalone，jvm分配24G&lt;/li&gt;
-&lt;li&gt;应用：2~8个jvm实例&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;测试时间：03.18-至今&lt;/p&gt;
-&lt;h6 id=&#34;测试结果-2&#34;&gt;测试结果&lt;/h6&gt;
-&lt;p&gt;OAP负载情况：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q7qh37j30nh0hmmzv.jpg&#34; alt=&#34;二次测试&#34;&gt;&lt;/p&gt;
-&lt;p&gt;ES集群负载：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl4q6sscbj30uo0l80wj.jpg&#34; alt=&#34;二测es监控&#34;&gt;&lt;/p&gt;
-&lt;p&gt;测试过程中，我们先接入了一台机器上的两个实例，完全没有遇到一测中的延迟或者数据丢弃的问题，三天后我们又接入了另外两台机器的4个实例，这之后两天我们又接入了另外两台机器的2个实例。依然没有遇到一测中的延迟或者数据丢弃的问题。&lt;/p&gt;
-&lt;p&gt;而ES负载的监控也基本验证了一测延迟的问题，Skywalking由于较高的并发插入，对于ES的性能压力很大（批量插入时需要针对每条数据分析并且构建查询索引），大概率是ES批量插入性能不够导致延迟，考虑到我们仅仅接入了8个实例，日均segment插入量大概5000万条（即日均5000万次独立调用），如果想支持更大规模的监控，对于ES容量规划势必要留够足够的冗余。同时OAP和ES集群的网络开销也不容忽视，在支撑大规模的监控时，需要集群并且receiver和aggregattor分离部署来分担网络IO的压力。&lt;/p&gt;
-&lt;p&gt;而在磁盘容量占用上，我们设置的原始数据7天过期，目前刚刚开始滚动过期，目前segment索引已经累计了314757240条记录总计158G数据，当然我们目前异常记录较少，如果异常记录较多的话，其磁盘开销将会急剧增加（span中会记录异常堆栈信息）。而由于选择的SSD，磁盘的写入和查询性能都很高，即使只有3个节点，也完全没有任何压力。&lt;/p&gt;
-&lt;p&gt;而在新版本的ES集群下，Skywalking的所有查询功能都变得可用，和我们之前自己的单独编写的异常指标监控都能完美对照。当然我们也遇到一个问题：Skywalking仅采集了调用记录，但是对于调用过程中的过程数据，除了异常堆栈其他均没有采集，导致真的出现异常也缺少充足的上下文信息还原现场，于是我们扩展了Skywalking的两个探针（我们项目目前重度依赖的组件）：OkHttp（增加对requestBody和responseBody的采集）和SpringMVC（增加了对requestBody的采集），目前工作正常，如果进一步的增加其他的探针，采集到足够的数据，那么我们基本可以脱离ELK了。&lt;/p&gt;
-&lt;p&gt;而OAP方面，CPU和内存的消耗远远低于预期的估计，CPU占用率一直较低，而分配的24G内存也仅使用了10+G，完全可以支持更大规模的接入量，不过在网络IO方面可能存在一定的风险，推测应该8C16G的容器就足以支持十万CPM级别的数据接入。&lt;/p&gt;
-&lt;p&gt;当然我们在查询也遇到了一些瓶颈，最大的问题就是无法精确的命中某一条调用记录，就如前面的分析，因为segment的数据结构问题，无法进行面向业务的查询（例如messageId、requestId、orderId等），所以如果想精确匹配某一次调用请求，需要通过各个维度的条件约束慢慢缩小范围最后定位。&lt;/p&gt;
-&lt;h2 id=&#34;skywalking展望&#34;&gt;Skywalking展望&lt;/h2&gt;
-&lt;p&gt;通过上述对Skywalking的剖析和实践，Skywalking确实是一个优秀的APM+调用链跟踪监控系统，能够覆盖大部分使用场景，让研发和运维能够更加实时/准实时的了解线上服务的运行情况。当然Skywailking也不是尽善尽美，例如下面就是个人觉得目前可见的不满足我们期望的：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;数据准实时通过gRPC上报，本地缓存的瓶颈（当然官方主要是为了简化模型，减少依赖，否则Skywalking还依赖ELK就玩得有点大了）
-&lt;ul&gt;
-&lt;li&gt;缓存队列的长度，过长占据内存，过短容易buffer满丢弃数据&lt;/li&gt;
-&lt;li&gt;优雅停机同时又不丢失缓存&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;数据上报需要在起点上报，链路回传的时候需要携带SPAN及子SPAN的信息，当链路较长或者SPAN保存的信息较多时，会额外消耗一定的带宽&lt;/li&gt;
-&lt;li&gt;skywalking更多是一个APM系统而不是分布式调用链跟踪系统
-&lt;ul&gt;
-&lt;li&gt;在整个链路的探针上均缺少输入输出的抓取&lt;/li&gt;
-&lt;li&gt;在调用链的筛查上并没用进行增强，并且体现在数据结构的设计，例如TAG信息均保存在SPAN信息中，而SPAN信息均被BASE64编码作为数据保存，无法检索，最终trace的筛查只能通过时间/traceId/service/endPoint/state进行非业务相关的搜索&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;skywalking缺少对三方接口依赖的指标，这个对于系统稳定往往非常重要&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;而作为一个初级的使用者，个人觉得我们可以使用有限的人力在以下方向进行扩展：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;增加receiver：整合ELK，通过日志采集采集数据，降低异构系统的采集开发成本&lt;/li&gt;
-&lt;li&gt;优化数据结构，提供基于业务关键数据的查询接口&lt;/li&gt;
-&lt;li&gt;优化探针，采集更多的业务数据，争取代替传统的ELK日志简单查询，绝大部分异常诊断和定位均可以通过Skywalking即可完成&lt;/li&gt;
-&lt;li&gt;增加业务指标监控的模式，能够自定义业务指标（目前官方已经在实现 &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/en/setup/backend/metric-exporter.md&#34;&gt;Metric Exporter&lt;/a&gt; ）&lt;/li&gt;
-&lt;/ul&gt;
 
       </description>
     </item>
