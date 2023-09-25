@@ -17,7 +17,7 @@ We are going to share SkyWalking's roadmap, features, product experiences, and o
 Welcome to join us.
 
 ## Venue
-Addr./地址  [(上海闵行）闵虹路80号上海中庚聚龙酒店](https://map.baidu.com/search/(%E4%B8%8A%E6%B5%B7%E9%97%B5%E8%A1%8C)%E9%97%B5%E8%99%B9%E8%B7%AF80%E5%8F%B7%E4%B8%8A%E6%B5%B7%E4%B8%AD%E5%BA%9A%E8%81%9A%E9%BE%99%E9%85%92%E5%BA%97/@13514733.595,3628172.13,19z?querytype=s&da_src=shareurl&wd=%EF%BC%88%E4%B8%8A%E6%B5%B7%E9%97%B5%E8%A1%8C%EF%BC%89%E9%97%B5%E8%99%B9%E8%B7%AF80%E5%8F%B7%E4%B8%8A%E6%B5%B7%E4%B8%AD%E5%BA%9A%E8%81%9A%E9%BE%99%E9%85%92%E5%BA%97&c=131&src=0&pn=0&sug=0&l=13&b=(12926936,4811897;12988376,4839449)&from=webmap&biz_forward=%7B%22scaler%22:2,%22styles%22:%22pl%22%7D&device_ratio=2)
+Addr./地址  [上海大华虹桥假日酒店](https://j.map.baidu.com/35/vCJ)
 
 ## Date
 8:00 - 17:00, Nov 4th. 
