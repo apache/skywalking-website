@@ -36,7 +36,7 @@ A Span is the fundamental unit of an operation in Tracing. It represents an oper
 
 In situations where Skywalking-go doesn't support a particular framework, users can manually create Spans to obtain tracing information.
 
-(Here, I have removed the originally supported frameworks for the sake of the example. If needed, please replace them with unsupported frameworks.)
+(Here, I have removed the supported frameworks for the sake of the example. These are only examples. You should reference this when using the APIs in private and/or unsupported frameworks)
 
 For example, when you need to trace an HTTP response, you can create a span using trace.CreateEntrySpan() within the method handling the request, and end the span using trace.StopSpan() after processing.
 When sending an HTTP request, use trace.CreateExitSpan() to create a span, and end the span after the request returns.
@@ -161,11 +161,11 @@ The usage examples provided are for illustration purposes, and users can decide 
 
 Please note that if a program ends too quickly, it may cause tracing data to be unable to be asynchronously sent to the SkyWalking backend.
 
-## Get/Set Tracing Data
+## Populate The Span
 
-When there's a necessity to record additional information, update, or modify the tags, logs, or operation names of the current traced Span, the Get/Set Tracing Data operations come into play. These actions are used to enhance trace information, providing a more detailed and precise contextual description, which aids in better understanding the events or operations being traced.
+When there's a necessity to record additional information, including creating/updating tags, appending logs, and setting a new operation name of the current traced Span, these APIs should be considered. These actions are used to enhance trace information, providing a more detailed and precise contextual description, which aids in better understanding the events or operations being traced.
 
-Toolkit trace provides a convenient way to access and manipulate trace data, including:
+Toolkit trace APIs provide a convenient way to access and manipulate trace data, including:
 
 - Setting Tags: `SetTag()`
 - Adding Logs: `AddLog()`
@@ -189,7 +189,7 @@ It's important to note that when making these method calls, the current thread s
 
 ## Async APIs
 
-Async API for Span Manipulation in Another Goroutine.When there is a necessity to manipulate a traced Span in another goroutine, the use of the Async API becomes essential. These scenarios might include:
+Async APIs work for manipulating spans across Goroutines. These scenarios might include:
 
 - Applications involving concurrency or multiple goroutines where operating on Spans across different execution contexts is necessary.
 - Updating or logging information for a Span during asynchronous operations.
