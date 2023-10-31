@@ -206,7 +206,10 @@ To use it, follow these steps:
 Here's an example:
 
 ```go
-spanRef, _ := trace.CreateLocalSpan("LocalSpan")
+spanRef, err := trace.CreateLocalSpan("LocalSpan")
+if err != nil {
+	return
+}
 spanRef.PrepareAsync()
 go func(){
 	// some work
