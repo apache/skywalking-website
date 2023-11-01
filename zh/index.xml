@@ -14,6 +14,224 @@
     
     
     <item>
+      <title>Zh: SkyWalking Go Toolkit Trace 详解</title>
+      <link>/zh/2023-10-18-skywalking-toolkit-trace/</link>
+      <pubDate>Wed, 18 Oct 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-10-18-skywalking-toolkit-trace/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;SkyWalking Go是一个开源的非侵入式Golang代理程序，用于监控、追踪和在分布式系统中进行数据收集。它使用户能够观察系统内请求的流程和延迟，从各个系统组件收集性能数据以进行性能监控，并通过追踪请求的完整路径来解决问题。&lt;/p&gt;
+&lt;p&gt;在版本v0.3.0中，Skywalking Go引入了 toolkit-trace 工具。Trace APIs 允许用户在插件不支持的情况下将关键操作、函数或服务添加到追踪范围。从而实现追踪和监控这些操作，并可用于故障分析、诊断和性能监控。&lt;/p&gt;
+&lt;p&gt;在深入了解之前，您可以参考&lt;a href=&#34;https://skywalking.apache.org/zh/2023-06-01-quick-start-with-skywalking-go-agent/&#34;&gt;SkyWalking Go Agent快速开始指南&lt;/a&gt;来学习如何使用SkyWalking Go Agent。&lt;/p&gt;
+&lt;p&gt;下面将会介绍如何在特定场景中使用这些接口。&lt;/p&gt;
+&lt;h2 id=&#34;导入-trace-toolkit&#34;&gt;导入 Trace Toolkit&lt;/h2&gt;
+&lt;p&gt;在项目的根目录中执行以下命令：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;go get github.com/apache/skywalking-go/toolkit
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;使用 toolkit trace 接口前，需要将该包导入到您的项目中：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go/toolkit/trace&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;手动追踪&#34;&gt;手动追踪&lt;/h2&gt;
+&lt;p&gt;Span 是 Tracing 中单个操作的基本单元。它代表在特定时间范围内的操作，比如一个请求、一个函数调用或特定动作。Span记录了特定操作的关键信息，包括开始和结束时间、操作名称、标签（键-值对）以及操作之间的关系。多个 Span 可以形成层次结构。&lt;/p&gt;
+&lt;p&gt;在遇到 Skywalking Go 不支持的框架的情况下，用户可以手动创建 Span 以获取追踪信息。&lt;/p&gt;
+&lt;p&gt;（为了作为示例，我删除了已支持的框架。以下仅为示例。请在使用私有或不支持的框架的 API 时参考）&lt;/p&gt;
+&lt;p&gt;例如，当需要追踪HTTP响应时，可以在处理请求的方法内部使用 &lt;code&gt;trace.CreateEntrySpan() &lt;/code&gt;来创建一个 span，在处理完成后使用 &lt;code&gt;trace.StopSpan()&lt;/code&gt; 来结束这个 span。在发送HTTP请求时，使用 &lt;code&gt;trace.CreateExitSpan()&lt;/code&gt; 来创建一个 span，在请求返回后结束这个 span。&lt;/p&gt;
+&lt;p&gt;这里有两个名为 consumer 和 provider 的HTTP服务。当用户访问 consumer 服务时，它在内部接收用户的请求，然后访问 provider 以获取资源。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// consumer.go
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;io&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+
+	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go/toolkit/trace&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;getProvider&lt;/span&gt;() (&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Response, &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;error&lt;/span&gt;) {
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 新建 HTTP 请求
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	req, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;NewRequest&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GET&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;http://localhost:9998/provider&amp;#34;&lt;/span&gt;, http.NoBody)
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 在发送 HTTP 请求之前创建 ExitSpan
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;CreateExitSpan&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GET:/provider&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;localhost:9999&amp;#34;&lt;/span&gt;,
+		&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(headerKey, headerValue &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;string&lt;/span&gt;) &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;error&lt;/span&gt; {
+			&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// Injector 向请求中添加特定的 header 信息
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;			req.Header.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Add&lt;/span&gt;(headerKey, headerValue)
+			&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;
+		})
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 结束 ExitSpan，使用 defer 确保在函数返回时执行
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;defer&lt;/span&gt; trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;StopSpan&lt;/span&gt;()
+
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 发送请求
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	client &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&lt;/span&gt;http.Client{}
+	resp, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; client.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Do&lt;/span&gt;(req)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;, err
+	}
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; resp, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;
+}
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;consumerHandler&lt;/span&gt;(w http.ResponseWriter, r &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 创建 EntrySpan 来追踪 consumerHandler 方法的执行
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;CreateEntrySpan&lt;/span&gt;(r.Method&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/consumer&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(headerKey &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;string&lt;/span&gt;) (&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;string&lt;/span&gt;, &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;error&lt;/span&gt;) {
+		&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// Extractor 获取请求中添加的 header 信息
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;		&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; r.Header.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Get&lt;/span&gt;(headerKey), &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;
+	})
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 结束 EntrySpan
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;defer&lt;/span&gt; trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;StopSpan&lt;/span&gt;()
+
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 准备发送 HTTP 请求
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	resp, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;getProvider&lt;/span&gt;()
+
+	body, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; io.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ReadAll&lt;/span&gt;(resp.Body)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt;
+	}
+	_, _ = w.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Write&lt;/span&gt;(body)
+}
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/consumer&amp;#34;&lt;/span&gt;, consumerHandler)
+
+	_ = http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:9999&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// provider.go
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+
+	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go/toolkit/trace&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;providerHandler&lt;/span&gt;(w http.ResponseWriter, r &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 创建 EntrySpan 来追踪 providerHandler 方法的执行
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;CreateEntrySpan&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GET:/provider&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(headerKey &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;string&lt;/span&gt;) (&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;string&lt;/span&gt;, &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;error&lt;/span&gt;) {
+		&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; r.Header.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Get&lt;/span&gt;(headerKey), &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;
+	})
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 结束 EntrySpan
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;defer&lt;/span&gt; trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;StopSpan&lt;/span&gt;()
+
+	_, _ = w.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Write&lt;/span&gt;([]&lt;span style=&#34;color:#0086b3&#34;&gt;byte&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success from provider&amp;#34;&lt;/span&gt;))
+}
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/provider&amp;#34;&lt;/span&gt;, providerHandler)
+
+	_ = http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:9998&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后中终端中执行：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o consumer ./consumer.go
+./consumer
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o provider ./provider.go
+./provider
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl 127.0.0.1:9999/consumer
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;此时 UI 中将会显示你所创建的span信息&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./trace.png&#34; alt=&#34;Trace List&#34;&gt;&lt;/p&gt;
+&lt;p&gt;如果需要追踪仅在本地执行的方法，可以使用 &lt;code&gt;trace.CreateLocalSpan()&lt;/code&gt;。如果不需要监控来自另一端的信息或状态，可以将 &lt;code&gt;ExitSpan&lt;/code&gt; 和 &lt;code&gt;EntrySpan&lt;/code&gt; 更改为 &lt;code&gt;LocalSpan&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;以上方法仅作为示例，用户可以决定追踪的粒度以及程序中需要进行追踪的位置。&lt;/p&gt;
+&lt;p&gt;注意，如果程序结束得太快，可能会导致 Tracing 数据无法异步发送到 SkyWalking 后端。&lt;/p&gt;
+&lt;h2 id=&#34;填充-span&#34;&gt;填充 Span&lt;/h2&gt;
+&lt;p&gt;当需要记录额外信息时，包括创建/更新标签、追加日志和设置当前被追踪 Span 的新操作名称时，可以使用这些API。这些操作用于增强追踪信息，提供更详细的上下文描述，有助于更好地理解被追踪的事件或操作。&lt;/p&gt;
+&lt;p&gt;Toolkit trace APIs 提供了一种简便的方式来访问和操作 Trace 数据：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;设置标签：&lt;code&gt;SetTag()&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;添加日志：&lt;code&gt;AddLog()&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;设置 Span 名称：&lt;code&gt;SetOperationName()&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;获取各种ID：&lt;code&gt;GetTraceID()&lt;/code&gt;, &lt;code&gt;GetSegmentID()&lt;/code&gt;, &lt;code&gt;GetSpanID()&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;例如，如果需要在一个 Span 中记录HTTP状态码，就可以在 Span 未结束时调用以下接口：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;CreateExitSpan&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GET:/provider&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;localhost:9999&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(headerKey, headerValue &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;string&lt;/span&gt;) &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;error&lt;/span&gt; {
+	r.Header.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Add&lt;/span&gt;(headerKey, headerValue)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;
+})
+resp, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Get&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;http://localhost:9999/provider&amp;#34;&lt;/span&gt;)
+trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SetTag&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;status_code&amp;#34;&lt;/span&gt;, fmt.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Sprintf&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;%d&amp;#34;&lt;/span&gt;, resp.StatusCode))
+spanID &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;GetSpanID&lt;/span&gt;()
+trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;StopSpan&lt;/span&gt;()
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在调用这些方法时，当前线程需要有正在活跃的 span。&lt;/p&gt;
+&lt;h2 id=&#34;异步-apis&#34;&gt;异步 APIs&lt;/h2&gt;
+&lt;p&gt;异步API 用于跨 goroutines 操作 spans。包括以下情况：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;包含多个 goroutines 的程序，需要在不同上下文中中操作 Span。&lt;/li&gt;
+&lt;li&gt;在异步操作时更新或记录 Span 的信息。&lt;/li&gt;
+&lt;li&gt;延迟结束 Span。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;按照以下步骤使用：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;获取 &lt;code&gt;CreateSpan&lt;/code&gt; 的返回值 &lt;code&gt;SpanRef&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;调用 &lt;code&gt;spanRef.PrepareAsync()&lt;/code&gt; ，准备在另一个 goroutine 中执行操作。&lt;/li&gt;
+&lt;li&gt;当前 goroutine 工作结束后，调用 &lt;code&gt;trace.StopSpan()&lt;/code&gt; 结束该 span（仅影响当前 goroutine）。&lt;/li&gt;
+&lt;li&gt;将 &lt;code&gt;spanRef&lt;/code&gt; 传递给另一个 goroutine。&lt;/li&gt;
+&lt;li&gt;完成工作后在任意 goroutine 中调用 &lt;code&gt;spanRef.AsyncFinish()&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;以下为示例：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;spanRef, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;CreateLocalSpan&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;LocalSpan&amp;#34;&lt;/span&gt;)
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt;
+}
+spanRef.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;PrepareAsync&lt;/span&gt;()
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;go&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(){
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// some work
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	spanRef.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;AsyncFinish&lt;/span&gt;()
+}()
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// some work
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;StopSpan&lt;/span&gt;()
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;correlation-context&#34;&gt;Correlation Context&lt;/h2&gt;
+&lt;p&gt;Correlation Context 用于在 Span 间传递参数，父 Span 会把 Correlation Context 递给其所有子 Spans。它允许在不同应用程序的 spans 之间传输信息。Correlation Context 的默认元素个数为3，其内容长度不能超过128字节。&lt;/p&gt;
+&lt;p&gt;Correlation Context 通常用于以下等情况:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;在 Spans 之间传递信息&lt;/code&gt;：它允许关键信息在不同 Span 之间传输，使上游和下游 Spans 能够获取彼此之间的关联和上下文。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;传递业务参数&lt;/code&gt;：在业务场景中，涉及在不同 Span 之间传输特定参数或信息，如认证令牌、交易ID等。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;用户可以使用 &lt;code&gt;trace.SetCorrelation(key, value)&lt;/code&gt; 设置 Correlation Context ，并可以使用 &lt;code&gt;value := trace.GetCorrelation(key)&lt;/code&gt; 在下游 spans 中获取相应的值。&lt;/p&gt;
+&lt;p&gt;例如在下面的代码中，我们将值存储在 span 的标签中，以便观察结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go/toolkit/trace&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;providerHandler&lt;/span&gt;(w http.ResponseWriter, r &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+	ctxValue &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;GetCorrelation&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;key&amp;#34;&lt;/span&gt;)
+	trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SetTag&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;result&amp;#34;&lt;/span&gt;, ctxValue)
+}
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;consumerHandler&lt;/span&gt;(w http.ResponseWriter, r &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+	trace.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SetCorrelation&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;key&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;value&amp;#34;&lt;/span&gt;)
+	_, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Get&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;http://localhost:9999/provider&amp;#34;&lt;/span&gt;)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt;
+	}
+}
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/provider&amp;#34;&lt;/span&gt;, providerHandler)
+
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/consumer&amp;#34;&lt;/span&gt;, consumerHandler)
+
+	_ = http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:9999&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后在终端执行：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;server
+go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o server ./server.go
+./server
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl 127.0.0.1:9999/consumer
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;最后在 &lt;code&gt;providerHandler()&lt;/code&gt; 的 Span 中找到了 Correlation Context 的信息：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./correlation.png&#34; alt=&#34;Correlation Value&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;本文讲述了Skywalking Go的 Trace APIs 及其应用。它为用户提供了自定义追踪的功能。&lt;/p&gt;
+&lt;p&gt;更多关于该接口的介绍见文档：&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/manual-apis/toolkit-trace/&#34;&gt;Tracing APIs&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;欢迎大家来使用新版本。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Zh: CommunityOverCode Conference 2023 Asia</title>
       <link>/zh/2023-08-20-coc-asia-2023/</link>
       <pubDate>Tue, 03 Oct 2023 00:00:00 +0000</pubDate>
@@ -6600,85 +6818,6 @@ local/skywalking 	0.1.0        	6.3.0      	Apache SkyWalking APM System&lt;/p&g
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm install -n &lt;span style=&#34;color:#0086b3&#34;&gt;test&lt;/span&gt; stable/skywalking
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;总结&#34;&gt;总结&lt;/h3&gt;
 &lt;p&gt;四种方式都可以进行部署，如果你想要自定义 chart ,需要使用上述两种本地方法及 harbor 存储的方式，以便你修改好 chart 之后进行部署.&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Zh: Apache SkyWalking Committer申请流程</title>
-      <link>/zh/2019-09-12-apache-skywalking-committer-apply-process/</link>
-      <pubDate>Thu, 12 Sep 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/zh/2019-09-12-apache-skywalking-committer-apply-process/</guid>
-      <description>
-        
-        
-        &lt;p&gt;作者： SkyWalking committer，&lt;a href=&#34;https://github.com/x22x22&#34;&gt;Kdump&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;本文介绍申请Apache SkyWalking Committer流程, 流程包括以下步骤&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;与PMC成员表达想成为committer的意愿(主动/被动)&lt;/li&gt;
-&lt;li&gt;PMC内部投票&lt;/li&gt;
-&lt;li&gt;PMC正式邮件邀请&lt;/li&gt;
-&lt;li&gt;填写Apache iCLA申请表&lt;/li&gt;
-&lt;li&gt;设置ApacheID和邮箱&lt;/li&gt;
-&lt;li&gt;设置GitHub加入Apache组织&lt;/li&gt;
-&lt;li&gt;GitHub其它一些不重要设置&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;前期过程&#34;&gt;前期过程&lt;/h2&gt;
-&lt;ol&gt;
-&lt;li&gt;与PMC成员表达想成为committer的意愿(主动/被动)&lt;/li&gt;
-&lt;li&gt;PMC内部投票&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;当你对项目的贡献活跃度足够高或足够多时, Skywalking项目的PMC(项目管理委员会)会找到你并询问你是否有意愿成为项目的Committer, 或者也可以主动联系项目的PMC表达自己的意向, 在此之后PMC们会进行内部讨论和投票并告知你是否可以进入下一个环节.这个过程可能需要一周.
-如果PMC主动邀请你进行非正式的意愿咨询, 你可以选择接受或拒绝.&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;&lt;strong&gt;PS&lt;/strong&gt;&lt;/em&gt;:PMC会向你索要你的个人邮箱, 建议提供Gmail, 因为后期绑定Apache邮箱需要用到, 其它邮箱我不确定是否能绑定.&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;&lt;strong&gt;PS&lt;/strong&gt;&lt;/em&gt;:从Apache官方的流程来讲, 现有的PMC会在没有通知候选人的情况下先进行候选人投票, 但是Skywalking项目的PMC有可能更倾向于先得到候选人的意愿再进行投票.&lt;/p&gt;
-&lt;h2 id=&#34;正式阶段&#34;&gt;正式阶段&lt;/h2&gt;
-&lt;ol&gt;
-&lt;li&gt;
-&lt;p&gt;PMC正式邮件邀请&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;当你收到PMC正式的邀请邮件时, 恭喜你, 你已经通过了PMC的内部投票, 你需要用英文回答接受邀请或者拒绝邀请, 记住回复的时候一定要选择&lt;code&gt;全部回复&lt;/code&gt;.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;填写Apache iCLA申请表&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;在你收到的PMC邮件中, 有几个ASF官方链接需要你去浏览, 重点的内容是查看&lt;a href=&#34;http://www.apache.org/licenses/contributor-agreements.html#clas&#34;&gt;CLAs&lt;/a&gt;, 并填写&lt;a href=&#34;http://www.apache.org/licenses/icla.pdf&#34;&gt;Individual Contributor License Agreement&lt;/a&gt;, 你可以将&lt;code&gt;icla.pdf&lt;/code&gt;文件下载到本地, 使用PDF工具填写里面所需的信息, 并打印出来签名(一定要手写签名, 否则会被要求重新签名), 再扫描(或手机拍照)成电子文档(需要回复PDF格式, 文件名建议重命名为&lt;code&gt;你的名字-icla.pdf&lt;/code&gt;), 使用gpg对电子文档进行签名(参考[HOW-TO: SUBMITTING LICENSE AGREEMENTS AND GRANTS&lt;/p&gt;
-&lt;p&gt;](&lt;a href=&#34;http://www.apache.org/licenses/contributor-agreements.html#submitting)),&#34;&gt;http://www.apache.org/licenses/contributor-agreements.html#submitting)),&lt;/a&gt; Window可以使用GnuPG或者Gpg4win.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;完成gpg签名后, 请将你签名用的公钥上送到&lt;a href=&#34;http://hkps.pool.sks-keyservers.net&#34;&gt;pool.sks-keyservers.net&lt;/a&gt;服务器, 并在这个页面中验证你的公钥是否可以被搜索到, 搜索关键词可以是你秘钥中填写的名字或者邮箱地址.&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;gpg签名后, 会生成&lt;code&gt;.pdf.asc&lt;/code&gt;的文件, 需要将你的&lt;code&gt;你的名字-icla.pdf&lt;/code&gt;和&lt;code&gt;你的名字-icla.pdf.asc&lt;/code&gt;以附件的方式一起发送到&lt;a href=&#34;mailto:secretary@apache.org&#34;&gt;secretary@apache.org&lt;/a&gt;, 并抄送给&lt;a href=&#34;mailto:private@skywalking.apache.org&#34;&gt;private@skywalking.apache.org&lt;/a&gt;.&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;设置ApacheID和邮箱&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;大概5个工作日内, 你会收到一封来至于&lt;a href=&#34;mailto:root@apache.org&#34;&gt;root@apache.org&lt;/a&gt;的邮件, 主题为&lt;code&gt;Welcome to the Apache Software Foundation (ASF)!&lt;/code&gt;, 恭喜你, 你已经获得了ApacheID, 这时候你需要根据邮件内容的提示去设置你的ApacheID密码, 密码设置完成后, 需要在&lt;a href=&#34;https://id.apache.org/&#34;&gt;Apache Account Utility&lt;/a&gt;页面中重点设置&lt;code&gt;Forwarding email address&lt;/code&gt;和&lt;code&gt;Your GitHub Username&lt;/code&gt;两个信息.保存信息的时候需要你填写当前的ApacheID的密码.&lt;/li&gt;
-&lt;li&gt;现在进入Gmail, 选择右上角的齿轮-&amp;gt;设置-&amp;gt;账号和导入-&amp;gt;添加其他电子邮件地址-&amp;gt;参考&lt;a href=&#34;https://reference.apache.org/committer/email&#34;&gt;Sending email from your apache.org email address&lt;/a&gt;给出的信息根据向导填写Apache邮箱.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;设置GitHub加入Apache组织&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;进入&lt;a href=&#34;https://gitbox.apache.org/setup/&#34;&gt;Welcome to the GitBox Account Linking Utility!&lt;/a&gt;, 按照顺序将&lt;code&gt;Apache Account&lt;/code&gt;和&lt;code&gt;GitHub Account&lt;/code&gt;点绿, 想点绿&lt;code&gt;MFA Status&lt;/code&gt;, 需要去GitHub开启2FA, 请参考&lt;a href=&#34;https://help.github.com/cn/articles/configuring-two-factor-authentication&#34;&gt;配置双重身份验证&lt;/a&gt;完成2FA的功能.&lt;/li&gt;
-&lt;li&gt;等待1~2小时后登陆自己的GitHub的dashboard界面, 你应该会看到一条Apache组织邀请你加入的通知, 这个时候接受即可享有Skywalking相关GitHub项目权限了.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;其它提示&#34;&gt;其它提示&lt;/h2&gt;
-&lt;ol&gt;
-&lt;li&gt;GitHub其它一些不重要设置
-&lt;ul&gt;
-&lt;li&gt;在GitHub首页展示Apache组织的logo: 进入&lt;a href=&#34;https://github.com/apache&#34;&gt;Apache GitHub组织&lt;/a&gt;-&amp;gt;People-&amp;gt;搜索自己的GitHubID-&amp;gt;将&lt;code&gt;Private&lt;/code&gt;改成&lt;code&gt;Public&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
 
       </description>
     </item>
