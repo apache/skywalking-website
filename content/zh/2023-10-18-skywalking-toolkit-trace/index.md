@@ -212,7 +212,7 @@ if err != nil {
 spanRef.PrepareAsync()
 go func(){
 	// some work
-    spanRef.AsyncFinish()
+	spanRef.AsyncFinish()
 }()
 // some work
 trace.StopSpan()
