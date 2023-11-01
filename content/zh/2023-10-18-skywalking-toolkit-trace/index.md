@@ -38,7 +38,7 @@ Span 是 Tracing 中单个操作的基本单元。它代表在特定时间范围
 
 （为了作为示例，我删除了已支持的框架。以下仅为示例。请在使用私有或不支持的框架的 API 时参考）
 
-例如，当需要追踪HTTP响应时，可以在处理请求的方法内部使用 `trace.CreateEntrySpan() `来创建一个 span，在处理完成后使用 trace.StopSpan() 来结束这个 span。在发送HTTP请求时，使用 `trace.CreateExitSpan()` 来创建一个 span，在请求返回后结束这个 span。
+例如，当需要追踪HTTP响应时，可以在处理请求的方法内部使用 `trace.CreateEntrySpan() `来创建一个 span，在处理完成后使用 `trace.StopSpan()` 来结束这个 span。在发送HTTP请求时，使用 `trace.CreateExitSpan()` 来创建一个 span，在请求返回后结束这个 span。
 
 这里有两个名为 consumer 和 provider 的HTTP服务。当用户访问 consumer 服务时，它在内部接收用户的请求，然后访问 provider 以获取资源。
 
