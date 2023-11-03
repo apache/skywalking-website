@@ -147,7 +147,7 @@ metricsRules:
   - name: status_code_count
     exp: nginx_status_code.sum(['service','status']).downsampling(SUM)
 ```
-最后，我们便可以来到 SkyWalking UI 页面新建 Nginx 仪表板，使用刚刚 MAL 中定义的指标信息创建 Nginx Dashboard（也可以通过上文提到[仓库]((https://github.com/weixiang1862/nginx-fluent-bit))中的 dashboard.json 直接导入测试）：
+最后，我们便可以来到 SkyWalking UI 页面新建 Nginx 仪表板，使用刚刚 MAL 中定义的指标信息创建 Nginx Dashboard（也可以通过上文提到[仓库](https://github.com/weixiang1862/nginx-fluent-bit)中的 dashboard.json 直接导入测试）：
 
 ![nginx-metric](./nginx-metric.jpg)
 
