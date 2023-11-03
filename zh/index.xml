@@ -14,6 +14,144 @@
     
     
     <item>
+      <title>Zh: 使用 LAL 收集并分析 Nginx access log</title>
+      <link>/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/</link>
+      <pubDate>Sun, 29 Oct 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;Nginx access log 中包含了丰富的信息，例如：日志时间、状态码、响应时间、body 大小等。通过收集并分析 access log，我们可以实现对 Nginx 中接口状态的监控。&lt;/p&gt;
+&lt;p&gt;在本案例中，将由 &lt;a href=&#34;https://fluentbit.io/&#34;&gt;fluent-bit&lt;/a&gt; 收集 access log，并通过 HTTP 将日志信息发送给 SkyWalking OAP Server 进行进一步的分析。&lt;/p&gt;
+&lt;h2 id=&#34;环境准备&#34;&gt;环境准备&lt;/h2&gt;
+&lt;p&gt;实验需要的 Nginx 及 Fluent-bit 相关配置文件都被上传到了&lt;a href=&#34;https://github.com/weixiang1862/nginx-fluent-bit&#34;&gt;Github&lt;/a&gt;，有需要的读者可以自行 git clone 并通过 docker compose 启动，本文中将介绍配置文件中几个关键点。&lt;/p&gt;
+&lt;h3 id=&#34;nginx日志格式配置&#34;&gt;Nginx日志格式配置&lt;/h3&gt;
+&lt;p&gt;LAL 目前支持 JSON、YAML 及 REGEX 日志解析，为了方便获取到日志中的指标字段，我们将 Nginx 的日志格式定义为 JSON.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http {
+    ...
+    ...
+
+    log_format  main  &#39;{&amp;quot;remote_addr&amp;quot;: &amp;quot;$remote_addr&amp;quot;,&#39;
+            &#39;&amp;quot;remote_user&amp;quot;: &amp;quot;$remote_user&amp;quot;,&#39;
+            &#39;&amp;quot;request&amp;quot;: &amp;quot;$request&amp;quot;,&#39;
+            &#39;&amp;quot;time&amp;quot;: &amp;quot;$time_iso8601&amp;quot;,&#39;
+            &#39;&amp;quot;status&amp;quot;: &amp;quot;$status&amp;quot;,&#39;
+            &#39;&amp;quot;request_time&amp;quot;:&amp;quot;$request_time&amp;quot;,&#39;
+            &#39;&amp;quot;body_bytes_sent&amp;quot;: &amp;quot;$body_bytes_sent&amp;quot;,&#39;
+            &#39;&amp;quot;http_referer&amp;quot;: &amp;quot;$http_referer&amp;quot;,&#39;
+            &#39;&amp;quot;http_user_agent&amp;quot;: &amp;quot;$http_user_agent&amp;quot;,&#39;
+            &#39;&amp;quot;http_x_forwarded_for&amp;quot;: &amp;quot;$http_x_forwarded_for&amp;quot;}&#39;;
+
+    access_log  /var/log/nginx/access.log  main;
+    
+    ...
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;fluent-bit-filter&#34;&gt;Fluent bit Filter&lt;/h3&gt;
+&lt;p&gt;我们通过 Fluent bit 的 lua filter 进行日志格式的改写，将其调整为 SkyWalking 所需要的格式，record的各个字段含义如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;body：日志内容体&lt;/li&gt;
+&lt;li&gt;service：服务名称&lt;/li&gt;
+&lt;li&gt;serviceInstance：实例名称&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;function rewrite_body(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;body&amp;quot;] = { json = { json = record.log } }
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;localhost&amp;quot;
+    return 1, timestamp, newRecord
+end
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;oap-日志分析&#34;&gt;OAP 日志分析&lt;/h2&gt;
+&lt;h3 id=&#34;lal定义&#34;&gt;LAL定义&lt;/h3&gt;
+&lt;p&gt;在 filter 中，我们通过条件判断，只处理 &lt;code&gt;service=nginx::nginx&lt;/code&gt; 的服务，其他服务依旧走默认逻辑：&lt;/p&gt;
+&lt;p&gt;第一步，使用 json 指令对日志进行解析，解析的结果会被存放到 parsed 字段中，通过 parsed 字段我们可以获取 json 日志中的字段信息。&lt;/p&gt;
+&lt;p&gt;第二步，使用 timestamp 指令解析 parsed.time 并将其赋值给日志的 timestamp 字段，这里的 time 就是access log json 中的 time。&lt;/p&gt;
+&lt;p&gt;第三步，使用 tag 指令给日志打上对应的标签，标签的值依然可以通过 parsed 字段获取。&lt;/p&gt;
+&lt;p&gt;第四步，使用 metrics 指令从日志中提取出指标信息，我们共提取了四个指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;nginx_log_count&lt;/code&gt;：Nginx 每次请求都会生成一条 access log，该指标可以帮助我们统计 Nginx 当前的请求数。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_request_time&lt;/code&gt;：access log 中会记录请求时间，该指标可以帮助我们统计上游接口的响应时长。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_body_bytes_sent&lt;/code&gt;：body 大小指标可以帮助我们了解网关上的流量情况。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_status_code&lt;/code&gt;：状态码指标可以实现对状态码的监控，如果出现异常上涨可以结合 alarm 进行告警。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;rules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;layer&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;GENERAL&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;dsl&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;|&lt;span style=&#34;color:#d14&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      filter {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        if (log.service == &amp;#34;nginx::nginx&amp;#34;) {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          json {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;            abortOnFailure true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          }&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;          &lt;/span&gt;extractor {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;timestamp parsed.time as String, &amp;#34;yyyy-MM-dd&amp;#39;T&amp;#39;HH:mm:ssXXX&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tag status&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.status&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tag remote_addr&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.remote_addr&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_log_count&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value 1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_request_time&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value parsed.request_time as Double&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_body_bytes_sent&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value parsed.body_bytes_sent as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance: log.serviceInstance, status&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.status&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_status_code&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value 1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;          &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;sink {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;经过 LAL 处理后，我们已经可以在日志面板看到日志信息了，接下来我们将对 LAL 中提取的指标进行进一步分析：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./nginx-log.jpg&#34; alt=&#34;nginx-log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;mal定义&#34;&gt;MAL定义&lt;/h3&gt;
+&lt;p&gt;在 MAL 中，我们可以对上一步 LAL 中提取的指标进行进一步的分析聚合，下面的例子里：&lt;/p&gt;
+&lt;p&gt;nginx_log_count、nginx_request_time、nginx_status_code 使用 sum 聚合函数处理，并使用 SUM 方式 downsampling，&lt;/p&gt;
+&lt;p&gt;nginx_request_time 使用 avg 聚合函数求平均值，默认使用 AVG 方式 downsampling。&lt;/p&gt;
+&lt;p&gt;完成聚合分析后，SkyWalking Meter System 会完成对上述指标的持久化。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;expSuffix&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;service([&amp;#39;service&amp;#39;], Layer.GENERAL)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metricPrefix&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metricsRules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;cpm&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_log_count.sum([&amp;#39;service&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;avg_request_time&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_request_time.avg([&amp;#39;service&amp;#39;])&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;body_bytes_sent_count&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_body_bytes_sent.sum([&amp;#39;service&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;status_code_count&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_status_code.sum([&amp;#39;service&amp;#39;,&amp;#39;status&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;最后，我们便可以来到 SkyWalking UI 页面新建 Nginx 仪表板，使用刚刚 MAL 中定义的指标信息创建 Nginx Dashboard（也可以通过上文提到&lt;a href=&#34;https://github.com/weixiang1862/nginx-fluent-bit&#34;&gt;仓库&lt;/a&gt;中的 dashboard.json 直接导入测试）：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./nginx-metric.jpg&#34; alt=&#34;nginx-metric&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;参考文档&#34;&gt;参考文档&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.fluentbit.io/manual/pipeline/filters/lua&#34;&gt;Fluent Bit lua Filter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/lal/&#34;&gt;Log Analysis Language&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;Meter Analysis Language&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Zh: SkyWalking Go Toolkit Trace 详解</title>
       <link>/zh/2023-10-18-skywalking-toolkit-trace/</link>
       <pubDate>Wed, 18 Oct 2023 00:00:00 +0000</pubDate>
@@ -6711,113 +6849,6 @@ elasticsearch:6.3.2(下文用es代替)&lt;/p&gt;
 &lt;hr&gt;
 &lt;h3 id=&#34;完结---&#34;&gt;完结&amp;mdash;&lt;/h3&gt;
 &lt;p&gt;于 2019年11月&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Zh: 使用 chart 部署 SkyWalking</title>
-      <link>/zh/2019-10-08-how-to-use-sw-chart/</link>
-      <pubDate>Tue, 08 Oct 2019 00:00:00 +0000</pubDate>
-      
-      <guid>/zh/2019-10-08-how-to-use-sw-chart/</guid>
-      <description>
-        
-        
-        &lt;ul&gt;
-&lt;li&gt;作者：innerpeacez&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://ipzgo.top/2019-10-08-%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8-helm-chart-%E9%83%A8%E7%BD%B2-skywalking/&#34;&gt;原文地址&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;本文主要讲述的是如何使用 Helm Charts  将 SkyWalking 部署到 Kubernetes 集群中，相关文档可以参考&lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;skywalking-kubernetes &lt;/a&gt;和 &lt;a href=&#34;https://github.com/apache/skywalking/blob/master/docs/en/setup/backend/backend-k8s.md&#34;&gt;backend-k8s 文档&lt;/a&gt; 。&lt;/p&gt;
-&lt;p&gt;目前推荐的四种方式：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;使用 helm 2 提供的 helm serve 启动本地 helm repo&lt;/li&gt;
-&lt;li&gt;使用本地 chart 文件部署&lt;/li&gt;
-&lt;li&gt;使用 harbor 提供的 repo 功能&lt;/li&gt;
-&lt;li&gt;直接从官方 repo 进行部署&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;注意：目前 skywalking 的 chart 还没有提交到官方仓库，请先参照前三种方式进行部署&lt;/p&gt;
-&lt;h4 id=&#34;helm-2-提供的-helm-serve&#34;&gt;Helm 2 提供的 helm serve&lt;/h4&gt;
-&lt;h5 id=&#34;打包对应版本的-skywalking-chart&#34;&gt;&lt;strong&gt;打包对应版本的 skywalking chart&lt;/strong&gt;&lt;/h5&gt;
-&lt;p&gt;1.配置 helm 环境，&lt;a href=&#34;https://ipzgo.top/2019-07-26-Windows-%E4%BD%BF%E7%94%A8-helm3-%E5%92%8C-kubectl/&#34;&gt;参考 Helm 环境配置&lt;/a&gt; ，如果你要部署 helm2 相关 chart 可以直接配置 helm2 的相关环境&lt;/p&gt;
-&lt;p&gt;2.克隆/下载ZIP &lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;&lt;strong&gt;skywalking-kubernetes&lt;/strong&gt;&lt;/a&gt; 这个仓库，仓库关于chart的目录结构如下&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;helm-chart&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;helm2
-&lt;ul&gt;
-&lt;li&gt;6.0.0-GA&lt;/li&gt;
-&lt;li&gt;6.1.0&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;helm3
-&lt;ul&gt;
-&lt;li&gt;6.3.0&lt;/li&gt;
-&lt;li&gt;6.4.0&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;克隆/下载ZIP 完成后进入指定目录打包对应版本的chart&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; skywalking-kubernetes/helm-chart/&amp;lt;helm-version&amp;gt;/&amp;lt;skywalking-version&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;注意：helm-version 为对应的 helm 版本目录，skywalking-version 为对应的 skywalking 版本目录，下面以helm3 和 skywalking 6.3.0 为例&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; skywalking-kubernetes/helm-chart/helm3/6.3.0
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;3.由于skywalking 依赖 elasticsearch 作为存储库，执行以下命令更新依赖，默认会从官方repo进行拉取&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm dep up skywalking
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
-&lt;p&gt;Hang tight while we grab the latest from your chart repositories&amp;hellip;
-&amp;hellip;Successfully got an update from the &amp;ldquo;stable&amp;rdquo; chart repository
-Update Complete. ⎈Happy Helming!⎈
-Saving 1 charts
-Downloading elasticsearch from repo &lt;a href=&#34;https://kubernetes-charts.storage.googleapis.com/&#34;&gt;https://kubernetes-charts.storage.googleapis.com/&lt;/a&gt;
-Deleting outdated charts&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;如果官方 repo 不存在，请先添加官方仓库&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm repo add stable https://kubernetes-charts.storage.googleapis.com
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
-&lt;p&gt;&amp;ldquo;stable&amp;rdquo; has been added to your repositories&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;4.打包 skywalking , 执行以下命令&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm package skywalking/
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
-&lt;p&gt;Successfully packaged chart and saved it to: C:\code\innerpeacez_github\skywalking-kubernetes\helm-chart\helm3\6.3.0\skywalking-0.1.0.tgz&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;打包完成后会在当前目录的同级目录生成 .tgz 文件&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt; ls
-&lt;/code&gt;&lt;/pre&gt;&lt;blockquote&gt;
-&lt;p&gt;skywalking/  skywalking-0.1.0.tgz&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;h5 id=&#34;启动-helm-serve&#34;&gt;启动 helm serve&lt;/h5&gt;
-&lt;p&gt;由于上文配置的 helm 为 helm3 ,但是 helm 3中移除了 helm serve 的相关命令，所以需要另外一个环境配置helm2 的相关环境，&lt;a href=&#34;https://github.com/helm/helm/releases/tag/v2.14.3&#34;&gt;下载 helm 2.14.3 的二进制文件&lt;/a&gt;，配置基本上没有大的差别，不在赘述&lt;/p&gt;
-&lt;p&gt;初始化 helm&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shelm&#34; data-lang=&#34;shelm&#34;&gt;helm init
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;将上文生成的 &lt;strong&gt;skywalking-0.1.0.tgz&lt;/strong&gt; 文件复制到 helm 相关目录 &lt;code&gt;/root/.helm/repository/local&lt;/code&gt;,启动 serve&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm serve --address &amp;lt;ip&amp;gt;:8879 --repo-path /root/.helm/repository/local
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;注意： ip 为要能够被上文配置 helm 3 环境的机器访问到&lt;/p&gt;
-&lt;p&gt;可以访问一下看看服务 serve 是否启动成功&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl ip:8879
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h5 id=&#34;部署-skywalking&#34;&gt;部署 skywalking&lt;/h5&gt;
-&lt;p&gt;1.在helm3 环境中添加启动的本地 repo&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm repo add &lt;span style=&#34;color:#0086b3&#34;&gt;local&lt;/span&gt; http://&amp;lt;ip&amp;gt;:8879
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;2.查看 skywalking chart 是否存在于本地仓库中&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm search skywalking
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
-&lt;p&gt;NAME             	CHART VERSION	APP VERSION	DESCRIPTION              &lt;br&gt;
-local/skywalking 	0.1.0        	6.3.0      	Apache SkyWalking APM System&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;p&gt;3.部署&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm -n &lt;span style=&#34;color:#0086b3&#34;&gt;test&lt;/span&gt; install skywalking local/skywalking
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这样 skywalking 就部署到了 k8s 集群中的 test 命名空间了，至此本地安装skywalking 就完成了。&lt;/p&gt;
-&lt;h4 id=&#34;本地文件部署&#34;&gt;本地文件部署&lt;/h4&gt;
-&lt;p&gt;如果你不想存储到 chart 到仓库中也可以直接使用本地文件部署 skywalking,按照上面的步骤将skywalking chart 打包完成之后，直接使用以下命令进行部署&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm -n &lt;span style=&#34;color:#0086b3&#34;&gt;test&lt;/span&gt; install skywalking skywalking-0.1.0.tgz
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;harbor-作为-repo-存储-charts&#34;&gt;harbor 作为 repo 存储 charts&lt;/h4&gt;
-&lt;p&gt;harbor 目前已经提供了，charts repo 的能力，这样就可以将 docker 镜像和 chart 存储在一个仓库中了，方便维护，具体harbor 的部署方法参考 &lt;a href=&#34;https://ipzgo.top/2019-07-26-Helm-3-%E4%BD%BF%E7%94%A8-harbor-%E4%BD%9C%E4%B8%BA%E4%BB%93%E5%BA%93%E5%AD%98%E5%82%A8-charts/&#34;&gt;Harbor 作为存储仓库存储 chart&lt;/a&gt;&lt;/p&gt;
-&lt;h4 id=&#34;官方-repo-部署&#34;&gt;官方 repo 部署&lt;/h4&gt;
-&lt;p&gt;目前没有发布到官方 repo 中，后续发布完成后，只需要执行下面命令即可&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;helm install -n &lt;span style=&#34;color:#0086b3&#34;&gt;test&lt;/span&gt; stable/skywalking
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;总结&#34;&gt;总结&lt;/h3&gt;
-&lt;p&gt;四种方式都可以进行部署，如果你想要自定义 chart ,需要使用上述两种本地方法及 harbor 存储的方式，以便你修改好 chart 之后进行部署.&lt;/p&gt;
 
       </description>
     </item>
