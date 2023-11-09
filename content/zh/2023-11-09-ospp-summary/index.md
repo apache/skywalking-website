@@ -49,7 +49,7 @@ Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2023"活动，�
 - 学生：胡宇腾
 - 学校：西安邮电大学
 - 合并PR：[88](https://github.com/apache/skywalking-go/pull/88), [94](https://github.com/apache/skywalking-go/pull/94)
-- 后续情况说明：此学校在开源之夏相关项目外，完成了[feature: add support for iris #99](https://github.com/apache/skywalking-go/pull/99)和[Go agent APIs](https://github.com/apache/skywalking-go/pull/104)功能开发。并发表文章[SkyWalking Go Toolkit Trace 详解](https://skywalking.apache.org/zh/2023-10-18-skywalking-toolkit-trace/)以及英文译本[Detailed explanation of SkyWalking Go Toolkit Trace](https://skywalking.apache.org/blog/2023-10-18-skywalking-toolkit-trace/)
+- 后续情况说明：该学生在开源之夏相关项目外，完成了[feature: add support for iris #99](https://github.com/apache/skywalking-go/pull/99)和[Go agent APIs](https://github.com/apache/skywalking-go/pull/104)功能开发。并发表文章[SkyWalking Go Toolkit Trace 详解](https://skywalking.apache.org/zh/2023-10-18-skywalking-toolkit-trace/)以及英文译本[Detailed explanation of SkyWalking Go Toolkit Trace](https://skywalking.apache.org/blog/2023-10-18-skywalking-toolkit-trace/)
 
 ## 监控Kafka
 - 学生：王竹
