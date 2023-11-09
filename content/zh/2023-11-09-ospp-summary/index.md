@@ -65,7 +65,7 @@ Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2023"活动，�
 - 学生：孟祥迎
 - 学校：重庆邮电大学 本科
 - 合并PR：[11339](https://github.com/apache/skywalking/pull/11339)
-- 失败原因：项目申请成员，作为ASF Pulsar项目的Committer，在担任Pulsar开源之夏项目导师期间，但依然申请了学生参与项目。属于违规行为。SkyWalking PMC审查了此行为并通报开源之夏组委会。
+- 失败原因：项目申请成员，作为ASF Pulsar项目的Committer，在担任Pulsar开源之夏项目导师期间，但依然申请了学生参与项目。属于违规行为。SkyWalking PMC审查了此行为并通报开源之夏组委会。开源之夏组委会依据活动规则取消其结项奖金。
 
 ## 集成SkyWalking PHP到SkyWalking E2E 测试
 - 学生：罗文
