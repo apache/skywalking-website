@@ -25,7 +25,7 @@ Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2023"活动，�
 ## SkyWalking 支持 GraalVM
 - 学生：张跃骎
 - 学校：辽宁大学 本科
-- 合并PR：https://github.com/apache/skywalking/pull/11354
+- 合并PR：[11354](https://github.com/apache/skywalking/pull/11354)
 - 后续情况说明：GraalVM因为复杂的生态，替代的代码将被分离到[SkyWalking GraalVM Distro](https://github.com/apache/skywalking-graalvm-distro), 相关讨论，请参见[Issue 11518](https://github.com/apache/skywalking/issues/11518)
 
 ## Skywalking Infra E2E 自测试
