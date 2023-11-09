@@ -30,7 +30,7 @@ Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2023"活动，�
 
 ## Skywalking Infra E2E 自测试
 - 学生：王子忱
-- 学校：华中师范大学
+- 学校：华中师范大学 本科
 - 合并PR：[115](https://github.com/apache/skywalking-infra-e2e/pull/115), [116](https://github.com/apache/skywalking-infra-e2e/pull/116), [117](https://github.com/apache/skywalking-infra-e2e/pull/117), [118](https://github.com/apache/skywalking-infra-e2e/pull/118), [119](https://github.com/apache/skywalking-infra-e2e/pull/119)
 - 后续情况说明：此特性已经包含在发行版skywalking-infra-e2e v1.3.0中
 
