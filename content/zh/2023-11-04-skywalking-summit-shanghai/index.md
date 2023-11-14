@@ -22,7 +22,7 @@ zh_tags:
 * [PDF](wu_sheng.pdf)
 
 
-## 使用 Terraform 与 Ansible 快速部署skyWalking 集群   
+## 使用 Terraform 与 Ansible 快速部署 SkyWalking 集群   
 * 柯振旭
 * [PDF](ke_zhenxu.pdf)
 
