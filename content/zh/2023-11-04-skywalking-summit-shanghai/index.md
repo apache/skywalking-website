@@ -27,7 +27,7 @@ zh_tags:
 * [PDF](ke_zhenxu.pdf)
 
 
-##  基于 skyWalking 建 全域一体化观测平台        
+##  基于 SkyWalking 建 全域一体化观测平台        
 * 陈修能
 * [PDF](chen_xiuneng.pdf)
 
@@ -37,7 +37,7 @@ zh_tags:
 * [PDF](gao_hongtao.pdf)
 
 
-## 基于skyWalking Agent 的性能剖析和实时诊断      
+## 基于 SkyWalking Agent 的性能剖析和实时诊断      
 * 陆家靖
 * [PDF](lu_jiajing.pdf)
 
