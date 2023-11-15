@@ -27,7 +27,7 @@ zh_tags:
 * [PDF](ke_zhenxu.pdf)
 
 
-##  基于 SkyWalking 建 全域一体化观测平台        
+## 基于SkyWalking构建全域一体化观测平台
 * 陈修能
 * [PDF](chen_xiuneng.pdf)
 
