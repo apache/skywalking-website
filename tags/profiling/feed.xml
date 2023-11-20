@@ -1,0 +1,787 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Profiling</title>
+    <link>/tags/profiling/</link>
+    <description>Recent content in Profiling on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 25 Jun 2023 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/profiling/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Activating Automatical Performance Analysis -- Continuous Profiling</title>
+      <link>/blog/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;In previous articles, We have discussed how to use SkyWalking and eBPF for performance problem detection within &lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;processes&lt;/a&gt; and &lt;a href=&#34;blog/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;networks&lt;/a&gt;.
+They are good methods to locate issues, but still there are some challenges:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;The timing of the task initiation&lt;/strong&gt;: It&amp;rsquo;s always challenging to address the processes that require performance monitoring when problems occur.
+Typically, manual engagement is required to identify processes and the types of performance analysis necessary, which cause extra time during the crash recovery.
+The root cause locating and the time of crash recovery conflict with each other from time to time.
+In the real case, rebooting would be the first choice of recovery, meanwhile, it destroys the site of crashing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Resource consumption of tasks&lt;/strong&gt;: The difficulties to determine the profiling scope. Wider profiling causes more resources than it should.
+We need a method to manage resource consumption and understand which processes necessitate performance analysis.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Engineer capabilities&lt;/strong&gt;: On-call is usually covered by the whole team, which have junior and senior engineers, even senior engineers have their understanding limitation of the complex distributed system,
+it is nearly impossible to understand the whole system by a single one person.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The &lt;strong&gt;Continuous Profiling&lt;/strong&gt; is a new created mechanism to resolve the above issues.&lt;/p&gt;
+&lt;h1 id=&#34;automate-profiling&#34;&gt;Automate Profiling&lt;/h1&gt;
+&lt;p&gt;As profiling is resource costing and high experience required, how about introducing a method to narrow the scope and automate the profiling driven by polices creates by senior SRE engineer?
+So, in 9.5.0, SkyWalking first introduced preset policy rules for specific services to be monitored by the eBPF Agent in a low-energy manner, and run profiling when necessary automatically.&lt;/p&gt;
+&lt;h2 id=&#34;policy&#34;&gt;Policy&lt;/h2&gt;
+&lt;p&gt;Policy rules specify how to monitor target processes and determine the type of profiling task to initiate when certain threshold conditions are met.&lt;/p&gt;
+&lt;p&gt;These policy rules primarily consist of the following configuration information:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitoring type&lt;/strong&gt;: This specifies what kind of monitoring should be implemented on the target process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold determination&lt;/strong&gt;: This defines how to determine whether the target process requires the initiation of a profiling task.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigger task&lt;/strong&gt;: This specifies what kind of performance analysis task should be initiated.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;monitoring-type&#34;&gt;Monitoring type&lt;/h3&gt;
+&lt;p&gt;The type of monitoring is determined by observing the data values of a specified process to generate corresponding metrics.
+These metric values can then facilitate subsequent threshold judgment operations.
+In eBPF observation, we believe the following metrics can most directly reflect the current performance of the program:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Monitor Type&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;System Load&lt;/td&gt;
+&lt;td&gt;Load&lt;/td&gt;
+&lt;td&gt;System load average over a specified period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process CPU&lt;/td&gt;
+&lt;td&gt;Percentage&lt;/td&gt;
+&lt;td&gt;The CPU usage of the process as a percentage.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process Thread Count&lt;/td&gt;
+&lt;td&gt;Count&lt;/td&gt;
+&lt;td&gt;The number of threads in the process.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Error Rate&lt;/td&gt;
+&lt;td&gt;Percentage&lt;/td&gt;
+&lt;td&gt;The percentage of HTTP requests that result in error responses (e.g., 4xx or 5xx status codes).&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Avg Response Time&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The average response time for HTTP requests.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;network-related-monitoring&#34;&gt;Network related monitoring&lt;/h4&gt;
+&lt;p&gt;Monitoring network type metrics is not as simple as obtaining basic process information.
+It requires the initiation of eBPF programs and attaching them to the target process for observation.
+This is similar to the principles of &lt;a href=&#34;blog/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;network profiling task we introduced in the previous article&lt;/a&gt;,
+except that we no longer collect the full content of the data packets. Instead, we only collect the content of messages that match specified HTTP prefixes.&lt;/p&gt;
+&lt;p&gt;By using this method, we can significantly reduce the number of times the kernel sends data to the user space,
+and the user-space program can parse the data content with less system resource usage. This ultimately helps in conserving system resources.&lt;/p&gt;
+&lt;h4 id=&#34;metrics-collector&#34;&gt;Metrics collector&lt;/h4&gt;
+&lt;p&gt;The eBPF agent would report metrics of processes periodically as follows to indicate the process performance in time.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Name&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;The CPU usage percent&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The thread count of process&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The average system load for the last minute, each process have same value&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;The network request error rate percentage&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;ms&lt;/td&gt;
+&lt;td&gt;The network average response duration&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;threshold-determination&#34;&gt;Threshold determination&lt;/h3&gt;
+&lt;p&gt;For the threshold determination, the judgement is made by the eBPF Agent based on the target monitoring process in its own memory,
+rather than relying on calculations performed by the SkyWalking backend.
+The advantage of this approach is that it doesn&amp;rsquo;t have to wait for the results of complex backend computations,
+and it reduces potential issues brought about by complicated interactions.&lt;/p&gt;
+&lt;p&gt;By using this method, the eBPF Agent can swiftly initiate tasks immediately after conditions are met, without any delay.&lt;/p&gt;
+&lt;p&gt;It includes the following configuration items:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;: Check if the monitoring value meets the specified expectations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;: The time period(seconds) for monitoring data, which can also be understood as the most recent duration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;: The number of times(seconds) the threshold is triggered within the detection period, which can also be understood as the total number of times the specified threshold rule is triggered in the most recent duration(seconds). Once the count check is met, the specified Profiling task will be started.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;trigger-task&#34;&gt;Trigger task&lt;/h3&gt;
+&lt;p&gt;When the eBPF Agent detects that the threshold determination in the specified policy meets the rules, it can initiate the corresponding task according to pre-configured rules.
+For each different target performance task, their task initiation parameters are different:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: It automatically performs performance analysis on processes that meet the conditions, defaulting to &lt;code&gt;10&lt;/code&gt; minutes of monitoring.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: It performs network performance analysis on all processes in the same &lt;strong&gt;Service Instance on the current machine&lt;/strong&gt;,
+to prevent the cause of the issue from being unrealizable due to too few process being collected, defaulting to &lt;code&gt;10&lt;/code&gt; minutes of monitoring.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Once the task is initiated, no new profiling tasks would be started for the current process for a certain period.
+The main reason for this is to prevent frequent task creation due to low threshold settings, which could affect program execution. The default time period is &lt;code&gt;20&lt;/code&gt; minutes.&lt;/p&gt;
+&lt;h2 id=&#34;data-flow&#34;&gt;Data Flow&lt;/h2&gt;
+&lt;p&gt;The figure 1 illustrates the data flow of the continuous profiling feature:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./data-flow.png&#34; alt=&#34;Figure 1: Data Flow of Continuous Profiling&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: Data Flow of Continuous Profiling&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ebpf-agent-with-process&#34;&gt;eBPF Agent with Process&lt;/h3&gt;
+&lt;p&gt;Firstly, we need to ensure that the eBPF Agent and the process to be monitored are deployed on the same host machine,
+so that we can collect relevant data from the process. When the eBPF Agent detects a threshold validation rule that conforms to the policy,
+it immediately triggers the profiling task for the target process, thereby reducing any intermediate steps and accelerating the ability to pinpoint performance issues.&lt;/p&gt;
+&lt;h4 id=&#34;sliding-window&#34;&gt;Sliding window&lt;/h4&gt;
+&lt;p&gt;The sliding window plays a crucial role in the eBPF Agent&amp;rsquo;s threshold determination process, as illustrated in the figure 2:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./sliding-window.png&#34; alt=&#34;Figure 2: Sliding Window in eBPF Agent&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: Sliding Window in eBPF Agent&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Each element in the array represents the data value for a specified second in time.
+When the sliding window needs to verify whether it is responsible for a rule,
+it fetches the content of each element from a certain number of recent elements (period parameter).
+If an element exceeds the threshold, it is marked in red and counted. If the number of red elements exceeds a certain number, it is deemed to trigger a task.&lt;/p&gt;
+&lt;p&gt;Using a sliding window offers the following two advantages:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Fast retrieval of recent content&lt;/strong&gt;: With a sliding window, complex calculations are unnecessary.
+You can know the data by simply reading a certain number of recent array elements.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Solving data spikes issues&lt;/strong&gt;: Validation through count prevents situations where a data point suddenly spikes and then quickly returns to normal.
+Verification with multiple values can reveal whether exceeding the threshold is frequent or occasional.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;ebpf-agent-with-skywalking-backend&#34;&gt;eBPF Agent with SkyWalking Backend&lt;/h3&gt;
+&lt;p&gt;The eBPF Agent communicates periodically with the SkyWalking backend, involving three most crucial operations:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Policy synchronization&lt;/strong&gt;: Through periodic policy synchronization, the eBPF Agent can keep processes on the local machine updated with the latest policy rules as much as possible.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics sending&lt;/strong&gt;: For processes that are already being monitored, the eBPF Agent periodically sends the collected data to the backend program.
+This facilitates real-time query of current data values by users, who can also compare this data with historical values or thresholds when problems arise.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Profiling task reporting&lt;/strong&gt;: When the eBPF detects that a certain process has triggered a policy rule, it automatically initiates a performance task,
+collects relevant information from the current process, and reports it to the SkyWalking backend. This allows users to know &lt;strong&gt;when, why, and what&lt;/strong&gt; type of profiling task was triggered from the interface.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;demo&#34;&gt;Demo&lt;/h1&gt;
+&lt;p&gt;Next, let&amp;rsquo;s quickly demonstrate the continuous profiling feature, so you can understand more specifically what it accomplishes.&lt;/p&gt;
+&lt;h2 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking.
+For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;create-continuous-profiling-policy&#34;&gt;Create Continuous Profiling Policy&lt;/h2&gt;
+&lt;p&gt;Currently, continues profiling feature is set by default in the &lt;strong&gt;Service Mesh&lt;/strong&gt; panel at the &lt;strong&gt;Service&lt;/strong&gt; level.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling.png&#34; alt=&#34;Figure 3: Continuous Policy Tab&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Continuous Policy Tab&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;By clicking on the edit button aside from the &lt;code&gt;Policy List&lt;/code&gt;, the polices of current service could be created or updated.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./edit-continuous-profiling-polocy.png&#34; alt=&#34;Figure 4: Edit Continuous Profiling Policy&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: Edit Continuous Profiling Policy&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Multiple polices are supported. Every policy has the following configurations.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;: Specifies the type of profiling task to be triggered when the threshold determination is met.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;: For profiling task of the same target, one or more validation items can be specified.
+As long as one validation item meets the threshold determination, the corresponding performance analysis task will be launched.
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;: Specifies the type of monitoring to be carried out for the target process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;: Depending on the type of monitoring, you need to fill in the corresponding threshold to complete the verification work.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;: Specifies the number of recent seconds of data you want to monitor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;: Determines the total number of seconds triggered within the recent period.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI Regex/List&lt;/strong&gt;: This is applicable to HTTP monitoring types, allowing URL filtering.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;done&#34;&gt;Done&lt;/h2&gt;
+&lt;p&gt;After clicking the save button, you can see the currently created monitoring rules, as shown in the figure 5:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-monitoring.png&#34; alt=&#34;Figure 5: Continuous Profiling Monitoring Processes&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: Continuous Profiling Monitoring Processes&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The data can be divided into the following parts:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Policy list&lt;/strong&gt;: On the left, you can see the rule list you have created.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Monitoring Summary List&lt;/strong&gt;: Once a rule is selected, you can see which pods and processes would be monitored by this rule.
+It also summarizes how many profiling tasks have been triggered in the &lt;strong&gt;last 48 hours&lt;/strong&gt; by the current pod or process, as well as the last trigger time.
+This list is also sorted in descending order by the number of triggers to facilitate your quick review.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;When you click on a specific process, a new dashboard would show to list metrics and triggered profiling results.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-tasks.png&#34; alt=&#34;Figure 6: Continuous Profiling Triggered Tasks&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: Continuous Profiling Triggered Tasks&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The current figure contains the following data contents:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Task Timeline&lt;/strong&gt;: It lists all profiling tasks in the &lt;strong&gt;past 48 hours&lt;/strong&gt;. And when the mouse hovers over a task, it would also display detailed information:
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Task start and end time&lt;/strong&gt;: It indicates when the current performance analysis task was triggered.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigger reason&lt;/strong&gt;: It would display the reason why the current process was profiled and list out the value of the metric exceeding the threshold when the profiling was triggered.
+so you can quickly understand the reason.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Task Detail&lt;/strong&gt;: Similar to the CPU Profiling and Network Profiling introduced in previous articles, this would display the flame graph or process topology map of the current task,
+depending on the profiling type.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Meanwhile, on the &lt;strong&gt;Metrics&lt;/strong&gt; tab, metrics relative to profiling policies are collected to retrieve the historical trend, in order to provide a comprehensive explanation of the trigger point about the profiling.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-metrics.png&#34; alt=&#34;Figure 7: Continuous Profiling Metrics&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Continuous Profiling Metrics&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, I have detailed how the continuous profiling feature in SkyWalking and eBPF works.
+In general, it involves deploying the eBPF Agent service on the same machine where the process to be monitored resides,
+and monitoring the target process with low resource consumption. When it meets the threshold conditions,
+it would initiate more complex CPU Profiling and Network Profiling tasks.&lt;/p&gt;
+&lt;p&gt;In the future, we will offer even more features. Stay tuned!&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter, &lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack. Send &lt;code&gt;Request to join SkyWalking slack&lt;/code&gt; mail to the mail list(&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;), we will invite you in.&lt;/li&gt;
+&lt;li&gt;Subscribe to our &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;medium list&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 自动化性能分析——持续剖析</title>
+      <link>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
+&lt;p&gt;在之前的文章中，我们讨论了如何使用 SkyWalking 和 eBPF 来检测性能问题，包括&lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;进程&lt;/a&gt;和&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络&lt;/a&gt;。这些方法可以很好地定位问题，但仍然存在一些挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务启动的时间&lt;/strong&gt;: 当需要进行性能监控时，解决需要性能监控的进程始终是一个挑战。通常需要手动参与，以标识进程和所需的性能分析类型，这会在崩溃恢复期间耗费额外的时间。根本原因定位和崩溃恢复时间有时会发生冲突。在实际情况中，重新启动可能是恢复的第一选择，同时也会破坏崩溃的现场。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务的资源消耗&lt;/strong&gt;: 确定分析范围的困难。过宽的分析范围会导致需要更多的资源。我们需要一种方法来管理资源消耗并了解哪些进程需要性能分析。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;工程师能力&lt;/strong&gt;: 通常由整个团队负责呼叫，其中有初级和高级工程师，即使是高级工程师也对复杂的分布式系统有其理解限制，单个人几乎无法理解整个系统。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;持续剖析（Continuous Profiling）&lt;/strong&gt; 是解决上述问题的新机制。&lt;/p&gt;
+&lt;h1 id=&#34;自动剖析&#34;&gt;自动剖析&lt;/h1&gt;
+&lt;p&gt;由于性能分析的资源消耗和高经验要求，因此引入一种方法以缩小范围并由高级 SRE 工程师创建策略自动剖析。因此，在 9.5.0 中，SkyWalking 首先引入了预设策略规则，以低功耗方式监视特定服务的 eBPF 代理，并在必要时自动运行剖析。&lt;/p&gt;
+&lt;h2 id=&#34;策略&#34;&gt;策略&lt;/h2&gt;
+&lt;p&gt;策略规则指定了如何监视目标进程并确定在满足某些阈值条件时应启动何种类型的分析任务。&lt;/p&gt;
+&lt;p&gt;这些策略规则主要包括以下配置信息：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;监测类型&lt;/strong&gt;: 这指定了应在目标进程上实施什么样的监测。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;阈值确定&lt;/strong&gt;: 这定义了如何确定目标进程是否需要启动分析任务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发任务&lt;/strong&gt;: 这指定了应启动什么类型的性能分析任务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;监测类型&#34;&gt;监测类型&lt;/h3&gt;
+&lt;p&gt;监测类型是通过观察指定进程的数据值来生成相应的指标来确定的。这些指标值可以促进后续的阈值判断操作。在 eBPF 观测中，我们认为以下指标最能直接反映程序的当前性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;监测类型&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;系统负载&lt;/td&gt;
+&lt;td&gt;负载&lt;/td&gt;
+&lt;td&gt;在指定时间段内的系统负载平均值。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程 CPU&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;进程的 CPU 使用率百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程线程计数&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 错误率&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;导致错误响应（例如，4xx 或 5xx 状态代码）的 HTTP 请求的百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 平均响应时间&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;HTTP 请求的平均响应时间。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;相关网络监测&#34;&gt;相关网络监测&lt;/h3&gt;
+&lt;p&gt;监测网络类型的指标不像获取基本进程信息那么简单。它需要启动 eBPF 程序并将其附加到目标进程以进行观测。这类似于我们在先前文章中介绍的&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络分析任务&lt;/a&gt;，不同的是我们不再收集数据包的完整内容。相反，我们仅收集与指定 HTTP 前缀匹配的消息的内容。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，我们可以大大减少内核向用户空间发送数据的次数，用户空间程序可以使用更少的系统资源来解析数据内容。这最终有助于节省系统资源。&lt;/p&gt;
+&lt;h3 id=&#34;指标收集器&#34;&gt;指标收集器&lt;/h3&gt;
+&lt;p&gt;eBPF 代理会定期报告以下进程度量，以指示进程性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;CPU 使用率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;最近一分钟的平均系统负载，每个进程的值相同&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;网络请求错误率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;网络平均响应持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;阈值确定&#34;&gt;阈值确定&lt;/h3&gt;
+&lt;p&gt;对于阈值的确定，eBPF 代理是基于其自身内存中的目标监测进程进行判断，而不是依赖于 SkyWalking 后端执行的计算。这种方法的优点在于，它不必等待复杂后端计算的结果，减少了复杂交互所带来的潜在问题。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，eBPF 代理可以在条件满足后立即启动任务，而无需任何延迟。&lt;/p&gt;
+&lt;p&gt;它包括以下配置项：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;阈值&lt;/strong&gt;: 检查监测值是否符合指定的期望值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;周期&lt;/strong&gt;: 监控数据的时间周期（秒），也可以理解为最近的持续时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;计数&lt;/strong&gt;: 检测期间触发阈值的次数（秒），也可以理解为最近持续时间内指定阈值规则触发的总次数（秒）。一旦满足计数检查，指定的分析任务将被开始。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;触发任务&#34;&gt;触发任务&lt;/h3&gt;
+&lt;p&gt;当 eBPF Agent 检测到指定策略中的阈值决策符合规则时，根据预配置的规则可以启动相应的任务。对于每个不同的目标性能任务，它们的任务启动参数都不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: 它会自动对符合条件的进程进行性能分析，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: 它会对当前机器上同一 &lt;strong&gt;Service Instance&lt;/strong&gt; 中的所有进程进行网络性能分析，以防问题的原因因被收集进程太少而无法实现，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;一旦任务启动，当前进程将在一定时间内不会启动新的剖析任务。主要原因是为了防止因低阈值设置而频繁创建任务，从而影响程序执行。缺省时间为 &lt;code&gt;20&lt;/code&gt; 分钟。&lt;/p&gt;
+&lt;h2 id=&#34;数据流&#34;&gt;数据流&lt;/h2&gt;
+&lt;p&gt;图 1 展示了持续剖析功能的数据流：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;data-flow.png&#34; alt=&#34;图 1: 持续剖析的数据流&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1: 持续剖析的数据流&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ebpf-agent进行进程跟踪&#34;&gt;eBPF Agent进行进程跟踪&lt;/h3&gt;
+&lt;p&gt;首先，我们需要确保 eBPF Agent 和要监测的进程部署在同一台主机上，以便我们可以从进程中收集相关数据。当 eBPF Agent 检测到符合策略的阈值验证规则时，它会立即为目标进程触发剖析任务，从而减少任何中间步骤并加速定位性能问题的能力。&lt;/p&gt;
+&lt;h3 id=&#34;滑动窗口&#34;&gt;滑动窗口&lt;/h3&gt;
+&lt;p&gt;滑动窗口在 eBPF Agent 的阈值决策过程中发挥着至关重要的作用，如图 2 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sliding-window.png&#34; alt=&#34;图 2: eBPF Agent 中的滑动窗口&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2: eBPF Agent 中的滑动窗口&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数组中的每个元素表示指定时间内的数据值。当滑动窗口需要验证是否负责某个规则时，它从最近的一定数量的元素 (period 参数) 中获取每个元素的内容。如果一个元素超过了阈值，则标记为红色并计数。如果红色元素的数量超过一定数量，则被认为触发了任务。&lt;/p&gt;
+&lt;p&gt;使用滑动窗口具有以下两个优点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;快速检索最近的内容&lt;/strong&gt;：使用滑动窗口，无需进行复杂的计算。你可以通过简单地读取一定数量的最近数组元素来了解数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解决数据峰值问题&lt;/strong&gt;：通过计数进行验证，可以避免数据点突然增加然后快速返回正常的情况。使用多个值进行验证可以揭示超过阈值是频繁还是偶然发生的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;ebpf-agent与oap后端通讯&#34;&gt;eBPF Agent与OAP后端通讯&lt;/h3&gt;
+&lt;p&gt;eBPF Agent 定期与 SkyWalking 后端通信，涉及三个最关键的操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略同步&lt;/strong&gt;：通过定期的策略同步，eBPF Agent 可以尽可能地让本地机器上的进程与最新的策略规则保持同步。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;指标发送&lt;/strong&gt;：对于已经被监视的进程，eBPF Agent 定期将收集到的数据发送到后端程序。这就使用户能够实时查询当前数据值，用户也可以在出现问题时将此数据与历史值或阈值进行比较。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;剖析任务报告&lt;/strong&gt;：当 eBPF 检测到某个进程触发了策略规则时，它会自动启动性能任务，从当前进程收集相关信息，并将其报告给 SkyWalking 后端。这使用户可以从界面了解&lt;strong&gt;何时、为什么和触发了什么类型的剖析任务&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;演示&#34;&gt;演示&lt;/h1&gt;
+&lt;p&gt;接下来，让我们快速演示持续剖析功能，以便你更具体地了解它的功能。&lt;/p&gt;
+&lt;h2 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase 包含完整的示例服务，并可以使用 SkyWalking 进行监视。有关详细信息，请查看&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在此演示中，我们只部署服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，请运行以下脚本以打开 SkyWalking UI：http://localhost:8080/。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;创建持续剖析策略&#34;&gt;创建持续剖析策略&lt;/h2&gt;
+&lt;p&gt;目前，持续剖析功能在 &lt;strong&gt;Service Mesh&lt;/strong&gt; 面板的 &lt;strong&gt;Service&lt;/strong&gt; 级别中默认设置。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling.png&#34; alt=&#34;图 3: 持续策略选项卡&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3: 持续策略选项卡&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;通过点击 &lt;code&gt;Policy List&lt;/code&gt; 旁边的编辑按钮，可以创建或更新当前服务的策略。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;edit-continuous-profiling-polocy.png&#34; alt=&#34;图 4: 编辑持续剖析策略&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4: 编辑持续剖析策略&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;支持多个策略。每个策略都有以下配置。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;：指定符合阈值决策时要触发的剖析任务的类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;：对于相同目标的剖析任务，可以指定一个或多个验证项目。只要一个验证项目符合阈值决策，就会启动相应的性能分析任务。
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;：指定要为目标进程执行的监视类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;：根据监视类型的不同，需要填写相应的阈值才能完成验证工作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;：指定你要监测的最近几秒钟的数据数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;：确定最近时间段内触发的总秒数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI 正则表达式/列表&lt;/strong&gt;：这适用于 HTTP 监控类型，允许 URL 过滤。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;完成&#34;&gt;完成&lt;/h2&gt;
+&lt;p&gt;单击保存按钮后，你可以看到当前已创建的监控规则，如图 5 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-monitoring.png&#34; alt=&#34;图 5: 持续剖析监控进程&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5: 持续剖析监控进程&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数据可以分为以下几个部分：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略列表&lt;/strong&gt;：在左侧，你可以看到已创建的规则列表。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;监测摘要列表&lt;/strong&gt;：选择规则后，你可以看到哪些 pod 和进程将受到该规则的监视。它还总结了当前 pod 或进程在&lt;strong&gt;过去 48 小时&lt;/strong&gt;内触发的性能分析任务数量，以及最后一个触发时间。该列表还按触发次数降序排列，以便你快速查看。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;当你单击特定进程时，将显示一个新的仪表板以列出指标和触发的剖析结果。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-tasks.png&#34; alt=&#34;图 6: 持续剖析触发的任务&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6: 持续剖析触发的任务&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当前图包含以下数据内容：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;任务时间轴：它列出了过去 48 小时的所有剖析任务。当鼠标悬停在任务上时，它还会显示详细信息：
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务的开始和结束时间&lt;/strong&gt;：它指示当前性能分析任务何时被触发。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发原因&lt;/strong&gt;：它会显示为什么会对当前进程进行剖析，并列出当剖析被触发时超过阈值的度量值，以便你快速了解原因。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务详情&lt;/strong&gt;：与前几篇文章介绍的 CPU 剖析和网络剖析类似，它会显示当前任务的火焰图或进程拓扑图，具体取决于剖析类型。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;同时，在 &lt;strong&gt;Metrics&lt;/strong&gt; 选项卡中，收集与剖析策略相关的指标以检索历史趋势，以便在剖析的触发点提供全面的解释。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-metrics.png&#34; alt=&#34;图 7: 持续剖析指标&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7: 持续剖析指标&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;结论&#34;&gt;结论&lt;/h1&gt;
+&lt;p&gt;在本文中，我详细介绍了 SkyWalking 和 eBPF 中持续剖析功能的工作原理。通常情况下，它涉及将 eBPF Agent 服务部署在要监视的进程所在的同一台计算机上，并以低资源消耗监测目标进程。当它符合阈值条件时，它会启动更复杂的 CPU 剖析和网络剖析任务。&lt;/p&gt;
+&lt;p&gt;在未来，我们将提供更多功能。敬请期待！&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter：&lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack：向邮件列表 (&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;) 发送“Request to join SkyWalking Slack”，我们会邀请你加入。&lt;/li&gt;
+&lt;li&gt;订阅我们的 &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;Medium 列表&lt;/a&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Pinpoint Service Mesh Critical Performance Impact by using eBPF</title>
+      <link>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</link>
+      <pubDate>Tue, 05 Jul 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; observes metrics, logs, traces, and events for services deployed into the service mesh. When troubleshooting, SkyWalking error analysis can be an invaluable tool helping to pinpoint where an error occurred. However, performance problems are more difficult: It’s often impossible to locate the root cause of performance problems with pre-existing observation data. To move beyond the status quo, dynamic debugging and troubleshooting are essential service performance tools. In this article, we&amp;rsquo;ll discuss how to use eBPF technology to improve the profiling feature in SkyWalking and analyze the performance impact in the service mesh.&lt;/p&gt;
+&lt;h1 id=&#34;trace-profiling-in-skywalking&#34;&gt;Trace Profiling in SkyWalking&lt;/h1&gt;
+&lt;p&gt;Since SkyWalking 7.0.0, Trace Profiling has helped developers find performance problems by periodically sampling the thread stack to let developers know which lines of code take more time. However, Trace Profiling is not suitable for the following scenarios:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Thread Model&lt;/strong&gt;: Trace Profiling is most useful for profiling code that executes in a single thread. It is less useful for middleware that relies heavily on async execution models. For example Goroutines in Go or Kotlin Coroutines.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Language&lt;/strong&gt;: Currently, Trace Profiling is only supported in Java and Python, since it’s not easy to obtain the thread stack in the runtimes of some languages such as Go and Node.js.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: Trace Profiling requires Agent installation, which can be tricky depending on the language (e.g., PHP has to rely on its C kernel; Rust and C/C++ require manual instrumentation to make install).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace Correlation&lt;/strong&gt;: Since Trace Profiling is only associated with a single request it can be hard to determine which request is causing the problem.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Short Lifecycle Services&lt;/strong&gt;: Trace Profiling doesn&amp;rsquo;t support short-lived services for (at least) two reasons:
+&lt;ol&gt;
+&lt;li&gt;It&amp;rsquo;s hard to differentiate system performance from class code manipulation in the booting stage.&lt;/li&gt;
+&lt;li&gt;Trace profiling is linked to an endpoint to identify performance impact, but there is no endpoint to match these short-lived services.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Fortunately, there are techniques that can go further than Trace Profiling in these situations.&lt;/p&gt;
+&lt;h1 id=&#34;introduce-ebpf&#34;&gt;Introduce eBPF&lt;/h1&gt;
+&lt;p&gt;We have found that eBPF — a technology that can run sandboxed programs in an operating system kernel and thus safely and efficiently extend the capabilities of the kernel without requiring kernel modifications or loading kernel modules — can help us fill gaps left by Trace Profiling. eBPF is a trending technology because it breaks the traditional barrier between user and kernel space. Programs can now inject bytecode that runs in the kernel, instead of having to recompile the kernel to customize it. This is naturally a good fit for observability.&lt;/p&gt;
+&lt;p&gt;In the figure below, we can see that when the system executes the execve syscalls, the eBPF program is triggered, and the current process runtime information is obtained by using function calls.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;eBPF-hook-points.png&#34; alt=&#34;eBPF Hook Point&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Using eBPF technology, we can expand the scope of Skywalking&amp;rsquo;s profiling capabilities:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Global Performance Analysis&lt;/strong&gt;: Before eBPF, data collection was limited to what agents can observe. Since eBPF programs run in the kernel, they can observe all threads. This is especially useful when you are not sure whether a performance problem is caused by a particular request.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Data Content&lt;/strong&gt;: eBPF can dump both user and kernel space thread stacks, so if a performance issue happens in kernel space, it’s easier to find.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: All modern Linux kernels support eBPF, so there is no need to install anything. This means it is an orchestration-free vs an agent model. This reduces friction caused by built-in software which may not have the correct agents installed, such as Envoy in a Service Mesh.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling Type&lt;/strong&gt;: Unlike Trace Profiling, eBPF is event-driven and, therefore, not constrained by interval polling. For example, eBPF can trigger events and collect more data depending on a transfer size threshold. This can allow the system to triage and prioritize data collection under extreme load.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;ebpf-limitations&#34;&gt;eBPF Limitations&lt;/h2&gt;
+&lt;p&gt;While eBPF offers significant advantages for hunting performance bottlenecks, no technology is perfect. eBPF has a number of limitations described below. Fortunately, since SkyWalking does not require eBPF, the impact is limited.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Linux Version Requirement&lt;/strong&gt;: eBPF programs require a Linux kernel version above 4.4, with later kernel versions offering more data to be collected. The BCC has &lt;a href=&#34;https://github.com/iovisor/bcc/blob/13b5563c11f7722a61a17c6ca0a1a387d2fa7788/docs/kernel-versions.md#main-features&#34;&gt;documented the features supported by different Linux kernel versions&lt;/a&gt;, with the differences between versions usually being what data can be collected with eBPF.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Privileges Required&lt;/strong&gt;: All processes that intend to load eBPF programs into the Linux kernel must be running in privileged mode. As such, bugs or other issues in such code may have a big impact.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Weak Support for Dynamic Language&lt;/strong&gt;: eBPF has weak support for JIT-based dynamic languages, such as Java. It also depends on what data you want to collect. For Profiling, eBPF does not support parsing the symbols of the program, which is why most eBPF-based profiling technologies only support static languages like C, C++, Go, and Rust. However, symbol mapping can sometimes be solved through tools provided by the language. For example, in Java, &lt;a href=&#34;https://github.com/jvm-profiling-tools/perf-map-agent#architecture&#34;&gt;perf-map-agent&lt;/a&gt; can be used to generate the symbol mapping. However, dynamic languages don&amp;rsquo;t support the attach (uprobe) functionality that would allow us to trace execution events through symbols.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;introducing-skywalking-rover&#34;&gt;Introducing SkyWalking Rover&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; introduces the eBPF profiling feature into the SkyWalking ecosystem. The figure below shows the overall architecture of SkyWalking Rover. SkyWalking Rover is currently supported in Kubernetes environments and must be deployed inside a Kubernetes cluster. After establishing a connection with the SkyWalking backend server, it saves information about the processes on the current machine to SkyWalking. When the user creates an eBPF profiling task via the user interface, SkyWalking Rover receives the task and executes it in the relevant C, C++, Golang, and Rust language-based programs.&lt;/p&gt;
+&lt;p&gt;Other than an eBPF-capable kernel, there are no additional prerequisites for deploying SkyWalking Rover.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;architecture.png&#34; alt=&#34;architecture&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;cpu-profiling-with-rover&#34;&gt;CPU Profiling with Rover&lt;/h2&gt;
+&lt;p&gt;CPU profiling is the most intuitive way to show service performance. Inspired by &lt;a href=&#34;https://www.brendangregg.com/offcpuanalysis.html&#34;&gt;Brendan Gregg‘s blog post&lt;/a&gt;, we&amp;rsquo;ve divided CPU profiling into two types that we have implemented in Rover:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;On-CPU Profiling&lt;/strong&gt;: Where threads are spending time running on-CPU.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Off-CPU Profiling&lt;/strong&gt;: Where time is spent waiting while blocked on I/O, locks, timers, paging/swapping, etc.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;profiling-envoy-with-ebpf&#34;&gt;Profiling Envoy with eBPF&lt;/h1&gt;
+&lt;p&gt;Envoy is a popular proxy, used as the data plane by the Istio service mesh. In a Kubernetes cluster, Istio injects Envoy into each service’s pod as a sidecar where it transparently intercepts and processes incoming and outgoing traffic. As the data plane, any performance issues in Envoy can affect all service traffic in the mesh. In this scenario, it’s more powerful to use &lt;strong&gt;eBPF profiling&lt;/strong&gt; to analyze issues in production caused by service mesh configuration.&lt;/p&gt;
+&lt;h2 id=&#34;demo-environment&#34;&gt;Demo Environment&lt;/h2&gt;
+&lt;p&gt;If you want to see this scenario in action, we&amp;rsquo;ve built a demo environment where we deploy an Nginx service for stress testing. Traffic is intercepted by Envoy and forwarded to Nginx. The commands to install the whole environment can be accessed through &lt;a href=&#34;https://github.com/mrproliu/skywalking-rover-profiling-demo&#34;&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;h1 id=&#34;on-cpu-profiling&#34;&gt;On-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;On-CPU profiling is suitable for analyzing thread stacks when service CPU usage is high. If the stack is dumped more times, it means that the thread stack occupies more CPU resources.&lt;/p&gt;
+&lt;p&gt;When installing Istio using the demo configuration profile, we found there are two places where we can optimize performance:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Zipkin Tracing&lt;/strong&gt;: Different Zipkin sampling percentages have a direct impact on QPS.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Access Log Format&lt;/strong&gt;: Reducing the fields of the Envoy access log can improve QPS.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;zipkin-tracing&#34;&gt;Zipkin Tracing&lt;/h2&gt;
+&lt;h3 id=&#34;zipkin-with-100-sampling&#34;&gt;Zipkin with 100% sampling&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, Envoy is using 100% sampling as default tracing policy. How does that impact the performance?&lt;/p&gt;
+&lt;p&gt;As shown in the figure below, using the &lt;strong&gt;on-CPU profiling&lt;/strong&gt;, we found that it takes about &lt;strong&gt;16%&lt;/strong&gt; of the CPU overhead. At a fixed consumption of &lt;strong&gt;2 CPUs&lt;/strong&gt;, its QPS can reach &lt;strong&gt;5.7K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;zipkin-sampling-100.png&#34; alt=&#34;Zipkin with 100% sampling&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-zipkin-tracing&#34;&gt;Disable Zipkin tracing&lt;/h3&gt;
+&lt;p&gt;At this point, we found that if Zipkin is not necessary, the sampling percentage can be reduced or we can even disable tracing. Based on the &lt;a href=&#34;https://istio.io/latest/docs/reference/config/istio.mesh.v1alpha1/#Tracing&#34;&gt;Istio documentation&lt;/a&gt;, we can disable tracing when installing the service mesh using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.enableTracing=false&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.defaultConfig.tracing.sampling=0.0&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling tracing, we performed on-CPU profiling again. According to the figure below, we found that Zipkin has disappeared from the flame graph. With the same &lt;strong&gt;2 CPU&lt;/strong&gt; consumption as in the previous example, the QPS reached &lt;strong&gt;9K&lt;/strong&gt;, which is an almost &lt;strong&gt;60%&lt;/strong&gt; increase.
+&lt;img src=&#34;zipkin-disable-tracing.png&#34; alt=&#34;Disable Zipkin tracing&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-with-throughput&#34;&gt;Tracing with Throughput&lt;/h3&gt;
+&lt;p&gt;With the same CPU usage, we&amp;rsquo;ve discovered that Envoy performance greatly improves when the tracing feature is disabled. Of course, this requires us to make trade-offs between the number of samples Zipkin collects and the desired performance of Envoy (QPS).&lt;/p&gt;
+&lt;p&gt;The table below illustrates how different Zipkin sampling percentages under the same CPU usage affect QPS.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Zipkin sampling %&lt;/th&gt;
+&lt;th&gt;QPS&lt;/th&gt;
+&lt;th&gt;CPUs&lt;/th&gt;
+&lt;th&gt;Note&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;100% &lt;strong&gt;(default)&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;5.7K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;16% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;1%&lt;/td&gt;
+&lt;td&gt;8.1K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0.3% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;disabled&lt;/td&gt;
+&lt;td&gt;9.2K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;access-log-format&#34;&gt;Access Log Format&lt;/h2&gt;
+&lt;h3 id=&#34;default-log-format&#34;&gt;Default Log Format&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/logs/access-log/#default-access-log-format&#34;&gt;the default Access Log format&lt;/a&gt; contains a lot of data. The flame graph below shows various functions involved in parsing the data such as request headers, response headers, and streaming the body.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;log-format-default.png&#34; alt=&#34;Default Log Format&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;simplifying-access-log-format&#34;&gt;Simplifying Access Log Format&lt;/h3&gt;
+&lt;p&gt;Typically, we don’t need all the information in the access log, so we can often simplify it to get what we need. The following command simplifies the access log format to only display basic information:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set meshConfig.accessLogFormat&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;[%START_TIME%] \&amp;#34;%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\&amp;#34; %RESPONSE_CODE%\n&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After simplifying the access log format, we found that the QPS increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;. When executing the on-CPU profiling again, the CPU usage of log formatting dropped from &lt;strong&gt;2.4%&lt;/strong&gt; to &lt;strong&gt;0.7%&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Simplifying the log format helped us to improve the performance.&lt;/p&gt;
+&lt;h1 id=&#34;off-cpu-profiling&#34;&gt;Off-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;Off-CPU profiling is suitable for performance issues that are not caused by high CPU usage. For example, when there are too many threads in one service, using off-CPU profiling could reveal which threads spend more time context switching.&lt;/p&gt;
+&lt;p&gt;We provide data aggregation in two dimensions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Switch count&lt;/strong&gt;: The number of times a thread switches context. When the thread returns to the CPU, it completes one context switch. A thread stack with a higher switch count spends more time context switching.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Switch duration&lt;/strong&gt;: The time it takes a thread to switch the context. A thread stack with a higher switch duration spends more time off-CPU.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;write-access-log&#34;&gt;Write Access Log&lt;/h2&gt;
+&lt;h3 id=&#34;enable-write&#34;&gt;Enable Write&lt;/h3&gt;
+&lt;p&gt;Using the same environment and settings as before in the on-CPU test, we performed off-CPU profiling. As shown below, we found that access log writes accounted for about &lt;strong&gt;28%&lt;/strong&gt; of the total context switches. The &amp;ldquo;__write&amp;rdquo; shown below also indicates that this method is the Linux kernel method.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-enable.png&#34; alt=&#34;Enable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-write&#34;&gt;Disable Write&lt;/h3&gt;
+&lt;p&gt;SkyWalking implements Envoy&amp;rsquo;s Access Log Service (ALS) feature which allows us to send access logs to the SkyWalking Observability Analysis Platform (OAP) using the gRPC protocol. Even by disabling the access logging, we can still use ALS to capture/aggregate the logs. We&amp;rsquo;ve disabled writing to the access log using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo --set meshConfig.accessLogFile&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling the Access Log feature, we performed the off-CPU profiling. File writing entries have disappeared as shown in the figure below. Envoy throughput also increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-disable.png&#34; alt=&#34;Disable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, we&amp;rsquo;ve examined the insights Apache Skywalking&amp;rsquo;s Trace Profiling can give us and how much more can be achieved with eBPF profiling. All of these features are implemented in &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;skywalking-rover&lt;/a&gt;. In addition to on- and off-CPU profiling, you will also find the following features:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Continuous profiling&lt;/strong&gt;, helps you automatically profile without manual intervention. For example, when Rover detects that the CPU exceeds a configurable threshold, it automatically executes the on-CPU profiling task.&lt;/li&gt;
+&lt;li&gt;More profiling types to enrich usage scenarios, such as network, and memory profiling.&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: SkyWalking Python Agent Supports Profiling Now</title>
+      <link>/blog/2021-09-12-skywalking-python-profiling/</link>
+      <pubDate>Sun, 12 Sep 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-09-12-skywalking-python-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;The Java Agent of Apache SkyWalking has supported profiling since &lt;a href=&#34;https://github.com/apache/skywalking/releases/tag/v7.0.0&#34;&gt;v7.0.0&lt;/a&gt;, and it enables users to troubleshoot the root cause of performance issues, and now we bring it into Python Agent.
+In this blog, we will show you how to use it, and we will introduce the mechanism of profiling.&lt;/p&gt;
+&lt;h3 id=&#34;how-to-use-profiling-in-python-agent&#34;&gt;How to use profiling in Python Agent&lt;/h3&gt;
+&lt;p&gt;This feature is released in Python Agent at v0.7.0. It is turned on by default, so you don&amp;rsquo;t need any extra configuration to use it. You can find the environment variables about it &lt;a href=&#34;https://github.com/apache/skywalking-python/blob/master/docs/en/setup/EnvVars.md#:~:text=SW_AGENT_PROFILE_ACTIVE&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Here are the demo codes of an intentional slow application.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-Python&#34; data-lang=&#34;Python&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#555&#34;&gt;time&lt;/span&gt;
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;method1&lt;/span&gt;():
+    time&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;sleep(&lt;span style=&#34;color:#099&#34;&gt;0.02&lt;/span&gt;)
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;1&amp;#39;&lt;/span&gt;
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;method2&lt;/span&gt;():
+    time&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;sleep(&lt;span style=&#34;color:#099&#34;&gt;0.02&lt;/span&gt;)
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; method1()
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;method3&lt;/span&gt;():
+    time&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;sleep(&lt;span style=&#34;color:#099&#34;&gt;0.02&lt;/span&gt;)
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; method2()
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; __name__ &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;==&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;__main__&amp;#39;&lt;/span&gt;:
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#555&#34;&gt;socketserver&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#555&#34;&gt;http.server&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; BaseHTTPRequestHandler
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;SimpleHTTPRequestHandler&lt;/span&gt;(BaseHTTPRequestHandler):
+
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;do_POST&lt;/span&gt;(&lt;span style=&#34;color:#999&#34;&gt;self&lt;/span&gt;):
+            method3()
+            time&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;sleep(&lt;span style=&#34;color:#099&#34;&gt;0.5&lt;/span&gt;)
+            &lt;span style=&#34;color:#999&#34;&gt;self&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;send_response(&lt;span style=&#34;color:#099&#34;&gt;200&lt;/span&gt;)
+            &lt;span style=&#34;color:#999&#34;&gt;self&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;send_header(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;Content-Type&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;application/json&amp;#39;&lt;/span&gt;)
+            &lt;span style=&#34;color:#999&#34;&gt;self&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;end_headers()
+            &lt;span style=&#34;color:#999&#34;&gt;self&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;wfile&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;write(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{&amp;#34;song&amp;#34;: &amp;#34;Despacito&amp;#34;, &amp;#34;artist&amp;#34;: &amp;#34;Luis Fonsi&amp;#34;}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;encode(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;ascii&amp;#39;&lt;/span&gt;))
+
+    PORT &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;19090&lt;/span&gt;
+    Handler &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; SimpleHTTPRequestHandler
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;with&lt;/span&gt; socketserver&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;TCPServer((&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;, PORT), Handler) &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;as&lt;/span&gt; httpd:
+        httpd&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;serve_forever()
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;We can start it with SkyWalking Python Agent CLI without changing any application code now, which is also the latest feature of v0.7.0.  We just need to add &lt;code&gt;sw-python run&lt;/code&gt; before our start command(i.e. &lt;code&gt;sw-python run python3 main.py&lt;/code&gt;), to start the application with python agent attached. More information about sw-python can be found &lt;a href=&#34;https://github.com/apache/skywalking-python/blob/master/docs/en/setup/CLI.md&#34;&gt;there&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Then, we should add a new profile task for the &lt;code&gt;/&lt;/code&gt; endpoint from the SkyWalking UI, as shown below.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;profiling-create.png&#34; alt=&#34;profiling-create&#34;&gt;&lt;/p&gt;
+&lt;p&gt;We can access it by &lt;code&gt;curl -X POST http://localhost:19090/&lt;/code&gt;, after that, we can view the result of this profile task on the SkyWalking UI.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;profiling-result.png&#34; alt=&#34;profiling-result&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;the-mechanism-of-profiling&#34;&gt;The mechanism of profiling&lt;/h3&gt;
+&lt;p&gt;When a request lands on an application with the profile function enabled, the agent begins the profiling automatically if the request’s URI is as required by the profiling task. A new thread is spawned to fetch the thread dump periodically until the end of request.&lt;/p&gt;
+&lt;p&gt;The agent sends these thread dumps, called &lt;code&gt;ThreadSnapshot&lt;/code&gt;, to SkyWalking OAPServer, and the OAPServer analyzes those &lt;code&gt;ThreadSnapshot(s)&lt;/code&gt; and gets the final result. It will take a method invocation with the same stack depth and code signature as the same operation, and estimate the execution time of each method from this.&lt;/p&gt;
+&lt;p&gt;Let&amp;rsquo;s demonstrate how this analysis works through the following example. Suppose we have such a program below and we profile it at 10ms intervals.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-Python&#34; data-lang=&#34;Python&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;():
+    methodA()
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;methodA&lt;/span&gt;():
+    methodB()
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;methodB&lt;/span&gt;():
+    methodC()
+    methodD()
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;methodC&lt;/span&gt;():
+    time&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;sleep(&lt;span style=&#34;color:#099&#34;&gt;0.04&lt;/span&gt;)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;methodD&lt;/span&gt;():
+    time&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;sleep(&lt;span style=&#34;color:#099&#34;&gt;0.06&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The agent collects a total of 10 &lt;code&gt;ThreadSnapShot(s)&lt;/code&gt; over the entire time period(Diagram A). The first 4 snapshots represent the thread dumps during the execution of function C, and the last 6 snapshots represent the thread dumps during the execution of function D.  After the analysis of OAPServer, we can see the result of this profile task on the SkyWalking Rocketbot UI as shown in the right of the diagram. With this result, we can clearly see the function call relationship and the time consumption situation of this program.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Diagram_A.png&#34; alt=&#34;Diagram A&#34;&gt;&lt;/p&gt;
+&lt;center&gt;Diagram A&lt;/center&gt;
+&lt;br&gt;
+&lt;p&gt;You can read more details of profiling theory from this &lt;a href=&#34;https://skywalking.apache.org/blog/2020-04-13-apache-skywalking-profiling/&#34;&gt;blog&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;We hope you enjoy the profile in the Python Agent, and if so, you can give us a star on &lt;a href=&#34;https://github.com/apache/skywalking-python&#34;&gt;Python Agent&lt;/a&gt; and &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking&lt;/a&gt; on GitHub.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache SkyWalking: Use Profiling to Fix the Blind Spot of Distributed Tracing</title>
+      <link>/blog/2020-04-13-apache-skywalking-profiling/</link>
+      <pubDate>Mon, 13 Apr 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2020-04-13-apache-skywalking-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;This post originally appears on &lt;a href=&#34;https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/&#34;&gt;The New Stack&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;This post introduces a way to automatically profile code in production with &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;Apache SkyWalking&lt;/a&gt;. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis.&lt;/p&gt;
+&lt;h3 id=&#34;limitations-of-the-distributed-tracing&#34;&gt;Limitations of the Distributed Tracing&lt;/h3&gt;
+&lt;p&gt;In the early days, metrics and logging systems were the key solutions in monitoring platforms. With the adoption of microservice and distributed system-based architecture, distributed tracing has become more important. Distributed tracing provides relevant service context, such as system topology map and RPC parent-child relationships.&lt;/p&gt;
+&lt;p&gt;Some claim that distributed tracing is the best way to discover the cause of performance issues in a distributed system. It’s good at finding issues at the RPC abstraction, or in the scope of components instrumented with spans. However, it isn’t that perfect.&lt;/p&gt;
+&lt;p&gt;Have you been surprised to find a span duration longer than expected, but no insight into why? What should you do next? Some may think that the next step is to add more instrumentation, more spans into the trace, thinking that you would eventually find the root cause, with more data points. We’ll argue this is not a good option within a production environment. Here’s why:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;There is a risk of application overhead and system overload. Ad-hoc spans measure the performance of specific scopes or methods, but picking the right place can be difficult. To identify the precise cause, you can “instrument” (add spans to) many suspicious places. The additional instrumentation costs more CPU and memory in the production environment. Next, ad-hoc instrumentation that didn’t help is often forgotten, not deleted. This creates a valueless overhead load. In the worst case, excess instrumentation can cause performance problems in the production app or overload the tracing system.&lt;/li&gt;
+&lt;li&gt;The process of ad-hoc (manual) instrumentation usually implies at least a restart. Trace instrumentation libraries, like Zipkin Brave, are integrated into many framework libraries. To instrument a method’s performance typically implies changing code, even if only an annotation. This implies a re-deploy. Even if you have the way to do auto instrumentation, like Apache SkyWalking, you still need to change the configuration and reboot the app. Otherwise, you take the risk of GC caused by hot dynamic instrumentation.&lt;/li&gt;
+&lt;li&gt;Injecting instrumentation into an uninstrumented third party library is hard and complex. It takes more time and many won’t know how to do this.&lt;/li&gt;
+&lt;li&gt;Usually, we don’t have code line numbers in the distributed tracing. Particularly when lambdas are in use, it can be difficult to identify the line of code associated with a span.
+Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/p&gt;
+&lt;h3 id=&#34;profiling-in-production&#34;&gt;Profiling in Production&lt;/h3&gt;
+&lt;h4 id=&#34;introduction&#34;&gt;Introduction&lt;/h4&gt;
+&lt;p&gt;To reuse distributed tracing to achieve method scope precision requires an understanding of the above limitations and a different approach. We called it PROFILE.&lt;/p&gt;
+&lt;p&gt;Most high-level languages build and run on a thread concept. The profile approach takes continuous thread dumps. We merge the thread dumps to estimate the execution time of every method shown in the thread dumps. The key for distributed tracing is the tracing context, identifiers active (or current) for the profiled method. Using this trace context, we can weave data harvested from profiling into existing traces. This allows the system to automate otherwise ad-hoc instrumentation. Let’s dig deeper into how profiling works:&lt;/p&gt;
+&lt;p&gt;We consider a method invocation with the same stack depth and signature (method, line number etc), the same operation. We derive span timestamps from the thread dumps the same operation is in. Let’s put this visually:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-1.png&#34; alt=&#34;span timespaces&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Above, represents 10 successive thread dumps. If this method is in dumps 4-8, we assume it started before dump 4 and finished after dump 8. We can’t tell exactly when the method started and stopped. but the timestamps of thread dumps are close enough.&lt;/p&gt;
+&lt;p&gt;To reduce overhead caused by thread dumps, we only profile methods enclosed by a specific entry point, such as a URI or MVC Controller method. We identify these entry points through the trace context and the APM system.&lt;/p&gt;
+&lt;p&gt;The profile does thread dump analysis and gives us:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The root cause, precise to the line number in the code.&lt;/li&gt;
+&lt;li&gt;Reduced maintenance as ad-hoc instrumentation is obviated.&lt;/li&gt;
+&lt;li&gt;Reduced overload risk caused by ad-hoc instrumentation.&lt;/li&gt;
+&lt;li&gt;Dynamic activation: only when necessary and with a very clear profile target.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;implementing-precise-profiling-with-apache-skywalking-7&#34;&gt;Implementing Precise Profiling with Apache SkyWalking 7&lt;/h3&gt;
+&lt;p&gt;Distributed profiling is built-into Apache SkyWalking application performance monitoring (APM). Let’s demonstrate how the profiling approach locates the root cause of the performance issue.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;final CountDownLatchcountDownLatch= new CountDownLatch(2);
+ 
+threadPool.submit(new Task1(countDownLatch));
+threadPool.submit(new Task2(countDownLatch));
+ 
+try {
+   countDownLatch.await(500, TimeUnit.MILLISECONDS);
+} catch (InterruptedExceptione) {
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Task1 and Task2 have a race condition and unstable execution time: they will impact the performance of each other and anything calling them. While this code looks suspicious, it is representative of real life. People in the OPS/SRE team are not usually aware of all code changes and who did them. They only know something in the new code is causing a problem.&lt;/p&gt;
+&lt;p&gt;To make matters interesting, the above code is not always slow: it only happens when the condition is locked. In SkyWalking APM, we have metrics of endpoint p99/p95 latency, so, we are easy to find out the p99 of this endpoint is far from the avg response time. However, this is not the same as understanding the cause of the latency. To locate the root cause, add a profile condition to this endpoint: duration greater than 500ms. This means faster executions will not add profiling load.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-2.png&#34; alt=&#34;profiled segment&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is a typical profiled trace segment (part of the whole distributed trace) shown on the SkyWalking UI. We now notice the “service/processWithThreadPool” span is slow as we expected, but why? This method is the one we added the faulty code to. As the UI shows that method, we know the profiler is working. Now, let’s see what the profile analysis result say.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-3.png&#34; alt=&#34;profile analysis&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is the profile analysis stack view. We see the stack element names, duration (include/exclude the children) and slowest methods have been highlighted. It shows clearly, “sun.misc.Unsafe.park” costs the most time. If we look for the caller, it is the code we added: &lt;strong&gt;CountDownLatch.await&lt;/strong&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;the-limitations-of-the-profile-method&#34;&gt;The Limitations of the Profile Method&lt;/h3&gt;
+&lt;p&gt;No diagnostic tool can fit all cases, not even the profile method.&lt;/p&gt;
+&lt;p&gt;The first consideration is mistaking a repeatedly called method for a slow method. Thread dumps are periodic. If there is a loop of calling one method, the profile analysis result would say the target method is slow because it is captured every time in the dump process. There could be another reason. A method called many times can also end up captured in each thread dump. Even so, the profile did what it is designed for. It still helps the OPS/SRE team to locate the code having the issue.&lt;/p&gt;
+&lt;p&gt;The second consideration is overhead, the impact of repeated thread dumps is real and can’t be ignored. In SkyWalking, we set the profile dump period to at least 10ms. This means we can’t locate method performance issues if they complete in less than 10ms. SkyWalking has a threshold to control the maximum parallel degree as well.&lt;/p&gt;
+&lt;p&gt;Understanding the above keeps distributed tracing and APM systems useful for your OPS/SRE team.&lt;/p&gt;
+&lt;h3 id=&#34;how-to-try-this&#34;&gt;How to Try This&lt;/h3&gt;
+&lt;p&gt;Everything we discussed, including the Apache SkyWalking Java Agent, profile analysis code, and UI, could be found in our GitHub repository. We hope you enjoyed this new profile method, and love Apache SkyWalking. If so, &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
+&lt;p&gt;SkyWalking 7 has just been released. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt;. Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe to the mail list.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

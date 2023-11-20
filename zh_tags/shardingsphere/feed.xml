@@ -1,0 +1,200 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – ShardingSphere</title>
+    <link>/zh_tags/shardingsphere/</link>
+    <description>Recent content in ShardingSphere on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Fri, 02 Dec 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/zh_tags/shardingsphere/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Zh: SkyWalking 基于 ShardingSphere-Proxy 的 MySQL-Sharding 分库分表的存储特性介绍</title>
+      <link>/zh/skywalking-shardingsphere-proxy/</link>
+      <pubDate>Fri, 02 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/skywalking-shardingsphere-proxy/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Apache SkyWalking 作为一个分布式系统的应用性能监控工具，它观察服务网格中的指标、日志、痕迹和事件。其中 SkyWalking OAP 高性能的数据流处理架构能够实时处理庞大的数据流量，但是这些海量数据的存储更新和后续查询对后端存储系统带来了挑战。&lt;/p&gt;
+&lt;p&gt;SkyWalking 默认已经提供了多种存储支持包括 H2、OpenSearch、ElasticSearch、MySQL、TiDB、PostgreSQL、BanyanDB。其中 MySQL 存储提供的是针对单机和单表的存储方式（MySQL 的集群能力需要自己选型提供），在面对高流量的业务系统时，监控数据的存储存在较大压力，同时影响查询性能。&lt;/p&gt;
+&lt;p&gt;在 MySQL 存储基础上 SkyWalking v9.3.0 提供了一种新的存储方式 MySQL-Sharding，它提供了基于 &lt;a href=&#34;https://shardingsphere.apache.org/document/5.1.2/cn/quick-start/shardingsphere-proxy-quick-start/&#34;&gt;ShardingSphere-Proxy&lt;/a&gt; 的分库分表特性，而分库分表是关系型数据库面对大数据量处理的成熟解决方案。&lt;/p&gt;
+&lt;h2 id=&#34;部署架构&#34;&gt;部署架构&lt;/h2&gt;
+&lt;p&gt;SkyWalking 使用 ShardingSphere-Proxy 的部署方式如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;arch.jpg&#34; alt=&#34;部署架构&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;SkyWalking OAP 由直连数据库的方式变成只与 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;ShardingSphere-Proxy&lt;/a&gt; 进行交互；&lt;/li&gt;
+&lt;li&gt;每一个 MySQL 节点暴露的连接都是一个数据源，由 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;ShardingSphere-Proxy&lt;/a&gt; 进行统一管理；&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;ShardingSphere-Proxy&lt;/a&gt; 会根据配置建立一个虚拟逻辑数据库，根据 OAP 提供的分库分表规则进行库表分片和路由；&lt;/li&gt;
+&lt;li&gt;SkyWalking OAP 负责生成分库分表规则并且像操作 MySQL 一样对虚拟逻辑库执行 DDL 和 DML；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;适用场景&#34;&gt;适用场景&lt;/h2&gt;
+&lt;p&gt;希望使用 MySQL 作为存储，随着业务规模的增长，单表模式已经无法满足性能需要。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-分库分表逻辑&#34;&gt;SkyWalking 分库分表逻辑&lt;/h2&gt;
+&lt;p&gt;分库分表逻辑通过注解 &lt;code&gt;@SQLDatabase.Sharding&lt;/code&gt; 对 SkyWalking 中的数据模型 Model 进行定义：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#3c5d5d;font-weight:bold&#34;&gt;@interface&lt;/span&gt; Sharding &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+  ShardingAlgorithm &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;shardingAlgorithm&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;();&lt;/span&gt;
+  String &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;dataSourceShardingColumn&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;default&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+  String &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;tableShardingColumn&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;default&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;;&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;shardingAlgorithm&lt;/code&gt;：表分片算法&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;dataSourceShardingColumn&lt;/code&gt;：分库键&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;tableShardingColumn&lt;/code&gt;：分表键&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;SkyWalking 根据注解 &lt;code&gt;@SQLDatabase.Sharding&lt;/code&gt; 选择分库键、分表键以及表分片算法对每个表动态生成分片规则通过 DistSQL 操作 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy&lt;/a&gt; 执行规则定义 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy&lt;/a&gt; 根据规则定义进行数据分片。&lt;/p&gt;
+&lt;h3 id=&#34;分库方式&#34;&gt;分库方式&lt;/h3&gt;
+&lt;p&gt;SkyWalking 对于分库采用统一的方式，路由目标库的数字后缀使用分库键的哈希值取模需要分库的数据库数量，所以路由目标库为：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;ds_{dataSourceShardingColumn.hashcode() % dataSourceList.size()}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;例如我们有 &lt;code&gt;dataSourceList = ds_0...ds_n&lt;/code&gt;，如果&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;{dataSourceShardingColumn.hashcode() % dataSourceList.size() = 2}&lt;/code&gt; 那么所有数据将会路由到 &lt;code&gt;ds_2&lt;/code&gt; 这个数据源节点上。&lt;/p&gt;
+&lt;h3 id=&#34;分表方式&#34;&gt;分表方式&lt;/h3&gt;
+&lt;p&gt;由于 TTL 机制的存在，分表算法主要根据时间的日期进行分片，分片表的数量是根据 TTL 每天一个表：&lt;/p&gt;
+&lt;p&gt;分片表名 = 逻辑表名_时间序列（日期）：&lt;code&gt;{tableName =logicTableName_timeSeries}&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;为保证在 TTL 有效期内的数据能够被写入和查询，时间序列将生成当前日期&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{timeSeries = currentDate - TTL +1...currentDate + 1}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;例如：如果 &lt;code&gt;TTL=3, currentDate = 20220907&lt;/code&gt;，则分片表为:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;logicTableName_20220905
+logicTableName_20220906
+logicTableName_20220907
+logicTableName_20220908
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;SkyWalking 提供了多种不同的分表算法用于不同的数据模型：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;算法名称&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;分片说明&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;分片键时间精度要求&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;典型应用数据模型&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;NO_SHARDING&lt;/code&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;不做任何表分片，保持单表模式&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;数据量小无需分片的数据模型&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;TIME_RELATIVE_ID_SHARDING_ALGORITHM&lt;/code&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;使用 ID 列中的 &lt;code&gt;time_bucket&lt;/code&gt; 按天分片&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;time_bucket&lt;/code&gt; 的精度可以是同一表中的秒、分、小时和天&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;各类 Metrics 指标&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;TIME_SEC_RANGE_SHARDING_ALGORITHM&lt;/code&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;使用 &lt;code&gt;time_bucket&lt;/code&gt; 列按天分片&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;time_bucket&lt;/code&gt; 的精度必须是秒&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;SegmentRecordLogRecord&lt;/code&gt; 等&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;TIME_MIN_RANGE_SHARDING_ALGORITHM&lt;/code&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;使用 &lt;code&gt;time_bucket&lt;/code&gt; 列按天分片&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;time_bucket&lt;/code&gt; 的精度必须是分钟&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;EndpointTraffic&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;TIME_BUCKET_SHARDING_ALGORITHM&lt;/code&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;使用 &lt;code&gt;time_bucket&lt;/code&gt; 列按天分片&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;code&gt;time_bucket&lt;/code&gt; 的精度可以是同一个表中的秒、分、小时和天&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Service、Instance、Endpoint 调用关系等如 &lt;code&gt;ServiceRelationServerSideMetrics&lt;/code&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;ttl-机制&#34;&gt;TTL 机制&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;对于进行分片的表根据 TTL 直接删除 &lt;code&gt;deadline&lt;/code&gt; &amp;gt;= &lt;code&gt;timeSeries&lt;/code&gt; 的物理表 &lt;code&gt;{deadline = new DateTime().plusDays(-ttl)}&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;TTL 定时器在根据当前日期删除过期表的同时也会根据新日期更新分片规则，通知 ShardingSphere-Proxy 创建新的分片表&lt;/li&gt;
+&lt;li&gt;对于单表的延续之前的方式，删除 deadline &amp;gt;= &lt;code&gt;time_bucket&lt;/code&gt; 的行记录&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;分片数据存储示例&#34;&gt;分片数据存储示例&lt;/h2&gt;
+&lt;p&gt;下面以 segment（Record 类型）和 &lt;code&gt;service_resp_time&lt;/code&gt;（Metrics 类型）两个为例说明数据存储的逻辑和物理分布。这里假设 MySQL 为 &lt;code&gt;ds_0&lt;/code&gt; 和 &lt;code&gt;ds_1&lt;/code&gt; 两个节点。&lt;/p&gt;
+&lt;p&gt;注意：以下的存储表结构仅为简化后的存储示例，不表示 SkyWalking 真实的表结构。&lt;/p&gt;
+&lt;h3 id=&#34;segment&#34;&gt;segment&lt;/h3&gt;
+&lt;p&gt;分片配置为：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;@SQLDatabase.Sharding(shardingAlgorithm = ShardingAlgorithm.TIME_SEC_RANGE_SHARDING_ALGORITHM, dataSourceShardingColumn = service_id, tableShardingColumn = time_bucket)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;逻辑库表结构和实际库表如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.jpg&#34; alt=&#34;逻辑表结构和实际库表 1&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;service_resp_time&#34;&gt;service_resp_time&lt;/h3&gt;
+&lt;p&gt;分片配置为：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;@SQLDatabase.Sharding(shardingAlgorithm = ShardingAlgorithm.TIME_RELATIVE_ID_SHARDING_ALGORITHM, tableShardingColumn = id, dataSourceShardingColumn = entity_id)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;逻辑库表结构和实际库表如下图：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;逻辑表结构和实际库表 2&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;如何使用&#34;&gt;如何使用&lt;/h2&gt;
+&lt;p&gt;你可以选择手动或使用 Docker 来运行 Demo。&lt;/p&gt;
+&lt;h3 id=&#34;手动部署&#34;&gt;手动部署&lt;/h3&gt;
+&lt;p&gt;这里以单节点 SkyWalking OAP 和 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy 5.1.2&lt;/a&gt; 部署为例，集群部署请参考其他相关文档。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;准备好 MySQL 集群&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;部署安装并配置 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy&lt;/a&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;conf/server.yaml&lt;/code&gt;，&lt;code&gt;props.proxy-hint-enabled&lt;/code&gt; 必须为 &lt;code&gt;true&lt;/code&gt;，完整配置可参考&lt;a href=&#34;https://github.com/wankai123/skywalking-mysql-sharding-demo/blob/main/shardingsphere-proxy/conf/server.yaml&#34;&gt;这里&lt;/a&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;conf/config-sharding.yaml&lt;/code&gt;，配置逻辑数据库和 &lt;code&gt;dataSources&lt;/code&gt; 列表，&lt;code&gt;dataSource&lt;/code&gt; 的名称必须以 &lt;code&gt;ds_&lt;/code&gt;为前缀，并且从 &lt;code&gt;ds_0&lt;/code&gt; 开始，完整配置可参考&lt;a href=&#34;https://github.com/wankai123/skywalking-mysql-sharding-demo/blob/main/shardingsphere-proxy/conf/config-sharding.yaml&#34;&gt;这里&lt;/a&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;部署安装并配置 SkyWalking OAP：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;设置 OAP 环境变量 &lt;code&gt;${SW_STORAGE:mysql-sharding}&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;根据实际部署情况配置连接信息： &lt;code&gt;${SW_JDBC_URL}&lt;/code&gt; &lt;code&gt;${SW_DATA_SOURCE_USER}&lt;/code&gt; &lt;code&gt;${SW_DATA_SOURCE_PASSWORD}&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;注意：连接信息需对应 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy&lt;/a&gt; 虚拟数据库。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;将 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy&lt;/a&gt; 中 &lt;code&gt;conf/config-sharding.yaml&lt;/code&gt; 配置的数据源名称配置在 &lt;code&gt;${SW_JDBC_SHARDING_DATA_SOURCES}&lt;/code&gt; 中，用 &lt;code&gt;,&lt;/code&gt; 分割&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;启动 MySQL 集群&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;启动 &lt;a href=&#34;https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy&#34;&gt;Shardingsphere-Proxy&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;启动 SkyWalking OAP&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;使用-docker-运行-demo&#34;&gt;使用 Docker 运行 Demo&lt;/h3&gt;
+&lt;p&gt;GitHub 资源库提供了一个基于 Docker 完整可运行的 demo：&lt;a href=&#34;https://github.com/wankai123/skywalking-mysql-sharding-demo&#34;&gt;skywalking-mysql-sharding-demo&lt;/a&gt;，可以快速尝试实际运行效果。&lt;/p&gt;
+&lt;p&gt;其中部署包含：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;oap 服务 1 个，Metrics 和 Record 数据的 TTL 均设为 2 天&lt;/li&gt;
+&lt;li&gt;sharding-proxy 服务 1 个版本为 5.1.2，对外端口为 13307，创建的逻辑库名称为 swtest&lt;/li&gt;
+&lt;li&gt;mysql 服务 2 个，对外端口分别为 3306，3307，在 sharding-proxy 的 &lt;code&gt;conf/config-sharding.yaml&lt;/code&gt; 中配置为 &lt;code&gt;ds_0&lt;/code&gt; 和 &lt;code&gt;ds_1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;provider 服务 1 个（模拟业务程序用于验证 trace 和 metrics 等数据），对外端口为 9090&lt;/li&gt;
+&lt;li&gt;consumer 服务 1 个（模拟业务程序用于验证 trace 和 metrics 等数据），对外端口为 9092&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;将 Demo 程序获取到本地后，在 skywalking-mysql-sharding-demo 目录下直接运行：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;docker-compose up -d
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;注意：初次启动由于拉取镜像和新建所有表可能需要一定的时间。&lt;/p&gt;
+&lt;p&gt;所有服务启动完成之后可以通过数据库工具查看 &lt;code&gt;sharding-proxy&lt;/code&gt; 逻辑表创建情况，以及两个 MySQL 库中实际的物理分片表创建情况。也可以连接 &lt;code&gt;sharding-proxy&lt;/code&gt; 逻辑库 &lt;code&gt;swtest&lt;/code&gt; 查看数据查询路由情况，如：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;PREVIEW
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; SEGMENT
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;显示结果如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sql.jpg&#34; alt=&#34;查询结果&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Demo 提供的模拟业务程序可以通过请求 consumer 服务模拟业务请求，用于验证各类型数据分布：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;curl http://127.0.0.1:9092/info
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;在这篇文章中我们详细介绍了 SkyWalking  基于 ShardingSphere-Proxy 的 MySQL-Sharding 存储特性的部署架构、适应场景、核心分库分表逻辑以及 TTL 机制，并提供了运行后的数据存储示例和详细部署配置步骤以便大家快速理解上手。SkyWalking 提供了多种存储方式以供选择，如果你目前的需求如本文所述，欢迎使用该新特性。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

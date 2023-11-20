@@ -1,0 +1,1154 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Tracing</title>
+    <link>/tags/tracing/</link>
+    <description>Recent content in Tracing on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 25 Jun 2023 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/tracing/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Activating Automatical Performance Analysis -- Continuous Profiling</title>
+      <link>/blog/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;In previous articles, We have discussed how to use SkyWalking and eBPF for performance problem detection within &lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;processes&lt;/a&gt; and &lt;a href=&#34;blog/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;networks&lt;/a&gt;.
+They are good methods to locate issues, but still there are some challenges:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;The timing of the task initiation&lt;/strong&gt;: It&amp;rsquo;s always challenging to address the processes that require performance monitoring when problems occur.
+Typically, manual engagement is required to identify processes and the types of performance analysis necessary, which cause extra time during the crash recovery.
+The root cause locating and the time of crash recovery conflict with each other from time to time.
+In the real case, rebooting would be the first choice of recovery, meanwhile, it destroys the site of crashing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Resource consumption of tasks&lt;/strong&gt;: The difficulties to determine the profiling scope. Wider profiling causes more resources than it should.
+We need a method to manage resource consumption and understand which processes necessitate performance analysis.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Engineer capabilities&lt;/strong&gt;: On-call is usually covered by the whole team, which have junior and senior engineers, even senior engineers have their understanding limitation of the complex distributed system,
+it is nearly impossible to understand the whole system by a single one person.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The &lt;strong&gt;Continuous Profiling&lt;/strong&gt; is a new created mechanism to resolve the above issues.&lt;/p&gt;
+&lt;h1 id=&#34;automate-profiling&#34;&gt;Automate Profiling&lt;/h1&gt;
+&lt;p&gt;As profiling is resource costing and high experience required, how about introducing a method to narrow the scope and automate the profiling driven by polices creates by senior SRE engineer?
+So, in 9.5.0, SkyWalking first introduced preset policy rules for specific services to be monitored by the eBPF Agent in a low-energy manner, and run profiling when necessary automatically.&lt;/p&gt;
+&lt;h2 id=&#34;policy&#34;&gt;Policy&lt;/h2&gt;
+&lt;p&gt;Policy rules specify how to monitor target processes and determine the type of profiling task to initiate when certain threshold conditions are met.&lt;/p&gt;
+&lt;p&gt;These policy rules primarily consist of the following configuration information:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitoring type&lt;/strong&gt;: This specifies what kind of monitoring should be implemented on the target process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold determination&lt;/strong&gt;: This defines how to determine whether the target process requires the initiation of a profiling task.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigger task&lt;/strong&gt;: This specifies what kind of performance analysis task should be initiated.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;monitoring-type&#34;&gt;Monitoring type&lt;/h3&gt;
+&lt;p&gt;The type of monitoring is determined by observing the data values of a specified process to generate corresponding metrics.
+These metric values can then facilitate subsequent threshold judgment operations.
+In eBPF observation, we believe the following metrics can most directly reflect the current performance of the program:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Monitor Type&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;System Load&lt;/td&gt;
+&lt;td&gt;Load&lt;/td&gt;
+&lt;td&gt;System load average over a specified period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process CPU&lt;/td&gt;
+&lt;td&gt;Percentage&lt;/td&gt;
+&lt;td&gt;The CPU usage of the process as a percentage.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process Thread Count&lt;/td&gt;
+&lt;td&gt;Count&lt;/td&gt;
+&lt;td&gt;The number of threads in the process.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Error Rate&lt;/td&gt;
+&lt;td&gt;Percentage&lt;/td&gt;
+&lt;td&gt;The percentage of HTTP requests that result in error responses (e.g., 4xx or 5xx status codes).&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Avg Response Time&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The average response time for HTTP requests.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;network-related-monitoring&#34;&gt;Network related monitoring&lt;/h4&gt;
+&lt;p&gt;Monitoring network type metrics is not as simple as obtaining basic process information.
+It requires the initiation of eBPF programs and attaching them to the target process for observation.
+This is similar to the principles of &lt;a href=&#34;blog/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;network profiling task we introduced in the previous article&lt;/a&gt;,
+except that we no longer collect the full content of the data packets. Instead, we only collect the content of messages that match specified HTTP prefixes.&lt;/p&gt;
+&lt;p&gt;By using this method, we can significantly reduce the number of times the kernel sends data to the user space,
+and the user-space program can parse the data content with less system resource usage. This ultimately helps in conserving system resources.&lt;/p&gt;
+&lt;h4 id=&#34;metrics-collector&#34;&gt;Metrics collector&lt;/h4&gt;
+&lt;p&gt;The eBPF agent would report metrics of processes periodically as follows to indicate the process performance in time.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Name&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;The CPU usage percent&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The thread count of process&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The average system load for the last minute, each process have same value&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;The network request error rate percentage&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;ms&lt;/td&gt;
+&lt;td&gt;The network average response duration&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;threshold-determination&#34;&gt;Threshold determination&lt;/h3&gt;
+&lt;p&gt;For the threshold determination, the judgement is made by the eBPF Agent based on the target monitoring process in its own memory,
+rather than relying on calculations performed by the SkyWalking backend.
+The advantage of this approach is that it doesn&amp;rsquo;t have to wait for the results of complex backend computations,
+and it reduces potential issues brought about by complicated interactions.&lt;/p&gt;
+&lt;p&gt;By using this method, the eBPF Agent can swiftly initiate tasks immediately after conditions are met, without any delay.&lt;/p&gt;
+&lt;p&gt;It includes the following configuration items:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;: Check if the monitoring value meets the specified expectations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;: The time period(seconds) for monitoring data, which can also be understood as the most recent duration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;: The number of times(seconds) the threshold is triggered within the detection period, which can also be understood as the total number of times the specified threshold rule is triggered in the most recent duration(seconds). Once the count check is met, the specified Profiling task will be started.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;trigger-task&#34;&gt;Trigger task&lt;/h3&gt;
+&lt;p&gt;When the eBPF Agent detects that the threshold determination in the specified policy meets the rules, it can initiate the corresponding task according to pre-configured rules.
+For each different target performance task, their task initiation parameters are different:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: It automatically performs performance analysis on processes that meet the conditions, defaulting to &lt;code&gt;10&lt;/code&gt; minutes of monitoring.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: It performs network performance analysis on all processes in the same &lt;strong&gt;Service Instance on the current machine&lt;/strong&gt;,
+to prevent the cause of the issue from being unrealizable due to too few process being collected, defaulting to &lt;code&gt;10&lt;/code&gt; minutes of monitoring.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Once the task is initiated, no new profiling tasks would be started for the current process for a certain period.
+The main reason for this is to prevent frequent task creation due to low threshold settings, which could affect program execution. The default time period is &lt;code&gt;20&lt;/code&gt; minutes.&lt;/p&gt;
+&lt;h2 id=&#34;data-flow&#34;&gt;Data Flow&lt;/h2&gt;
+&lt;p&gt;The figure 1 illustrates the data flow of the continuous profiling feature:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./data-flow.png&#34; alt=&#34;Figure 1: Data Flow of Continuous Profiling&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: Data Flow of Continuous Profiling&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ebpf-agent-with-process&#34;&gt;eBPF Agent with Process&lt;/h3&gt;
+&lt;p&gt;Firstly, we need to ensure that the eBPF Agent and the process to be monitored are deployed on the same host machine,
+so that we can collect relevant data from the process. When the eBPF Agent detects a threshold validation rule that conforms to the policy,
+it immediately triggers the profiling task for the target process, thereby reducing any intermediate steps and accelerating the ability to pinpoint performance issues.&lt;/p&gt;
+&lt;h4 id=&#34;sliding-window&#34;&gt;Sliding window&lt;/h4&gt;
+&lt;p&gt;The sliding window plays a crucial role in the eBPF Agent&amp;rsquo;s threshold determination process, as illustrated in the figure 2:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./sliding-window.png&#34; alt=&#34;Figure 2: Sliding Window in eBPF Agent&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: Sliding Window in eBPF Agent&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Each element in the array represents the data value for a specified second in time.
+When the sliding window needs to verify whether it is responsible for a rule,
+it fetches the content of each element from a certain number of recent elements (period parameter).
+If an element exceeds the threshold, it is marked in red and counted. If the number of red elements exceeds a certain number, it is deemed to trigger a task.&lt;/p&gt;
+&lt;p&gt;Using a sliding window offers the following two advantages:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Fast retrieval of recent content&lt;/strong&gt;: With a sliding window, complex calculations are unnecessary.
+You can know the data by simply reading a certain number of recent array elements.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Solving data spikes issues&lt;/strong&gt;: Validation through count prevents situations where a data point suddenly spikes and then quickly returns to normal.
+Verification with multiple values can reveal whether exceeding the threshold is frequent or occasional.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;ebpf-agent-with-skywalking-backend&#34;&gt;eBPF Agent with SkyWalking Backend&lt;/h3&gt;
+&lt;p&gt;The eBPF Agent communicates periodically with the SkyWalking backend, involving three most crucial operations:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Policy synchronization&lt;/strong&gt;: Through periodic policy synchronization, the eBPF Agent can keep processes on the local machine updated with the latest policy rules as much as possible.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics sending&lt;/strong&gt;: For processes that are already being monitored, the eBPF Agent periodically sends the collected data to the backend program.
+This facilitates real-time query of current data values by users, who can also compare this data with historical values or thresholds when problems arise.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Profiling task reporting&lt;/strong&gt;: When the eBPF detects that a certain process has triggered a policy rule, it automatically initiates a performance task,
+collects relevant information from the current process, and reports it to the SkyWalking backend. This allows users to know &lt;strong&gt;when, why, and what&lt;/strong&gt; type of profiling task was triggered from the interface.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;demo&#34;&gt;Demo&lt;/h1&gt;
+&lt;p&gt;Next, let&amp;rsquo;s quickly demonstrate the continuous profiling feature, so you can understand more specifically what it accomplishes.&lt;/p&gt;
+&lt;h2 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking.
+For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;create-continuous-profiling-policy&#34;&gt;Create Continuous Profiling Policy&lt;/h2&gt;
+&lt;p&gt;Currently, continues profiling feature is set by default in the &lt;strong&gt;Service Mesh&lt;/strong&gt; panel at the &lt;strong&gt;Service&lt;/strong&gt; level.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling.png&#34; alt=&#34;Figure 3: Continuous Policy Tab&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Continuous Policy Tab&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;By clicking on the edit button aside from the &lt;code&gt;Policy List&lt;/code&gt;, the polices of current service could be created or updated.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./edit-continuous-profiling-polocy.png&#34; alt=&#34;Figure 4: Edit Continuous Profiling Policy&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: Edit Continuous Profiling Policy&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Multiple polices are supported. Every policy has the following configurations.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;: Specifies the type of profiling task to be triggered when the threshold determination is met.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;: For profiling task of the same target, one or more validation items can be specified.
+As long as one validation item meets the threshold determination, the corresponding performance analysis task will be launched.
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;: Specifies the type of monitoring to be carried out for the target process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;: Depending on the type of monitoring, you need to fill in the corresponding threshold to complete the verification work.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;: Specifies the number of recent seconds of data you want to monitor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;: Determines the total number of seconds triggered within the recent period.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI Regex/List&lt;/strong&gt;: This is applicable to HTTP monitoring types, allowing URL filtering.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;done&#34;&gt;Done&lt;/h2&gt;
+&lt;p&gt;After clicking the save button, you can see the currently created monitoring rules, as shown in the figure 5:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-monitoring.png&#34; alt=&#34;Figure 5: Continuous Profiling Monitoring Processes&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: Continuous Profiling Monitoring Processes&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The data can be divided into the following parts:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Policy list&lt;/strong&gt;: On the left, you can see the rule list you have created.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Monitoring Summary List&lt;/strong&gt;: Once a rule is selected, you can see which pods and processes would be monitored by this rule.
+It also summarizes how many profiling tasks have been triggered in the &lt;strong&gt;last 48 hours&lt;/strong&gt; by the current pod or process, as well as the last trigger time.
+This list is also sorted in descending order by the number of triggers to facilitate your quick review.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;When you click on a specific process, a new dashboard would show to list metrics and triggered profiling results.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-tasks.png&#34; alt=&#34;Figure 6: Continuous Profiling Triggered Tasks&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: Continuous Profiling Triggered Tasks&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The current figure contains the following data contents:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Task Timeline&lt;/strong&gt;: It lists all profiling tasks in the &lt;strong&gt;past 48 hours&lt;/strong&gt;. And when the mouse hovers over a task, it would also display detailed information:
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Task start and end time&lt;/strong&gt;: It indicates when the current performance analysis task was triggered.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigger reason&lt;/strong&gt;: It would display the reason why the current process was profiled and list out the value of the metric exceeding the threshold when the profiling was triggered.
+so you can quickly understand the reason.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Task Detail&lt;/strong&gt;: Similar to the CPU Profiling and Network Profiling introduced in previous articles, this would display the flame graph or process topology map of the current task,
+depending on the profiling type.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Meanwhile, on the &lt;strong&gt;Metrics&lt;/strong&gt; tab, metrics relative to profiling policies are collected to retrieve the historical trend, in order to provide a comprehensive explanation of the trigger point about the profiling.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-metrics.png&#34; alt=&#34;Figure 7: Continuous Profiling Metrics&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Continuous Profiling Metrics&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, I have detailed how the continuous profiling feature in SkyWalking and eBPF works.
+In general, it involves deploying the eBPF Agent service on the same machine where the process to be monitored resides,
+and monitoring the target process with low resource consumption. When it meets the threshold conditions,
+it would initiate more complex CPU Profiling and Network Profiling tasks.&lt;/p&gt;
+&lt;p&gt;In the future, we will offer even more features. Stay tuned!&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter, &lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack. Send &lt;code&gt;Request to join SkyWalking slack&lt;/code&gt; mail to the mail list(&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;), we will invite you in.&lt;/li&gt;
+&lt;li&gt;Subscribe to our &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;medium list&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 自动化性能分析——持续剖析</title>
+      <link>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
+&lt;p&gt;在之前的文章中，我们讨论了如何使用 SkyWalking 和 eBPF 来检测性能问题，包括&lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;进程&lt;/a&gt;和&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络&lt;/a&gt;。这些方法可以很好地定位问题，但仍然存在一些挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务启动的时间&lt;/strong&gt;: 当需要进行性能监控时，解决需要性能监控的进程始终是一个挑战。通常需要手动参与，以标识进程和所需的性能分析类型，这会在崩溃恢复期间耗费额外的时间。根本原因定位和崩溃恢复时间有时会发生冲突。在实际情况中，重新启动可能是恢复的第一选择，同时也会破坏崩溃的现场。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务的资源消耗&lt;/strong&gt;: 确定分析范围的困难。过宽的分析范围会导致需要更多的资源。我们需要一种方法来管理资源消耗并了解哪些进程需要性能分析。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;工程师能力&lt;/strong&gt;: 通常由整个团队负责呼叫，其中有初级和高级工程师，即使是高级工程师也对复杂的分布式系统有其理解限制，单个人几乎无法理解整个系统。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;持续剖析（Continuous Profiling）&lt;/strong&gt; 是解决上述问题的新机制。&lt;/p&gt;
+&lt;h1 id=&#34;自动剖析&#34;&gt;自动剖析&lt;/h1&gt;
+&lt;p&gt;由于性能分析的资源消耗和高经验要求，因此引入一种方法以缩小范围并由高级 SRE 工程师创建策略自动剖析。因此，在 9.5.0 中，SkyWalking 首先引入了预设策略规则，以低功耗方式监视特定服务的 eBPF 代理，并在必要时自动运行剖析。&lt;/p&gt;
+&lt;h2 id=&#34;策略&#34;&gt;策略&lt;/h2&gt;
+&lt;p&gt;策略规则指定了如何监视目标进程并确定在满足某些阈值条件时应启动何种类型的分析任务。&lt;/p&gt;
+&lt;p&gt;这些策略规则主要包括以下配置信息：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;监测类型&lt;/strong&gt;: 这指定了应在目标进程上实施什么样的监测。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;阈值确定&lt;/strong&gt;: 这定义了如何确定目标进程是否需要启动分析任务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发任务&lt;/strong&gt;: 这指定了应启动什么类型的性能分析任务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;监测类型&#34;&gt;监测类型&lt;/h3&gt;
+&lt;p&gt;监测类型是通过观察指定进程的数据值来生成相应的指标来确定的。这些指标值可以促进后续的阈值判断操作。在 eBPF 观测中，我们认为以下指标最能直接反映程序的当前性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;监测类型&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;系统负载&lt;/td&gt;
+&lt;td&gt;负载&lt;/td&gt;
+&lt;td&gt;在指定时间段内的系统负载平均值。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程 CPU&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;进程的 CPU 使用率百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程线程计数&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 错误率&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;导致错误响应（例如，4xx 或 5xx 状态代码）的 HTTP 请求的百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 平均响应时间&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;HTTP 请求的平均响应时间。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;相关网络监测&#34;&gt;相关网络监测&lt;/h3&gt;
+&lt;p&gt;监测网络类型的指标不像获取基本进程信息那么简单。它需要启动 eBPF 程序并将其附加到目标进程以进行观测。这类似于我们在先前文章中介绍的&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络分析任务&lt;/a&gt;，不同的是我们不再收集数据包的完整内容。相反，我们仅收集与指定 HTTP 前缀匹配的消息的内容。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，我们可以大大减少内核向用户空间发送数据的次数，用户空间程序可以使用更少的系统资源来解析数据内容。这最终有助于节省系统资源。&lt;/p&gt;
+&lt;h3 id=&#34;指标收集器&#34;&gt;指标收集器&lt;/h3&gt;
+&lt;p&gt;eBPF 代理会定期报告以下进程度量，以指示进程性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;CPU 使用率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;最近一分钟的平均系统负载，每个进程的值相同&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;网络请求错误率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;网络平均响应持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;阈值确定&#34;&gt;阈值确定&lt;/h3&gt;
+&lt;p&gt;对于阈值的确定，eBPF 代理是基于其自身内存中的目标监测进程进行判断，而不是依赖于 SkyWalking 后端执行的计算。这种方法的优点在于，它不必等待复杂后端计算的结果，减少了复杂交互所带来的潜在问题。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，eBPF 代理可以在条件满足后立即启动任务，而无需任何延迟。&lt;/p&gt;
+&lt;p&gt;它包括以下配置项：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;阈值&lt;/strong&gt;: 检查监测值是否符合指定的期望值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;周期&lt;/strong&gt;: 监控数据的时间周期（秒），也可以理解为最近的持续时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;计数&lt;/strong&gt;: 检测期间触发阈值的次数（秒），也可以理解为最近持续时间内指定阈值规则触发的总次数（秒）。一旦满足计数检查，指定的分析任务将被开始。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;触发任务&#34;&gt;触发任务&lt;/h3&gt;
+&lt;p&gt;当 eBPF Agent 检测到指定策略中的阈值决策符合规则时，根据预配置的规则可以启动相应的任务。对于每个不同的目标性能任务，它们的任务启动参数都不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: 它会自动对符合条件的进程进行性能分析，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: 它会对当前机器上同一 &lt;strong&gt;Service Instance&lt;/strong&gt; 中的所有进程进行网络性能分析，以防问题的原因因被收集进程太少而无法实现，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;一旦任务启动，当前进程将在一定时间内不会启动新的剖析任务。主要原因是为了防止因低阈值设置而频繁创建任务，从而影响程序执行。缺省时间为 &lt;code&gt;20&lt;/code&gt; 分钟。&lt;/p&gt;
+&lt;h2 id=&#34;数据流&#34;&gt;数据流&lt;/h2&gt;
+&lt;p&gt;图 1 展示了持续剖析功能的数据流：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;data-flow.png&#34; alt=&#34;图 1: 持续剖析的数据流&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1: 持续剖析的数据流&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ebpf-agent进行进程跟踪&#34;&gt;eBPF Agent进行进程跟踪&lt;/h3&gt;
+&lt;p&gt;首先，我们需要确保 eBPF Agent 和要监测的进程部署在同一台主机上，以便我们可以从进程中收集相关数据。当 eBPF Agent 检测到符合策略的阈值验证规则时，它会立即为目标进程触发剖析任务，从而减少任何中间步骤并加速定位性能问题的能力。&lt;/p&gt;
+&lt;h3 id=&#34;滑动窗口&#34;&gt;滑动窗口&lt;/h3&gt;
+&lt;p&gt;滑动窗口在 eBPF Agent 的阈值决策过程中发挥着至关重要的作用，如图 2 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sliding-window.png&#34; alt=&#34;图 2: eBPF Agent 中的滑动窗口&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2: eBPF Agent 中的滑动窗口&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数组中的每个元素表示指定时间内的数据值。当滑动窗口需要验证是否负责某个规则时，它从最近的一定数量的元素 (period 参数) 中获取每个元素的内容。如果一个元素超过了阈值，则标记为红色并计数。如果红色元素的数量超过一定数量，则被认为触发了任务。&lt;/p&gt;
+&lt;p&gt;使用滑动窗口具有以下两个优点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;快速检索最近的内容&lt;/strong&gt;：使用滑动窗口，无需进行复杂的计算。你可以通过简单地读取一定数量的最近数组元素来了解数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解决数据峰值问题&lt;/strong&gt;：通过计数进行验证，可以避免数据点突然增加然后快速返回正常的情况。使用多个值进行验证可以揭示超过阈值是频繁还是偶然发生的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;ebpf-agent与oap后端通讯&#34;&gt;eBPF Agent与OAP后端通讯&lt;/h3&gt;
+&lt;p&gt;eBPF Agent 定期与 SkyWalking 后端通信，涉及三个最关键的操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略同步&lt;/strong&gt;：通过定期的策略同步，eBPF Agent 可以尽可能地让本地机器上的进程与最新的策略规则保持同步。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;指标发送&lt;/strong&gt;：对于已经被监视的进程，eBPF Agent 定期将收集到的数据发送到后端程序。这就使用户能够实时查询当前数据值，用户也可以在出现问题时将此数据与历史值或阈值进行比较。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;剖析任务报告&lt;/strong&gt;：当 eBPF 检测到某个进程触发了策略规则时，它会自动启动性能任务，从当前进程收集相关信息，并将其报告给 SkyWalking 后端。这使用户可以从界面了解&lt;strong&gt;何时、为什么和触发了什么类型的剖析任务&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;演示&#34;&gt;演示&lt;/h1&gt;
+&lt;p&gt;接下来，让我们快速演示持续剖析功能，以便你更具体地了解它的功能。&lt;/p&gt;
+&lt;h2 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase 包含完整的示例服务，并可以使用 SkyWalking 进行监视。有关详细信息，请查看&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在此演示中，我们只部署服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，请运行以下脚本以打开 SkyWalking UI：http://localhost:8080/。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;创建持续剖析策略&#34;&gt;创建持续剖析策略&lt;/h2&gt;
+&lt;p&gt;目前，持续剖析功能在 &lt;strong&gt;Service Mesh&lt;/strong&gt; 面板的 &lt;strong&gt;Service&lt;/strong&gt; 级别中默认设置。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling.png&#34; alt=&#34;图 3: 持续策略选项卡&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3: 持续策略选项卡&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;通过点击 &lt;code&gt;Policy List&lt;/code&gt; 旁边的编辑按钮，可以创建或更新当前服务的策略。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;edit-continuous-profiling-polocy.png&#34; alt=&#34;图 4: 编辑持续剖析策略&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4: 编辑持续剖析策略&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;支持多个策略。每个策略都有以下配置。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;：指定符合阈值决策时要触发的剖析任务的类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;：对于相同目标的剖析任务，可以指定一个或多个验证项目。只要一个验证项目符合阈值决策，就会启动相应的性能分析任务。
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;：指定要为目标进程执行的监视类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;：根据监视类型的不同，需要填写相应的阈值才能完成验证工作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;：指定你要监测的最近几秒钟的数据数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;：确定最近时间段内触发的总秒数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI 正则表达式/列表&lt;/strong&gt;：这适用于 HTTP 监控类型，允许 URL 过滤。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;完成&#34;&gt;完成&lt;/h2&gt;
+&lt;p&gt;单击保存按钮后，你可以看到当前已创建的监控规则，如图 5 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-monitoring.png&#34; alt=&#34;图 5: 持续剖析监控进程&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5: 持续剖析监控进程&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数据可以分为以下几个部分：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略列表&lt;/strong&gt;：在左侧，你可以看到已创建的规则列表。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;监测摘要列表&lt;/strong&gt;：选择规则后，你可以看到哪些 pod 和进程将受到该规则的监视。它还总结了当前 pod 或进程在&lt;strong&gt;过去 48 小时&lt;/strong&gt;内触发的性能分析任务数量，以及最后一个触发时间。该列表还按触发次数降序排列，以便你快速查看。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;当你单击特定进程时，将显示一个新的仪表板以列出指标和触发的剖析结果。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-tasks.png&#34; alt=&#34;图 6: 持续剖析触发的任务&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6: 持续剖析触发的任务&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当前图包含以下数据内容：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;任务时间轴：它列出了过去 48 小时的所有剖析任务。当鼠标悬停在任务上时，它还会显示详细信息：
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务的开始和结束时间&lt;/strong&gt;：它指示当前性能分析任务何时被触发。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发原因&lt;/strong&gt;：它会显示为什么会对当前进程进行剖析，并列出当剖析被触发时超过阈值的度量值，以便你快速了解原因。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务详情&lt;/strong&gt;：与前几篇文章介绍的 CPU 剖析和网络剖析类似，它会显示当前任务的火焰图或进程拓扑图，具体取决于剖析类型。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;同时，在 &lt;strong&gt;Metrics&lt;/strong&gt; 选项卡中，收集与剖析策略相关的指标以检索历史趋势，以便在剖析的触发点提供全面的解释。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-metrics.png&#34; alt=&#34;图 7: 持续剖析指标&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7: 持续剖析指标&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;结论&#34;&gt;结论&lt;/h1&gt;
+&lt;p&gt;在本文中，我详细介绍了 SkyWalking 和 eBPF 中持续剖析功能的工作原理。通常情况下，它涉及将 eBPF Agent 服务部署在要监视的进程所在的同一台计算机上，并以低资源消耗监测目标进程。当它符合阈值条件时，它会启动更复杂的 CPU 剖析和网络剖析任务。&lt;/p&gt;
+&lt;p&gt;在未来，我们将提供更多功能。敬请期待！&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter：&lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack：向邮件列表 (&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;) 发送“Request to join SkyWalking Slack”，我们会邀请你加入。&lt;/li&gt;
+&lt;li&gt;订阅我们的 &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;Medium 列表&lt;/a&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 使用SkyWalking go agent快速实现Dubbo Go监控</title>
+      <link>/zh/2023-06-05-quick-start-using-skywalking-go-monitoring-dubbo-go/</link>
+      <pubDate>Mon, 05 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-06-05-quick-start-using-skywalking-go-monitoring-dubbo-go/</guid>
+      <description>
+        
+        
+        &lt;p&gt;本文演示如何将 &lt;a href=&#34;https://github.com/apache/dubbo-go&#34;&gt;Dubbo-Go&lt;/a&gt; 应用程序与 SkyWalking Go 集成，并在 SkyWalking UI 中查看结果。&lt;/p&gt;
+&lt;p&gt;以前，如果你想要在 SkyWalking 中监控 Golang 应用程序，需要将项目与 &lt;a href=&#34;https://github.com/skyapm/go2sky&#34;&gt;go2sky&lt;/a&gt; 项目集成，并手动编写各种带有 go2sky 插件的框架。现在，我们有一个全新的项目（ &lt;a href=&#34;https://github.com/apache/skywalking-go&#34;&gt;Skywalking Go&lt;/a&gt; ），允许你将 Golang 项目集成到 SkyWalking 中，几乎不需要编码，同时提供更大的灵活性和可扩展性。&lt;/p&gt;
+&lt;p&gt;在本文中，我们将指导你快速将 skywalking-go 项目集成到 dubbo-go 项目中。&lt;/p&gt;
+&lt;p&gt;演示包括以下步骤：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;部署 SkyWalking&lt;/strong&gt;：这涉及设置 SkyWalking 后端和 UI 程序，使你能够看到最终效果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;使用 SkyWalking Go 编译程序&lt;/strong&gt;：在这里，你将把 SkyWalking Go Agent 编译到要监控的 Golang 程序中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;应用部署&lt;/strong&gt;：你将导出环境变量并部署应用程序，以促进你的服务与 SkyWalking 后端之间的通信。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 SkyWalking UI 上可视化&lt;/strong&gt;：最后，你将发送请求并在 SkyWalking UI 中观察效果。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;部署-skywalking&#34;&gt;部署 SkyWalking&lt;/h2&gt;
+&lt;p&gt;请从官方 SkyWalking 网站下载 &lt;a href=&#34;https://skywalking.apache.org/downloads/#SkyWalkingAPM&#34;&gt;SkyWalking APM 程序&lt;/a&gt; 。然后执行以下两个命令来启动服务:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 启动 OAP 后端&lt;/span&gt;
+&amp;gt; bin/oapService.sh
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 启动 UI&lt;/span&gt;
+&amp;gt; bin/webappService.sh
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接下来，你可以访问地址 &lt;code&gt;http://localhost:8080/&lt;/code&gt; 。此时，由于尚未部署任何应用程序，因此你将看不到任何数据。&lt;/p&gt;
+&lt;h2 id=&#34;使用-skywalking-go-编译-dubbo-go-程序&#34;&gt;使用 SkyWalking GO 编译 Dubbo Go 程序&lt;/h2&gt;
+&lt;p&gt;这里将演示如何将 &lt;a href=&#34;https://github.com/apache/dubbo-go&#34;&gt;Dubbo-go&lt;/a&gt; 程序与SkyWalking Go Agent集成。请依次执行如下命令来创建一个新的项目:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 安装dubbo-go基础环境&lt;/span&gt;
+&amp;gt; &lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;GOPROXY&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;https://goproxy.cn&amp;#34;&lt;/span&gt;
+&amp;gt; go install github.com/dubbogo/dubbogo-cli@latest
+&amp;gt; dubbogo-cli install all
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 创建demo项目&lt;/span&gt;
+&amp;gt; mkdir demo &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; demo
+&amp;gt; dubbogo-cli newDemo .
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 升级dubbo-go依赖到最新版本&lt;/span&gt;
+&amp;gt; go get -u dubbo.apache.org/dubbo-go/v3
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在项目的根目录中执行以下命令。此命令将下载 skywalking-go 所需的依赖项：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;go get github.com/apache/skywalking-go
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接下来，请分别在服务端和客户端的&lt;code&gt;main&lt;/code&gt;包中引入。包含之后，代码将会更新为：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// go-server/cmd/server.go
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;context&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dubbo.apache.org/dubbo-go/v3/common/logger&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dubbo.apache.org/dubbo-go/v3/config&amp;#34;&lt;/span&gt;
+	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dubbo.apache.org/dubbo-go/v3/imports&amp;#34;&lt;/span&gt;
+
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;helloworld/api&amp;#34;&lt;/span&gt;
+	
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 引入skywalking-go
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;type&lt;/span&gt; GreeterProvider &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;struct&lt;/span&gt; {
+	api.UnimplementedGreeterServer
+}
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; (s &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;GreeterProvider) &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SayHello&lt;/span&gt;(ctx context.Context, in &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;api.HelloRequest) (&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;api.User, &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;error&lt;/span&gt;) {
+	logger.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Infof&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Dubbo3 GreeterProvider get user name = %s\n&amp;#34;&lt;/span&gt;, in.Name)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&lt;/span&gt;api.User{Name: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Hello &amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;+&lt;/span&gt; in.Name, Id: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;12345&amp;#34;&lt;/span&gt;, Age: &lt;span style=&#34;color:#099&#34;&gt;21&lt;/span&gt;}, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;
+}
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// export DUBBO_GO_CONFIG_PATH= PATH_TO_SAMPLES/helloworld/go-server/conf/dubbogo.yaml
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	config.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SetProviderService&lt;/span&gt;(&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&lt;/span&gt;GreeterProvider{})
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; config.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Load&lt;/span&gt;(); err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#0086b3&#34;&gt;panic&lt;/span&gt;(err)
+	}
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;select&lt;/span&gt; {}
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在客户端代码中除了需要引入skywalking-go之外，还需要在main方法中的最后一行增加主携程等待语句，以防止因为客户端快速关闭而无法将Tracing数据异步发送到SkyWalking后端：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;context&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dubbo.apache.org/dubbo-go/v3/common/logger&amp;#34;&lt;/span&gt;
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dubbo.apache.org/dubbo-go/v3/config&amp;#34;&lt;/span&gt;
+	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dubbo.apache.org/dubbo-go/v3/imports&amp;#34;&lt;/span&gt;
+
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;helloworld/api&amp;#34;&lt;/span&gt;
+
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 引入skywalking-go
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;var&lt;/span&gt; grpcGreeterImpl = &lt;span style=&#34;color:#0086b3&#34;&gt;new&lt;/span&gt;(api.GreeterClientImpl)
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// export DUBBO_GO_CONFIG_PATH= PATH_TO_SAMPLES/helloworld/go-client/conf/dubbogo.yaml
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	config.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SetConsumerService&lt;/span&gt;(grpcGreeterImpl)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; config.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Load&lt;/span&gt;(); err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#0086b3&#34;&gt;panic&lt;/span&gt;(err)
+	}
+
+	logger.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Info&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;start to test dubbo&amp;#34;&lt;/span&gt;)
+	req &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&lt;/span&gt;api.HelloRequest{
+		Name: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;laurence&amp;#34;&lt;/span&gt;,
+	}
+	reply, err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; grpcGreeterImpl.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;SayHello&lt;/span&gt;(context.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Background&lt;/span&gt;(), req)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		logger.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Error&lt;/span&gt;(err)
+	}
+	logger.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Infof&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;client response result: %v\n&amp;#34;&lt;/span&gt;, reply)
+	&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// 增加主携程等待语句
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;select&lt;/span&gt; {}
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接下来，请从官方 SkyWalking 网站下载 &lt;a href=&#34;https://skywalking.apache.org/downloads/#GoAgent&#34;&gt;Go Agent 程序&lt;/a&gt; 。当你使用 &lt;code&gt;go build&lt;/code&gt; 命令进行编译时，请在 &lt;strong&gt;bin&lt;/strong&gt; 目录中找到与当前操作系统匹配的代理程序，并添加 &lt;code&gt;-toolexec=&amp;quot;/path/to/go-agent -a&lt;/code&gt; 参数。例如，请使用以下命令：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 进入项目主目录&lt;/span&gt;
+&amp;gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; demo
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 分别编译服务端和客户端&lt;/span&gt;
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# -toolexec 参数定义为go-agent的路径&lt;/span&gt;
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# -a 参数用于强制重新编译所有依赖项&lt;/span&gt;
+&amp;gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; go-server &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o go-server cmd/server.go &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; ..
+&amp;gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; go-client &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o go-client cmd/client.go &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; ..
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;应用部署&#34;&gt;应用部署&lt;/h2&gt;
+&lt;p&gt;在开始部署应用程序之前，你可以通过环境变量更改 SkyWalking 中当前应用程序的服务名称。你还可以更改其配置，例如服务器端的地址。有关详细信息，请&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/settings-override/&#34;&gt;参阅文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;p&gt;在这里，我们分别启动两个终端窗口来分别启动服务端和客户端。&lt;/p&gt;
+&lt;p&gt;在服务端，将服务的名称更改为&lt;code&gt;dubbo-server&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 导出dubbo-go服务端配置文件路径&lt;/span&gt;
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;DUBBO_GO_CONFIG_PATH&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;/path/to/demo/go-server/conf/dubbogo.yaml
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 导出skywalking-go的服务名称&lt;/span&gt;
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;dubbo-server
+
+./go-server/go-server
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在客户端，将服务的名称更改为&lt;code&gt;dubbo-client&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 导出dubbo-go客户端配置文件路径&lt;/span&gt;
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;DUBBO_GO_CONFIG_PATH&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;/path/to/demo/go-client/conf/dubbogo.yaml
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 导出skywalking-go的服务名称&lt;/span&gt;
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;dubbo-client
+
+./go-client/go-client
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;在-skywalking-ui-上可视化&#34;&gt;在 SkyWalking UI 上可视化&lt;/h2&gt;
+&lt;p&gt;现在，由于客户端会自动像服务器端发送请求，现在就可以在 SkyWalking UI 中观察结果。&lt;/p&gt;
+&lt;p&gt;几秒钟后，重新访问 &lt;code&gt;http://localhost:8080&lt;/code&gt; 的 SkyWalking UI。能够在主页上看到部署的 &lt;code&gt;dubbo-server&lt;/code&gt; 和 &lt;code&gt;dubbo-client&lt;/code&gt; 服务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;services.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;此外，在追踪页面上，可以看到刚刚发送的请求。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;并可以在拓扑图页面中看到服务之间的关系。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;在本文中，我们指导你快速开发&lt;code&gt;dubbo-go&lt;/code&gt;服务，并将其与 SkyWalking Go Agent 集成。这个过程也适用于你自己的任意 Golang 服务。最终，可以在 SkyWalking 服务中查看显示效果。如果你有兴趣了解 SkyWalking Go 代理当前支持的框架，请&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/agent/support-plugins/&#34;&gt;参阅此文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;p&gt;将来，我们将继续扩展 SkyWalking Go 的功能，添加更多插件支持。所以，请继续关注！&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Quick start with SkyWalking Go Agent</title>
+      <link>/blog/2023-06-01-quick-start-with-skywalking-go-agent/</link>
+      <pubDate>Thu, 01 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-06-01-quick-start-with-skywalking-go-agent/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;Previously, if you wanted to monitor a Golang application in SkyWalking, you would integrate your project with the &lt;a href=&#34;https://github.com/skyapm/go2sky&#34;&gt;go2sky&lt;/a&gt; project
+and manually write various frameworks with go2sky plugins. Now, we have a brand-new project (&lt;a href=&#34;https://github.com/apache/skywalking-go&#34;&gt;Skywalking Go&lt;/a&gt;)
+that allows you to integrate your Golang projects into SkyWalking with almost zero coding, while offering greater flexibility and scalability.&lt;/p&gt;
+&lt;p&gt;In this article, we will guide you quickly integrating the skywalking-go project into your Golang project.&lt;/p&gt;
+&lt;h1 id=&#34;quick-start&#34;&gt;Quick start&lt;/h1&gt;
+&lt;p&gt;This demonstration will consist of the following steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Deploy SkyWalking&lt;/strong&gt;: This involves setting up the SkyWalking backend and UI programs, enabling you to see the final effect.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Compile Golang with SkyWalking Go&lt;/strong&gt;: Here, you&amp;rsquo;ll compile the SkyWalking Go Agent into the Golang program you wish to monitor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Application Deployment&lt;/strong&gt;: You&amp;rsquo;ll export environment variables and deploy the application to facilitate communication between your service and the SkyWalking backend.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Visualization on SkyWalking UI&lt;/strong&gt;: Finally, you&amp;rsquo;ll send requests and observe the effects within the SkyWalking UI.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;deploy-skywalking&#34;&gt;Deploy SkyWalking&lt;/h2&gt;
+&lt;p&gt;Please download the &lt;a href=&#34;https://skywalking.apache.org/downloads/#SkyWalkingAPM&#34;&gt;SkyWalking APM program from the official SkyWalking website&lt;/a&gt;.
+Then execute the following two commands to start the service:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# startup the OAP backend&lt;/span&gt;
+&amp;gt; bin/oapService.sh
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# startup the UI&lt;/span&gt;
+&amp;gt; bin/webappService.sh
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Next, you can access the address at &lt;code&gt;http://localhost:8080/&lt;/code&gt;. At this point, as no applications have been deployed yet, you will not see any data.&lt;/p&gt;
+&lt;h2 id=&#34;compile-golang-with-skywalking-go&#34;&gt;Compile Golang with SkyWalking GO&lt;/h2&gt;
+&lt;p&gt;Here is a simple business application here that starts an HTTP service.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/hello&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(writer http.ResponseWriter, request &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+		writer.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Write&lt;/span&gt;([]&lt;span style=&#34;color:#0086b3&#34;&gt;byte&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Hello World&amp;#34;&lt;/span&gt;))
+	})
+	err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:8000&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#0086b3&#34;&gt;panic&lt;/span&gt;(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Execute the following command in the project&amp;rsquo;s root directory. This command will download the dependencies required for skywalking-go:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;go get github.com/apache/skywalking-go
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Also, include it in the &lt;code&gt;main&lt;/code&gt; package of the project. After the inclusion, the code will update to:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;// This is an important step. DON&amp;#39;T MISS IT.
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;&lt;/span&gt;	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/hello&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(writer http.ResponseWriter, request &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+		writer.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Write&lt;/span&gt;([]&lt;span style=&#34;color:#0086b3&#34;&gt;byte&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Hello World&amp;#34;&lt;/span&gt;))
+	})
+	err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:8000&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#0086b3&#34;&gt;panic&lt;/span&gt;(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Next, please download the &lt;a href=&#34;https://skywalking.apache.org/downloads/#GoAgent&#34;&gt;Go Agent program from the official SkyWalking website&lt;/a&gt;.
+When you compile with the go build command, find the agent program that matches your current operating system in the &lt;strong&gt;bin&lt;/strong&gt; directory,
+and add the &lt;code&gt;-toolexec=&amp;quot;/path/to/go-agent -a&lt;/code&gt; parameter. For example, use the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Build application with SkyWalking go agent&lt;/span&gt;
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# -toolexec parameter define the path of go-agent&lt;/span&gt;
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# -a parameter is used to force rebuild all packages&lt;/span&gt;
+&amp;gt; go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o &lt;span style=&#34;color:#0086b3&#34;&gt;test&lt;/span&gt; .
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;application-deployment&#34;&gt;Application Deployment&lt;/h2&gt;
+&lt;p&gt;Before you start to deploy the application, you can change the service name of the current application in SkyWalking through environment variables.
+You can also change its configuration such as the address with the server-side. For specific details, please &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/settings-override/&#34;&gt;refer to the documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Here, we&amp;rsquo;re just changing the name of the current service to &lt;code&gt;demo&lt;/code&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Change the service name&lt;/span&gt;
+&amp;gt; &lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Next, you can start the application:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Start the application&lt;/span&gt;
+&amp;gt; ./test
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;visualization-on-skywalking-ui&#34;&gt;Visualization on SkyWalking UI&lt;/h2&gt;
+&lt;p&gt;Now, you can send a request to the application and observe the results in the SkyWalking UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Send a request&lt;/span&gt;
+&amp;gt; curl http://localhost:8000/hello
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After a few seconds, you can revisit the SkyWalking UI at &lt;code&gt;http://localhost:8080&lt;/code&gt;. You will be able to see the &lt;code&gt;demo&lt;/code&gt; service you deployed on the homepage.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./service.png&#34; alt=&#34;Service List&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Moreover, on the Trace page, you can see the request you just sent.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./trace.png&#34; alt=&#34;Trace List&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, we&amp;rsquo;ve guided you to quickly develop a &lt;code&gt;demo&lt;/code&gt; service and integrate it with SkyWalking Go Agent.
+This process is also applicable to your own Golang services. Ultimately, you can view the display effect in the SkyWalking service.
+If you&amp;rsquo;re interested in learning which frameworks the SkyWalking Go agent currently supports, please &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/agent/support-plugins/&#34;&gt;refer to this documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In the future, we will continue to expand the functionality of SkyWalking Go, adding more plugin support. So, stay tuned!&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: SkyWalking Go Agent 快速开始指南</title>
+      <link>/zh/2023-06-01-quick-start-with-skywalking-go-agent/</link>
+      <pubDate>Thu, 01 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-06-01-quick-start-with-skywalking-go-agent/</guid>
+      <description>
+        
+        
+        &lt;p&gt;本文演示如何将应用程序与 SkyWalking Go 集成，并在 SkyWalking UI 中查看结果。&lt;/p&gt;
+&lt;p&gt;以前，如果你想要在 SkyWalking 中监控 Golang 应用程序，需要将项目与 &lt;a href=&#34;https://github.com/skyapm/go2sky&#34;&gt;go2sky&lt;/a&gt; 项目集成，并手动编写各种带有 go2sky 插件的框架。现在，我们有一个全新的项目（&lt;a href=&#34;https://github.com/apache/skywalking-go&#34;&gt;Skywalking Go&lt;/a&gt; ），允许你将 Golang 项目集成到 SkyWalking 中，几乎不需要编码，同时提供更大的灵活性和可扩展性。&lt;/p&gt;
+&lt;p&gt;在本文中，我们将指导你快速将 skywalking-go 项目集成到 Golang 项目中。&lt;/p&gt;
+&lt;p&gt;演示包括以下步骤：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;部署 SkyWalking&lt;/strong&gt;：这涉及设置 SkyWalking 后端和 UI 程序，使你能够看到最终效果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;使用 SkyWalking Go 编译 Golang&lt;/strong&gt;：在这里，你将把 SkyWalking Go Agent 编译到要监控的 Golang 程序中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;应用部署&lt;/strong&gt;：你将导出环境变量并部署应用程序，以促进你的服务与 SkyWalking 后端之间的通信。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 SkyWalking UI 上可视化&lt;/strong&gt;：最后，你将发送请求并在 SkyWalking UI 中观察效果。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;部署-skywalking&#34;&gt;部署 SkyWalking&lt;/h2&gt;
+&lt;p&gt;请从官方 SkyWalking 网站下载 &lt;a href=&#34;https://skywalking.apache.org/downloads/#SkyWalkingAPM&#34;&gt;SkyWalking APM 程序&lt;/a&gt; 。然后执行以下两个命令来启动服务:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 启动 OAP 后端&lt;/span&gt;
+&amp;gt; bin/oapService.sh
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 启动 UI&lt;/span&gt;
+&amp;gt; bin/webappService.sh
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接下来，你可以访问地址 &lt;code&gt;http://localhost:8080/&lt;/code&gt; 。此时，由于尚未部署任何应用程序，因此你将看不到任何数据。&lt;/p&gt;
+&lt;h2 id=&#34;使用-skywalking-go-编译-golang&#34;&gt;使用 SkyWalking GO 编译 Golang&lt;/h2&gt;
+&lt;p&gt;这里有一个简单的业务应用程序，启动了一个 HTTP 服务。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/hello&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(writer http.ResponseWriter, request &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+		writer.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Write&lt;/span&gt;([]&lt;span style=&#34;color:#0086b3&#34;&gt;byte&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Hello World&amp;#34;&lt;/span&gt;))
+	})
+	err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:8000&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#0086b3&#34;&gt;panic&lt;/span&gt;(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在项目的根目录中执行以下命令。此命令将下载 skywalking-go 所需的依赖项：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;go get github.com/apache/skywalking-go
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接下来，请将其包含在项目的 &lt;code&gt;main&lt;/code&gt; 包中。包含之后，代码将会更新为：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;package&lt;/span&gt; main
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; (
+	&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;net/http&amp;#34;&lt;/span&gt;
+	_ &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;github.com/apache/skywalking-go&amp;#34;&lt;/span&gt;
+)
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;main&lt;/span&gt;() {
+	http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;HandleFunc&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/hello&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;func&lt;/span&gt;(writer http.ResponseWriter, request &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;http.Request) {
+		writer.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Write&lt;/span&gt;([]&lt;span style=&#34;color:#0086b3&#34;&gt;byte&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Hello World&amp;#34;&lt;/span&gt;))
+	})
+	err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:=&lt;/span&gt; http.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;ListenAndServe&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:8000&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt;)
+	&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; err &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;!=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;nil&lt;/span&gt; {
+		&lt;span style=&#34;color:#0086b3&#34;&gt;panic&lt;/span&gt;(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;接下来，请从官方 SkyWalking 网站下载 &lt;a href=&#34;https://skywalking.apache.org/downloads/#GoAgent&#34;&gt;Go Agent 程序&lt;/a&gt; 。当你使用 &lt;code&gt;go build&lt;/code&gt; 命令进行编译时，请在 &lt;strong&gt;bin&lt;/strong&gt; 目录中找到与当前操作系统匹配的代理程序，并添加 &lt;code&gt;-toolexec=&amp;quot;/path/to/go-agent&amp;quot; -a&lt;/code&gt; 参数。例如，请使用以下命令：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;go build -toolexec&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/path/to/go-agent&amp;#34;&lt;/span&gt; -a -o &lt;span style=&#34;color:#0086b3&#34;&gt;test&lt;/span&gt; .
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;应用部署&#34;&gt;应用部署&lt;/h2&gt;
+&lt;p&gt;在开始部署应用程序之前，你可以通过环境变量更改 SkyWalking 中当前应用程序的服务名称。你还可以更改其配置，例如服务器端的地址。有关详细信息，请&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/settings-override/&#34;&gt;参阅文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;p&gt;在这里，我们只是将当前服务的名称更改为 &lt;code&gt;demo&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;接下来，你可以启动应用程序：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo
+
+./test
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;在-skywalking-ui-上可视化&#34;&gt;在 SkyWalking UI 上可视化&lt;/h2&gt;
+&lt;p&gt;现在，向应用程序发送请求并在 SkyWalking UI 中观察结果。&lt;/p&gt;
+&lt;p&gt;几秒钟后，重新访问 &lt;code&gt;http://localhost:8080&lt;/code&gt; 的 SkyWalking UI。能够在主页上看到部署的 &lt;code&gt;demo&lt;/code&gt; 服务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;service.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;此外，在追踪页面上，可以看到刚刚发送的请求。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;在本文中，我们指导你快速开发 &lt;code&gt;demo&lt;/code&gt; 服务，并将其与 SkyWalking Go Agent 集成。这个过程也适用于你自己的 Golang 服务。最终，可以在 SkyWalking 服务中查看显示效果。如果你有兴趣了解 SkyWalking Go 代理当前支持的框架，请&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/agent/support-plugins/&#34;&gt;参阅此文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;p&gt;将来，我们将继续扩展 SkyWalking Go 的功能，添加更多插件支持。所以，请继续关注！&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache ShenYu(incubating) plugin implementation principles and observability practices</title>
+      <link>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</link>
+      <pubDate>Sun, 08 May 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-Introduction-of-SkyWalking-and-ShenYu&#34;&gt;Introduction of SkyWalking and ShenYu&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-Apache-ShenYu-plugin-implementation-principle&#34;&gt;Apache ShenYu plugin implementation principle&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-Adding-generalized-call-tracking-to-the-gRPC-plugin-and-keeping-it-compatible&#34;&gt;Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-ShenYu-Gateway-Observability-Practice&#34;&gt;ShenYu Gateway Observability Practice&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-Summary&#34;&gt;Summary&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1-introduction-of-skywalking-and-shenyu&#34;&gt;1. Introduction of SkyWalking and ShenYu&lt;/h2&gt;
+&lt;h3 id=&#34;11-skywalking&#34;&gt;1.1 SkyWalking&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/hutaishi/skywalking&#34;&gt;SkyWalking&lt;/a&gt; is an Application Performance Monitoring (APM) and Observability Analysis Platform (OAP) for microservices, distributed systems, and cloud natives,
+Has powerful features that provide a multi-dimensional means of application performance analysis, including distributed topology diagrams, application performance metrics, distributed link tracing, log correlation analysis and alerts. Also has a very rich ecology. Widely used in various companies and open source projects.&lt;/p&gt;
+&lt;h3 id=&#34;12-apache-shenyu-incubating&#34;&gt;1.2 Apache ShenYu (incubating)&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;
+High-performance,multi-protocol,extensible,responsive API Gateway. Compatible with a variety of mainstream framework systems, support hot plug,
+users can customize the development, meet the current situation and future needs of users in a variety of scenarios, experienced the temper of large-scale scenes.
+Rich protocol support: &lt;code&gt;Http&lt;/code&gt;, &lt;code&gt;Spring Cloud&lt;/code&gt;, &lt;code&gt;gRPC&lt;/code&gt;, &lt;code&gt;Dubbo&lt;/code&gt;, &lt;code&gt;SOFARPC&lt;/code&gt;, &lt;code&gt;Motan&lt;/code&gt;, &lt;code&gt;Tars&lt;/code&gt;, etc.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;shenyu-arch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2-apache-shenyu-plugin-implementation-principle&#34;&gt;2. Apache ShenYu plugin implementation principle&lt;/h2&gt;
+&lt;p&gt;ShenYu&amp;rsquo;s asynchrony is a little different from previous exposure to asynchrony, it is a full-link asynchrony, the execution of each plug-in is asynchronous, and thread switching is not a single fixed situation (and the individual plug-in implementation is related).
+The gateway initiates service calls of various protocol types, and the existing SkyWalking plugins create ExitSpan (synchronous or asynchronous) when they initiate service calls.  The gateway receives the request and creates an asynchronous EntrySpan.
+The asynchronous EntrySpan needs to be concatenated with the synchronous or asynchronous ExitSpan, otherwise the link will be broken.&lt;/p&gt;
+&lt;p&gt;There are 2 types of tandem solutions：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Snapshot Delivery&lt;/strong&gt;:&lt;br&gt;
+Pass the snapshot after creating the EntrySpan to the thread that created the ExitSpan in some way.&lt;br&gt;
+Currently this approach is used in the asynchronous WebClient plugin, which can receive asynchronous snapshots. shenYu proxy Http service or SpringCloud service is to achieve span concatenation through snapshot passing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LocalSpan transit&lt;/strong&gt;:&lt;br&gt;
+Other RPC class plugins do not receive snapshots for concatenation like Asynchronous WebClient. Although you can modify other RPC plugins to receive snapshots for concatenation, it is not recommended or necessary to do so.
+This can be achieved by creating a LocalSpan in the thread where the ExitSpan is created, and then connecting the asynchronous EntrySpan and LocalSpan by &lt;code&gt;snapshot passing&lt;/code&gt;. This can be done without changing the original plugin code.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The span connection is shown below:&lt;br&gt;
+&lt;img src=&#34;span-connect.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You may ask if it is possible to create LocalSpan inside a generic plugin, instead of creating one separately for ShenYu RPC plugin?
+The answer is no, because you need to ensure that LocalSpan and ExitSpan are in the same thread, and ShenYu is fully linked asynchronously. The code to create LocalSpan is reused in the implementation.&lt;/p&gt;
+&lt;h2 id=&#34;3-adding-generalized-call-tracking-to-the-grpc-plugin-and-keeping-it-compatible&#34;&gt;3. Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/h2&gt;
+&lt;p&gt;The existing SkyWalking gRPC plugin only supports calls initiated by way of stubs. For the gateway there is no proto file, the gateway takes generalized calls (not through stubs), so tracing RPC requests, you will find that the link will break at the gateway node.
+In this case, it is necessary to make the gRPC plugin support generalized calls, while at the same time needing to remain compatible and not affect the original tracing method. This is achieved by determining whether the request parameter is a DynamicMessage, and if it is not, then the original tracing logic through the stub is used.
+If not, then the original tracing logic via stubs is used, and if not, then the generalized call tracing logic is used. The other compatibility is the difference between the old and new versions of gRPC, as well as the compatibility of various cases of obtaining server-side IP, for those interested in the source code.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-generic-call.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;4-shenyu-gateway-observability-practice&#34;&gt;4. ShenYu Gateway Observability Practice&lt;/h2&gt;
+&lt;p&gt;The above explains the principle of SkyWalking ShenYu plug-in implementation, the following deployment application to see the effect. SkyWalking powerful, in addition to the link tracking requires the development of plug-ins, other powerful features out of the box.
+Here only describe the link tracking and application performance analysis part, if you want to experience the power of SkyWalking features, please refer to the &lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking official documentation&lt;/a&gt;.&lt;br&gt;
+Version description:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;skywalking-java: &lt;code&gt;8.11.0-SNAPSHOT&lt;/code&gt; source code build. Note: The shenyu plugin will be released in version 8.11.0, and will probably release it initially in May or June. the Java agent is in the regular release phase.&lt;/li&gt;
+&lt;li&gt;skywalking: &lt;code&gt;9.0.0&lt;/code&gt; V9 version&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Usage instructions:&lt;br&gt;
+SkyWalking is designed to be very easy to use. Please refer to the official documentation for configuring and activating the shenyu plugin.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/readme/&#34;&gt;SkyWalking Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/readme/&#34;&gt;SkyWalking Java Agent Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;41-sending-requests-to-the-gateway&#34;&gt;4.1 Sending requests to the gateway&lt;/h3&gt;
+&lt;p&gt;Initiate various service requests to the gateway via the &lt;code&gt;postman&lt;/code&gt; client or &lt;code&gt;other means&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;42-request-topology-diagram&#34;&gt;4.2 Request Topology Diagram&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;topology2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;43-request-trace-in-the-case-of-grpc&#34;&gt;4.3 Request Trace (in the case of gRPC)&lt;/h3&gt;
+&lt;h4 id=&#34;normal-trace&#34;&gt;Normal Trace：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-ok.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;abnormal-trace&#34;&gt;Abnormal Trace：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Click on the link node to see the corresponding node information and exception information&lt;/p&gt;
+&lt;h4 id=&#34;service-provider-span&#34;&gt;Service Provider Span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;gateway-request-span&#34;&gt;Gateway request span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;gateway-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;44-service-metrics-monitoring&#34;&gt;4.4 Service Metrics Monitoring&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;overview.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;45-gateway-background-metrics-monitoring&#34;&gt;4.5 Gateway background metrics monitoring&lt;/h3&gt;
+&lt;h4 id=&#34;database-monitoring&#34;&gt;Database Monitoring:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;database.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;thread-pool-and-connection-pool-monitoring&#34;&gt;Thread pool and connection pool monitoring:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;img.png&#34; alt=&#34;img.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;46-jvm-monitoring&#34;&gt;4.6 JVM Monitoring&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;jvm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;47-endpoint-analysis&#34;&gt;4.7 Endpoint Analysis&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;endpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;48-exception-log-and-exception-link-analysis&#34;&gt;4.8 Exception log and exception link analysis&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/&#34;&gt;See official documentation for log configuration&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Log monitoring
+&lt;img src=&#34;log-trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Distributed link trace details corresponding to exception logs
+&lt;img src=&#34;log-trace-detail.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;5-summary&#34;&gt;5. Summary&lt;/h2&gt;
+&lt;p&gt;SkyWalking has very comprehensive support for metrics, link tracing, and logging in observability, and is powerful, easy to use, and designed for large distributed systems, microservices, cloud-native, container architectures, and has a rich ecosystem.
+Using SkyWalking to provide powerful observability support for Apache ShenYu (incubating) gives ShenYu a boost. Finally, if you are interested in high-performance responsive gateways, you can follow
+&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;.
+Also, thanks to SkyWalking such an excellent open source software to the industry contributions.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: SourceMarker: Continuous Feedback for Developers</title>
+      <link>/blog/2021-03-16-continuous-feedback/</link>
+      <pubDate>Tue, 16 Mar 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-03-16-continuous-feedback/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;SM_IDE-APM.gif&#34; alt=&#34;Alt Text&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://sourcemarker.dev&#34;&gt;SourceMarker&lt;/a&gt; is an open-source continuous feedback IDE plugin built on top of Apache SkyWalking, a popular open-source APM system with monitoring, tracing, and diagnosing capabilities for distributed software systems. SkyWalking, a truly holistic system, provides the means for automatically producing, storing, and querying software operation metrics. It requires little to no code changes to implement and is lightweight enough to be used in production. By itself, SkyWalking is a formidable force in the realm of continuous monitoring technology.&lt;/p&gt;
+&lt;p&gt;SourceMarker, leveraging the continuous monitoring functionality provided by SkyWalking, creates continuous feedback technology by automatically linking software operation metrics to source code and displaying feedback directly inside of the IDE. While currently only supporting JetBrains-based IDEs and JVM-based programming languages, SourceMarker may be extended to support any number of programming languages and IDEs. Using SourceMarker, software developers can understand and validate software operation inside of their IDE. Instead of charts that indicate the health of the application, software developers can view the health of individual source code components and interpret software operation metrics from a much more familiar perspective. Such capabilities improve productivity as time spent continuously context switching from development to monitoring would be eliminated.&lt;/p&gt;
+&lt;h2 id=&#34;logging&#34;&gt;Logging&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;SM_Logging.gif&#34; alt=&#34;Logging&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The benefits of continuous feedback technology are immediately apparent with the ability to view and search logs directly from source code. Instead of tailing log files or viewing logs through the browser, SourceMarker allows software developers to navigate production logs just as easily as they navigate source code. By using the source code as the primary perspective for navigating logs, SourceMarker allows software developers to view logs specific to any package, class, method, or line directly from the context of the source code which resulted in those logs.&lt;/p&gt;
+&lt;h2 id=&#34;tracing&#34;&gt;Tracing&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;SM_Tracing.gif&#34; alt=&#34;Tracing&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Furthermore, continuous feedback technology offers software developers a deeper understanding of software by explicitly tying the implicit software operation to source code. Instead of visualizing software traces as Gantt charts, SourceMarker allows software developers to step through trace stacks while automatically resolving trace tags and logs. With SourceMarker, software developers can navigate production software traces in much the same way one debugs local applications.&lt;/p&gt;
+&lt;h2 id=&#34;alerting&#34;&gt;Alerting&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;SM_Alerting.gif&#34; alt=&#34;Alerting&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Most importantly, continuous feedback technology keeps software developers aware of production software operation. Armed with an APM-powered IDE, every software developer can keep track of the behavior of any method, class, package, and even the entire application itself. Moreover, this allows for source code to be the medium through which production bugs are made evident, thereby creating the feasibility of source code with the ability to self-diagnose and convey its own health.&lt;/p&gt;
+&lt;hr&gt;
+&lt;h1 id=&#34;download-sourcemarker&#34;&gt;Download SourceMarker&lt;/h1&gt;
+&lt;p&gt;SourceMarker aims to bridge the theoretical and empirical practices of software development through continuous feedback. The goal is to make developing software with empirical data feel natural and intuitive, creating more complete software developers that understand the entire software development cycle.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/sourcemarker&#34;&gt;https://github.com/sourceplusplus/sourcemarker&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This project is still early in its development, so if you think of any ways to improve SourceMarker, please let us know.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache SkyWalking: How to propagate context between threads when using ThreadPoolExecutor</title>
+      <link>/blog/2021-02-09-skywalking-trace-threadpool/</link>
+      <pubDate>Tue, 09 Feb 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-02-09-skywalking-trace-threadpool/</guid>
+      <description>
+        
+        
+        &lt;p&gt;When using SkyWalking java agent, people usually propagate context easily. They even do not need to change the business
+code. However, it becomes harder when you want to propagate context between threads when using ThreadPoolExecutor.
+You can use the RunnableWrapper in the maven artifact org.apache.skywalking:apm-toolkit-trace. This way you must change
+your code. The developer manager usually don&amp;rsquo;t like this because there may be lots of projects, or lots of runnable code.
+If they don&amp;rsquo;t use SkyWalking some day, the code added will be superfluous and inelegant.&lt;/p&gt;
+&lt;p&gt;Is there a way to propagate context without changing the business code? Yes.&lt;/p&gt;
+&lt;p&gt;Skywalking java agent enhances a class by add a field and implement an interface. The ThreadPoolExecutor is a special
+class that is used widely. We even don&amp;rsquo;t know when and where it is loaded. Most JVMs do not allow changes in the class
+file format for classes that have been loaded previously. So SkyWalking should not enhance the ThreadPoolExecutor successfully by retransforming when the ThreadPoolExecutor has been loaded.
+However, we can apply advice to the ThreadPoolExecutor#execute method and wrap the Runnable param using our
+own agent, then enhance the wrapper class by SkyWalking java agent. An advice do not change the layout of a class.&lt;/p&gt;
+&lt;p&gt;Now we should decide how to do this. You can use the RunnableWrapper in the maven artifact
+org.apache.skywalking:apm-toolkit-trace to wrap the param, but you need to face another problem. This RunnableWrapper
+has a plugin whose active condition is checking if there is @TraceCrossThread. Agent core uses net.bytebuddy.pool.TypePool.Default.WithLazyResolution.LazyTypeDescription to find the annotations
+of a class. The LazyTypeDescription finds annotations by using a URLClassLoader with no urls if the classloader is
+null(bootstrap classloader). So it can not find the @TraceCrossThread class unless you change the LocationStrategy of
+SkyWalking java agent builder.&lt;/p&gt;
+&lt;p&gt;In &lt;a href=&#34;https://github.com/libinglong/skywalking-threadpool-agent&#34;&gt;this project&lt;/a&gt;, I write my own wrapper class,
+and simply add a plugin with a name match condition.
+Next, Let me show you how these two agents work together.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Move the plugin to the skywalking &amp;ldquo;plugins&amp;rdquo; directory.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;plugin.png&#34; alt=&#34;plugin&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sky-plugins.png&#34; alt=&#34;plugins directory&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add this agent after the SkyWalking agent since the wrapper class should not be loaded before
+SkyWalking agent instrumentation have finished. For example,&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;java -javaagent:/path/to/skywalking-agent.jar -javaagent:/path/to/skywalking-tool-agent-v1.0.0.jar &amp;hellip;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;agent.png&#34; alt=&#34;agent.png&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;When our application runs&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;SkyWalking java agent adds a transformer by parsing the plugin for enhancing the wrapper class in the tool agent.&lt;/li&gt;
+&lt;li&gt;The tool agent loads the wrapper class into bootstrap classloader. This triggers the previous transformer.&lt;/li&gt;
+&lt;li&gt;The tool agent applies an advice to the ThreadPoolExecutor class, wrapping the java.lang.Runnable param of &amp;ldquo;execute&amp;rdquo; method with the wrapper class.&lt;/li&gt;
+&lt;li&gt;Now SkyWalking propagates the context with the wrapper class.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Enjoy tracing with ThreadPoolExecutor in SkyWalking!&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache SkyWalking: Use Profiling to Fix the Blind Spot of Distributed Tracing</title>
+      <link>/blog/2020-04-13-apache-skywalking-profiling/</link>
+      <pubDate>Mon, 13 Apr 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2020-04-13-apache-skywalking-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;This post originally appears on &lt;a href=&#34;https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/&#34;&gt;The New Stack&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;This post introduces a way to automatically profile code in production with &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;Apache SkyWalking&lt;/a&gt;. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis.&lt;/p&gt;
+&lt;h3 id=&#34;limitations-of-the-distributed-tracing&#34;&gt;Limitations of the Distributed Tracing&lt;/h3&gt;
+&lt;p&gt;In the early days, metrics and logging systems were the key solutions in monitoring platforms. With the adoption of microservice and distributed system-based architecture, distributed tracing has become more important. Distributed tracing provides relevant service context, such as system topology map and RPC parent-child relationships.&lt;/p&gt;
+&lt;p&gt;Some claim that distributed tracing is the best way to discover the cause of performance issues in a distributed system. It’s good at finding issues at the RPC abstraction, or in the scope of components instrumented with spans. However, it isn’t that perfect.&lt;/p&gt;
+&lt;p&gt;Have you been surprised to find a span duration longer than expected, but no insight into why? What should you do next? Some may think that the next step is to add more instrumentation, more spans into the trace, thinking that you would eventually find the root cause, with more data points. We’ll argue this is not a good option within a production environment. Here’s why:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;There is a risk of application overhead and system overload. Ad-hoc spans measure the performance of specific scopes or methods, but picking the right place can be difficult. To identify the precise cause, you can “instrument” (add spans to) many suspicious places. The additional instrumentation costs more CPU and memory in the production environment. Next, ad-hoc instrumentation that didn’t help is often forgotten, not deleted. This creates a valueless overhead load. In the worst case, excess instrumentation can cause performance problems in the production app or overload the tracing system.&lt;/li&gt;
+&lt;li&gt;The process of ad-hoc (manual) instrumentation usually implies at least a restart. Trace instrumentation libraries, like Zipkin Brave, are integrated into many framework libraries. To instrument a method’s performance typically implies changing code, even if only an annotation. This implies a re-deploy. Even if you have the way to do auto instrumentation, like Apache SkyWalking, you still need to change the configuration and reboot the app. Otherwise, you take the risk of GC caused by hot dynamic instrumentation.&lt;/li&gt;
+&lt;li&gt;Injecting instrumentation into an uninstrumented third party library is hard and complex. It takes more time and many won’t know how to do this.&lt;/li&gt;
+&lt;li&gt;Usually, we don’t have code line numbers in the distributed tracing. Particularly when lambdas are in use, it can be difficult to identify the line of code associated with a span.
+Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/p&gt;
+&lt;h3 id=&#34;profiling-in-production&#34;&gt;Profiling in Production&lt;/h3&gt;
+&lt;h4 id=&#34;introduction&#34;&gt;Introduction&lt;/h4&gt;
+&lt;p&gt;To reuse distributed tracing to achieve method scope precision requires an understanding of the above limitations and a different approach. We called it PROFILE.&lt;/p&gt;
+&lt;p&gt;Most high-level languages build and run on a thread concept. The profile approach takes continuous thread dumps. We merge the thread dumps to estimate the execution time of every method shown in the thread dumps. The key for distributed tracing is the tracing context, identifiers active (or current) for the profiled method. Using this trace context, we can weave data harvested from profiling into existing traces. This allows the system to automate otherwise ad-hoc instrumentation. Let’s dig deeper into how profiling works:&lt;/p&gt;
+&lt;p&gt;We consider a method invocation with the same stack depth and signature (method, line number etc), the same operation. We derive span timestamps from the thread dumps the same operation is in. Let’s put this visually:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-1.png&#34; alt=&#34;span timespaces&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Above, represents 10 successive thread dumps. If this method is in dumps 4-8, we assume it started before dump 4 and finished after dump 8. We can’t tell exactly when the method started and stopped. but the timestamps of thread dumps are close enough.&lt;/p&gt;
+&lt;p&gt;To reduce overhead caused by thread dumps, we only profile methods enclosed by a specific entry point, such as a URI or MVC Controller method. We identify these entry points through the trace context and the APM system.&lt;/p&gt;
+&lt;p&gt;The profile does thread dump analysis and gives us:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The root cause, precise to the line number in the code.&lt;/li&gt;
+&lt;li&gt;Reduced maintenance as ad-hoc instrumentation is obviated.&lt;/li&gt;
+&lt;li&gt;Reduced overload risk caused by ad-hoc instrumentation.&lt;/li&gt;
+&lt;li&gt;Dynamic activation: only when necessary and with a very clear profile target.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;implementing-precise-profiling-with-apache-skywalking-7&#34;&gt;Implementing Precise Profiling with Apache SkyWalking 7&lt;/h3&gt;
+&lt;p&gt;Distributed profiling is built-into Apache SkyWalking application performance monitoring (APM). Let’s demonstrate how the profiling approach locates the root cause of the performance issue.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;final CountDownLatchcountDownLatch= new CountDownLatch(2);
+ 
+threadPool.submit(new Task1(countDownLatch));
+threadPool.submit(new Task2(countDownLatch));
+ 
+try {
+   countDownLatch.await(500, TimeUnit.MILLISECONDS);
+} catch (InterruptedExceptione) {
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Task1 and Task2 have a race condition and unstable execution time: they will impact the performance of each other and anything calling them. While this code looks suspicious, it is representative of real life. People in the OPS/SRE team are not usually aware of all code changes and who did them. They only know something in the new code is causing a problem.&lt;/p&gt;
+&lt;p&gt;To make matters interesting, the above code is not always slow: it only happens when the condition is locked. In SkyWalking APM, we have metrics of endpoint p99/p95 latency, so, we are easy to find out the p99 of this endpoint is far from the avg response time. However, this is not the same as understanding the cause of the latency. To locate the root cause, add a profile condition to this endpoint: duration greater than 500ms. This means faster executions will not add profiling load.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-2.png&#34; alt=&#34;profiled segment&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is a typical profiled trace segment (part of the whole distributed trace) shown on the SkyWalking UI. We now notice the “service/processWithThreadPool” span is slow as we expected, but why? This method is the one we added the faulty code to. As the UI shows that method, we know the profiler is working. Now, let’s see what the profile analysis result say.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-3.png&#34; alt=&#34;profile analysis&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is the profile analysis stack view. We see the stack element names, duration (include/exclude the children) and slowest methods have been highlighted. It shows clearly, “sun.misc.Unsafe.park” costs the most time. If we look for the caller, it is the code we added: &lt;strong&gt;CountDownLatch.await&lt;/strong&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;the-limitations-of-the-profile-method&#34;&gt;The Limitations of the Profile Method&lt;/h3&gt;
+&lt;p&gt;No diagnostic tool can fit all cases, not even the profile method.&lt;/p&gt;
+&lt;p&gt;The first consideration is mistaking a repeatedly called method for a slow method. Thread dumps are periodic. If there is a loop of calling one method, the profile analysis result would say the target method is slow because it is captured every time in the dump process. There could be another reason. A method called many times can also end up captured in each thread dump. Even so, the profile did what it is designed for. It still helps the OPS/SRE team to locate the code having the issue.&lt;/p&gt;
+&lt;p&gt;The second consideration is overhead, the impact of repeated thread dumps is real and can’t be ignored. In SkyWalking, we set the profile dump period to at least 10ms. This means we can’t locate method performance issues if they complete in less than 10ms. SkyWalking has a threshold to control the maximum parallel degree as well.&lt;/p&gt;
+&lt;p&gt;Understanding the above keeps distributed tracing and APM systems useful for your OPS/SRE team.&lt;/p&gt;
+&lt;h3 id=&#34;how-to-try-this&#34;&gt;How to Try This&lt;/h3&gt;
+&lt;p&gt;Everything we discussed, including the Apache SkyWalking Java Agent, profile analysis code, and UI, could be found in our GitHub repository. We hope you enjoyed this new profile method, and love Apache SkyWalking. If so, &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
+&lt;p&gt;SkyWalking 7 has just been released. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt;. Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe to the mail list.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Understand distributed trace easier in the incoming 6-GA</title>
+      <link>/blog/2019-01-01-understand-trace/</link>
+      <pubDate>Tue, 01 Jan 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2019-01-01-understand-trace/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Distributed tracing is a necessary part of modern microservices architecture, but how to understand or use distributed tracing data is unclear to some end users. This blog overviews typical distributed tracing use cases with new visualization features in SkyWalking v6. We hope new users will understand more through these examples.&lt;/p&gt;
+&lt;h2 id=&#34;metric-and-topology&#34;&gt;Metric and topology&lt;/h2&gt;
+&lt;p&gt;Trace data underpins in two well known analysis features: &lt;strong&gt;metric&lt;/strong&gt; and &lt;strong&gt;topology&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Metric&lt;/strong&gt; of each service, service instance, endpoint are derived from entry spans in trace. Metrics represent response time performance. So, you could have average response time, 99% response time, success rate, etc. These are broken down by service, service instance, endpoint.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Topology&lt;/strong&gt; represents links between services and is distributed tracing&amp;rsquo;s most attractive feature. Topologies allows all users to understand distributed service relationships and dependencies even when they are varied or complex. This is important as it brings a single view to all interested parties, regardless of if they are a developer, designer or operator.&lt;/p&gt;
+&lt;p&gt;Here&amp;rsquo;s an example topology of 4 projects, including Kafka and two outside dependencies.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./demo-spring.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Topology in SkyWalking optional UI, RocketBot&lt;/p&gt;
+&lt;h2 id=&#34;trace&#34;&gt;Trace&lt;/h2&gt;
+&lt;p&gt;In a distributed tracing system, we spend a lot of resources(CPU, Memory, Disk and Network) to generate, transport and persistent trace data. Let&amp;rsquo;s try to answer why we do this? What are the typical diagnosis and system performance questions we can answer with trace data?&lt;/p&gt;
+&lt;p&gt;SkyWalking v6 includes two trace views:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;TreeMode: The first time provided. Help you easier to identify issues.&lt;/li&gt;
+&lt;li&gt;ListMode: Traditional view in time line, also usually seen in other tracing system, such as Zipkin.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;error-occurred&#34;&gt;Error occurred&lt;/h3&gt;
+&lt;p&gt;In the trace view, the easiest part is locating the error, possibly caused by a code exception or network fault. Both ListMode and TreeMode can identify errors, while the span detail screen provides details.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;span-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;ListMode error span&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;span-error-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;TreeMode error span&lt;/p&gt;
+&lt;h3 id=&#34;slow-span&#34;&gt;Slow span&lt;/h3&gt;
+&lt;p&gt;A high priority feature is identifying the slowest spans in a trace. This uses execution duration captured by application agents. In the old ListMode trace view, parent span almost always includes the child span&amp;rsquo;s duration, due to nesting. In other words, a slow span usually causes its parent to also become slow. In SkyWalking 6, we provide &lt;code&gt;Top 5 of slow span&lt;/code&gt; filter to help you locate the spans directly.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;top5-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Top 5 slow span&lt;/p&gt;
+&lt;p&gt;The above screenshot highlights the top 5 slow spans, excluding child span duration. Also, this shows all spans&#39; execution time, which helps identify the slowest ones.&lt;/p&gt;
+&lt;h3 id=&#34;too-many-child-spans&#34;&gt;Too many child spans&lt;/h3&gt;
+&lt;p&gt;In some cases, individual durations are quick, but the trace is still slow, like this one:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;top5-not-clear.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Trace with no slow span&lt;/p&gt;
+&lt;p&gt;To understand if the root problem is related to too many operations, use &lt;code&gt;Top 5 of children span number&lt;/code&gt;. This filter shows the amount of children each span has, highlighting the top 5.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;too-many-child.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;13 database accesses of a span&lt;/p&gt;
+&lt;p&gt;In this screenshot, there is a span with 13 children, which are all Database accesses. Also, when you see overview of trace, database cost 1380ms of this 2000ms trace.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;database-long-duration.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;1380ms database accesses&lt;/p&gt;
+&lt;p&gt;In this example, the root cause is too many database accesses. This is also typical in other scenarios like too many RPCs or cache accesses.&lt;/p&gt;
+&lt;h3 id=&#34;trace-depth&#34;&gt;Trace depth&lt;/h3&gt;
+&lt;p&gt;Trace depth is also related latency. Like the &lt;a href=&#34;#too-many-child-spans&#34;&gt;too many child spans&lt;/a&gt; scenario, each span latency looks good, but the whole trace is slow.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;deep-trace-1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;Trace depth&lt;/p&gt;
+&lt;p&gt;Here, the slowest spans are less than 500ms, which are not too slow for a 2000ms trace. When you see the first line, there are four different colors representing four services involved in this distributed trace. Every one of them costs 100~400ms. For all four, there nearly 2000ms. From here, we know this slow trace is caused by 3 RPCs in a serial sequence.&lt;/p&gt;
+&lt;h2 id=&#34;at-the-end&#34;&gt;At the end&lt;/h2&gt;
+&lt;p&gt;Distributed tracing and APM tools help users identify root causes, allowing development and operation teams to optimize accordingly. We hope you enjoyed this, and love Apache SkyWalking and our new trace visualization. If so, &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
+&lt;p&gt;SkyWalking 6 is scheduled to release at the end of January 2019. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt; . Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe the mail list.&lt;/li&gt;
+&lt;li&gt;Join &lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt; room.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,333 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Demo</title>
+    <link>/tags/demo/</link>
+    <description>Recent content in Demo on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Tue, 13 Dec 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/demo/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: How to run Apache SkyWalking on AWS EKS and RDS/Aurora</title>
+      <link>/blog/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</link>
+      <pubDate>Tue, 13 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking is an open source APM tool for monitoring and troubleshooting distributed systems,
+especially designed for microservices, cloud native and container-based (Docker, Kubernetes, Mesos)
+architectures. It provides distributed tracing, service mesh observability, metric aggregation and
+visualization, and alarm.&lt;/p&gt;
+&lt;p&gt;In this article, I will introduce how to quickly set up Apache SkyWalking on AWS EKS and RDS/Aurora,
+as well as a couple of sample services, monitoring services to observe SkyWalking itself.&lt;/p&gt;
+&lt;h2 id=&#34;prerequisites&#34;&gt;Prerequisites&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;AWS account&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html&#34;&gt;AWS CLI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/downloads.html&#34;&gt;Terraform&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/#kubectl&#34;&gt;kubectl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We can use the AWS web console or CLI to create all resources needed in this tutorial, but it can be
+too tedious and hard to debug when something goes wrong. So in this artical I will use Terraform to
+create all AWS resources, deploy SkyWalking, sample services, and load generator services (Locust).&lt;/p&gt;
+&lt;h2 id=&#34;architecture&#34;&gt;Architecture&lt;/h2&gt;
+&lt;p&gt;The demo architecture is as follows:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-mermaid&#34; data-lang=&#34;mermaid&#34;&gt;graph LR
+    subgraph AWS
+        subgraph EKS
+          subgraph istio-system namespace
+              direction TB
+              OAP[[SkyWalking OAP]]
+              UI[[SkyWalking UI]]
+            Istio[[istiod]]
+          end
+          subgraph sample namespace
+              Service0[[Service0]]
+              Service1[[Service1]]
+              ServiceN[[Service ...]]
+          end
+          subgraph locust namespace
+              LocustMaster[[Locust Master]]
+              LocustWorkers0[[Locust Worker 0]]
+              LocustWorkers1[[Locust Worker 1]]
+              LocustWorkersN[[Locust Worker ...]]
+          end
+        end
+        RDS[[RDS/Aurora]]
+    end
+    OAP --&amp;gt; RDS
+    Service0 -. telemetry data -.-&amp;gt; OAP
+    Service1 -. telemetry data -.-&amp;gt; OAP
+    ServiceN -. telemetry data -.-&amp;gt; OAP
+    UI --query--&amp;gt; OAP
+    LocustWorkers0 -- traffic --&amp;gt; Service0
+    LocustWorkers1 -- traffic --&amp;gt; Service0
+    LocustWorkersN -- traffic --&amp;gt; Service0
+    Service0 --&amp;gt; Service1 --&amp;gt; ServiceN
+    LocustMaster --&amp;gt; LocustWorkers0
+    LocustMaster --&amp;gt; LocustWorkers1
+    LocustMaster --&amp;gt; LocustWorkersN
+    User --&amp;gt; LocustMaster
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;As shown in the architecture diagram, we need to create the following AWS resources:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;EKS cluster&lt;/li&gt;
+&lt;li&gt;RDS instance or Aurora cluster&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Sounds simple, but there are a lot of things behind the scenes, such as VPC, subnets, security groups, etc.
+You have to configure them correctly to make sure the EKS cluster can connect to RDS instance/Aurora cluster
+otherwise the SkyWalking won&amp;rsquo;t work. Luckily, Terraform can help us to create and destroy all these resources
+automatically.&lt;/p&gt;
+&lt;p&gt;I have created a Terraform module to create all AWS resources needed in this tutorial, you can find it in the
+&lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/tree/main/aws&#34;&gt;GitHub repository&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;create-aws-resources&#34;&gt;Create AWS resources&lt;/h2&gt;
+&lt;p&gt;First, we need to clone the GitHub repository and &lt;code&gt;cd&lt;/code&gt; into the folder:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/kezhenxu94/oap-load-test.git
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then, we need to create a file named &lt;code&gt;terraform.tfvars&lt;/code&gt; to specify the AWS region and other variables:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;cat &amp;gt; terraform.tfvars &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_access_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_secret_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;cluster_name   = &amp;#34;skywalking-on-aws&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;region         = &amp;#34;ap-east-1&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;db_type        = &amp;#34;rds-postgresql&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;If you have already configured the AWS CLI, you can skip the &lt;code&gt;aws_access_key&lt;/code&gt; and &lt;code&gt;aws_secret_key&lt;/code&gt; variables.
+To install SkyWalking with RDS postgresql, set the &lt;code&gt;db_type&lt;/code&gt; to &lt;code&gt;rds-postgresql&lt;/code&gt;, to install SkyWalking with
+Aurora postgresql, set the &lt;code&gt;db_type&lt;/code&gt; to &lt;code&gt;aurora-postgresql&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;There are a lot of other variables you can configure, such as tags, sample services count, replicas, etc.,
+you can find them in the &lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/blob/main/aws/variables.tf&#34;&gt;variables.tf&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Then, we can run the following commands to initialize the Terraform module and download the required providers,
+then create all AWS resources:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform init
+terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Type &lt;code&gt;yes&lt;/code&gt; to confirm the creation of all AWS resources, or add the &lt;code&gt;-auto-approve&lt;/code&gt; flag to the &lt;code&gt;terraform apply&lt;/code&gt;
+to skip the confirmation:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now what you need to do is to wait for the creation of all AWS resources to complete, it may take a few minutes.
+You can check the progress of the creation in the AWS web console, and check the deployment progress of the services
+inside the EKS cluster.&lt;/p&gt;
+&lt;h2 id=&#34;generate-traffic&#34;&gt;Generate traffic&lt;/h2&gt;
+&lt;p&gt;Besides creating necessary AWS resources, the Terraform module also deploys SkyWalking, sample services, and Locust
+load generator services to the EKS cluster.&lt;/p&gt;
+&lt;p&gt;You can access the Locust web UI to generate traffic to the sample services:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;open http://&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get svc -n locust -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;locust-master -o &lt;span style=&#34;color:#008080&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{.items[0].status.loadBalancer.ingress[0].hostname}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;:8089
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The command opens the browser to the Locust web UI, you can configure the number of users and hatch rate to generate
+traffic.&lt;/p&gt;
+&lt;h2 id=&#34;observe-skywalking&#34;&gt;Observe SkyWalking&lt;/h2&gt;
+&lt;p&gt;You can access the SkyWalking web UI to observe the sample services.&lt;/p&gt;
+&lt;p&gt;First you need to forward the SkyWalking UI port to local&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl -n istio-system port-forward &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl -n istio-system get pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking -l &lt;span style=&#34;color:#008080&#34;&gt;component&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;ui -o name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;And then open the browser to http://localhost:8080 to access the SkyWalking web UI.&lt;/p&gt;
+&lt;h2 id=&#34;observe-rdsaurora&#34;&gt;Observe RDS/Aurora&lt;/h2&gt;
+&lt;p&gt;You can also access the RDS/Aurora web console to observe the performance of RDS/Aurora instance/Aurora cluste.&lt;/p&gt;
+&lt;h2 id=&#34;test-results&#34;&gt;Test Results&lt;/h2&gt;
+&lt;h3 id=&#34;test-1-skywalking-with-eks-and-rds-postgresql&#34;&gt;Test 1: SkyWalking with EKS and RDS PostgreSQL&lt;/h3&gt;
+&lt;h4 id=&#34;service-traffic&#34;&gt;Service Traffic&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-cpm.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-performance&#34;&gt;RDS Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-performance&#34;&gt;SkyWalking Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;test-2-skywalking-with-eks-and-aurora-postgresql&#34;&gt;Test 2: SkyWalking with EKS and Aurora PostgreSQL&lt;/h3&gt;
+&lt;h4 id=&#34;service-traffic-1&#34;&gt;Service Traffic&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-cpm-skywalking.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-performance-1&#34;&gt;RDS Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-performance-1&#34;&gt;SkyWalking Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;clean-up&#34;&gt;Clean up&lt;/h2&gt;
+&lt;p&gt;When you are done with the demo, you can run the following command to destroy all AWS resources:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform destroy -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 如何在 AWS EKS 和 RDS/Aurora 上运行 Apache SkyWalking</title>
+      <link>/zh/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</link>
+      <pubDate>Tue, 13 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;介绍&#34;&gt;介绍&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 是一个开源的 APM 工具，用于监控分布式系统和排除故障，特别是为微服务、云原生和基于容器（Docker、Kubernetes、Mesos）的架构而设计。它提供分布式跟踪、服务网格可观测性、指标聚合和可视化以及警报。&lt;/p&gt;
+&lt;p&gt;在本文中，我将介绍如何在 AWS EKS 和 RDS/Aurora 上快速设置 Apache SkyWalking，以及几个示例服务，监控服务以观察 SkyWalking 本身。&lt;/p&gt;
+&lt;h2 id=&#34;先决条件&#34;&gt;先决条件&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;AWS 账号&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html&#34;&gt;AWS CLI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/downloads.html&#34;&gt;Terraform&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/#kubectl&#34;&gt;kubectl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我们可以使用 AWS Web 控制台或 CLI 来创建本教程所需的所有资源，但是当出现问题时，它可能过于繁琐且难以调试。因此，在本文中，我将使用 Terraform 创建所有 AWS 资源、部署 SkyWalking、示例服务和负载生成器服务 (Locust)。&lt;/p&gt;
+&lt;h2 id=&#34;架构&#34;&gt;架构&lt;/h2&gt;
+&lt;p&gt;演示架构如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-mermaid&#34; data-lang=&#34;mermaid&#34;&gt;graph LR
+    subgraph AWS
+        subgraph EKS
+          subgraph istio-system namespace
+              direction TB
+              OAP[[SkyWalking OAP]]
+              UI[[SkyWalking UI]]
+            Istio[[istiod]]
+          end
+          subgraph sample namespace
+              Service0[[Service0]]
+              Service1[[Service1]]
+              ServiceN[[Service ...]]
+          end
+          subgraph locust namespace
+              LocustMaster[[Locust Master]]
+              LocustWorkers0[[Locust Worker 0]]
+              LocustWorkers1[[Locust Worker 1]]
+              LocustWorkersN[[Locust Worker ...]]
+          end
+        end
+        RDS[[RDS/Aurora]]
+    end
+    OAP --&amp;gt; RDS
+    Service0 -. telemetry data -.-&amp;gt; OAP
+    Service1 -. telemetry data -.-&amp;gt; OAP
+    ServiceN -. telemetry data -.-&amp;gt; OAP
+    UI --query--&amp;gt; OAP
+    LocustWorkers0 -- traffic --&amp;gt; Service0
+    LocustWorkers1 -- traffic --&amp;gt; Service0
+    LocustWorkersN -- traffic --&amp;gt; Service0
+    Service0 --&amp;gt; Service1 --&amp;gt; ServiceN
+    LocustMaster --&amp;gt; LocustWorkers0
+    LocustMaster --&amp;gt; LocustWorkers1
+    LocustMaster --&amp;gt; LocustWorkersN
+    User --&amp;gt; LocustMaster
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;如架构图所示，我们需要创建以下 AWS 资源：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;EKS 集群&lt;/li&gt;
+&lt;li&gt;RDS 实例或 Aurora 集群&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;听起来很简单，但背后有很多东西，比如 VPC、子网、安全组等。你必须正确配置它们以确保 EKS 集群可以连接到 RDS 实例 / Aurora 集群，否则 SkyWalking 不会不工作。幸运的是，Terraform 可以帮助我们自动创建和销毁所有这些资源。&lt;/p&gt;
+&lt;p&gt;我创建了一个 Terraform 模块来创建本教程所需的所有 AWS 资源，您可以在 &lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/tree/main/aws&#34;&gt;GitHub 存储库&lt;/a&gt;中找到它。&lt;/p&gt;
+&lt;h2 id=&#34;创建-aws-资源&#34;&gt;创建 AWS 资源&lt;/h2&gt;
+&lt;p&gt;首先，我们需要将 GitHub 存储库克隆 &lt;code&gt;cd&lt;/code&gt; 到文件夹中：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/kezhenxu94/oap-load-test.git
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后，我们需要创建一个文件 &lt;code&gt;terraform.tfvars&lt;/code&gt; 来指定 AWS 区域和其他变量：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;cat &amp;gt; terraform.tfvars &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_access_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_secret_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;cluster_name   = &amp;#34;skywalking-on-aws&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;region         = &amp;#34;ap-east-1&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;db_type        = &amp;#34;rds-postgresql&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;如果您已经配置了 AWS CLI，则可以跳过 &lt;code&gt;aws_access_key&lt;/code&gt; 和 &lt;code&gt;aws_secret_key&lt;/code&gt; 变量。要使用 RDS postgresql 安装 SkyWalking，请将 &lt;code&gt;db_type&lt;/code&gt; 设置为 &lt;code&gt;rds-postgresql&lt;/code&gt;，要使用 Aurora postgresql 安装 SkyWalking，请将 &lt;code&gt;db_type&lt;/code&gt; 设置为 &lt;code&gt;aurora-postgresql&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;您可以配置许多其他变量，例如标签、示例服务计数、副本等，您可以在 variables.tf 中找到&lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/blob/main/aws/variables.tf&#34;&gt;它们&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;然后，我们可以运行以下命令来初始化 Terraform 模块并下载所需的提供程序，然后创建所有 AWS 资源：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform init
+terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;键入 &lt;code&gt;yes&lt;/code&gt; 以确认所有 AWS 资源的创建，或将标志 &lt;code&gt;-auto-approve&lt;/code&gt; 添加到 &lt;code&gt;terraform apply&lt;/code&gt; 以跳过确认：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;现在你需要做的就是等待所有 AWS 资源的创建完成，这可能需要几分钟的时间。您可以在 AWS Web 控制台查看创建进度，也可以查看 EKS 集群内部服务的部署进度。&lt;/p&gt;
+&lt;h2 id=&#34;产生流量&#34;&gt;产生流量&lt;/h2&gt;
+&lt;p&gt;除了创建必要的 AWS 资源外，Terraform 模块还将 SkyWalking、示例服务和 Locust 负载生成器服务部署到 EKS 集群。&lt;/p&gt;
+&lt;p&gt;您可以访问 Locust Web UI 以生成到示例服务的流量：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;open http://&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get svc -n locust -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;locust-master -o &lt;span style=&#34;color:#008080&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{.items[0].status.loadBalancer.ingress[0].hostname}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;:8089
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;该命令将浏览器打开到 Locust web UI，您可以配置用户数量和孵化率以生成流量。&lt;/p&gt;
+&lt;h2 id=&#34;观察-skywalking&#34;&gt;观察 SkyWalking&lt;/h2&gt;
+&lt;p&gt;您可以访问 SkyWalking Web UI 来观察示例服务。&lt;/p&gt;
+&lt;p&gt;首先需要将 SkyWalking UI 端口转发到本地：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl -n istio-system port-forward &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl -n istio-system get pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking -l &lt;span style=&#34;color:#008080&#34;&gt;component&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;ui -o name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后在浏览器中打开 http://localhost:8080 访问 SkyWalking web UI。&lt;/p&gt;
+&lt;h2 id=&#34;观察-rdsaurora&#34;&gt;观察 RDS/Aurora&lt;/h2&gt;
+&lt;p&gt;您也可以访问 RDS/Aurora web 控制台，观察 RDS/Aurora 实例 / Aurora 集群的性能。&lt;/p&gt;
+&lt;h2 id=&#34;试验结果&#34;&gt;试验结果&lt;/h2&gt;
+&lt;h3 id=&#34;测试-1使用-eks-和-rds-postgresql-的-skywalking&#34;&gt;测试 1：使用 EKS 和 RDS PostgreSQL 的 SkyWalking&lt;/h3&gt;
+&lt;h4 id=&#34;服务流量&#34;&gt;服务流量&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-cpm.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-性能&#34;&gt;RDS 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-性能&#34;&gt;SkyWalking 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;测试-2使用-eks-和-aurora-postgresql-的-skywalking&#34;&gt;测试 2：使用 EKS 和 Aurora PostgreSQL 的 SkyWalking&lt;/h3&gt;
+&lt;h4 id=&#34;服务流量-1&#34;&gt;服务流量&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-cpm-skywalking.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-性能-1&#34;&gt;RDS 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-性能-1&#34;&gt;SkyWalking 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;清理&#34;&gt;清理&lt;/h2&gt;
+&lt;p&gt;完成演示后，您可以运行以下命令销毁所有 AWS 资源：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform destroy -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: [Video] Distributed tracing demo using Apache SkyWalking and Kong API Gateway</title>
+      <link>/blog/2022-08-11-kongcast-20-distributed-tracing-using-skywalking-kong/</link>
+      <pubDate>Thu, 11 Aug 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-08-11-kongcast-20-distributed-tracing-using-skywalking-kong/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Observability essential when working with distributed systems. Built on 3 pillars of metrics, logging and
+tracing, having the right tools in place to quickly identify and determine the root cause of an issue in production
+is imperative. In this Kongcast interview, we explore the benefits of having observability and demo the use of
+Apache SkyWalking. We walk through the capabilities that SkyWalking offers out of the box and debug a common HTTP 500
+error using the tool.&lt;/p&gt;
+&lt;p&gt;Andrew Kew is interviewed by Viktor Gamov, a developer advocate at &lt;a href=&#34;https://konghq.com/&#34;&gt;Kong Inc&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Andrew is a highly passionate technologist with over 16 valuable years experience in building server side and cloud
+applications. Having spent the majority of his time in the Financial Services domain, his meritocratic rise to CTO of an
+Algorithmic Trading firm allowed him to not only steer the business from a technology standpoint, but build robust and
+scalable trading algorithms. His mantra is &amp;ldquo;right first time&amp;rdquo;, thus ensuring the projects or clients he is involved in
+are left in a better place than they were before he arrived.&lt;/p&gt;
+&lt;p&gt;He is the founder of a boutique software consultancy in the United Kingdom, &lt;a href=&#34;https://quadcorps.co.uk&#34;&gt;QuadCorps Ltd&lt;/a&gt;, working in the API and
+Integration Ecosystem space and is currently on a residency programme at &lt;a href=&#34;https://konghq.com/&#34;&gt;Kong Inc&lt;/a&gt; as a senior field engineer and
+technical account manager working across many of their enterprise strategic accounts.&lt;/p&gt;
+
+&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
+  &lt;iframe src=&#34;https://www.youtube.com/embed/r8e9ib0powM&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

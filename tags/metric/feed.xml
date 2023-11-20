@@ -1,0 +1,1371 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Metric</title>
+    <link>/tags/metric/</link>
+    <description>Recent content in Metric on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Thu, 16 Mar 2023 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/metric/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Build Grafana dashboards for Apache SkyWalking -- Native PromQL Support</title>
+      <link>/blog/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</link>
+      <pubDate>Thu, 16 Mar 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;As an application performance monitoring tool for distributed systems, Apache SkyWalking provides monitoring, tracing, diagnosing capabilities for distributed system in Cloud Native architecture.
+&lt;a href=&#34;https://prometheus.io/docs/introduction/overview/#what-is-prometheus&#34;&gt;Prometheus&lt;/a&gt; is an open-source systems monitoring and alerting toolkit with an active ecosystem.
+Especially Prometheus metrics receive widespread support through &lt;a href=&#34;https://prometheus.io/docs/instrumenting/exporters/#exporters-and-integrations&#34;&gt;exporters and integrations&lt;/a&gt;.
+&lt;a href=&#34;https://prometheus.io/docs/prometheus/latest/querying/basics/#querying-prometheus&#34;&gt;PromQL&lt;/a&gt; as Prometheus Querying Language containing a set of expressions and expose HTTP APIs to read metrics.&lt;/p&gt;
+&lt;p&gt;SkyWalking supports to ingest Prometheus metrics through &lt;a href=&#34;https://opentelemetry.io/ecosystem/integrations/&#34;&gt;OpenTelemetry collector&lt;/a&gt; and through the aggregate calculation of these metrics
+to provide a variety of systems monitoring, such as Linux Monitoring and Kubernetes monitoring.
+SkyWalking already provides &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;native UI&lt;/a&gt; and &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/&#34;&gt;GraphQL API&lt;/a&gt; for users.
+But as designed to provide wider ecological integration capabilities, since 9.4.0, it provides PromQL Service, the third-party systems or visualization platforms that already support PromQL (such as Grafana),
+could obtain metrics through it. SkyWalking users will benefit from it when they integrate with different systems.&lt;/p&gt;
+&lt;h2 id=&#34;what-is-promql-service-in-skywalking&#34;&gt;What is PromQL Service in SkyWalking?&lt;/h2&gt;
+&lt;p&gt;PromQL Service is a query engine on the top of SkyWalking native GraphQL query, with additional query stage calculation capabilities powered by Prometheus expressions.
+It can accept PromQL HTTP API requests, parse Prometheus expressions, and transform between Prometheus metrics and SkyWalking metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_1.png#pic_left&#34; alt=&#34;PromQL Service architecture&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The PromQL Service follows all PromQL&amp;rsquo;s protocols and grammar and users can use it as they would with PromQL.
+As SkyWalking is fundamentally different from Prometheus in terms of metric classification, format, storage, etc. PromQL Service doesn&amp;rsquo;t have to implement the full PromQL feature.
+Refer to the documentation for the &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#promql-service&#34;&gt;detail&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-basic-concepts&#34;&gt;SkyWalking Basic Concepts&lt;/h2&gt;
+&lt;p&gt;Here are some basic concepts and differences from Prometheus that users need to understand in order to use the PromQL service:
+Prometheus metrics specify the naming format and structure, the actual metric names and labels are determined by the client provider, and the details are stored.
+The user aggregates and calculates the metrics using the expression in PromQL.
+Unlike Prometheus, SkyWalking&amp;rsquo;s metric mechanism is built around the following core concepts with a hierarchical structure:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Layer: represents an abstract framework in computer science, such as Operating System(OS_LINUX layer), Kubernetes(k8s
+layer). This layer would be the owner of different services detected from different technologies. All Layers definitions can be found &lt;a href=&#34;https://github.com/apache/skywalking/blob/master/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java&#34;&gt;here&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Service: Represents a set/group of workloads which provides the same behaviors for incoming requests.&lt;/li&gt;
+&lt;li&gt;Service Instance: An individual workload in the Service group.&lt;/li&gt;
+&lt;li&gt;Endpoint: A path in a service for incoming requests.&lt;/li&gt;
+&lt;li&gt;Process: An operating system process. In some scenarios, a &lt;code&gt;service instance&lt;/code&gt; is not a process, such as a pod Kubernetes could contain multiple processes.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The metric name and properties (labels) are configured by the SkyWalking OAP server based on the data source as well as OAL and MAL.
+SkyWalking provides the ability to down-sampling time series metrics, and generate different time bucket data (minute, hour, day).&lt;/p&gt;
+&lt;p&gt;The SkyWalking metric stream is as follows:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_3.png#pic_left&#34; alt=&#34;SkyWalking metrics stream&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;traffic&#34;&gt;Traffic&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;The metadata of the
+Service/ServiceRelation/Instance/ServiceInstanceRelation/Endpoint/EndpointRelation/Process/ProcessRelation.
+Include names, layers, properties, relations between them, etc.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;metric&#34;&gt;Metric&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Name: metric name, configuration from OAL and MAL.&lt;/li&gt;
+&lt;li&gt;Entity: represents the metrics&#39; belonging and used for the query.
+An Entity will contain the following information depending on the &lt;code&gt;Scope&lt;/code&gt;：
+Scope represents the metrics level and in query stage represents the Scope catalog,
+Scope catalog provides high-dimension classifications for all scopes as a hierarchy structure.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Scope&lt;/th&gt;
+&lt;th&gt;Entity Info&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Service&lt;/td&gt;
+&lt;td&gt;Service(include layer info)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstance&lt;/td&gt;
+&lt;td&gt;Service, ServiceInstance&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Endpoint&lt;/td&gt;
+&lt;td&gt;Service, Endpoint&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceRelation&lt;/td&gt;
+&lt;td&gt;Service, DestService&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstanceRelation&lt;/td&gt;
+&lt;td&gt;ServiceInstance, DestServiceInstance&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;EndpointRelation&lt;/td&gt;
+&lt;td&gt;Endpoint, DestEndpoint&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process&lt;/td&gt;
+&lt;td&gt;Service, ServiceInstance, Process&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ProcessRelation&lt;/td&gt;
+&lt;td&gt;Process,  ServiceInstance, DestProcess&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;Value:&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol&gt;
+&lt;li&gt;single value: long.&lt;/li&gt;
+&lt;li&gt;labeled value: text, &lt;code&gt;label1,value1|label2,value2|...&lt;/code&gt;, such as &lt;code&gt;L2 aggregation,5000 | L1 aggregation,8000&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;TimeBucket: the time is accurate to minute, hour, day.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;how-to-use-promql-service&#34;&gt;How to use PromQL Service&lt;/h2&gt;
+&lt;h3 id=&#34;setup&#34;&gt;Setup&lt;/h3&gt;
+&lt;p&gt;PromQL Service is enabled by default after v9.4.0, so no additional configuration is required.
+The default ports, for example, can be configured by using OAP environment variables:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;restHost: ${SW_PROMQL_REST_HOST:0.0.0.0}
+restPort: ${SW_PROMQL_REST_PORT:9090}
+restContextPath: ${SW_PROMQL_REST_CONTEXT_PATH:/}
+restMaxThreads: ${SW_PROMQL_REST_MAX_THREADS:200}
+restIdleTimeOut: ${SW_PROMQL_REST_IDLE_TIMEOUT:30000}
+restAcceptQueueSize: ${SW_PROMQL_REST_QUEUE_SIZE:0}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;use-prometheus-expression&#34;&gt;Use Prometheus expression&lt;/h3&gt;
+&lt;p&gt;PromQL matches metric through the Prometheus expression. Here is a typical Prometheus metric.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_2.png#pic_left&#34; alt=&#34;Prometheus metric&#34;&gt;&lt;/p&gt;
+&lt;p&gt;To match the metric, the Prometheus expression is as follows:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_4.png#pic_left&#34; alt=&#34;Prometheus expression&#34;&gt;&lt;/p&gt;
+&lt;p&gt;In the PromQL Service, these reserved labels would be parsed as the metric name and entity info fields with other labels for the query. The mappings are as follows.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;SkyWalking Concepts&lt;/th&gt;
+&lt;th&gt;Prometheus expression&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Metric name&lt;/td&gt;
+&lt;td&gt;Metric name&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Layer&lt;/td&gt;
+&lt;td&gt;Label&lt;layer&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Service&lt;/td&gt;
+&lt;td&gt;Label&lt;service&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstance&lt;/td&gt;
+&lt;td&gt;Label&amp;lt;service_instance&amp;gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Endpoint&lt;/td&gt;
+&lt;td&gt;Label&lt;endpoint&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&amp;hellip;&lt;/td&gt;
+&lt;td&gt;&amp;hellip;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For example, the following expressions are used to match query metrics: service_cpm, service_instance_cpm, endpoint_cpm&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_cpm{service=&amp;#39;agent::songs&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;}
+service_instance_cpm{service=&amp;#39;agent::songs&amp;#39;, service_instance=&amp;#39;agent::songs_instance_1&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;}
+endpoint_cpm{service=&amp;#39;agent::songs&amp;#39;, endpoint=&amp;#39;GET:/songs&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;} 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;typical-query-example&#34;&gt;Typical Query Example&lt;/h3&gt;
+&lt;p&gt;At here, we take the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;SkyWalking Showcase&lt;/a&gt; deployment as the playground to demonstrate how to use PromQL for SkyWalking metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_5.png&#34; alt=&#34;Example Services&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The following examples can be used to query the metadata and metrics of services through PromQL Service.&lt;/p&gt;
+&lt;h4 id=&#34;get-metrics-names&#34;&gt;Get metrics names&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://localhost:9099/api/v1/label/__name__/values
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_mysql_instance_qps&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;envoy_cluster_up_rq_active&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;instance_jvm_class_loaded_class_count&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;k8s_cluster_memory_requests&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_used&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_apisix_sv_bandwidth_unmatched&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_total&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;...&lt;/span&gt;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;select-a-metric-and-get-the-labels&#34;&gt;Select a metric and get the labels&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://localhost:9099/api/v1/labels?match[]=service_cpm
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;top_n&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;order&amp;#34;&lt;/span&gt;
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;get-services-from-a-specific-layer&#34;&gt;Get services from a specific layer&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://127.0.0.1:9099/api/v1/series?match[]=service_traffic{layer=&amp;#39;GENERAL&amp;#39;}&amp;amp;start=1677479336&amp;amp;end=1677479636
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::recommendation&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::app&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::gateway&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::frontend&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        }
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;query-specific-metric-for-a-service&#34;&gt;Query specific metric for a service&lt;/h4&gt;
+&lt;p&gt;Query:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;http://127.0.0.1:9099/api/v1/query?query=service_cpm{service=&amp;#39;agent::songs&amp;#39;, layer=&amp;#39;GENERAL&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: {
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;resultType&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;vector&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;result&amp;#34;&lt;/span&gt;: [
+      {
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;metric&amp;#34;&lt;/span&gt;: {
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;
+        },
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;value&amp;#34;&lt;/span&gt;: [
+          &lt;span style=&#34;color:#099&#34;&gt;1679559960&lt;/span&gt;,
+          &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;6&amp;#34;&lt;/span&gt;
+        ]
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;About the &lt;code&gt;range query&lt;/code&gt; and different &lt;code&gt;metrics type for query&lt;/code&gt; can refer to the document &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;build-grafana-dashboard&#34;&gt;Build Grafana Dashboard&lt;/h2&gt;
+&lt;p&gt;From the above, we know the mechanism and how to query from PromQL Service, now we can build the Grafana Dashboard for the above service example.
+&lt;strong&gt;Note&lt;/strong&gt;: All the following configurations are based on Grafana version 9.1.0.&lt;/p&gt;
+&lt;p&gt;SkyWalking Showcase provides dashboards files such as services of &lt;code&gt;General&lt;/code&gt; and &lt;code&gt;Service Mesh&lt;/code&gt; layers，
+we can quickly create a dashboard for the &lt;code&gt;General&lt;/code&gt; layer service by importing the dashboard JSON file.&lt;/p&gt;
+&lt;p&gt;After the Grafana application is deployed, follow the steps below:&lt;/p&gt;
+&lt;h3 id=&#34;configure-data-source&#34;&gt;Configure Data Source&lt;/h3&gt;
+&lt;p&gt;First, we need to create a data source:
+In the data source config panel, chose &lt;code&gt;Prometheus&lt;/code&gt; and set the URL to the OAP server address, the default port is &lt;code&gt;9090&lt;/code&gt;.
+Here set the data source name &lt;code&gt;SkyWalking&lt;/code&gt; in case there are multiple Prometheus data sources.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;datasource.jpg&#34; alt=&#34;datasource.jpg&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;import-dashboard-file&#34;&gt;Import Dashboard File&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Create a dashboard folder named &lt;code&gt;SkyWalking&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-folder.jpg&#34; alt=&#34;dashboard-folder.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Import the dashboard file into Grafana, there are two ways to get the file:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;From &lt;a href=&#34;https://github.com/apache/skywalking-showcase/tree/main/deploy/platform/config/promql/dashboards&#34;&gt;SkyWalking Showcase&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Go to SkyWaking Demo: &lt;a href=&#34;https://skywalking.apache.org/#demo&#34;&gt;Preview metrics on Grafana&lt;/a&gt;, and export it from the &lt;code&gt;General Service&lt;/code&gt; dashboard.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-import.jpg&#34; alt=&#34;dashboard-import.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Done! Now we can see the dashboard is working, the services are in the drop-down list and the metrics are displayed on the panels.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard.jpg&#34; alt=&#34;dashboard.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This is an easy way to build, but we need to know how it works if we want to customize it.&lt;/p&gt;
+&lt;h3 id=&#34;how-the-dashboard-works&#34;&gt;How the dashboard works&lt;/h3&gt;
+&lt;h4 id=&#34;dashboard-settings&#34;&gt;Dashboard Settings&lt;/h4&gt;
+&lt;p&gt;Open the &lt;code&gt;Settings-Variables&lt;/code&gt; we can see the following variables:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-variables.jpg&#34; alt=&#34;dashboard-variables.jpg&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Let&amp;rsquo;s look at what each variable does:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$DS_SkyWalking&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This is a data source ty variable that specifies the Prometheus data source which was defined earlier as &lt;code&gt;SkyWalking&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-DS_SkyWalking.jpg&#34; alt=&#34;v-DS_SkyWalking.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$layer&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This is a constant type because in the &amp;lsquo;General Service&amp;rsquo; dashboard, all services belong to the &amp;lsquo;GENERAL&amp;rsquo; layer, so they can be used directly in each query
+&lt;strong&gt;Note&lt;/strong&gt; When you customize other layers, this value must be defined in the &lt;code&gt;Layer&lt;/code&gt; mentioned above.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-layer.jpg&#34; alt=&#34;v-layer.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Query type variable, to get all service names under this layer for the drop-down list.&lt;/p&gt;
+&lt;p&gt;Query expression:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;label_values(service_traffic{layer=&amp;#39;$layer&amp;#39;}, service)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The query expression will query HTTP API &lt;code&gt;/api/v1/series&lt;/code&gt; for service metadata in &lt;code&gt;$layer&lt;/code&gt; and fetch the service name according to the label(service).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-service.jpg&#34; alt=&#34;v-service.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service_instance&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Same as the &lt;code&gt;$service&lt;/code&gt; is a query variable that is used to select all instances of the service in the drop-down list.&lt;/p&gt;
+&lt;p&gt;Query expression:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;label_values(instance_traffic{layer=&amp;#39;$layer&amp;#39;, service=&amp;#39;$service&amp;#39;}, service_instance)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The query expression here not only specifies the &lt;code&gt;$layer&lt;/code&gt; but also contains the variable &lt;code&gt;$service&lt;/code&gt;, which is used to correlate with the services for the drop-down list.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Same as the &lt;code&gt;$service&lt;/code&gt; is a query variable that is used to select all endpoints of the service in the drop-down list.&lt;/p&gt;
+&lt;p&gt;Query expression:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;label_values(endpoint_traffic{layer=&amp;#39;$layer&amp;#39;, service=&amp;#39;$service&amp;#39;, keyword=&amp;#39;$endpoint_keyword&amp;#39;, limit=&amp;#39;$endpoint_limit&amp;#39;}, endpoint)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The query expression here specifies the &lt;code&gt;$layer&lt;/code&gt; and &lt;code&gt;$service&lt;/code&gt; which are used to correlate with the services for the drop-down list. And also
+accept variables &lt;code&gt;$endpoint_keyword&lt;/code&gt; and &lt;code&gt;$endpoint_limit&lt;/code&gt; as filtering condition.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_keyword&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;A text type variable that the user can input to filter the return value of &lt;code&gt;$endpoint&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_keyword.jpg&#34; alt=&#34;v-endpoint_keyword.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_limit&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Custom type, which the user can select to limit the maximum number of returned endpoints.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_limit.jpg&#34; alt=&#34;v-endpoint_limit.jpg&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;panel-configurations&#34;&gt;Panel Configurations&lt;/h4&gt;
+&lt;p&gt;There are several typical metrics panels on this dashboard, let&amp;rsquo;s see how it&amp;rsquo;s configured.&lt;/p&gt;
+&lt;h5 id=&#34;common-value-metrics&#34;&gt;Common Value Metrics&lt;/h5&gt;
+&lt;p&gt;Select &lt;code&gt;Time series chart&lt;/code&gt; panel &lt;code&gt;Service Apdex&lt;/code&gt; and click &lt;code&gt;edit&lt;/code&gt;.
+&lt;img src=&#34;panel-common-value.jpg&#34; alt=&#34;panel-common-value.jpg&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Query expression
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_apdex{service=&amp;#39;$service&amp;#39;, layer=&amp;#39;$layer&amp;#39;} / 10000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The metric scope is &lt;code&gt;Service&lt;/code&gt;, add labels &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;layer&lt;/code&gt; for the match, and the label value used the variables configured above.
+The calculation &lt;code&gt;Divided by 10000&lt;/code&gt; is used for matching the result units.
+The document for the query can refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#common-value-metrics&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;, because the metrics min time bucket in SkyWalking is 1m.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Connect null values --&amp;gt; Always&lt;/code&gt; and &lt;code&gt;Show points --&amp;gt; Always&lt;/code&gt; because when the query interval &amp;gt; 1 hour or 1 day SkyWalking returns
+the hour/day step metrics values.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h5 id=&#34;labeled-value-metrics&#34;&gt;Labeled Value Metrics&lt;/h5&gt;
+&lt;p&gt;Select &lt;code&gt;Time series chart&lt;/code&gt; panel &lt;code&gt;Service Response Time Percentile&lt;/code&gt; and click &lt;code&gt;edit&lt;/code&gt;.
+&lt;img src=&#34;panel-labeled-value.jpg&#34; alt=&#34;panel-labeled-value.jpg&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Query expression
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_percentile{service=&amp;#39;$service&amp;#39;, layer=&amp;#39;$layer&amp;#39;, labels=&amp;#39;0,1,2,3,4&amp;#39;, relabels=&amp;#39;P50,P75,P90,P95,P99&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The metric scope is &lt;code&gt;Service&lt;/code&gt;, add labels &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;layer&lt;/code&gt; for the match, and the label value used the variables configured above.
+Add &lt;code&gt;labels=&#39;0,1,2,3,4&#39;&lt;/code&gt; filter the result label, and add&lt;code&gt;relabels=&#39;P50,P75,P90,P95,P99&#39;&lt;/code&gt; rename the result label.
+The document for the query can refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#labeled-value-metrics&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;, because the metrics min time bucket in SkyWalking is 1m.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Connect null values --&amp;gt; Always&lt;/code&gt; and &lt;code&gt;Show points --&amp;gt; Always&lt;/code&gt; because when the query interval &amp;gt; 1 hour or 1 day SkyWalking returns
+the hour/day step metrics values.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Legend&lt;/code&gt; to &lt;code&gt;{{label}}&lt;/code&gt; for show up.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h5 id=&#34;sort-metrics&#34;&gt;Sort Metrics&lt;/h5&gt;
+&lt;p&gt;Select &lt;code&gt;Time series chart&lt;/code&gt; panel &lt;code&gt;Service Response Time Percentile&lt;/code&gt; and click &lt;code&gt;edit&lt;/code&gt;.
+&lt;img src=&#34;panel-sort-metric.jpg&#34; alt=&#34;panel-sort-metric.jpg&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Query expression
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;service_instance_cpm{parent_service=&amp;#39;$service&amp;#39;, layer=&amp;#39;$layer&amp;#39;, top_n=&amp;#39;10&amp;#39;, order=&amp;#39;DES&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The expression is used for query the sore metrics under service, so add labels &lt;code&gt;parent_service&lt;/code&gt; and &lt;code&gt;layer&lt;/code&gt; for the match.
+Add &lt;code&gt;top_n=&#39;10&#39;&lt;/code&gt; and &lt;code&gt;order=&#39;DES&#39;&lt;/code&gt; filter the result.
+The document for the query can refer to &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#sort-metrics&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;, because the metrics min time bucket in SkyWalking is 1m.&lt;/li&gt;
+&lt;li&gt;Set the &lt;code&gt;Calculation --&amp;gt; Latest*&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Set &lt;code&gt;Legend&lt;/code&gt; to &lt;code&gt;{{service_instance}}&lt;/code&gt; for show up.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we introduced what is the PromQL Service in SkyWalking and its background.
+Detailed how to use PromQL Service and the basic concepts related to SkyWalking, and show how to use PromQL Service to build Grafana dashboards for SkyWalking.&lt;/p&gt;
+&lt;p&gt;In the future, there will be more integrations by leveraging this protocol, such as CI/CD, HPA (scaling), etc.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 为 Apache SkyWalking 构建 Grafana Dashboard —— 原生 PromQL 支持</title>
+      <link>/zh/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</link>
+      <pubDate>Thu, 16 Mar 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-03-17-build-grafana-dashboards-for-apache-skywalking-native-promql-support/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 作为分布式系统的应用性能监控工具，提供了对云原生架构下的分布式系统的监控、跟踪、诊断能力。&lt;a href=&#34;https://prometheus.io/docs/introduction/overview/#what-is-prometheus&#34;&gt;Prometheus&lt;/a&gt; 是一个开源系统监控和警报工具包，具有活跃的生态系统。特别是 Prometheus 指标通过 &lt;a href=&#34;https://prometheus.io/docs/instrumenting/exporters/#exporters-and-integrations&#34;&gt;导出器和集成&lt;/a&gt; 得到广泛支持。 &lt;a href=&#34;https://prometheus.io/docs/prometheus/latest/querying/basics/#querying-prometheus&#34;&gt;PromQL&lt;/a&gt; 作为 Prometheus 查询语言，包含一组表达式并公开 HTTP API 以读取指标。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://opentelemetry.io/ecosystem/integrations/&#34;&gt;SkyWalking 支持通过 OpenTelemetry 收集器&lt;/a&gt; 摄取 Prometheus 指标，并通过这些指标的聚合计算提供多种系统监控，例如 Linux 监控和 Kubernetes 监控。SkyWalking 已经为用户提供了 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/ui/readme/&#34;&gt;原生 UI&lt;/a&gt; 和 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/&#34;&gt;GraphQL API&lt;/a&gt;。但为了提供更广泛的生态整合能力，从 9.4.0 开始，它提供了 PromQL 服务，已经支持 PromQL 的第三方系统或可视化平台（如 Grafana），可以通过它获取指标。SkyWalking 用户在与不同系统集成时将从中受益。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-中的-promql-服务是什么&#34;&gt;SkyWalking 中的 PromQL 服务是什么？&lt;/h2&gt;
+&lt;p&gt;PromQL 服务是 SkyWalking 原生 GraphQL 查询之上的查询引擎，具有由 Prometheus 表达式提供支持的附加查询阶段计算能力。它可以接受 PromQL HTTP API 请求，解析 Prometheus 表达式，并在 Prometheus 指标和 SkyWalking 指标之间进行转换。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_1.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;PromQL 服务遵循 PromQL 的所有协议和语法，用户可以像使用 PromQL 一样使用它。由于 SkyWalking 在度量分类、格式、存储等方面与 Prometheus 有根本不同，因此 PromQL 服务不必实现完整的 PromQL 功能。&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#promql-service&#34;&gt;有关详细信息&lt;/a&gt;，请参阅文档。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-基本概念&#34;&gt;SkyWalking 基本概念&lt;/h2&gt;
+&lt;p&gt;以下是用户使用 PromQL 服务需要了解的一些基本概念和与 Prometheus 的区别： Prometheus 指标指定命名格式和结构，实际指标名称和标签由客户端提供商确定，并存储详细信息。用户使用 PromQL 中的表达式聚合和计算指标。与 Prometheus 不同，SkyWalking 的度量机制是围绕以下具有层次结构的核心概念构建的：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;层（Layer）：表示计算机科学中的一个抽象框架，如 Operating System（OS_LINUX 层）、Kubernetes（k8s 层）。该层将是从不同技术检测到的不同服务的所有者。&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java&#34;&gt;可以在此处&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;找到所有层定义。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;服务：表示一组 / 一组工作负载，它为传入请求提供相同的行为。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;服务实例：服务组中的单个工作负载。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;端点：传入请求的服务路径。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;进程：操作系统进程。在某些场景下，&lt;code&gt;service instance&lt;/code&gt; 不是一个进程，比如一个 Kubernetes Pod 可能包含多个进程。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Metric 名称和属性（标签）由 SkyWalking OAP 服务器根据数据源以及 OAL 和 MAL 配置。SkyWalking 提供了对时间序列指标进行下采样（down-sampling），并生成不同时间段数据（分钟、小时、天）的能力。&lt;/p&gt;
+&lt;p&gt;SkyWalking 指标流如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_3.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;流量&#34;&gt;流量&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Service/ServiceRelation/Instance/ServiceInstanceRelation/Endpoint/EndpointRelation/Process/ProcessRelation 的元数据。包括名称、层、属性、它们之间的关系等。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;指标&#34;&gt;指标&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;名称（Name）：指标名称，来自 OAL 和 MAL 的配置。&lt;/li&gt;
+&lt;li&gt;实体（Entity）：表示指标的归属，用于查询。一个 Entity 根据 &lt;code&gt;Scope&lt;/code&gt; 不同会包含如下信息： Scope 代表指标级别，在查询阶段代表 Scope catalog，Scope catalog 为所有的 scope 提供了高维的分类，层次结构。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Scope&lt;/th&gt;
+&lt;th&gt;实体信息&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Service&lt;/td&gt;
+&lt;td&gt;服务（包括图层信息）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstance&lt;/td&gt;
+&lt;td&gt;服务、服务实例&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Endpoint&lt;/td&gt;
+&lt;td&gt;服务、端点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceRelation&lt;/td&gt;
+&lt;td&gt;服务，目标服务&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ServiceInstanceRelation&lt;/td&gt;
+&lt;td&gt;服务实例、目标服务实例&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;EndpointRelation&lt;/td&gt;
+&lt;td&gt;端点、目标端点&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process&lt;/td&gt;
+&lt;td&gt;服务、服务实例、流程&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ProcessRelation&lt;/td&gt;
+&lt;td&gt;进程、服务实例、DestProcess&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;值：&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol&gt;
+&lt;li&gt;单值：long&lt;/li&gt;
+&lt;li&gt;标签值：文本，&lt;code&gt;label1,value1|label2,value2|...&lt;/code&gt; ，例如 &lt;code&gt;L2 aggregation,5000 | L1 aggregation,8000&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;TimeBucket：时间精确到分钟、小时、天&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;如何使用-promql-服务&#34;&gt;如何使用 PromQL 服务&lt;/h2&gt;
+&lt;h3 id=&#34;设置&#34;&gt;设置&lt;/h3&gt;
+&lt;p&gt;PromQL 服务在 v9.4.0 之后默认开启，不需要额外配置。例如，可以使用 OAP 环境变量配置默认端口：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;restHost: ${SW_PROMQL_REST_HOST:0.0.0.0}
+restPort: ${SW_PROMQL_REST_PORT:9090}
+restContextPath: ${SW_PROMQL_REST_CONTEXT_PATH:/}
+restMaxThreads: ${SW_PROMQL_REST_MAX_THREADS:200}
+restIdleTimeOut: ${SW_PROMQL_REST_IDLE_TIMEOUT:30000}
+restAcceptQueueSize: ${SW_PROMQL_REST_QUEUE_SIZE:0}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;使用-prometheus-表达式&#34;&gt;使用 Prometheus 表达式&lt;/h3&gt;
+&lt;p&gt;PromQL 通过 Prometheus 表达式匹配指标。这是一个典型的 Prometheus 指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_2.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;为了匹配指标，Prometheus 表达式如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_4.png#pic_left&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;在 PromQL 服务中，这些保留的标签将被解析为度量名称和实体信息字段以及用于查询的其他标签。映射如下。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;SkyWalking 概念&lt;/th&gt;
+&lt;th&gt;Prometheus 表达&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;指标名称&lt;/td&gt;
+&lt;td&gt;指标名称&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;层&lt;/td&gt;
+&lt;td&gt;标签&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;服务&lt;/td&gt;
+&lt;td&gt;标签&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;服务实例&lt;/td&gt;
+&lt;td&gt;标签 &amp;lt;服务实例&amp;gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;端点&lt;/td&gt;
+&lt;td&gt;标签&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;……&lt;/td&gt;
+&lt;td&gt;……&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;例如，以下表达式用于匹配查询指标：service_cpm、service_instance_cpm、endpoint_cpm&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_cpm {service=&#39;agent::songs&#39;, layer=&#39;GENERAL&#39;}
+service_instance_cpm {service=&#39;agent::songs&#39;, service_instance=&#39;agent::songs_instance_1&#39;, layer=&#39;GENERAL&#39;}
+endpoint_cpm {service=&#39;agent::songs&#39;, endpoint=&#39;GET:/songs&#39;, layer=&#39;GENERAL&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;典型查询示例&#34;&gt;典型查询示例&lt;/h3&gt;
+&lt;p&gt;在这里，我们将 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;SkyWalking Showcase&lt;/a&gt; 部署作为 Playground 来演示如何使用 PromQL 获取 SkyWalking 指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;img_5.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;以下示例可用于通过 PromQL 服务查询服务的元数据和指标。&lt;/p&gt;
+&lt;h3 id=&#34;获取指标名称&#34;&gt;获取指标名称&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://localhost:9099/api/v1/label/__name__/values
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_mysql_instance_qps&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;envoy_cluster_up_rq_active&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;instance_jvm_class_loaded_class_count&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;k8s_cluster_memory_requests&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_used&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_apisix_sv_bandwidth_unmatched&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;meter_vm_memory_total&amp;#34;&lt;/span&gt;,
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;...&lt;/span&gt;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;选择一个指标并获取标签&#34;&gt;选择一个指标并获取标签&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://localhost:9099/api/v1/labels?match []=service_cpm
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;top_n&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;order&amp;#34;&lt;/span&gt;
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;从特定层获取服务&#34;&gt;从特定层获取服务&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://127.0.0.1:9099/api/v1/series?match []=service_traffic {layer=&#39;GENERAL&#39;}&amp;amp;start=1677479336&amp;amp;end=1677479636
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: [
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::recommendation&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::app&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::gateway&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        },
+        {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_traffic&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::frontend&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+            &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;
+        }
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;查询服务的特定指标&#34;&gt;查询服务的特定指标&lt;/h3&gt;
+&lt;p&gt;查询：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://127.0.0.1:9099/api/v1/query?query=service_cpm {service=&#39;agent::songs&#39;, layer=&#39;GENERAL&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;结果：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;{
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;status&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;success&amp;#34;&lt;/span&gt;,
+  &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;data&amp;#34;&lt;/span&gt;: {
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;resultType&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;vector&amp;#34;&lt;/span&gt;,
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;result&amp;#34;&lt;/span&gt;: [
+      {&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;metric&amp;#34;&lt;/span&gt;: {
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;__name__&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;service_cpm&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;layer&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;GENERAL&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;scope&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;Service&amp;#34;&lt;/span&gt;,
+          &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;service&amp;#34;&lt;/span&gt;: &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;agent::songs&amp;#34;&lt;/span&gt;
+        },&lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;value&amp;#34;&lt;/span&gt;: [
+          &lt;span style=&#34;color:#099&#34;&gt;1679559960&lt;/span&gt;,
+          &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;6&amp;#34;&lt;/span&gt;
+        ]
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;关于&lt;code&gt;range query&lt;/code&gt;和不同的&lt;code&gt;metrics type for query&lt;/code&gt; 可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service&#34;&gt;这里的&lt;/a&gt; 文档。&lt;/p&gt;
+&lt;h2 id=&#34;构建-grafana-dashboard&#34;&gt;构建 Grafana Dashboard&lt;/h2&gt;
+&lt;p&gt;从上面我们知道了 PromQL 服务的机制和查询方式，现在我们可以为上面的服务示例构建 Grafana Dashboard。&lt;strong&gt;注&lt;/strong&gt;：以下所有配置均基于 Grafana 9.1.0 版本。&lt;/p&gt;
+&lt;p&gt;SkyWalking Showcase 提供了 &lt;code&gt;General Service&lt;/code&gt; 和 &lt;code&gt;Service Mesh&lt;/code&gt; 层等 Dashboard 文件，我们可以通过导入 Dashboard JSON 文件快速为层服务创建 Dashboard。&lt;/p&gt;
+&lt;p&gt;部署 Grafana 应用程序后，请按照以下步骤操作：&lt;/p&gt;
+&lt;h3 id=&#34;配置数据源&#34;&gt;配置数据源&lt;/h3&gt;
+&lt;p&gt;首先，我们需要创建一个数据源： 在数据源配置面板中，选择 &lt;code&gt;Prometheus&lt;/code&gt; 并设置 URL 为 OAP 服务器地址，默认端口为 &lt;code&gt;9090&lt;/code&gt;。 &lt;code&gt;SkyWalking&lt;/code&gt; 如果有多个 Prometheus 数据源，请在此处设置数据源名称。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;datasource.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;导入-dashboard-文件&#34;&gt;导入 Dashboard 文件&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;创建一个名为 &lt;code&gt;SkyWalking&lt;/code&gt; 的 Dashboard 文件夹。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-folder.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;将 Dashboard 文件导入到 Grafana 中，有两种获取文件的方式：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;来自 &lt;a href=&#34;https://github.com/apache/skywalking-showcase/tree/main/deploy/platform/config/promql/dashboards&#34;&gt;SkyWalking Showcase&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;转到 SkyWaking Demo：&lt;a href=&#34;https://skywalking.apache.org/#demo&#34;&gt;在 Grafana 上预览指标&lt;/a&gt;，并将其从 &lt;code&gt;General Service&lt;/code&gt; Dashboard 导出。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-import.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;完毕！现在我们可以看到 Dashboard 正在运行，服务位于下拉列表中，指标显示在面板上。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这是一种简单的构建方式，但是如果我们想要自定义它，我们需要知道它是如何工作的。&lt;/p&gt;
+&lt;h3 id=&#34;dashboard-的工作原理&#34;&gt;Dashboard 的工作原理&lt;/h3&gt;
+&lt;h3 id=&#34;dashboard-设置&#34;&gt;Dashboard 设置&lt;/h3&gt;
+&lt;p&gt;打开 &lt;code&gt;Settings-Variables&lt;/code&gt; 我们可以看到如下变量：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard-variables.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;让我们看看每个变量的作用：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$DS_SkyWalking&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这是一个数据源 ty 变量，它指定了之前定义为 &lt;code&gt;SkyWalking&lt;/code&gt; 的 Prometheus 数据源。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-DS_SkyWalking.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$layer&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这是一个常量类型，因为在 &amp;lsquo;General Service&amp;rsquo; Dashboard 中，所有服务都属于 &amp;lsquo;GENERAL&amp;rsquo; 层，因此可以在每个查询中直接使用它们。注意，当您自定义其他层时，必须在 &lt;code&gt;Layer&lt;/code&gt; 上面定义该值。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-layer.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;查询类型变量，为下拉列表获取该层下的所有服务名称。&lt;/p&gt;
+&lt;p&gt;查询表达式：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;label_values (service_traffic {layer=&#39;$layer&#39;}, service)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;查询表达式将查询 HTTP API &lt;code&gt;/api/v1/series&lt;/code&gt;，以获取 &lt;code&gt;$layer&lt;/code&gt; 中服务元数据，并根据标签（服务）提取服务名称。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-service.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$service_instance&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;与 &lt;code&gt;$service&lt;/code&gt; 一样，是一个查询变量，用于在下拉列表中选择服务的所有实例。&lt;/p&gt;
+&lt;p&gt;查询表达式：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;label_values (instance_traffic {layer=&#39;$layer&#39;, service=&#39;$service&#39;}, service_instance)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;这里的查询表达式不仅指定了 &lt;code&gt;$layer&lt;/code&gt; 还包含 &lt;code&gt;$service&lt;/code&gt; 变量，用于关联下拉列表的服务。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;与 &lt;code&gt;$service&lt;/code&gt; 一样，是一个查询变量，用于在下拉列表中选择服务的所有端点。&lt;/p&gt;
+&lt;p&gt;查询表达式：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;label_values (endpoint_traffic {layer=&#39;$layer&#39;, service=&#39;$service&#39;, keyword=&#39;$endpoint_keyword&#39;, limit=&#39;$endpoint_limit&#39;}, endpoint)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;此处的查询表达式指定 &lt;code&gt;$layer&lt;/code&gt; 和 &lt;code&gt;$service&lt;/code&gt; 用于与下拉列表的服务相关联的。并且还接受 &lt;code&gt;$endpoint_keyword&lt;/code&gt; 和 &lt;code&gt;$endpoint_limit&lt;/code&gt; 变量作为过滤条件。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_keyword&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;一个文本类型的变量，用户可以输入它来过滤 &lt;code&gt;$endpoint&lt;/code&gt; 的返回值。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_keyword.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;$endpoint_limit&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;自定义类型，用户可以选择它以限制返回端点的最大数量。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;v-endpoint_limit.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;dashboard-配置&#34;&gt;Dashboard 配置&lt;/h3&gt;
+&lt;p&gt;这个 Dashboard 上有几个典型的指标面板，让我们看看它是如何配置的。&lt;/p&gt;
+&lt;h3 id=&#34;普通值指标&#34;&gt;普通值指标&lt;/h3&gt;
+&lt;p&gt;选择 &lt;code&gt;Time series chart&lt;/code&gt; 面板 &lt;code&gt;Service Apdex&lt;/code&gt; 并单击 &lt;code&gt;edit。&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;panel-common-value.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;查询表达式&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_apdex {service=&#39;$service&#39;, layer=&#39;$layer&#39;} / 10000
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;指标范围为 &lt;code&gt;Service&lt;/code&gt;，添加 &lt;code&gt;service&lt;/code&gt; 和 &lt;code&gt;layer&lt;/code&gt; 标签用于匹配，label 值使用上面配置的变量。该计算 &lt;code&gt;Divided by 10000&lt;/code&gt; 用于匹配结果单位。查询文档可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#common-value-metrics&#34;&gt;这里&lt;/a&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;，因为 SkyWalking 中的指标最小时间段是 1m。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Connect null values --&amp;gt; AlwaysShow points --&amp;gt; Always&lt;/code&gt;，因为当查询间隔大于 1 小时或 1 天时，SkyWalking 返回小时 / 天步长指标值。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;标签值指标&#34;&gt;标签值指标&lt;/h3&gt;
+&lt;p&gt;选择 &lt;code&gt;Time series chart&lt;/code&gt; 面板 &lt;code&gt;Service Response Time Percentile&lt;/code&gt; 并单击 &lt;code&gt;edit&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;panel-labeled-value.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;查询表达式&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_percentile {service=&#39;$service&#39;, layer=&#39;$layer&#39;, labels=&#39;0,1,2,3,4&#39;, relabels=&#39;P50,P75,P90,P95,P99&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;指标范围为 &lt;code&gt;Service&lt;/code&gt;，添加 &lt;code&gt;service&lt;/code&gt; 和 &lt;code&gt;layer&lt;/code&gt; 标签用于匹配，label 值使用上面配置的变量。添加 &lt;code&gt;labels=&#39;0,1,2,3,4&#39;&lt;/code&gt; 过滤结果标签，并添加 &lt;code&gt;relabels=&#39;P50,P75,P90,P95,P99&#39;&lt;/code&gt; 重命名结果标签。查询文档可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#labeled-value-metrics&#34;&gt;这里&lt;/a&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;，因为 SkyWalking 中的指标最小时间段是 1m。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Connect null values --&amp;gt; AlwaysShow points --&amp;gt; Always&lt;/code&gt;，因为当查询间隔 &amp;gt; 1 小时或 1 天时，SkyWalking 返回小时 / 天步长指标值。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Legend&lt;/code&gt; 为 &lt;code&gt;{{label}}&lt;/code&gt; 来展示。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;排序指标&#34;&gt;排序指标&lt;/h3&gt;
+&lt;p&gt;选择 &lt;code&gt;Time series chart&lt;/code&gt; 面板 &lt;code&gt;Service Response Time Percentile&lt;/code&gt; 并单击 &lt;code&gt;edit&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;panel-sort-metric.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;查询表达式&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;service_instance_cpm {parent_service=&#39;$service&#39;, layer=&#39;$layer&#39;, top_n=&#39;10&#39;, order=&#39;DES&#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;该表达式用于查询服务下的排序指标，因此添加标签 &lt;code&gt;parent_service&lt;/code&gt; 和 &lt;code&gt;layer&lt;/code&gt; 进行匹配。添加 &lt;code&gt;top_n=&#39;10&#39;&lt;/code&gt; 和 &lt;code&gt;order=&#39;DES&#39;&lt;/code&gt; 过滤结果。查询文档可以参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/promql-service/#sort-metrics&#34;&gt;这里&lt;/a&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Query options --&amp;gt; Min interval = 1m&lt;/code&gt;，因为 SkyWalking 中的指标最小时间段是 1m。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Calculation --&amp;gt; Latest*&lt;/code&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设置 &lt;code&gt;Legend&lt;/code&gt; 为 &lt;code&gt;{{service_instance}}&lt;/code&gt; 来展示。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;在这篇文章中，我们介绍了 SkyWalking 中的 PromQL 服务是什么以及它的背景。详细介绍了 PromQL 服务的使用方法和 SkyWalking 相关的基本概念，展示了如何使用 PromQL 服务为 SkyWalking 构建 Grafana Dashboard。&lt;/p&gt;
+&lt;p&gt;未来，将会有更多的集成利用这个协议，比如 CI/CD、HPA（缩放）等。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: eBPF enhanced HTTP observability - L7 metrics and tracing</title>
+      <link>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
+      <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;banner&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking is an open-source Application Performance Management system that helps users collect and aggregate logs, traces, metrics, and events for display on a UI. In the &lt;a href=&#34;/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;previous article&lt;/a&gt;, we introduced how to use Apache SkyWalking Rover to analyze the network performance issue in the service mesh environment. However, in business scenarios, users often rely on mature layer 7 protocols, such as HTTP, for interactions between systems. In this article, we will discuss how to use eBPF techniques to analyze performance bottlenecks of layer 7 protocols and how to enhance the tracing system using network sampling.&lt;/p&gt;
+&lt;p&gt;This article will show how to use &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; with &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; to enhance metrics and traces in HTTP observability.&lt;/p&gt;
+&lt;h2 id=&#34;http-protocol-analysis&#34;&gt;HTTP Protocol Analysis&lt;/h2&gt;
+&lt;p&gt;HTTP is one of the most common Layer 7 protocols and is usually used to provide services to external parties and for inter-system communication. In the following sections, we will show how to identify and analyze HTTP/1.x protocols.&lt;/p&gt;
+&lt;h3 id=&#34;protocol-identification&#34;&gt;Protocol Identification&lt;/h3&gt;
+&lt;p&gt;In HTTP/1.x, the client and server communicate through a single file descriptor (FD) on each side. Figure 1 shows the process of communication involving the following steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Connect/accept: The client establishes a connection with the HTTP server, or the server accepts a connection from the client.&lt;/li&gt;
+&lt;li&gt;Read/write (multiple times): The client or server reads and writes HTTPS requests and responses. A single request-response pair occurs within the same connection on each side.&lt;/li&gt;
+&lt;li&gt;Close: The client and server close the connection.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;To obtain HTTP content, it’s necessary to read it from the second step of this process. As defined in the &lt;a href=&#34;http://rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC&lt;/a&gt;, the content is contained within the data of the Layer 4 protocol and can be obtained by parsing the data. The request and response pair can be correlated because they both occur within the same connection on each side.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.png&#34; alt=&#34;Figure 1: HTTP communication timeline.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: HTTP communication timeline.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;http-pipeline&#34;&gt;HTTP Pipeline&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/HTTP_pipelining&#34;&gt;HTTP pipelining&lt;/a&gt; is a feature of HTTP/1.1 that enables multiple HTTP requests to be sent over a single TCP connection without waiting for the corresponding responses. This feature is important because it ensures that the order of the responses on the server side matches the order of the requests.&lt;/p&gt;
+&lt;p&gt;Figure 2 illustrates how this works. Consider the following scenario: an HTTP client sends multiple requests to a server, and the server responds by sending the HTTP responses in the same order as the requests. This means that the first request sent by the client will receive the first response from the server, the second request will receive the second response, and so on.&lt;/p&gt;
+&lt;p&gt;When designing HTTP parsing, we should follow this principle by adding request data to a list and removing the first item when parsing a response. This ensures that the responses are processed in the correct order.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.png&#34; alt=&#34;Figure 2: HTTP/1.1  pipeline.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: HTTP/1.1  pipeline.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;metrics&#34;&gt;Metrics&lt;/h3&gt;
+&lt;p&gt;Based on the identification of the HTTP content and process topology diagram mentioned in the previous article, we can combine these two to generate process-to-process metrics data.&lt;/p&gt;
+&lt;p&gt;Figure 3 shows the metrics that currently support the analysis between the two processes. Based on the HTTP request and response data, we can analyze the following data:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;Metrics Name&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Type&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Unit&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Description&lt;/strong&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Request CPM(Call Per Minute)&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The HTTP request count&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Response Status CPM(Call Per Minute)&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The count of per HTTP response status code&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Request Package Size&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Byte&lt;/td&gt;
+&lt;td&gt;The request package size&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Response Package Size&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Byte&lt;/td&gt;
+&lt;td&gt;The response package size&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Client Duration&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The duration of single HTTP response on the client side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Server Duration&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The duration of single HTTP response on the server side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;img src=&#34;f3.png&#34; alt=&#34;Figure 3: Process-to-process metrics.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Process-to-process metrics.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;http-and-trace&#34;&gt;HTTP and Trace&lt;/h2&gt;
+&lt;p&gt;During the HTTP process, if we unpack the HTTP requests and responses from raw data, we can use this data to correlate with the existing tracing system.&lt;/p&gt;
+&lt;h3 id=&#34;trace-context-identification&#34;&gt;Trace Context Identification&lt;/h3&gt;
+&lt;p&gt;In order to track the flow of requests between multiple services, the trace system usually creates a trace context when a request enters a service and passes it along to other services during the request-response process. For example, when an HTTP request is sent to another server, the trace context is included in the request header.&lt;/p&gt;
+&lt;p&gt;Figure 4 displays the raw content of an HTTP request intercepted by Wireshark. The trace context information generated by the Zipkin Tracing system can be identified by the “X-B3” prefix in the header. By using eBPF to intercept the trace context in the HTTP header, we can connect the current request with the trace system.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.png&#34; alt=&#34;Figure 4: View of HTTP headers in Wireshark.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: View of HTTP headers in Wireshark.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;trace-event&#34;&gt;Trace Event&lt;/h3&gt;
+&lt;p&gt;We have added the concept of an &lt;em&gt;event&lt;/em&gt; to traces. An event can be attached to a span and consists of start and end times, tags, and summaries, allowing us to attach any desired information to the Trace.&lt;/p&gt;
+&lt;p&gt;When performing eBPF network profiling, two events can be generated based on the request-response data. Figure 5 illustrates what happens when a service performs an HTTP request with profiling. The trace system generates &lt;em&gt;trace context&lt;/em&gt; information and sends it in the request. When the service executes in the kernel, we can generate an event for the corresponding trace span by interacting with the request-response data and execution time in the kernel space.&lt;/p&gt;
+&lt;p&gt;Previously, we could only observe the execution status in the user space. However, by combining traces and eBPF technologies, we can now also get more information about the current trace in the kernel space, which would impact less performance for the target service if we do similar things in the tracing SDK and agent.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.png&#34; alt=&#34;Figure 5: Logical view of profiling an HTTP request and response.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: Logical view of profiling an HTTP request and response.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;sampling&#34;&gt;Sampling&lt;/h3&gt;
+&lt;p&gt;To ensure efficient data storage and minimize unnecessary data sampling, we use a sampling mechanism for traces in our system. This mechanism triggers sampling only when certain conditions are met. We also provide a list of the top &lt;em&gt;N&lt;/em&gt; traces, which allows users to quickly access the relevant request information for a specific trace.&lt;/p&gt;
+&lt;p&gt;To help users easily identify and analyze relevant events, we offer three different sampling rules:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Slow Traces&lt;/strong&gt;: Sampling is triggered when the response time for a request exceeds a specified threshold.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Status [400, 500)&lt;/strong&gt;: Sampling is triggered when the response status code is greater than or equal to 400 and less than 500.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Status [500, 600)&lt;/strong&gt;: Sampling is triggered when the response status code is greater than or equal to 500 and less than 600.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In addition, we recognize that not all request or response raw data may be necessary for analysis. For example, users may be more interested in requesting data when trying to identify performance issues, while they may be more interested in response data when troubleshooting errors. As such, we also provide configuration options for request or response events to allow users to specify which type of data they would like to sample.&lt;/p&gt;
+&lt;h2 id=&#34;profiling-in-a-service-mesh&#34;&gt;Profiling in a Service Mesh&lt;/h2&gt;
+&lt;p&gt;The SkyWalking and SkyWalking Rover projects have already implemented the HTTP protocol &lt;em&gt;analyze&lt;/em&gt; and &lt;em&gt;trace&lt;/em&gt; associations. How do they perform when running in a service mesh environment?&lt;/p&gt;
+&lt;h3 id=&#34;deployment&#34;&gt;Deployment&lt;/h3&gt;
+&lt;p&gt;Figure 6 demonstrates the deployment of SkyWalking and SkyWalking Rover in a service mesh environment. SkyWalking Rover is deployed as a DaemonSet on each machine where a service is located and communicates with the SkyWalking backend cluster. It automatically recognizes the services on the machine and reports metadata information to the SkyWalking backend cluster. When a new network profiling task arises, SkyWalking Rover senses the task and analyzes the designated processes, collecting and aggregating network data before ultimately reporting it back to the SkyWalking backend service.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.png&#34; alt=&#34;Figure 6: SkyWalking rover deployment topology in a service mesh.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: SkyWalking rover deployment topology in a service mesh.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-systems&#34;&gt;Tracing Systems&lt;/h3&gt;
+&lt;p&gt;Starting from version 9.3.0, the SkyWalking backend fully supports all functions in the Zipkin server. Therefore, the SkyWalking backend can collect traces from both the SkyWalking and Zipkin protocols. Similarly, SkyWalking Rover can identify and analyze trace context in both the SkyWalking and Zipkin trace systems. In the following two sections, network analysis results will be displayed in the SkyWalking and Zipkin UI respectively.&lt;/p&gt;
+&lt;h4 id=&#34;skywalking&#34;&gt;SkyWalking&lt;/h4&gt;
+&lt;p&gt;When SkyWalking performs network profiling, similar to the TCP metrics in the &lt;a href=&#34;/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;previous article&lt;/a&gt;, the SkyWalking UI will first display the topology between processes. When you open the dashboard of the line representing the traffic metrics between processes, you can see the metrics of HTTP traffic from the “HTTP/1.x” tab and the sampled HTTP requests with tracing in the “HTTP Requests” tab.&lt;/p&gt;
+&lt;p&gt;As shown in Figure 7, there are three lists in the tab, each corresponding to a condition in the event sampling rules. Each list displays the traces that meet the pre-specified conditions. When you click on an item in the trace list, you can view the complete trace.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.png&#34; alt=&#34;Figure 7: Sampled HTTP requests within tracing context.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Sampled HTTP requests within tracing context.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you click on an item in the trace list, you can quickly view the specified trace. In Figure 8, we can see that in the current service-related span, there is a tag with a number indicating how many HTTP events are related to that trace span.&lt;/p&gt;
+&lt;p&gt;Since we are in a service mesh environment, each service involves interacting with Envoy. Therefore, the current span includes Envoy’s request and response information. Additionally, since the current service has both incoming and outgoing requests, there are events in the corresponding span.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.png&#34; alt=&#34;Figure 8: Events in the trace detail.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 8: Events in the trace detail.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When the span is clicked, the details of the span will be displayed. If there are events in the current span, the relevant event information will be displayed on a time axis. As shown in Figure 9, there are a total of 6 related events in the current Span. Each event represents a data sample of an HTTP request/response. One of the events spans multiple time ranges, indicating a longer system call time. It may be due to a blocked system call, depending on the implementation details of the HTTP request in different languages. This can also help us query the possible causes of errors.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.png&#34; alt=&#34;Figure 9: Events in one trace span.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 9: Events in one trace span.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Finally, we can click on a specific event to see its complete information. As shown in Figure 10, it displays the sampling information of a request, including the SkyWalking trace context protocol contained in the request header from the HTTP raw data. The raw request data allows you to quickly re-request the request to solve any issues.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.png&#34; alt=&#34;Figure 10: The detail of the event.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 10: The detail of the event.&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;zipkin&#34;&gt;Zipkin&lt;/h4&gt;
+&lt;p&gt;Zipkin is one of the most widely used distributed tracing systems in the world. SkyWalking can function as an &lt;a href=&#34;https://zipkin.io/pages/extensions_choices.html&#34;&gt;alternative server&lt;/a&gt; to provide advanced features for Zipkin users. Here, we use this way to bring the feature into the Zipkin ecosystem out-of-box. The new events would also be treated as a kind of Zipkin’s tags and annotations.&lt;/p&gt;
+&lt;p&gt;To add events to a Zipkin span, we need to do the following:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Split the start and end times of each event into two annotations with a canonical name.&lt;/li&gt;
+&lt;li&gt;Add the sampled HTTP raw data from the event to the Zipkin span tags, using the same event name for corresponding purposes.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Figures 11 and 12 show annotations and tags in the same span. In these figures, we can see that the span includes at least two events with the same event name and sequence suffix (e.g., “Start/Finished HTTP Request/Response Sampling-x” in the figure). Both events have separate timestamps to represent their relative times within the span. In the tags, the data content of the corresponding event is represented by the event name and sequence number, respectively.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.png&#34; alt=&#34;Figure 11: Event timestamp in the Zipkin span annotation.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 11: Event timestamp in the Zipkin span annotation.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.png&#34; alt=&#34;Figure 12: Event raw data in the Zipkin span tag.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 12: Event raw data in the Zipkin span tag.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, we demonstrate how to perform network profiling in a service mesh and complete metrics collection and HTTP raw data sampling. To follow along, you will need a running Kubernetes environment.&lt;/p&gt;
+&lt;h3 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking. For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.4.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;start-network-profiling-task&#34;&gt;Start Network Profiling Task&lt;/h3&gt;
+&lt;p&gt;Currently, we can select the specific instances that we wish to monitor by clicking the &lt;strong&gt;Data Plane&lt;/strong&gt; item in the &lt;strong&gt;Service Mesh&lt;/strong&gt; panel and the &lt;strong&gt;Service&lt;/strong&gt; item in the &lt;strong&gt;Kubernetes&lt;/strong&gt; panel.&lt;/p&gt;
+&lt;p&gt;In figure 13, we have selected an instance with a list of tasks in the network profiling tab.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f13.png&#34; alt=&#34;Figure 13: Network Profiling tab in the Data Plane.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 13: Network Profiling tab in the Data Plane.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When we click the Start button, as shown in Figure 14, we need to specify the sampling rules for the profiling task. The sampling rules consist of one or more rules, each of which is distinguished by a different URI regular expression. When the HTTP request URI matches the regular expression, the rule is used. If the URI regular expression is empty, the default rule is used. Using multiple rules can help us make different sampling configurations for different requests.&lt;/p&gt;
+&lt;p&gt;Each rule has three parameters to determine if sampling is needed:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Minimal Request Duration (ms)&lt;/strong&gt;: requests with a response time exceeding the specified time will be sampled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling response status code between 400 and 499&lt;/strong&gt;: all status codes in the range [400-499) will be sampled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling response status code between 500 and 599&lt;/strong&gt;: all status codes in the range [500-599) will be sampled.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Once the sampling configuration is complete, we can create the task.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f14.png&#34; alt=&#34;Figure 14: Create network profiling task page.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 14: Create network profiling task page.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;After a few seconds, you will see the process topology appear on the right side of the page.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f15.png&#34; alt=&#34;Figure 15&#34;&gt;&lt;/p&gt;
+&lt;p&gt;When you click on the line between processes, you can view the data between the two processes, which is divided into three tabs:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;TCP&lt;/strong&gt;: displays TCP-related metrics.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/1.x&lt;/strong&gt;: displays metrics in the HTTP 1 protocol.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP Requests&lt;/strong&gt;: displays the analyzed request and saves it to a list according to the sampling rule.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f16.png&#34; alt=&#34;Figure 16: TCP metrics in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 16: TCP metrics in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f17.png&#34; alt=&#34;Figure 17: HTTP/1.x metrics in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 17: HTTP/1.x metrics in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f18.png&#34; alt=&#34;Figure 18: HTTP sampled requests in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 18: HTTP sampled requests in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we detailed the overview of how to analyze the Layer 7 HTTP/1.x protocol in network analysis, and how to associate it with existing trace systems. This allows us to extend the scope of data we can observe from just user space to also include kernel-space data.&lt;/p&gt;
+&lt;p&gt;In the future, we will delve further into the analysis of kernel data, such as collecting information on TCP packet size, transmission frequency, network card, and help on enhancing distributed tracing from another perspective.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/next/readme/&#34;&gt;SkyWalking Rover Documentation ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;Diagnose Service Mesh Network Performance with eBPF blog post &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/&#34;&gt;SkyWalking Profiling Documentation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/&#34;&gt;SkyWalking Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;Zipkin Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC - Hypertext Transfer Protocol – HTTP/1.1 &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 使用 eBPF 提升 HTTP 可观测性 - L7 指标和追踪</title>
+      <link>/zh/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
+      <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;banner&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 是一个开源应用性能管理系统，帮助用户收集和聚合日志、追踪、指标和事件，并在 UI 上显示。在&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;上一篇文章&lt;/a&gt;中，我们介绍了如何使用 Apache SkyWalking Rover 分析服务网格环境中的网络性能问题。但是，在商业场景中，用户通常依靠成熟的第 7 层协议（如 HTTP）来进行系统之间的交互。在本文中，我们将讨论如何使用 eBPF 技术来分析第 7 层协议的性能瓶颈，以及如何使用网络采样来增强追踪系统。&lt;/p&gt;
+&lt;p&gt;本文将演示如何使用 &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; 与 &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; 来增强 HTTP 可观察性中的指标和追踪。&lt;/p&gt;
+&lt;h2 id=&#34;http-协议分析&#34;&gt;HTTP 协议分析&lt;/h2&gt;
+&lt;p&gt;HTTP 是最常用的 7 层协议之一，通常用于为外部方提供服务和进行系统间通信。在下面的章节中，我们将展示如何识别和分析 HTTP/1.x 协议。&lt;/p&gt;
+&lt;h3 id=&#34;协议识别&#34;&gt;协议识别&lt;/h3&gt;
+&lt;p&gt;在 HTTP/1.x 中，客户端和服务器通过两端的单个文件描述符（File Descriptor）进行通信。图 1 显示了涉及以下步骤的通信过程：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Connect/Accept：客户端与 HTTP 服务器建立连接，或者服务器接受客户端的连接。&lt;/li&gt;
+&lt;li&gt;Read/Write（多次）：客户端或服务器读取和写入 HTTPS 请求和响应。单个请求 - 响应对在每边的同一连接内发生。&lt;/li&gt;
+&lt;li&gt;Close：客户端和服务器关闭连接。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为了获取 HTTP 内容，必须从此过程的第二步读取它。根据 &lt;a href=&#34;http://rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC&lt;/a&gt; 定义，内容包含在 4 层协议的数据中，可以通过解析数据来获取。请求和响应对可以相关联，因为它们都在两端的同一连接内发生。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.png&#34; alt=&#34;图 1：HTTP 通信时间线。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1：HTTP 通信时间线。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;http-管线化&#34;&gt;HTTP 管线化&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/HTTP_pipelining&#34;&gt;HTTP 管线化（Pipelining）&lt;/a&gt;是 HTTP/1.1 的一个特性，允许在等待对应的响应的情况下在单个 TCP 连接上发送多个 HTTP 请求。这个特性很重要，因为它确保了服务器端的响应顺序必须与请求的顺序匹配。&lt;/p&gt;
+&lt;p&gt;图 2 说明了这是如何工作的，考虑以下情况：HTTP 客户端向服务器发送多个请求，服务器通过按照请求的顺序发送 HTTP 响应来响应。这意味着客户端发送的第一个请求将收到服务器的第一个响应，第二个请求将收到第二个响应，以此类推。&lt;/p&gt;
+&lt;p&gt;在设计 HTTP 解析时，我们应该遵循这个原则，将请求数据添加到列表中，并在解析响应时删除第一个项目。这可以确保响应按正确的顺序处理。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.png&#34; alt=&#34;图 2： HTTP/1.1 管道。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2： HTTP/1.1 管道。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;指标&#34;&gt;指标&lt;/h3&gt;
+&lt;p&gt;根据前文提到的 HTTP 内容和流程拓扑图的识别，我们可以将这两者结合起来生成进程间的指标数据。&lt;/p&gt;
+&lt;p&gt;图 3 显示了目前支持两个进程间分析的指标。基于 HTTP 请求和响应数据，可以分析以下数据：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;指标名称&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;类型&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;请求 CPM（Call Per Minute）&lt;/td&gt;
+&lt;td&gt;计数器&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;HTTP 请求计数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;响应状态 CPM (Call Per Minute)&lt;/td&gt;
+&lt;td&gt;计数器&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;每个 HTTP 响应状态码的计数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;请求包大小&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;字节&lt;/td&gt;
+&lt;td&gt;请求包大小&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;响应包大小&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;字节&lt;/td&gt;
+&lt;td&gt;响应包大小&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;客户端持续时间&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;客户端单个 HTTP 响应的持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;服务器持续时间&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;服务器端单个 HTTP 响应的持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;img src=&#34;f3.png&#34; alt=&#34;图 3：进程到进程指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3：进程到进程指标。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;http-和追踪&#34;&gt;HTTP 和追踪&lt;/h2&gt;
+&lt;p&gt;在 HTTP 过程中，如果我们能够从原始数据中解包 HTTP 请求和响应，就可以使用这些数据与现有的追踪系统进行关联。&lt;/p&gt;
+&lt;h3 id=&#34;追踪上下文标识&#34;&gt;追踪上下文标识&lt;/h3&gt;
+&lt;p&gt;为了追踪多个服务之间的请求流，追踪系统通常在请求进入服务时创建追踪上下文，并在请求 - 响应过程中将其传递给其他服务。例如，当 HTTP 请求发送到另一个服务器时，追踪上下文包含在请求头中。&lt;/p&gt;
+&lt;p&gt;图 4 显示了 Wireshark 拦截的 HTTP 请求的原始内容。由 Zipkin Tracing 系统生成的追踪上下文信息可以通过头中的 “X-B3” 前缀进行标识。通过使用 eBPF 拦截 HTTP 头中的追踪上下文，可以将当前请求与追踪系统连接起来。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.png&#34; alt=&#34;图 4：Wireshark 中的 HTTP Header 视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4：Wireshark 中的 HTTP Header 视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;trace-事件&#34;&gt;Trace 事件&lt;/h3&gt;
+&lt;p&gt;我们已经将事件这个概念加入了追踪中。事件可以附加到跨度上，并包含起始和结束时间、标签和摘要，允许我们将任何所需的信息附加到追踪中。&lt;/p&gt;
+&lt;p&gt;在执行 eBPF 网络分析时，可以根据请求 - 响应数据生成两个事件。图 5 说明了在带分析的情况下执行 HTTP 请求时发生的情况。追踪系统生成追踪上下文信息并将其发送到请求中。当服务在内核中执行时，我们可以通过与内核空间中的请求 - 响应数据和执行时间交互，为相应的追踪跨度生成事件。&lt;/p&gt;
+&lt;p&gt;以前，我们只能观察用户空间的执行状态。现在，通过结合追踪和 eBPF 技术，我们还可以在内核空间获取更多关于当前追踪的信息，如果我们在追踪 SDK 和代理中执行类似的操作，将对目标服务的性能产生较小的影响。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.png&#34; alt=&#34;图 5：分析 HTTP 请求和响应的逻辑视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5：分析 HTTP 请求和响应的逻辑视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;抽样&#34;&gt;抽样&lt;/h3&gt;
+&lt;p&gt;该机制仅在满足特定条件时触发抽样。我们还提供了前 N 条追踪的列表，允许用户快速访问特定追踪的相关请求信息。为了帮助用户轻松识别和分析相关事件，我们提供了三种不同的抽样规则：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;慢速追踪&lt;/strong&gt;：当请求的响应时间超过指定阈值时触发抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应状态 [400,500)&lt;/strong&gt;：当响应状态代码大于或等于 400 且小于 500 时触发抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应状态 [500,600)&lt;/strong&gt;：当响应状态代码大于或等于 500 且小于 600 时触发抽样。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;此外，我们认识到分析时可能并不需要所有请求或响应的原始数据。例如，当试图识别性能问题时，用户可能更感兴趣于请求数据，而在解决错误时，他们可能更感兴趣于响应数据。因此，我们还提供了请求或响应事件的配置选项，允许用户指定要抽样的数据类型。&lt;/p&gt;
+&lt;h2 id=&#34;服务网格中的分析&#34;&gt;服务网格中的分析&lt;/h2&gt;
+&lt;p&gt;SkyWalking Rover 项目已经实现了 HTTP 协议的分析和追踪关联。当在服务网格环境中运行时它们的表现如何？&lt;/p&gt;
+&lt;h3 id=&#34;部署&#34;&gt;部署&lt;/h3&gt;
+&lt;p&gt;图 6 演示了 SkyWalking 和 SkyWalking Rover 在服务网格环境中的部署方式。SkyWalking Rover 作为一个 DaemonSet 部署在每台服务所在的机器上，并与 SkyWalking 后端集群通信。它会自动识别机器上的服务并向 SkyWalking 后端集群报告元数据信息。当出现新的网络分析任务时，SkyWalking Rover 会感知该任务并对指定的进程进行分析，在最终将数据报告回 SkyWalking 后端服务之前，收集和聚合网络数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.png&#34; alt=&#34;图 6：服务网格中的 SkyWalking rover 部署拓扑。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6：服务网格中的 SkyWalking rover 部署拓扑。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;追踪系统&#34;&gt;追踪系统&lt;/h3&gt;
+&lt;p&gt;从版本 9.3.0 开始，SkyWalking 后端完全支持 Zipkin 服务器中的所有功能。因此，SkyWalking 后端可以收集来自 SkyWalking 和 Zipkin 协议的追踪。同样，SkyWalking Rover 可以在 SkyWalking 和 Zipkin 追踪系统中识别和分析追踪上下文。在接下来的两节中，网络分析结果将分别在 SkyWalking 和 Zipkin UI 中显示。&lt;/p&gt;
+&lt;h4 id=&#34;skywalking&#34;&gt;SkyWalking&lt;/h4&gt;
+&lt;p&gt;当 SkyWalking 执行网络分析时，与&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;前文中&lt;/a&gt;的 TCP 指标类似，SkyWalking UI 会首先显示进程间的拓扑图。当打开代表进程间流量指标的线的仪表板时，您可以在 “HTTP/1.x” 选项卡中看到 HTTP 流量的指标，并在 “HTTP Requests” 选项卡中看到带追踪的抽样的 HTTP 请求。&lt;/p&gt;
+&lt;p&gt;如图 7 所示，选项卡中有三个列表，每个列表对应事件抽样规则中的一个条件。每个列表显示符合预先规定条件的追踪。当您单击追踪列表中的一个项目时，就可以查看完整的追踪。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.png&#34; alt=&#34;图 7：Tracing 上下文中的采样 HTTP 请求。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7：Tracing 上下文中的采样 HTTP 请求。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您单击追踪列表中的一个项目时，就可以快速查看指定的追踪。在图 8 中，我们可以看到在当前的服务相关的跨度中，有一个带有数字的标签，表示与该追踪跨度相关的 HTTP 事件数。&lt;/p&gt;
+&lt;p&gt;由于我们在服务网格环境中，每个服务都涉及与 Envoy 交互。因此，当前的跨度包括 Envoy 的请求和响应信息。此外，由于当前的服务有传入和传出的请求，因此相应的跨度中有事件。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.png&#34; alt=&#34;图 8：Tracing 详细信息中的事件。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 8：Tracing 详细信息中的事件。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当单击跨度时，将显示跨度的详细信息。如果当前跨度中有事件，则相关事件信息将在时间轴上显示。如图 9 所示，当前跨度中一共有 6 个相关事件。每个事件代表一个 HTTP 请求 / 响应的数据样本。其中一个事件跨越多个时间范围，表示较长的系统调用时间。这可能是由于系统调用被阻塞，具体取决于不同语言中的 HTTP 请求的实现细节。这也可以帮助我们查询错误的可能原因。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.png&#34; alt=&#34;图 9：一个 Tracing 范围内的事件。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 9：一个 Tracing 范围内的事件。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;最后，我们可以单击特定的事件查看它的完整信息。如图 10 所示，它显示了一个请求的抽样信息，包括从 HTTP 原始数据中的请求头中包含的 SkyWalking 追踪上下文协议。原始请求数据允许您快速重新请求以解决任何问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.png&#34; alt=&#34;图 10：事件的详细信息。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 10：事件的详细信息。&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;zipkin&#34;&gt;Zipkin&lt;/h4&gt;
+&lt;p&gt;Zipkin 是世界上广泛使用的分布式追踪系统。SkyWalking 可以作为&lt;a href=&#34;https://zipkin.io/pages/extensions_choices.html&#34;&gt;替代服务器&lt;/a&gt;，提供高级功能。在这里，我们使用这种方式将功能无缝集成到 Zipkin 生态系统中。新事件也将被视为 Zipkin 的标签和注释的一种。&lt;/p&gt;
+&lt;p&gt;为 Zipkin 跨度添加事件，需要执行以下操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;将每个事件的开始时间和结束时间分别拆分为两个具有规范名称的注释。&lt;/li&gt;
+&lt;li&gt;将抽样的 HTTP 原始数据从事件添加到 Zipkin 跨度标签中，使用相同的事件名称用于相应的目的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;图 11 和图 12 显示了同一跨度中的注释和标签。在这些图中，我们可以看到跨度包含至少两个具有相同事件名称和序列后缀的事件（例如，图中的 “Start/Finished HTTP Request/Response Sampling-x”）。这两个事件均具有单独的时间戳，用于表示其在跨度内的相对时间。在标签中，对应事件的数据内容分别由事件名称和序列号表示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.png&#34; alt=&#34;图 11：Zipkin span 注释中的事件时间戳。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 11：Zipkin span 注释中的事件时间戳。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.png&#34; alt=&#34;图 12：Zipkin span 标签中的事件原始数据。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 12：Zipkin span 标签中的事件原始数据。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;演示&#34;&gt;演示&lt;/h2&gt;
+&lt;p&gt;在本节中，我们将演示如何在服务网格中执行网络分析，并完成指标收集和 HTTP 原始数据抽样。要进行操作，您需要一个运行中的 Kubernetes 环境。&lt;/p&gt;
+&lt;h3 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase 包含一套完整的示例服务，可以使用 SkyWalking 进行监控。有关详细信息，请参阅&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在本演示中，我们只部署了服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.4.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，运行下面的脚本启动 SkyWalking UI：&lt;a href=&#34;http://localhost:8080/&#34;&gt;http://localhost:8080/&lt;/a&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;启动网络分析任务&#34;&gt;启动网络分析任务&lt;/h3&gt;
+&lt;p&gt;目前，我们可以通过单击服务网格面板中的 &lt;strong&gt;Data Plane&lt;/strong&gt; 项和 &lt;strong&gt;Kubernetes&lt;/strong&gt; 面板中的 &lt;strong&gt;Service&lt;/strong&gt; 项来选择要监视的特定实例。&lt;/p&gt;
+&lt;p&gt;在图 13 中，我们已在网络分析选项卡中选择了一个具有任务列表的实例。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f13.png&#34; alt=&#34;图 13：数据平面中的网络分析选项卡。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 13：数据平面中的网络分析选项卡。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当我们单击 “开始” 按钮时，如图 14 所示，我们需要为分析任务指定抽样规则。抽样规则由一个或多个规则组成，每个规则都由不同的 URI 正则表达式区分。当 HTTP 请求的 URI 与正则表达式匹配时，将使用该规则。如果 URI 正则表达式为空，则使用默认规则。使用多个规则可以帮助我们为不同的请求配置不同的抽样配置。&lt;/p&gt;
+&lt;p&gt;每个规则都有三个参数来确定是否需要抽样：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;最小请求持续时间（毫秒）&lt;/strong&gt;：响应时间超过指定时间的请求将被抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 400 和 499 之间的抽样响应状态代码&lt;/strong&gt;：范围 [400-499) 中的所有状态代码将被抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 500 和 599 之间的抽样响应状态代码&lt;/strong&gt;：范围 [500-599) 中的所有状态码将被抽样。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;抽样配置完成后，我们就可以创建任务了。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f14.png&#34; alt=&#34;图 14：创建网络分析任务页面。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 14：创建网络分析任务页面。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;完成&#34;&gt;完成&lt;/h3&gt;
+&lt;p&gt;几秒钟后，你会看到页面的右侧出现进程拓扑结构。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f15.png&#34; alt=&#34;图 15：网络分析任务中的流程拓扑。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 15：网络分析任务中的流程拓扑。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您单击进程之间的线时，您可以查看两个过程之间的数据，它被分为三个选项卡：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;TCP&lt;/strong&gt;：显示与 TCP 相关的指标。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/1.x&lt;/strong&gt;：显示 HTTP 1 协议中的指标。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP 请求&lt;/strong&gt;：显示已分析的请求，并根据抽样规则保存到列表中。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f16.png&#34; alt=&#34;图 16：网络分析任务中的 TCP 指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 16：网络分析任务中的 TCP 指标。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f17.png&#34; alt=&#34;图 17：网络分析任务中的 HTTP/1.x 指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 17：网络分析任务中的 HTTP/1.x 指标。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f18.png&#34; alt=&#34;图 18：网络分析任务中的 HTTP 采样请求。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 18：网络分析任务中的 HTTP 采样请求。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;在本文中，我们详细介绍了如何在网络分析中分析 7 层 HTTP/1.x 协议，以及如何将其与现有追踪系统相关联。这使我们能够将我们能够观察到的数据从用户空间扩展到内核空间数据。&lt;/p&gt;
+&lt;p&gt;在未来，我们将进一步探究内核数据的分析，例如收集 TCP 包大小、传输频率、网卡等信息，并从另一个角度提升分布式追踪。&lt;/p&gt;
+&lt;h2 id=&#34;其他资源&#34;&gt;其他资源&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/&#34;&gt;SkyWalking Rover Documentation ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;Diagnose Service Mesh Network Performance with eBPF blog post &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/&#34;&gt;SkyWalking Profiling Documentation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/&#34;&gt;SkyWalking Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;Zipkin Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC - Hypertext Transfer Protocol – HTTP/1.1 &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Boost Root Cause Analysis Quickly With SkyWalking’s New Trace-Metrics Association Feature</title>
+      <link>/blog/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</link>
+      <pubDate>Mon, 19 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;Banner&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Observability for modern distributed applications work is critical for understanding how they behave under a variety of conditions and for troubleshooting and resolving issues when they arise. Traces, metrics, and logs are regarded as fundamental parts of the observability stack. Traces are the footprints of distributed system executions, meanwhile, metrics measure system performance with numbers in the timeline. Essentially, they measure the performance from two dimensions. Being able to quickly visualize the connection between traces and corresponding metrics makes it possible to quickly diagnose which process flows are correlated to potentially pathological behavior. This powerful new capability is now &lt;a href=&#34;https://skywalking.apache.org/events/release-apache-skywalking-apm-9.3.0/&#34;&gt;available in SkyWalking 9.3.0&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;The SkyWalking project started only with tracing, with a focus on 100% sampling-based metrics and topology analysis since 2018. When users face anomaly trends of time-series metrics, like a peak on the line chart, or histogram shows a larger gap between p95 and p95, the immediate question is, why is this happening? One of SkyWalking&amp;rsquo;s latest features, the &lt;strong&gt;trace-metric association&lt;/strong&gt;, makes it much easier to answer that question and to address the root cause.&lt;/p&gt;
+&lt;h2 id=&#34;how-are-metrics-generated&#34;&gt;How Are Metrics Generated?&lt;/h2&gt;
+&lt;p&gt;SkyWalking provides three ways to calculate metrics:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Metrics built from trace spans, depending on the span’s layer, kind, and tags.&lt;/li&gt;
+&lt;li&gt;Metrics extracted from logs—a kind of keyword and tags-based metrics extraction.&lt;/li&gt;
+&lt;li&gt;Metrics reported from mature and mainstream metrics/meter systems, such as OpenTelemetry, Prometheus, and Zabbix.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Tracing tracks the processes of requests between an application&amp;rsquo;s services. Most systems that generate traffic and performance-related metrics also generate tracing data, either from server-side trace-based aggregations or through client SDKs.&lt;/p&gt;
+&lt;h2 id=&#34;use-skywalking-to-reduce-the-traditional-cost-of-trace-indexing&#34;&gt;Use SkyWalking to Reduce the Traditional Cost of Trace Indexing&lt;/h2&gt;
+&lt;p&gt;Tracing data and visualization are critical troubleshooting tools for both developers and operators alike because of how helpful they are in locating issue boundaries. But, because it has traditionally been difficult to find associations between metrics and traces, teams have added increasingly more tags into the spans, and search through various combinations. This trend of increased instrumentation and searching has required increased infrastructure investment to support this kind of search. SkyWalking&amp;rsquo;s metrics and tracing association capabilities can help reduce the cost of indexing and searching that data.&lt;/p&gt;
+&lt;h2 id=&#34;find-the-associated-trace&#34;&gt;Find the Associated Trace&lt;/h2&gt;
+&lt;p&gt;When looking for association between metrics and traces, the kind of metrics we&amp;rsquo;re dealing with determines their relationships to traces. Let’s review the standard request &lt;em&gt;rate, error, and duration (RED)&lt;/em&gt; metrics to see how it works.&lt;/p&gt;
+&lt;h3 id=&#34;success-rate-metrics&#34;&gt;Success Rate Metrics&lt;/h3&gt;
+&lt;p&gt;The success rate is determined by the return code, RPC response code, or exceptions of the process. When the success rate decreases, looking for errors in the traces of this service or pod are the first place to look to find clues.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.jpg&#34; alt=&#34;Figure 1: The success rate graph from SkyWalking&amp;rsquo;s 9.3.0 dashboard with the option to view related traces at a particular time.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: The success rate graph from SkyWalking&amp;rsquo;s 9.3.0 dashboard with the option to view related traces at a particular time.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Drilling down from the peak of the success rate, SkyWalking lists all traces and their error status that were collected in this particular minute (Figure 2):&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;Figure 2: SkyWalking shows related traces with an error status.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: SkyWalking shows related traces with an error status.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Requests to &lt;em&gt;/test&lt;/em&gt; can be located from the trace, and the span’s tag indicates a 404 response code of the HTTP request.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;Figure 3: A detail view of a request to http://frontend/test showing that the URI doesn&amp;rsquo;t exist.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: A detail view of a request to http://frontend/test showing that the URI doesn&amp;rsquo;t exist.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;By looking at the trace data, it becomes immediately clear that the drop in success rate is caused by requests to a nonexistent URI.&lt;/p&gt;
+&lt;h3 id=&#34;average-response-time&#34;&gt;Average Response Time&lt;/h3&gt;
+&lt;p&gt;The average response time metric provides a general overview of service performance. When average response time is unstable, this usually means that the system is facing serious performance impacts.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;Figure 4: SkyWalking&amp;rsquo;s query UI for searching for related traces showing traces for requests that exceed a particular duration threshold.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: SkyWalking&amp;rsquo;s query UI for searching for related traces showing traces for requests that exceed a particular duration threshold.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you drill down from this metric, this query condition (Figure 4) will reveal the slowest traces of the service in this specific minute. Notice, at least 168ms is added as a condition automatically, to avoid scanning a large number of rows in the Database.&lt;/p&gt;
+&lt;h3 id=&#34;apdex&#34;&gt;Apdex&lt;/h3&gt;
+&lt;p&gt;Apdex—the Application Performance Index—is a measure of response time based against a set threshold. It measures the ratio of satisfactory response times to unsatisfactory response times (Figure 5). The response time is measured from an asset request to completed delivery back to the requestor.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;Figure 5: The Apdex formula&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: The Apdex formula&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;A user defines a response time tolerating threshold &lt;em&gt;T&lt;/em&gt;. All responses handled in &lt;em&gt;T&lt;/em&gt; or less time satisfy the user.&lt;/p&gt;
+&lt;p&gt;For example, if &lt;em&gt;T&lt;/em&gt; is 1.2 seconds and a response completes in 0.5 seconds, then the user is satisfied. All responses greater than 1.2 seconds dissatisfy the user. Responses greater than 4.8 seconds frustrate the user.&lt;/p&gt;
+&lt;p&gt;When the Apdex score decreases, we need to find related traces from two perspectives: slow traces and error status traces. SkyWalking&amp;rsquo;s new related tracing features offers a quick way to view both (Figure 6) directly from the Apdex graph.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;Figure 6: Show slow trace and error status traces from the Apdex graph&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: Show slow trace and error status traces from the Apdex graph&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;service-response-time&#34;&gt;Service Response Time&lt;/h3&gt;
+&lt;p&gt;Percentile MetricThe percentile graph (Figure 7) provides p50, p75, p90, p95, and p99 latency ranks to measure the long-tail issues of service performance.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.jpg&#34; alt=&#34;Figure 7: The service response time percentile graph helps to highlight long-tail issues of service performance.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: The service response time percentile graph helps to highlight long-tail issues of service performance.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;This percentile graph shows a typical long-tail issue. P99 latency is four times slower than the P95. When we use the association, we see the traces with latency between P95 - P99 and P99 - Infinity.&lt;/p&gt;
+&lt;p&gt;The traces of requests causing this kind of long-tail phenomena are automatically listing from there.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.jpg&#34; alt=&#34;Figure 8: Query parameters to search for traces based on latency.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 8: Query parameters to search for traces based on latency.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;are-more-associations-available&#34;&gt;Are More Associations Available?&lt;/h2&gt;
+&lt;p&gt;SkyWalking provides more than just associations between between traces and metrics to help you find possible causal relationships and to avoid looking for the proverbial needle in a haystack.&lt;/p&gt;
+&lt;p&gt;Currently, SkyWalking 9.3.0 offers two more associations: &lt;strong&gt;metric-to-metric&lt;/strong&gt; associations and &lt;strong&gt;event-to-metric&lt;/strong&gt; associations.&lt;/p&gt;
+&lt;h3 id=&#34;metric-to-metric-associations&#34;&gt;Metric-to-metric Associations&lt;/h3&gt;
+&lt;p&gt;There are dozens of metrics on the dashboard—which is great for getting a complete picture of application behavior. During a typical performance issue, the peaks of multiple metrics are affected simultaneously. But, trying to correlate peaks across all of these graphs can be difficult&amp;hellip;&lt;/p&gt;
+&lt;p&gt;Now in SkyWalking 9.3.0, when you click the peak of one graph, the pop-out box lets you see associated metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.jpg&#34; alt=&#34;Figure 9: SkyWalking&amp;rsquo;s option to view associated metrics.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 9: SkyWalking&amp;rsquo;s option to view associated metrics.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you choose that option, all associated metrics graphs will show axis pointers (the dotted vertical lines) in all associated graphs like in Figure 10. This makes it easier to correlate the peaks in different graphs with each other. Often, these correlated peaks with have the same root cause.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.jpg&#34; alt=&#34;Figure 10: Axis pointers (vertical dotted lines) show associations between peaks across multiple metrics graphs.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 10: Axis pointers (vertical dotted lines) show associations between peaks across multiple metrics graphs.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;event-to-metric-associations&#34;&gt;Event-to-Metric Associations&lt;/h3&gt;
+&lt;p&gt;SkyWalking provides the event concept to associate possible service performance impacted by the infrastructure, such as new deployment even from k8s. Or, the anomaly had been detected by alerting or integrated AIOps engine.&lt;/p&gt;
+&lt;p&gt;The event to metrics association is also automatically, it could cover the time range of the event on the metric graphs(blue areas). If the area of event and peaks are matched, most likely this event covered this anomaly.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.jpg&#34; alt=&#34;Figure 11: SkyWalking&amp;rsquo;s event to metric association view.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 11: SkyWalking&amp;rsquo;s event to metric association view.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-makes-it-easier-and-faster-to-find-root-causes&#34;&gt;SkyWalking Makes it Easier and Faster to Find Root Causes&lt;/h2&gt;
+&lt;p&gt;SkyWalking now makes it easy to find associations between metrics, events, and traces, ultimately making it possible to identify root causes and fix problems fast. The associations we&amp;rsquo;ve discussed in this article are available out-of-box in the SkyWalking 9.3.0 release.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.jpg&#34; alt=&#34;Figure 12: Just click on the dots to see related traces and metrics associations.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 12: Just click on the dots to see related traces and metrics associations.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Click the dots on any metric graph, and you will see a &lt;em&gt;View Related Traces&lt;/em&gt; item pop-out if this metric has logical mapping traces.&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this blog, we took a look at the newly-added association feature between metrics and traces. With this new visualization, it&amp;rsquo;s now much easier to find key traces to identify root cause of issues.Associations in SkyWalking can go even deeper. Associations from metrics to traces is not the end of diagnosing system bottleneck. In the next post, we will introduce an eBPF powered trace enhancement where you’ll be able to see HTTP request and response details associated with tracing spans from network profiling. Stay tuned.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: SkyWalking 推出 trace-metric 关联功能助力快速根源问题排查</title>
+      <link>/zh/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</link>
+      <pubDate>Mon, 19 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;Banner&#34;&gt;&lt;/p&gt;
+&lt;p&gt;现代分布式应用程序工作的可观测性对于了解它们在各种条件下的行为方式以及在出现问题时进行故障排除和解决至关重要。追踪、指标和日志被视为可观测性堆栈的基本部分。Trace 是分布式系统执行的足迹，而 metric 则是用时间轴上的数字衡量系统性能。本质上，它们从两个维度衡量性能。能够快速可视化追踪和相应指标之间的联系，可以快速诊断哪些流程与潜在的异常相关。&lt;a href=&#34;https://skywalking.apache.org/events/release-apache-skywalking-apm-9.3.0/&#34;&gt;SkyWalking 9.3.0&lt;/a&gt; 现在提供了这一强大的新功能。&lt;/p&gt;
+&lt;p&gt;SkyWalking 项目从 tracing 开始，从 2018 年开始专注于 100% 基于采样的指标和拓扑分析。当用户面对时间序列指标的异常趋势时，比如折线图上的峰值，或者直方图显示 p95 和 p95 之间的差距较大，直接的问题是，为什么会出现这种情况？SkyWalking 的最新功能之一，trace 与 metric 关联，使得回答这个问题和解决根本原因更加容易。&lt;/p&gt;
+&lt;h2 id=&#34;指标是如何生成的&#34;&gt;指标是如何生成的？&lt;/h2&gt;
+&lt;p&gt;SkyWalking 提供了三种计算指标的方式：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;根据追踪跨度构建的指标，具体取决于跨度的层、种类和标签。&lt;/li&gt;
+&lt;li&gt;从日志中提取指标—— 一种基于关键词和标签的指标提取。&lt;/li&gt;
+&lt;li&gt;从成熟和主流的指标 / 仪表系统报告的指标，例如 OpenTelemetry、Prometheus 和 Zabbix。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Tracing 追踪应用程序服务之间的请求过程。大多数生成流量和性能相关指标的系统也会生成追踪数据，这些数据来自服务器端基于追踪的聚合或通过客户端 SDK。&lt;/p&gt;
+&lt;h2 id=&#34;使用-skywalking-降低追踪索引的传统成本&#34;&gt;使用 SkyWalking 降低追踪索引的传统成本&lt;/h2&gt;
+&lt;p&gt;Trace 数据和可视化对于开发人员和运维人员来说都是至关重要的故障排除工具，因为它们在定位问题边界方面非常有帮助。但是，由于传统上很难找到指标和痕迹之间的关联，团队已经将越来越多的标签添加到跨度中，并搜索各种组合。这种增加仪器和搜索的趋势需要增加基础设施投资来支持这种搜索。SkyWalking 的指标和追踪关联功能有助于降低索引和搜索该数据的成本。&lt;/p&gt;
+&lt;h2 id=&#34;查找关联的-trace&#34;&gt;查找关联的 trace&lt;/h2&gt;
+&lt;p&gt;在寻找 metric 和 trace 之间的关联时，我们处理的指标类型决定了它们与 trace 的关系。让我们回顾一下标准请求*率、错误和持续时间（RED）*指标，看看它是如何工作的。&lt;/p&gt;
+&lt;h3 id=&#34;成功率指标&#34;&gt;成功率指标&lt;/h3&gt;
+&lt;p&gt;成功率由返回码、RPC 响应码或进程异常决定。当成功率下降时，在这个服务或 Pod 的 trace 中寻找错误是第一个寻找线索的地方。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.jpg&#34; alt=&#34;图 1：SkyWalking 9.3.0 仪表板的成功率图表，带有在特定时间查看相关追踪的选项。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1：SkyWalking 9.3.0 仪表板的成功率图表，带有在特定时间查看相关 trace 的选项。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;从成功率的峰值向下探索，SkyWalking 列出了在这一特定分钟内收集的所有 trace 及其错误状态（图 2）：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;图 2：SkyWalking 显示具有错误状态的相关追踪。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2：SkyWalking 显示具有错误状态的相关追踪。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;可以从 trace 中找到对 &lt;code&gt;/test&lt;/code&gt; 的请求，并且 span 的标记指示 HTTP 请求的 404 响应代码。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;图 3：显示 URI 不存在的 http://frontend/test 请求的详细视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3：显示 URI 不存在的 http://frontend/test 请求的详细视图。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;通过查看 trace 数据，很明显成功率的下降是由对不存在的 URI 的请求引起的。&lt;/p&gt;
+&lt;h3 id=&#34;平均响应时间&#34;&gt;平均响应时间&lt;/h3&gt;
+&lt;p&gt;平均响应时间指标提供了服务性能的一般概览。当平均响应时间不稳定时，这通常意味着系统面临严重的性能影响。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;图 4：SkyWalking 用于搜索相关追踪的查询 UI，显示超过特定持续时间阈值的请求的追踪。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4：SkyWalking 用于搜索相关 trace 的查询 UI，显示超过特定持续时间阈值的请求的 trace。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您从该指标向下探索时，该查询条件（图 4）将揭示该特定分钟内服务的最慢 trace。请注意，至少 168ms 作为条件自动添加，以避免扫描数据库中的大量行。&lt;/p&gt;
+&lt;h3 id=&#34;apdex&#34;&gt;Apdex&lt;/h3&gt;
+&lt;p&gt;Apdex（应用程序性能指数）是根据设定的阈值衡量响应时间的指标。它测量令人满意的响应时间与不令人满意的响应时间的比率（图 5）。响应时间是从资产请求到完成交付回请求者的时间。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;图 5：Apdex 公式&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5：Apdex 公式&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;用户定义响应时间容忍阈值 &lt;em&gt;T&lt;/em&gt;。在 &lt;em&gt;T&lt;/em&gt; 或更短时间内处理的所有响应都使用户满意。&lt;/p&gt;
+&lt;p&gt;例如，如果 &lt;em&gt;T&lt;/em&gt; 为 1.2 秒，响应在 0.5 秒内完成，则用户会感到满意。所有大于 1.2 秒的响应都会让用户不满意。超过 4.8 秒的响应会让用户感到沮丧。&lt;/p&gt;
+&lt;p&gt;当 Apdex 分数下降时，我们需要从两个角度寻找相关的 trace：慢速和错误状态的 trace。SkyWalking 的新相关追踪功能提供了一种直接从 Apdex 图表查看两者（图 6）的快速方法。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;图 6：显示 Apdex 图中的慢速追踪和错误状态追踪&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6：显示 Apdex 图中的慢速 trace 和错误状态 trace&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;服务响应时间&#34;&gt;服务响应时间&lt;/h3&gt;
+&lt;p&gt;百分位指标百分位图（图 7）提供 p50、p75、p90、p95 和 p99 延迟排名，以衡量服务性能的长尾问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.jpg&#34; alt=&#34;图 7：服务响应时间百分位图有助于突出服务性能的长尾问题。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7：服务响应时间百分位图有助于突出服务性能的长尾问题。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这个百分位数图显示了一个典型的长尾问题。P99 延迟比 P95 慢四倍。当我们使用关联时，我们会看到 P95 - P99 和 P99 - Infinity 之间具有延迟的 trace。&lt;/p&gt;
+&lt;p&gt;造成这种长尾现象的请求 trace，就是从那里自动列出来的。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.jpg&#34; alt=&#34;图 8：用于根据延迟搜索追踪的查询参数。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 8：用于根据延迟搜索 trace 的查询参数。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;是否有更多关联可用&#34;&gt;是否有更多关联可用？&lt;/h2&gt;
+&lt;p&gt;SkyWalking 提供的不仅仅是 trace 和 metric 之间的关联，还可以帮助您找到可能的因果关系，避免大海捞针。&lt;/p&gt;
+&lt;p&gt;目前，SkyWalking 9.3.0 提供了两种关联：&lt;strong&gt;metric-to-metric&lt;/strong&gt; 关联和 &lt;strong&gt;event-to-metric&lt;/strong&gt; 关联。&lt;/p&gt;
+&lt;h3 id=&#34;metric-to-metric-关联&#34;&gt;Metric-to-metric 关联&lt;/h3&gt;
+&lt;p&gt;仪表板上有许多指标 —— 这对于全面了解应用程序行为非常有用。在典型的性能问题中，多个指标的峰值会同时受到影响。但是，尝试关联所有这些图表中的峰值可能很困难……&lt;/p&gt;
+&lt;p&gt;现在在 SkyWalking 9.3.0 中，当你点击一个图表的峰值时，弹出框可以让你看到相关的指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.jpg&#34; alt=&#34;图 9：SkyWalking 用于查看相关指标的选项。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 9：SkyWalking 用于查看相关指标的选项。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您选择该选项时，所有关联的指标图表将在所有关联的图表中显示轴指针（垂直虚线），如图 10 所示。这使得将不同图表中的峰值相互关联起来变得更加容易。通常，这些相关的峰值具有相同的根本原因。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.jpg&#34; alt=&#34;图 10：轴指针（垂直虚线）显示多个指标图中峰值之间的关联。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 10：轴指针（垂直虚线）显示多个指标图中峰值之间的关联。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;event-to-metric-关联&#34;&gt;Event-to-metric 关联&lt;/h3&gt;
+&lt;p&gt;SkyWalking 提供了事件概念来关联可能受基础设施影响的服务性能，例如来自 Kubernetes 的新部署。或者，已通过警报或集成 AIOps 引擎检测到异常。&lt;/p&gt;
+&lt;p&gt;事件到指标的关联也是自动的，它可以覆盖指标图上事件的时间范围（蓝色区域）。如果事件区域和峰值匹配，则很可能该事件覆盖了该异常。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.jpg&#34; alt=&#34;图 11：SkyWalking 的事件与指标关联视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 11：SkyWalking 的事件与指标关联视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-使查找根本原因变得更加容易和快速&#34;&gt;SkyWalking 使查找根本原因变得更加容易和快速&lt;/h2&gt;
+&lt;p&gt;SkyWalking 现在可以轻松找到指标、事件和追踪之间的关联，最终可以确定根本原因并快速解决问题。我们在本文中讨论的关联在 SkyWalking 9.3.0 版本中开箱即用。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.jpg&#34; alt=&#34;图 12：只需单击圆点即可查看相关追踪和指标关联。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 12：只需单击圆点即可查看相关 trace 和 metric 关联。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;单击任何指标图上的点，如果该指标具有逻辑映射，您将看到一个&lt;em&gt;查看相关 trace&lt;/em&gt; 弹出窗口。&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;在这篇博客中，我们了解了 metric 和 trace 之间新增的关联功能。有了这个新的可视化，现在可以更容易地找到关键 trace 来识别问题的根本原因。SkyWalking 中的关联可以更深入。从 metric 到 trace 的关联并不是诊断系统瓶颈的终点。在下一篇文章中，我们将介绍 eBPF 支持的追踪增强功能，您将看到与网络分析中的追踪跨度相关的 HTTP 请求和响应详细信息。敬请关注。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

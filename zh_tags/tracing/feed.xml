@@ -1,0 +1,260 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Tracing</title>
+    <link>/zh_tags/tracing/</link>
+    <description>Recent content in Tracing on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 08 May 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/zh_tags/tracing/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Zh: Apache ShenYu (incubating)插件实现原理和可观测性实践</title>
+      <link>/zh/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</link>
+      <pubDate>Sun, 08 May 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;目录&#34;&gt;目录&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-SkyWalking%E5%92%8CShenYu%E4%BB%8B%E7%BB%8D&#34;&gt;SkyWalking和ShenYu介绍&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-ApacheShenYu%E6%8F%92%E4%BB%B6%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86&#34;&gt;ApacheShenYu插件实现原理&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-%E7%BB%99gRPC%E6%8F%92%E4%BB%B6%E5%A2%9E%E5%8A%A0%E6%B3%9B%E5%8C%96%E8%B0%83%E7%94%A8%E8%BF%BD%E8%B8%AA%E5%B9%B6%E4%BF%9D%E6%8C%81%E5%85%BC%E5%AE%B9&#34;&gt;给gRPC插件增加泛化调用追踪并保持兼容&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-ShenYu%E7%BD%91%E5%85%B3%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E5%AE%9E%E8%B7%B5&#34;&gt;ShenYu网关可观测性实践&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-%E6%80%BB%E7%BB%93&#34;&gt;总结&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1skywalking和shenyu介绍&#34;&gt;1.SkyWalking和ShenYu介绍&lt;/h2&gt;
+&lt;h3 id=&#34;11-skywalking&#34;&gt;1.1 SkyWalking&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/hutaishi/skywalking&#34;&gt;SkyWalking&lt;/a&gt;是一个针对微服务、分布式系统、云原生的应用性能监控(APM)和可观测性分析平台(OAP),
+拥有强大的功能，提供了多维度应用性能分析手段，包含分布式拓扑图、应用性能指标、分布式链路追踪、日志关联分析和告警。同时还拥有非常丰富的生态。广泛应用于各个公司和开源项目。&lt;/p&gt;
+&lt;h3 id=&#34;12-apache-shenyu-incubating&#34;&gt;1.2 Apache ShenYu (incubating)&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;是一个高性能，多协议，易扩展，响应式的API网关。
+兼容各种主流框架体系，支持热插拔，用户可以定制化开发，满足用户各种场景的现状和未来需求，经历过大规模场景的锤炼。
+支持丰富的协议：&lt;code&gt;Http&lt;/code&gt;、&lt;code&gt;Spring Cloud&lt;/code&gt;、&lt;code&gt;gRPC&lt;/code&gt;、&lt;code&gt;Dubbo&lt;/code&gt;、&lt;code&gt;SOFARPC&lt;/code&gt;、&lt;code&gt;Motan&lt;/code&gt;、&lt;code&gt;Tars&lt;/code&gt;等等。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;shenyu-arch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2apacheshenyu插件实现原理&#34;&gt;2.ApacheShenYu插件实现原理&lt;/h2&gt;
+&lt;p&gt;ShenYu的异步和以往接触的异步有一点不一样，是一种全链路异步，每一个插件的执行都是异步的，并且线程切换并不是单一固定的情况(和各个插件实现有关)。
+网关会发起各种协议类型的服务调用，现有的SkyWalking插件发起服务调用的时候会创建ExitSpan(同步或异步).  网关接收到请求会创建异步的EntrySpan。
+异步的EntrySpan需要和同步或异步的ExitSpan串联起来，否则链路会断。
+串联方案有2种：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;快照传递&lt;/strong&gt;： 将创建EntrySpan之后的快照通过某种方式传递到创建ExitSpan的线程中。&lt;br&gt;
+目前这种方式应用在异步的WebClient插件中，该插件能接收异步快照。ShenYu代理Http服务或SpringCloud服务便是通过快照传递实现span串联。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LocalSpan中转&lt;/strong&gt;：
+其它RPC类插件不像异步WebClient那样可以接收快照实现串联。尽管你可以改动其它RPC插件让其接收快照实现串联，但不推荐也没必要，
+因为可以通过在创建ExitSpan的线程中，创建一个LocalSpan就可以实现和ExitSpan串联，然后将异步的EntrySpan和LocalSpan通过&lt;code&gt;快照传递&lt;/code&gt;的方式串联。这样实现完全可以不改动原先插件的代码。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;span连接如下图所示:&lt;br&gt;
+&lt;img src=&#34;span-connect.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;也许你会问是否可以在一个通用的插件里面创建LocalSpan,而不是ShenYu RPC插件分别创建一个？
+答案是不行，因为需要保证LocalSpan和ExitSpan在同一个线程，而ShenYu是全链路异步. 在实现上创建LocalSpan的代码是复用的。&lt;/p&gt;
+&lt;h2 id=&#34;3-给grpc插件增加泛化调用追踪并保持兼容&#34;&gt;3. 给gRPC插件增加泛化调用追踪并保持兼容&lt;/h2&gt;
+&lt;p&gt;现有的SkyWalking gRPC插件只支持通过存根的方式发起的调用。而对于网关而言并没有proto文件，网关采取的是泛化调用(不通过存根)，所以追踪rpc请求，你会发现链路会在网关节点断掉。
+在这种情况下，需要让gRPC插件支持泛化调用，而同时需要保持兼容，不影响原先的追踪方式。实现上通过判断请求参数是否是动态消息(DynamicMessage)，如果不是则走原先通过存根的追踪逻辑，
+如果是则走泛化调用追踪逻辑。另外的兼容则是在gRPC新旧版本的差异，以及获取服务端IP各种情况的兼容，感兴趣的可以看看源码。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-generic-call.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;4-shenyu网关可观测性实践&#34;&gt;4. ShenYu网关可观测性实践&lt;/h2&gt;
+&lt;p&gt;上面讲解了SkyWalking ShenYu插件的实现原理，下面部署应用看下效果。SkyWalking功能强大，除了了链路追踪需要开发插件外，其它功能强大功能开箱即用。
+这里只描述链路追踪和应用性能剖析部分，如果想体验SkyWalking功能的强大，请参考&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking官方文档&lt;/a&gt;。&lt;br&gt;
+版本说明：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;skywalking-java: &lt;code&gt;8.11.0-SNAPSHOT&lt;/code&gt;源码构建。说明：shenyu插件会在8.11.0版本发布，可能会在5月或6月初步发布它。Java代理正处于常规发布阶段。&lt;/li&gt;
+&lt;li&gt;skywalking: &lt;code&gt;9.0.0&lt;/code&gt; V9 版本&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;用法说明:&lt;br&gt;
+SkyWalking的设计非常易用，配置和激活插件请参考官方文档。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/readme/&#34;&gt;SkyWalking Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/readme/&#34;&gt;SkyWalking Java Agent Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;41-向网关发起请求&#34;&gt;4.1 向网关发起请求&lt;/h3&gt;
+&lt;p&gt;通过&lt;code&gt;postman&lt;/code&gt;客户端或者其它方式向网关发起各种服务请求&lt;/p&gt;
+&lt;h3 id=&#34;42-请求拓扑图&#34;&gt;4.2 请求拓扑图&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;topology2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;43-请求链路以grpc为例&#34;&gt;4.3 请求链路(以gRPC为例)&lt;/h3&gt;
+&lt;h4 id=&#34;正常链路&#34;&gt;正常链路：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-ok.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;异常链路&#34;&gt;异常链路：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;点击链路节点变可以看到对应的节点信息和异常信息&lt;/p&gt;
+&lt;h4 id=&#34;服务提供者span&#34;&gt;服务提供者span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;网关请求span&#34;&gt;网关请求span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;gateway-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;44-服务指标监控&#34;&gt;4.4 服务指标监控&lt;/h3&gt;
+&lt;p&gt;服务指标监控
+&lt;img src=&#34;overview.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;45-网关后台指标监控&#34;&gt;4.5 网关后台指标监控&lt;/h3&gt;
+&lt;h4 id=&#34;数据库监控&#34;&gt;数据库监控:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;database.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;线程池和连接池监控&#34;&gt;线程池和连接池监控&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;img.png&#34; alt=&#34;img.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;46-jvm监控&#34;&gt;4.6 JVM监控&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;jvm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;47-接口分析&#34;&gt;4.7 接口分析&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;endpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;48-异常日志和异常链路分析&#34;&gt;4.8 异常日志和异常链路分析&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/&#34;&gt;日志配置见官方文档&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;日志监控
+&lt;img src=&#34;log-trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;异常日志对应的分布式链路追踪详情
+&lt;img src=&#34;log-trace-detail.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;5-总结&#34;&gt;5. 总结&lt;/h2&gt;
+&lt;p&gt;SkyWalking在可观测性方面对指标、链路追踪、日志有着非常全面的支持，功能强大，简单易用，专为大型分布式系统、微服务、云原生、容器架构而设计，拥有丰富的生态。
+使用SkyWalking为Apache ShenYu (incubating)提供强大的可观测性支持，让ShenYu如虎添翼。最后，如果你对高性能响应式网关感兴趣，可以关注
+&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt; 。
+同时感谢SkyWalking这么优秀的开源软件对行业所作的贡献。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 在线代码级性能剖析，补全分布式追踪的最后一块“短板”</title>
+      <link>/zh/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/</link>
+      <pubDate>Mon, 23 Mar 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2020-03-23-using-profiling-to-fix-the-blind-spot-of-distributed-tracing/</guid>
+      <description>
+        
+        
+        &lt;ul&gt;
+&lt;li&gt;作者：&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;吴晟&lt;/a&gt;，&lt;a href=&#34;https://github.com/mrproliu&#34;&gt;刘晗&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.infoq.cn/article/CWUOl1JA0EyXw0CxQ4Zm&#34;&gt;原文地址&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在本文中，我们详细介绍了代码级的性能剖析方法，以及我们在 Apache SkyWalking 中的实践。希望能够帮助大家在线定位系统性能短板，缓解系统压力。&lt;/p&gt;
+&lt;h2 id=&#34;分布式链路追踪的局限性&#34;&gt;分布式链路追踪的局限性&lt;/h2&gt;
+&lt;p&gt;在传统的监控系统中，我们如果想要得知系统中的业务是否正常，会采用进程监控、日志收集分析等方式来对系统进行监控。当机器或者服务出现问题时，则会触发告警及时通知负责人。通过这种方式，我们可以得知具体哪些服务出现了问题。但是这时我们并不能得知具体的错误原因出在了哪里，开发人员或者运维人员需要到日志系统里面查看错误日志，甚至需要到真实的业务服务器上查看执行情况来解决问题。&lt;/p&gt;
+&lt;p&gt;如此一来，仅仅是发现问题的阶段，可能就会耗费相当长的时间；另外，发现问题但是并不能追溯到问题产生具体原因的情况，也常有发生。这样反反复复极其耗费时间和精力，为此我们便有了基于分布式追踪的 APM 系统。&lt;/p&gt;
+&lt;p&gt;通过将业务系统接入分布式追踪中，我们就像是给程序增加了一个放大镜功能，可以清晰看到真实业务请求的整体链路，包括请求时间、请求路径，甚至是操作数据库的语句都可以看得一清二楚。通过这种方式，我们结合告警便可以快速追踪到真实用户请求的完整链路信息，并且这些数据信息完全是持久化的，可以随时进行查询，复盘错误的原因。&lt;/p&gt;
+&lt;p&gt;然而随着我们对服务监控理解的加深，我们发现事情并没有那么简单。在分布式链路追踪中我们有这样的两个流派：代码埋点和字节码增强。无论使用哪种方式，底层逻辑一定都逃不过面向切面这个基础逻辑。因为只有这样才可以做到大面积的使用。这也就决定了它只能做到框架级别和 RPC 粒度的监控。这时我们可能依旧会遇到程序执行缓慢或者响应时间不稳定等情况，但无法具体查询到原因。这时候，大家很自然的会考虑到增加埋点粒度，比如对所有的 Spring Bean 方法、甚至主要的业务层方法都加上埋点。但是这种思路会遇到不小的挑战：&lt;/p&gt;
+&lt;p&gt;第一，增加埋点时系统开销大，埋点覆盖不够全面。通过这种方式我们确实可以做到具体业务场景具体分析。但随着业务不断迭代上线，弊端也很明显：大量的埋点无疑会加大系统资源的开销，造成 CPU、内存使用率增加，更有可能拖慢整个链路的执行效率。虽然每个埋点消耗的性能很小，在微秒级别，但是因为数量的增加，甚至因为业务代码重用造成重复埋点或者循环使用，此时的性能开销已经无法忽略。&lt;/p&gt;
+&lt;p&gt;第二，动态埋点作为一项埋点技术，和手动埋点的性能消耗上十分类似，只是减少的代码修改量，但是因为通用技术的特别，上一个挑战中提到的循环埋点和重复使用的场景甚至更为严重。比如选择所有方法或者特定包下的所有方法埋点，很可能造成系统性能彻底崩溃。&lt;/p&gt;
+&lt;p&gt;第三，即使我们通过合理设计和埋点，解决了上述问题，但是 JDK 函数是广泛使用的，我们很难限制对 JDK API 的使用场景。对 JDK 过多方法、特别是非 RPC 方法的监控会造成系统的巨大延迟风险。而且有一些基础类型和底层工具类，是很难通过字节码进行增强的。当我们的 SDK 使用不当或者出现 bug 时，我们无法具体得知真实的错误原因。&lt;/p&gt;
+&lt;h2 id=&#34;代码级性能剖析方法&#34;&gt;代码级性能剖析方法&lt;/h2&gt;
+&lt;h3 id=&#34;方法介绍&#34;&gt;方法介绍&lt;/h3&gt;
+&lt;p&gt;基于以上问题，在系统性能监控方法上，我们提出了&lt;strong&gt;代码级性能剖析&lt;/strong&gt;这种在线诊断方法。这种方法基于一个高级语言编程模型共性，即使再复杂的系统，再复杂的业务逻辑，都是基于线程去进行执行的，而且多数逻辑是在单个线程状态下执行的。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;代码级性能剖析&lt;/strong&gt;就是利用方法栈快照，并对方法执行情况进行分析和汇总。并结合有限的分布式追踪 span 上下文，对代码执行速度进行估算。&lt;/p&gt;
+&lt;p&gt;性能剖析激活时，会对指定线程周期性的进行线程栈快照，并将所有的快照进行汇总分析，如果两个连续的快照含有同样的方法栈，则说明此栈中的方法大概率在这个时间间隔内都处于执行状态。从而，通过这种连续快照的时间间隔累加成为估算的方法执行时间。时间估算方法如下图所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl527tsgwj30us0cwwet.jpg&#34; alt=&#34;Profile Time estimation&#34;&gt;&lt;/p&gt;
+&lt;p&gt;在上图中，d0-d10 代表 10 次连续的内存栈快照，实际方法执行时间在 d3-d4 区间，结束时间在 d8-d9 之间。性能剖析无法告诉你方法的准确执行时间，但是他会估算出方法执行时间为 d4-d8 的 4 个快照采集间隔时间之和，这已经是非常的精确的时间估算了。&lt;/p&gt;
+&lt;p&gt;而这个过程因为不涉及代码埋点，所以自然性能消耗是稳定和可控的，也无需担心是否被埋点，是否是 JDK 方法等问题。同时，由于上层已经在分布式追踪之下，性能剖析方法可以明确地确定分析开始和结束时间，减少不必要的性能开销。&lt;/p&gt;
+&lt;p&gt;性能剖析可以很好的对线程的堆栈信息进行监控，主要有以下几点优势：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;精确的问题定位，直接到代码方法和代码行；&lt;/li&gt;
+&lt;li&gt;无需反复的增删埋点，大大减少了人力开发成本；&lt;/li&gt;
+&lt;li&gt;不用承担过多埋点对目标系统和监控系统的压力和性能风险；&lt;/li&gt;
+&lt;li&gt;按需使用，平时对系统无消耗，使用时的消耗稳定可能。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;skywalking-实践实例&#34;&gt;SkyWalking 实践实例&lt;/h3&gt;
+&lt;p&gt;我们首先在 Apache SkyWalking APM 中实现此技术方法，下面我们就以一个真实的例子来说明此方法的执行效果。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; CountDownLatchcountDownLatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; CountDownLatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;2&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+threadPool&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;submit&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; Task1&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;countDownLatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;));&lt;/span&gt;
+threadPool&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;submit&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; Task2&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;countDownLatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;));&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;try&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+   countDownLatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;await&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;500&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; TimeUnit&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;MILLISECONDS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;);&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;catch&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;InterruptedExceptione&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这是我们故意加入的问题代码，我们使用 CountDownLanth 设置了两个任务完成后方法执行结束，Task1 和 Task2 是两个执行时间不稳定的任务，所以主任务也会执行速度不稳定。但对于运维和监控团队来说，很难定位到这个方法片段。&lt;/p&gt;
+&lt;p&gt;针对于这种情况，我们看看性能剖析会怎样直接定位此问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl527i9fsj30l403j0tf.jpg&#34; alt=&#34;Profile Trace&#34;&gt;&lt;/p&gt;
+&lt;p&gt;上图所示的就是我们在进行链路追踪时所看到的真实执行情况，其中我们可以看到在 service/processWithThreadPool 执行速度缓慢，这正是我们植入问题代码的方法。此时在这个调用中没有后续链路了，所以并没有更细致的原因，我们也不打算去 review 代码，从而增加新埋点。这时，我们可以对 HelloService 进行性能剖析，并执行只剖析响应速度大于 500 毫秒的请求。&lt;/p&gt;
+&lt;p&gt;注意，指定特定响应时间的剖析是保证剖析有效性的重要特性，如果方法在平均响应时间上已经出现问题，往往通过分布式链路可以快速定位，因为此时链路总时间长，新埋点带来的性能影响相对可控。但是方法性能抖动是不容易用新增埋点来解决的，而且往往只发生在生产环境。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl528dv3cj30u010vdj1.jpg&#34; alt=&#34;Profile Thread Stack&#34;&gt;&lt;/p&gt;
+&lt;p&gt;上图就是我们进行性能剖析后的真实结果图。从左到右分别表示：栈帧名称、该栈帧总计耗时（包含其下面所有自栈帧）、当前栈帧自身耗时和监控次数。我们可以在最后一行看到，线程卡在了 sun.misc.Unsafe.park 中了。如果你熟悉 Java 就可以知道此时进行了锁等待，我们继续按照树的结构向上推，便可以看到线程真正是卡在了 CountDownLatch.await 方法中。&lt;/p&gt;
+&lt;h3 id=&#34;方法局限性&#34;&gt;方法局限性&lt;/h3&gt;
+&lt;p&gt;当然任何的方法都不是万能的，性能剖析也有一些局限性。&lt;/p&gt;
+&lt;p&gt;第一， 对于高频反复执行的方法，如循环调用，可能会误报为缓慢方法。但这并不是大问题，因为如果反复执行的耗时较长，必然是系统需要关注的性能瓶颈。&lt;/p&gt;
+&lt;p&gt;第二， 由于性能栈快照有一定的性能消耗，所以采集周期不宜过密，如 SkyWalking 实践中，不支持小于 10ms 的采集间隔。所以如果问题方法执行时间过小（比如在 10 毫秒内波动），此方法并不适用。我们也再此强调，&lt;strong&gt;方法论和工具的强大，始终不能代替程序员&lt;/strong&gt;。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 更容易理解将要到来的分布式链路追踪 6.0GA (翻译)</title>
+      <link>/zh/2019-01-02-understand-trace-trans2cn/</link>
+      <pubDate>Wed, 02 Jan 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2019-01-02-understand-trace-trans2cn/</guid>
+      <description>
+        
+        
+        &lt;ul&gt;
+&lt;li&gt;作者: Wu Sheng, tetrate, SkyWalking original creator&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;GitHub&lt;/a&gt;, &lt;a href=&#34;https://twitter.com/wusheng1108&#34;&gt;Twitter&lt;/a&gt;, &lt;a href=&#34;https://www.linkedin.com/in/wusheng1108&#34;&gt;Linkedin&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;翻译: jjlu521016&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
+&lt;p&gt;在当前的微服务架构中分布式链路追踪是很有必要的一部分，但是对于一些用户来说如何去理解和使用分布式链路追踪的相关数据是不清楚的。
+这个博客概述了典型的分布式跟踪用例，以及Skywalking的V6版本中新的可视化功能。我们希望新的用户通过这些示例来更好的理解。&lt;/p&gt;
+&lt;h2 id=&#34;指标和拓扑图&#34;&gt;指标和拓扑图&lt;/h2&gt;
+&lt;p&gt;跟踪数据支持两个众所周知的分析特性：&lt;code&gt;指标&lt;/code&gt;和&lt;code&gt;拓扑图&lt;/code&gt;&lt;br&gt;
+&lt;code&gt;指标&lt;/code&gt;: 每个service, service instance, endpoint的指标都是从跟踪中的入口span派生的。指标代表响应时间的性能。所以可以有一个平均响应时间，99%的响应时间，成功率等。它们按service, service instance, endpoint进行分解。&lt;br&gt;
+&lt;code&gt;拓扑图&lt;/code&gt;: 拓扑表示服务之间的链接，是分布式跟踪最有吸引力的特性。拓扑结构允许所有用户理解分布式服务关系和依赖关系，即使它们是不同的或复杂的。这一点很重要，因为它为所有相关方提供了一个单一的视图，无论他们是开发人员、设计者还是操作者。&lt;/p&gt;
+&lt;p&gt;这里有一个拓扑图的例子包含了4个项目，包括kafka和两个外部依赖。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44oveesj31gr0u00u1.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-在skywalking的可选择UI0RocketBot的拓扑图-&lt;/p&gt;
+&lt;h1 id=&#34;trace&#34;&gt;Trace&lt;/h1&gt;
+&lt;p&gt;在分布式链路追踪系统中，我们花费大量资源（CPU、内存、磁盘和网络）来生成、传输和持久跟踪数据。让我们试着回答为什么要这样做？我们可以用跟踪数据回答哪些典型的诊断和系统性能问题？&lt;/p&gt;
+&lt;p&gt;Skywalking v6包含两种追踪视图:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;ol&gt;
+&lt;li&gt;TreeMode: 第一次提供,帮助您更容易识别问题。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;ListMode: 常规的时间线视图，通常也出现在其他跟踪系统中，如Zipkin。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;发生错误&#34;&gt;发生错误&lt;/h1&gt;
+&lt;p&gt;在trace视图，最简单的部分是定位错误，可能是由代码异常或网络故障引起的。通过span详情提供的细节，ListMode和TreeMode都能够找到错误
+&lt;img src=&#34;0081Kckwly1gkl44lh09oj32ha0se42w.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-ListMode 错误span-&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44kwl6nj31q20u0dl0.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-TreeMode 错误span-&lt;/p&gt;
+&lt;h1 id=&#34;慢span&#34;&gt;慢span&lt;/h1&gt;
+&lt;p&gt;一个高优先级的特性是识别跟踪中最慢的span。这将使用应用程序代理捕获的执行持续时间。在旧的ListMode跟踪视图中，由于嵌套，父span几乎总是包括子span的持续时间。换句话说，一个缓慢的span通常会导致它的父节点也变慢，在Skywalking 6中，我们提供了 &lt;code&gt;最慢的前5个span&lt;/code&gt; 过滤器来帮助你您直接定位span。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gkl44odek5j31sd0u0q8f.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-最慢的前5个span-&lt;/p&gt;
+&lt;h1 id=&#34;太多子span&#34;&gt;太多子span&lt;/h1&gt;
+&lt;p&gt;在某些情况下，个别持续时间很快，但跟踪速度仍然很慢，如：
+&lt;img src=&#34;0081Kckwly1gkl44mxmddj310i0lktbp.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-没有慢span的追踪-&lt;/p&gt;
+&lt;p&gt;如果要了解根问题是否与太多操作相关，请使用子范围号的&lt;code&gt;Top 5 of children span number&lt;/code&gt;,筛选器显示每个span的子级数量，突出显示前5个。
+&lt;img src=&#34;0081Kckwly1gkl44nbryhj31fa0tcafl.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-13个数据库访问相关的span-&lt;/p&gt;
+&lt;p&gt;在这个截图中，有一个包含13个子项的span，这些子项都是数据库访问。另外，当您看到跟踪的概述时，这个2000ms跟踪的数据库花费了1380ms。
+&lt;img src=&#34;0081Kckwly1gkl44lzkbwj31040famyy.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-1380ms花费在数据库访问-&lt;/p&gt;
+&lt;p&gt;在本例中，根本原因是数据库访问太多。这在其他场景中也很常见，比如太多的RPC或缓存访问。&lt;/p&gt;
+&lt;h1 id=&#34;链路深度&#34;&gt;链路深度&lt;/h1&gt;
+&lt;p&gt;跟踪深度也与延迟有关。像&lt;a href=&#34;#%E5%A4%AA%E5%A4%9A%E5%AD%90span&#34;&gt;太多子span&lt;/a&gt;的场景一样，每个span延迟看起来不错，但整个链路追踪的过程很慢。
+&lt;img src=&#34;0081Kckwly1gkl44nv4gfj32600u0q7a.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;-链路深度-&lt;/p&gt;
+&lt;p&gt;上图所示,最慢的span小鱼500ms,对于2000毫秒的跟踪来说，速度并不太慢。当您看到第一行时，有四种不同的颜色表示这个分布式跟踪中涉及的四个services。每一个都需要100~400ms，这四个都需要近2000ms，从这里我们知道这个缓慢的跟踪是由一个序列中的3个RPC造成的。&lt;/p&gt;
+&lt;h2 id=&#34;结束语&#34;&gt;结束语&lt;/h2&gt;
+&lt;p&gt;分布式链路追踪和APM 工具帮助我们确定造成问题的根源，允许开发和操作团队进行相应的优化。我们希望您喜欢这一点，并且喜欢Apache Skywalking和我们的新链路追踪可视化界面。如果你喜欢的话，在&lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;github上面给我们加start来鼓励我们&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Skywakling 6计划在2019年的1月底完成release。您可以通过以下渠道联系项目团队成员&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;关注 &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;skywalking推特&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;订阅邮件:dev@skywalking.apache.org。发送邮件到 &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; 来订阅.&lt;/li&gt;
+&lt;li&gt;加入&lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt;聊天室&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

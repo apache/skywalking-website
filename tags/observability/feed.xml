@@ -1,0 +1,1086 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Observability</title>
+    <link>/tags/observability/</link>
+    <description>Recent content in Observability on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Tue, 13 Dec 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/observability/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: How to run Apache SkyWalking on AWS EKS and RDS/Aurora</title>
+      <link>/blog/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</link>
+      <pubDate>Tue, 13 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking is an open source APM tool for monitoring and troubleshooting distributed systems,
+especially designed for microservices, cloud native and container-based (Docker, Kubernetes, Mesos)
+architectures. It provides distributed tracing, service mesh observability, metric aggregation and
+visualization, and alarm.&lt;/p&gt;
+&lt;p&gt;In this article, I will introduce how to quickly set up Apache SkyWalking on AWS EKS and RDS/Aurora,
+as well as a couple of sample services, monitoring services to observe SkyWalking itself.&lt;/p&gt;
+&lt;h2 id=&#34;prerequisites&#34;&gt;Prerequisites&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;AWS account&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html&#34;&gt;AWS CLI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/downloads.html&#34;&gt;Terraform&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/#kubectl&#34;&gt;kubectl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We can use the AWS web console or CLI to create all resources needed in this tutorial, but it can be
+too tedious and hard to debug when something goes wrong. So in this artical I will use Terraform to
+create all AWS resources, deploy SkyWalking, sample services, and load generator services (Locust).&lt;/p&gt;
+&lt;h2 id=&#34;architecture&#34;&gt;Architecture&lt;/h2&gt;
+&lt;p&gt;The demo architecture is as follows:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-mermaid&#34; data-lang=&#34;mermaid&#34;&gt;graph LR
+    subgraph AWS
+        subgraph EKS
+          subgraph istio-system namespace
+              direction TB
+              OAP[[SkyWalking OAP]]
+              UI[[SkyWalking UI]]
+            Istio[[istiod]]
+          end
+          subgraph sample namespace
+              Service0[[Service0]]
+              Service1[[Service1]]
+              ServiceN[[Service ...]]
+          end
+          subgraph locust namespace
+              LocustMaster[[Locust Master]]
+              LocustWorkers0[[Locust Worker 0]]
+              LocustWorkers1[[Locust Worker 1]]
+              LocustWorkersN[[Locust Worker ...]]
+          end
+        end
+        RDS[[RDS/Aurora]]
+    end
+    OAP --&amp;gt; RDS
+    Service0 -. telemetry data -.-&amp;gt; OAP
+    Service1 -. telemetry data -.-&amp;gt; OAP
+    ServiceN -. telemetry data -.-&amp;gt; OAP
+    UI --query--&amp;gt; OAP
+    LocustWorkers0 -- traffic --&amp;gt; Service0
+    LocustWorkers1 -- traffic --&amp;gt; Service0
+    LocustWorkersN -- traffic --&amp;gt; Service0
+    Service0 --&amp;gt; Service1 --&amp;gt; ServiceN
+    LocustMaster --&amp;gt; LocustWorkers0
+    LocustMaster --&amp;gt; LocustWorkers1
+    LocustMaster --&amp;gt; LocustWorkersN
+    User --&amp;gt; LocustMaster
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;As shown in the architecture diagram, we need to create the following AWS resources:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;EKS cluster&lt;/li&gt;
+&lt;li&gt;RDS instance or Aurora cluster&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Sounds simple, but there are a lot of things behind the scenes, such as VPC, subnets, security groups, etc.
+You have to configure them correctly to make sure the EKS cluster can connect to RDS instance/Aurora cluster
+otherwise the SkyWalking won&amp;rsquo;t work. Luckily, Terraform can help us to create and destroy all these resources
+automatically.&lt;/p&gt;
+&lt;p&gt;I have created a Terraform module to create all AWS resources needed in this tutorial, you can find it in the
+&lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/tree/main/aws&#34;&gt;GitHub repository&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;create-aws-resources&#34;&gt;Create AWS resources&lt;/h2&gt;
+&lt;p&gt;First, we need to clone the GitHub repository and &lt;code&gt;cd&lt;/code&gt; into the folder:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/kezhenxu94/oap-load-test.git
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then, we need to create a file named &lt;code&gt;terraform.tfvars&lt;/code&gt; to specify the AWS region and other variables:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;cat &amp;gt; terraform.tfvars &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_access_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_secret_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;cluster_name   = &amp;#34;skywalking-on-aws&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;region         = &amp;#34;ap-east-1&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;db_type        = &amp;#34;rds-postgresql&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;If you have already configured the AWS CLI, you can skip the &lt;code&gt;aws_access_key&lt;/code&gt; and &lt;code&gt;aws_secret_key&lt;/code&gt; variables.
+To install SkyWalking with RDS postgresql, set the &lt;code&gt;db_type&lt;/code&gt; to &lt;code&gt;rds-postgresql&lt;/code&gt;, to install SkyWalking with
+Aurora postgresql, set the &lt;code&gt;db_type&lt;/code&gt; to &lt;code&gt;aurora-postgresql&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;There are a lot of other variables you can configure, such as tags, sample services count, replicas, etc.,
+you can find them in the &lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/blob/main/aws/variables.tf&#34;&gt;variables.tf&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Then, we can run the following commands to initialize the Terraform module and download the required providers,
+then create all AWS resources:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform init
+terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Type &lt;code&gt;yes&lt;/code&gt; to confirm the creation of all AWS resources, or add the &lt;code&gt;-auto-approve&lt;/code&gt; flag to the &lt;code&gt;terraform apply&lt;/code&gt;
+to skip the confirmation:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now what you need to do is to wait for the creation of all AWS resources to complete, it may take a few minutes.
+You can check the progress of the creation in the AWS web console, and check the deployment progress of the services
+inside the EKS cluster.&lt;/p&gt;
+&lt;h2 id=&#34;generate-traffic&#34;&gt;Generate traffic&lt;/h2&gt;
+&lt;p&gt;Besides creating necessary AWS resources, the Terraform module also deploys SkyWalking, sample services, and Locust
+load generator services to the EKS cluster.&lt;/p&gt;
+&lt;p&gt;You can access the Locust web UI to generate traffic to the sample services:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;open http://&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get svc -n locust -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;locust-master -o &lt;span style=&#34;color:#008080&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{.items[0].status.loadBalancer.ingress[0].hostname}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;:8089
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The command opens the browser to the Locust web UI, you can configure the number of users and hatch rate to generate
+traffic.&lt;/p&gt;
+&lt;h2 id=&#34;observe-skywalking&#34;&gt;Observe SkyWalking&lt;/h2&gt;
+&lt;p&gt;You can access the SkyWalking web UI to observe the sample services.&lt;/p&gt;
+&lt;p&gt;First you need to forward the SkyWalking UI port to local&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl -n istio-system port-forward &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl -n istio-system get pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking -l &lt;span style=&#34;color:#008080&#34;&gt;component&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;ui -o name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;And then open the browser to http://localhost:8080 to access the SkyWalking web UI.&lt;/p&gt;
+&lt;h2 id=&#34;observe-rdsaurora&#34;&gt;Observe RDS/Aurora&lt;/h2&gt;
+&lt;p&gt;You can also access the RDS/Aurora web console to observe the performance of RDS/Aurora instance/Aurora cluste.&lt;/p&gt;
+&lt;h2 id=&#34;test-results&#34;&gt;Test Results&lt;/h2&gt;
+&lt;h3 id=&#34;test-1-skywalking-with-eks-and-rds-postgresql&#34;&gt;Test 1: SkyWalking with EKS and RDS PostgreSQL&lt;/h3&gt;
+&lt;h4 id=&#34;service-traffic&#34;&gt;Service Traffic&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-cpm.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-performance&#34;&gt;RDS Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-performance&#34;&gt;SkyWalking Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;test-2-skywalking-with-eks-and-aurora-postgresql&#34;&gt;Test 2: SkyWalking with EKS and Aurora PostgreSQL&lt;/h3&gt;
+&lt;h4 id=&#34;service-traffic-1&#34;&gt;Service Traffic&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-cpm-skywalking.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-performance-1&#34;&gt;RDS Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-performance-1&#34;&gt;SkyWalking Performance&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;clean-up&#34;&gt;Clean up&lt;/h2&gt;
+&lt;p&gt;When you are done with the demo, you can run the following command to destroy all AWS resources:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform destroy -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 如何在 AWS EKS 和 RDS/Aurora 上运行 Apache SkyWalking</title>
+      <link>/zh/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</link>
+      <pubDate>Tue, 13 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;介绍&#34;&gt;介绍&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 是一个开源的 APM 工具，用于监控分布式系统和排除故障，特别是为微服务、云原生和基于容器（Docker、Kubernetes、Mesos）的架构而设计。它提供分布式跟踪、服务网格可观测性、指标聚合和可视化以及警报。&lt;/p&gt;
+&lt;p&gt;在本文中，我将介绍如何在 AWS EKS 和 RDS/Aurora 上快速设置 Apache SkyWalking，以及几个示例服务，监控服务以观察 SkyWalking 本身。&lt;/p&gt;
+&lt;h2 id=&#34;先决条件&#34;&gt;先决条件&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;AWS 账号&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html&#34;&gt;AWS CLI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/downloads.html&#34;&gt;Terraform&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/#kubectl&#34;&gt;kubectl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我们可以使用 AWS Web 控制台或 CLI 来创建本教程所需的所有资源，但是当出现问题时，它可能过于繁琐且难以调试。因此，在本文中，我将使用 Terraform 创建所有 AWS 资源、部署 SkyWalking、示例服务和负载生成器服务 (Locust)。&lt;/p&gt;
+&lt;h2 id=&#34;架构&#34;&gt;架构&lt;/h2&gt;
+&lt;p&gt;演示架构如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-mermaid&#34; data-lang=&#34;mermaid&#34;&gt;graph LR
+    subgraph AWS
+        subgraph EKS
+          subgraph istio-system namespace
+              direction TB
+              OAP[[SkyWalking OAP]]
+              UI[[SkyWalking UI]]
+            Istio[[istiod]]
+          end
+          subgraph sample namespace
+              Service0[[Service0]]
+              Service1[[Service1]]
+              ServiceN[[Service ...]]
+          end
+          subgraph locust namespace
+              LocustMaster[[Locust Master]]
+              LocustWorkers0[[Locust Worker 0]]
+              LocustWorkers1[[Locust Worker 1]]
+              LocustWorkersN[[Locust Worker ...]]
+          end
+        end
+        RDS[[RDS/Aurora]]
+    end
+    OAP --&amp;gt; RDS
+    Service0 -. telemetry data -.-&amp;gt; OAP
+    Service1 -. telemetry data -.-&amp;gt; OAP
+    ServiceN -. telemetry data -.-&amp;gt; OAP
+    UI --query--&amp;gt; OAP
+    LocustWorkers0 -- traffic --&amp;gt; Service0
+    LocustWorkers1 -- traffic --&amp;gt; Service0
+    LocustWorkersN -- traffic --&amp;gt; Service0
+    Service0 --&amp;gt; Service1 --&amp;gt; ServiceN
+    LocustMaster --&amp;gt; LocustWorkers0
+    LocustMaster --&amp;gt; LocustWorkers1
+    LocustMaster --&amp;gt; LocustWorkersN
+    User --&amp;gt; LocustMaster
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;如架构图所示，我们需要创建以下 AWS 资源：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;EKS 集群&lt;/li&gt;
+&lt;li&gt;RDS 实例或 Aurora 集群&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;听起来很简单，但背后有很多东西，比如 VPC、子网、安全组等。你必须正确配置它们以确保 EKS 集群可以连接到 RDS 实例 / Aurora 集群，否则 SkyWalking 不会不工作。幸运的是，Terraform 可以帮助我们自动创建和销毁所有这些资源。&lt;/p&gt;
+&lt;p&gt;我创建了一个 Terraform 模块来创建本教程所需的所有 AWS 资源，您可以在 &lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/tree/main/aws&#34;&gt;GitHub 存储库&lt;/a&gt;中找到它。&lt;/p&gt;
+&lt;h2 id=&#34;创建-aws-资源&#34;&gt;创建 AWS 资源&lt;/h2&gt;
+&lt;p&gt;首先，我们需要将 GitHub 存储库克隆 &lt;code&gt;cd&lt;/code&gt; 到文件夹中：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/kezhenxu94/oap-load-test.git
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后，我们需要创建一个文件 &lt;code&gt;terraform.tfvars&lt;/code&gt; 来指定 AWS 区域和其他变量：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;cat &amp;gt; terraform.tfvars &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_access_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;aws_secret_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;cluster_name   = &amp;#34;skywalking-on-aws&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;region         = &amp;#34;ap-east-1&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;db_type        = &amp;#34;rds-postgresql&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;如果您已经配置了 AWS CLI，则可以跳过 &lt;code&gt;aws_access_key&lt;/code&gt; 和 &lt;code&gt;aws_secret_key&lt;/code&gt; 变量。要使用 RDS postgresql 安装 SkyWalking，请将 &lt;code&gt;db_type&lt;/code&gt; 设置为 &lt;code&gt;rds-postgresql&lt;/code&gt;，要使用 Aurora postgresql 安装 SkyWalking，请将 &lt;code&gt;db_type&lt;/code&gt; 设置为 &lt;code&gt;aurora-postgresql&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;您可以配置许多其他变量，例如标签、示例服务计数、副本等，您可以在 variables.tf 中找到&lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/blob/main/aws/variables.tf&#34;&gt;它们&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;然后，我们可以运行以下命令来初始化 Terraform 模块并下载所需的提供程序，然后创建所有 AWS 资源：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform init
+terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;键入 &lt;code&gt;yes&lt;/code&gt; 以确认所有 AWS 资源的创建，或将标志 &lt;code&gt;-auto-approve&lt;/code&gt; 添加到 &lt;code&gt;terraform apply&lt;/code&gt; 以跳过确认：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform apply -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;现在你需要做的就是等待所有 AWS 资源的创建完成，这可能需要几分钟的时间。您可以在 AWS Web 控制台查看创建进度，也可以查看 EKS 集群内部服务的部署进度。&lt;/p&gt;
+&lt;h2 id=&#34;产生流量&#34;&gt;产生流量&lt;/h2&gt;
+&lt;p&gt;除了创建必要的 AWS 资源外，Terraform 模块还将 SkyWalking、示例服务和 Locust 负载生成器服务部署到 EKS 集群。&lt;/p&gt;
+&lt;p&gt;您可以访问 Locust Web UI 以生成到示例服务的流量：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;open http://&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get svc -n locust -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;locust-master -o &lt;span style=&#34;color:#008080&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{.items[0].status.loadBalancer.ingress[0].hostname}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;:8089
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;该命令将浏览器打开到 Locust web UI，您可以配置用户数量和孵化率以生成流量。&lt;/p&gt;
+&lt;h2 id=&#34;观察-skywalking&#34;&gt;观察 SkyWalking&lt;/h2&gt;
+&lt;p&gt;您可以访问 SkyWalking Web UI 来观察示例服务。&lt;/p&gt;
+&lt;p&gt;首先需要将 SkyWalking UI 端口转发到本地：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl -n istio-system port-forward &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl -n istio-system get pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking -l &lt;span style=&#34;color:#008080&#34;&gt;component&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;ui -o name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后在浏览器中打开 http://localhost:8080 访问 SkyWalking web UI。&lt;/p&gt;
+&lt;h2 id=&#34;观察-rdsaurora&#34;&gt;观察 RDS/Aurora&lt;/h2&gt;
+&lt;p&gt;您也可以访问 RDS/Aurora web 控制台，观察 RDS/Aurora 实例 / Aurora 集群的性能。&lt;/p&gt;
+&lt;h2 id=&#34;试验结果&#34;&gt;试验结果&lt;/h2&gt;
+&lt;h3 id=&#34;测试-1使用-eks-和-rds-postgresql-的-skywalking&#34;&gt;测试 1：使用 EKS 和 RDS PostgreSQL 的 SkyWalking&lt;/h3&gt;
+&lt;h4 id=&#34;服务流量&#34;&gt;服务流量&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-cpm.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-性能&#34;&gt;RDS 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-性能&#34;&gt;SkyWalking 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;测试-2使用-eks-和-aurora-postgresql-的-skywalking&#34;&gt;测试 2：使用 EKS 和 Aurora PostgreSQL 的 SkyWalking&lt;/h3&gt;
+&lt;h4 id=&#34;服务流量-1&#34;&gt;服务流量&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-cpm-skywalking.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-性能-1&#34;&gt;RDS 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-性能-1&#34;&gt;SkyWalking 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;清理&#34;&gt;清理&lt;/h2&gt;
+&lt;p&gt;完成演示后，您可以运行以下命令销毁所有 AWS 资源：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;terraform destroy -var-file&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: [Video] Distributed tracing demo using Apache SkyWalking and Kong API Gateway</title>
+      <link>/blog/2022-08-11-kongcast-20-distributed-tracing-using-skywalking-kong/</link>
+      <pubDate>Thu, 11 Aug 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-08-11-kongcast-20-distributed-tracing-using-skywalking-kong/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Observability essential when working with distributed systems. Built on 3 pillars of metrics, logging and
+tracing, having the right tools in place to quickly identify and determine the root cause of an issue in production
+is imperative. In this Kongcast interview, we explore the benefits of having observability and demo the use of
+Apache SkyWalking. We walk through the capabilities that SkyWalking offers out of the box and debug a common HTTP 500
+error using the tool.&lt;/p&gt;
+&lt;p&gt;Andrew Kew is interviewed by Viktor Gamov, a developer advocate at &lt;a href=&#34;https://konghq.com/&#34;&gt;Kong Inc&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Andrew is a highly passionate technologist with over 16 valuable years experience in building server side and cloud
+applications. Having spent the majority of his time in the Financial Services domain, his meritocratic rise to CTO of an
+Algorithmic Trading firm allowed him to not only steer the business from a technology standpoint, but build robust and
+scalable trading algorithms. His mantra is &amp;ldquo;right first time&amp;rdquo;, thus ensuring the projects or clients he is involved in
+are left in a better place than they were before he arrived.&lt;/p&gt;
+&lt;p&gt;He is the founder of a boutique software consultancy in the United Kingdom, &lt;a href=&#34;https://quadcorps.co.uk&#34;&gt;QuadCorps Ltd&lt;/a&gt;, working in the API and
+Integration Ecosystem space and is currently on a residency programme at &lt;a href=&#34;https://konghq.com/&#34;&gt;Kong Inc&lt;/a&gt; as a senior field engineer and
+technical account manager working across many of their enterprise strategic accounts.&lt;/p&gt;
+
+&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
+  &lt;iframe src=&#34;https://www.youtube.com/embed/r8e9ib0powM&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Pinpoint Service Mesh Critical Performance Impact by using eBPF</title>
+      <link>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</link>
+      <pubDate>Tue, 05 Jul 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; observes metrics, logs, traces, and events for services deployed into the service mesh. When troubleshooting, SkyWalking error analysis can be an invaluable tool helping to pinpoint where an error occurred. However, performance problems are more difficult: It’s often impossible to locate the root cause of performance problems with pre-existing observation data. To move beyond the status quo, dynamic debugging and troubleshooting are essential service performance tools. In this article, we&amp;rsquo;ll discuss how to use eBPF technology to improve the profiling feature in SkyWalking and analyze the performance impact in the service mesh.&lt;/p&gt;
+&lt;h1 id=&#34;trace-profiling-in-skywalking&#34;&gt;Trace Profiling in SkyWalking&lt;/h1&gt;
+&lt;p&gt;Since SkyWalking 7.0.0, Trace Profiling has helped developers find performance problems by periodically sampling the thread stack to let developers know which lines of code take more time. However, Trace Profiling is not suitable for the following scenarios:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Thread Model&lt;/strong&gt;: Trace Profiling is most useful for profiling code that executes in a single thread. It is less useful for middleware that relies heavily on async execution models. For example Goroutines in Go or Kotlin Coroutines.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Language&lt;/strong&gt;: Currently, Trace Profiling is only supported in Java and Python, since it’s not easy to obtain the thread stack in the runtimes of some languages such as Go and Node.js.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: Trace Profiling requires Agent installation, which can be tricky depending on the language (e.g., PHP has to rely on its C kernel; Rust and C/C++ require manual instrumentation to make install).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace Correlation&lt;/strong&gt;: Since Trace Profiling is only associated with a single request it can be hard to determine which request is causing the problem.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Short Lifecycle Services&lt;/strong&gt;: Trace Profiling doesn&amp;rsquo;t support short-lived services for (at least) two reasons:
+&lt;ol&gt;
+&lt;li&gt;It&amp;rsquo;s hard to differentiate system performance from class code manipulation in the booting stage.&lt;/li&gt;
+&lt;li&gt;Trace profiling is linked to an endpoint to identify performance impact, but there is no endpoint to match these short-lived services.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Fortunately, there are techniques that can go further than Trace Profiling in these situations.&lt;/p&gt;
+&lt;h1 id=&#34;introduce-ebpf&#34;&gt;Introduce eBPF&lt;/h1&gt;
+&lt;p&gt;We have found that eBPF — a technology that can run sandboxed programs in an operating system kernel and thus safely and efficiently extend the capabilities of the kernel without requiring kernel modifications or loading kernel modules — can help us fill gaps left by Trace Profiling. eBPF is a trending technology because it breaks the traditional barrier between user and kernel space. Programs can now inject bytecode that runs in the kernel, instead of having to recompile the kernel to customize it. This is naturally a good fit for observability.&lt;/p&gt;
+&lt;p&gt;In the figure below, we can see that when the system executes the execve syscalls, the eBPF program is triggered, and the current process runtime information is obtained by using function calls.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;eBPF-hook-points.png&#34; alt=&#34;eBPF Hook Point&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Using eBPF technology, we can expand the scope of Skywalking&amp;rsquo;s profiling capabilities:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Global Performance Analysis&lt;/strong&gt;: Before eBPF, data collection was limited to what agents can observe. Since eBPF programs run in the kernel, they can observe all threads. This is especially useful when you are not sure whether a performance problem is caused by a particular request.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Data Content&lt;/strong&gt;: eBPF can dump both user and kernel space thread stacks, so if a performance issue happens in kernel space, it’s easier to find.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: All modern Linux kernels support eBPF, so there is no need to install anything. This means it is an orchestration-free vs an agent model. This reduces friction caused by built-in software which may not have the correct agents installed, such as Envoy in a Service Mesh.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling Type&lt;/strong&gt;: Unlike Trace Profiling, eBPF is event-driven and, therefore, not constrained by interval polling. For example, eBPF can trigger events and collect more data depending on a transfer size threshold. This can allow the system to triage and prioritize data collection under extreme load.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;ebpf-limitations&#34;&gt;eBPF Limitations&lt;/h2&gt;
+&lt;p&gt;While eBPF offers significant advantages for hunting performance bottlenecks, no technology is perfect. eBPF has a number of limitations described below. Fortunately, since SkyWalking does not require eBPF, the impact is limited.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Linux Version Requirement&lt;/strong&gt;: eBPF programs require a Linux kernel version above 4.4, with later kernel versions offering more data to be collected. The BCC has &lt;a href=&#34;https://github.com/iovisor/bcc/blob/13b5563c11f7722a61a17c6ca0a1a387d2fa7788/docs/kernel-versions.md#main-features&#34;&gt;documented the features supported by different Linux kernel versions&lt;/a&gt;, with the differences between versions usually being what data can be collected with eBPF.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Privileges Required&lt;/strong&gt;: All processes that intend to load eBPF programs into the Linux kernel must be running in privileged mode. As such, bugs or other issues in such code may have a big impact.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Weak Support for Dynamic Language&lt;/strong&gt;: eBPF has weak support for JIT-based dynamic languages, such as Java. It also depends on what data you want to collect. For Profiling, eBPF does not support parsing the symbols of the program, which is why most eBPF-based profiling technologies only support static languages like C, C++, Go, and Rust. However, symbol mapping can sometimes be solved through tools provided by the language. For example, in Java, &lt;a href=&#34;https://github.com/jvm-profiling-tools/perf-map-agent#architecture&#34;&gt;perf-map-agent&lt;/a&gt; can be used to generate the symbol mapping. However, dynamic languages don&amp;rsquo;t support the attach (uprobe) functionality that would allow us to trace execution events through symbols.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;introducing-skywalking-rover&#34;&gt;Introducing SkyWalking Rover&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; introduces the eBPF profiling feature into the SkyWalking ecosystem. The figure below shows the overall architecture of SkyWalking Rover. SkyWalking Rover is currently supported in Kubernetes environments and must be deployed inside a Kubernetes cluster. After establishing a connection with the SkyWalking backend server, it saves information about the processes on the current machine to SkyWalking. When the user creates an eBPF profiling task via the user interface, SkyWalking Rover receives the task and executes it in the relevant C, C++, Golang, and Rust language-based programs.&lt;/p&gt;
+&lt;p&gt;Other than an eBPF-capable kernel, there are no additional prerequisites for deploying SkyWalking Rover.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;architecture.png&#34; alt=&#34;architecture&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;cpu-profiling-with-rover&#34;&gt;CPU Profiling with Rover&lt;/h2&gt;
+&lt;p&gt;CPU profiling is the most intuitive way to show service performance. Inspired by &lt;a href=&#34;https://www.brendangregg.com/offcpuanalysis.html&#34;&gt;Brendan Gregg‘s blog post&lt;/a&gt;, we&amp;rsquo;ve divided CPU profiling into two types that we have implemented in Rover:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;On-CPU Profiling&lt;/strong&gt;: Where threads are spending time running on-CPU.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Off-CPU Profiling&lt;/strong&gt;: Where time is spent waiting while blocked on I/O, locks, timers, paging/swapping, etc.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;profiling-envoy-with-ebpf&#34;&gt;Profiling Envoy with eBPF&lt;/h1&gt;
+&lt;p&gt;Envoy is a popular proxy, used as the data plane by the Istio service mesh. In a Kubernetes cluster, Istio injects Envoy into each service’s pod as a sidecar where it transparently intercepts and processes incoming and outgoing traffic. As the data plane, any performance issues in Envoy can affect all service traffic in the mesh. In this scenario, it’s more powerful to use &lt;strong&gt;eBPF profiling&lt;/strong&gt; to analyze issues in production caused by service mesh configuration.&lt;/p&gt;
+&lt;h2 id=&#34;demo-environment&#34;&gt;Demo Environment&lt;/h2&gt;
+&lt;p&gt;If you want to see this scenario in action, we&amp;rsquo;ve built a demo environment where we deploy an Nginx service for stress testing. Traffic is intercepted by Envoy and forwarded to Nginx. The commands to install the whole environment can be accessed through &lt;a href=&#34;https://github.com/mrproliu/skywalking-rover-profiling-demo&#34;&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;h1 id=&#34;on-cpu-profiling&#34;&gt;On-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;On-CPU profiling is suitable for analyzing thread stacks when service CPU usage is high. If the stack is dumped more times, it means that the thread stack occupies more CPU resources.&lt;/p&gt;
+&lt;p&gt;When installing Istio using the demo configuration profile, we found there are two places where we can optimize performance:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Zipkin Tracing&lt;/strong&gt;: Different Zipkin sampling percentages have a direct impact on QPS.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Access Log Format&lt;/strong&gt;: Reducing the fields of the Envoy access log can improve QPS.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;zipkin-tracing&#34;&gt;Zipkin Tracing&lt;/h2&gt;
+&lt;h3 id=&#34;zipkin-with-100-sampling&#34;&gt;Zipkin with 100% sampling&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, Envoy is using 100% sampling as default tracing policy. How does that impact the performance?&lt;/p&gt;
+&lt;p&gt;As shown in the figure below, using the &lt;strong&gt;on-CPU profiling&lt;/strong&gt;, we found that it takes about &lt;strong&gt;16%&lt;/strong&gt; of the CPU overhead. At a fixed consumption of &lt;strong&gt;2 CPUs&lt;/strong&gt;, its QPS can reach &lt;strong&gt;5.7K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;zipkin-sampling-100.png&#34; alt=&#34;Zipkin with 100% sampling&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-zipkin-tracing&#34;&gt;Disable Zipkin tracing&lt;/h3&gt;
+&lt;p&gt;At this point, we found that if Zipkin is not necessary, the sampling percentage can be reduced or we can even disable tracing. Based on the &lt;a href=&#34;https://istio.io/latest/docs/reference/config/istio.mesh.v1alpha1/#Tracing&#34;&gt;Istio documentation&lt;/a&gt;, we can disable tracing when installing the service mesh using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.enableTracing=false&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.defaultConfig.tracing.sampling=0.0&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling tracing, we performed on-CPU profiling again. According to the figure below, we found that Zipkin has disappeared from the flame graph. With the same &lt;strong&gt;2 CPU&lt;/strong&gt; consumption as in the previous example, the QPS reached &lt;strong&gt;9K&lt;/strong&gt;, which is an almost &lt;strong&gt;60%&lt;/strong&gt; increase.
+&lt;img src=&#34;zipkin-disable-tracing.png&#34; alt=&#34;Disable Zipkin tracing&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-with-throughput&#34;&gt;Tracing with Throughput&lt;/h3&gt;
+&lt;p&gt;With the same CPU usage, we&amp;rsquo;ve discovered that Envoy performance greatly improves when the tracing feature is disabled. Of course, this requires us to make trade-offs between the number of samples Zipkin collects and the desired performance of Envoy (QPS).&lt;/p&gt;
+&lt;p&gt;The table below illustrates how different Zipkin sampling percentages under the same CPU usage affect QPS.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Zipkin sampling %&lt;/th&gt;
+&lt;th&gt;QPS&lt;/th&gt;
+&lt;th&gt;CPUs&lt;/th&gt;
+&lt;th&gt;Note&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;100% &lt;strong&gt;(default)&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;5.7K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;16% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;1%&lt;/td&gt;
+&lt;td&gt;8.1K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0.3% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;disabled&lt;/td&gt;
+&lt;td&gt;9.2K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;access-log-format&#34;&gt;Access Log Format&lt;/h2&gt;
+&lt;h3 id=&#34;default-log-format&#34;&gt;Default Log Format&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/logs/access-log/#default-access-log-format&#34;&gt;the default Access Log format&lt;/a&gt; contains a lot of data. The flame graph below shows various functions involved in parsing the data such as request headers, response headers, and streaming the body.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;log-format-default.png&#34; alt=&#34;Default Log Format&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;simplifying-access-log-format&#34;&gt;Simplifying Access Log Format&lt;/h3&gt;
+&lt;p&gt;Typically, we don’t need all the information in the access log, so we can often simplify it to get what we need. The following command simplifies the access log format to only display basic information:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set meshConfig.accessLogFormat&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;[%START_TIME%] \&amp;#34;%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\&amp;#34; %RESPONSE_CODE%\n&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After simplifying the access log format, we found that the QPS increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;. When executing the on-CPU profiling again, the CPU usage of log formatting dropped from &lt;strong&gt;2.4%&lt;/strong&gt; to &lt;strong&gt;0.7%&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Simplifying the log format helped us to improve the performance.&lt;/p&gt;
+&lt;h1 id=&#34;off-cpu-profiling&#34;&gt;Off-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;Off-CPU profiling is suitable for performance issues that are not caused by high CPU usage. For example, when there are too many threads in one service, using off-CPU profiling could reveal which threads spend more time context switching.&lt;/p&gt;
+&lt;p&gt;We provide data aggregation in two dimensions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Switch count&lt;/strong&gt;: The number of times a thread switches context. When the thread returns to the CPU, it completes one context switch. A thread stack with a higher switch count spends more time context switching.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Switch duration&lt;/strong&gt;: The time it takes a thread to switch the context. A thread stack with a higher switch duration spends more time off-CPU.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;write-access-log&#34;&gt;Write Access Log&lt;/h2&gt;
+&lt;h3 id=&#34;enable-write&#34;&gt;Enable Write&lt;/h3&gt;
+&lt;p&gt;Using the same environment and settings as before in the on-CPU test, we performed off-CPU profiling. As shown below, we found that access log writes accounted for about &lt;strong&gt;28%&lt;/strong&gt; of the total context switches. The &amp;ldquo;__write&amp;rdquo; shown below also indicates that this method is the Linux kernel method.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-enable.png&#34; alt=&#34;Enable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-write&#34;&gt;Disable Write&lt;/h3&gt;
+&lt;p&gt;SkyWalking implements Envoy&amp;rsquo;s Access Log Service (ALS) feature which allows us to send access logs to the SkyWalking Observability Analysis Platform (OAP) using the gRPC protocol. Even by disabling the access logging, we can still use ALS to capture/aggregate the logs. We&amp;rsquo;ve disabled writing to the access log using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo --set meshConfig.accessLogFile&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling the Access Log feature, we performed the off-CPU profiling. File writing entries have disappeared as shown in the figure below. Envoy throughput also increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-disable.png&#34; alt=&#34;Disable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, we&amp;rsquo;ve examined the insights Apache Skywalking&amp;rsquo;s Trace Profiling can give us and how much more can be achieved with eBPF profiling. All of these features are implemented in &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;skywalking-rover&lt;/a&gt;. In addition to on- and off-CPU profiling, you will also find the following features:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Continuous profiling&lt;/strong&gt;, helps you automatically profile without manual intervention. For example, when Rover detects that the CPU exceeds a configurable threshold, it automatically executes the on-CPU profiling task.&lt;/li&gt;
+&lt;li&gt;More profiling types to enrich usage scenarios, such as network, and memory profiling.&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache ShenYu(incubating) plugin implementation principles and observability practices</title>
+      <link>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</link>
+      <pubDate>Sun, 08 May 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-Introduction-of-SkyWalking-and-ShenYu&#34;&gt;Introduction of SkyWalking and ShenYu&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-Apache-ShenYu-plugin-implementation-principle&#34;&gt;Apache ShenYu plugin implementation principle&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-Adding-generalized-call-tracking-to-the-gRPC-plugin-and-keeping-it-compatible&#34;&gt;Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-ShenYu-Gateway-Observability-Practice&#34;&gt;ShenYu Gateway Observability Practice&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-Summary&#34;&gt;Summary&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1-introduction-of-skywalking-and-shenyu&#34;&gt;1. Introduction of SkyWalking and ShenYu&lt;/h2&gt;
+&lt;h3 id=&#34;11-skywalking&#34;&gt;1.1 SkyWalking&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/hutaishi/skywalking&#34;&gt;SkyWalking&lt;/a&gt; is an Application Performance Monitoring (APM) and Observability Analysis Platform (OAP) for microservices, distributed systems, and cloud natives,
+Has powerful features that provide a multi-dimensional means of application performance analysis, including distributed topology diagrams, application performance metrics, distributed link tracing, log correlation analysis and alerts. Also has a very rich ecology. Widely used in various companies and open source projects.&lt;/p&gt;
+&lt;h3 id=&#34;12-apache-shenyu-incubating&#34;&gt;1.2 Apache ShenYu (incubating)&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;
+High-performance,multi-protocol,extensible,responsive API Gateway. Compatible with a variety of mainstream framework systems, support hot plug,
+users can customize the development, meet the current situation and future needs of users in a variety of scenarios, experienced the temper of large-scale scenes.
+Rich protocol support: &lt;code&gt;Http&lt;/code&gt;, &lt;code&gt;Spring Cloud&lt;/code&gt;, &lt;code&gt;gRPC&lt;/code&gt;, &lt;code&gt;Dubbo&lt;/code&gt;, &lt;code&gt;SOFARPC&lt;/code&gt;, &lt;code&gt;Motan&lt;/code&gt;, &lt;code&gt;Tars&lt;/code&gt;, etc.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;shenyu-arch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2-apache-shenyu-plugin-implementation-principle&#34;&gt;2. Apache ShenYu plugin implementation principle&lt;/h2&gt;
+&lt;p&gt;ShenYu&amp;rsquo;s asynchrony is a little different from previous exposure to asynchrony, it is a full-link asynchrony, the execution of each plug-in is asynchronous, and thread switching is not a single fixed situation (and the individual plug-in implementation is related).
+The gateway initiates service calls of various protocol types, and the existing SkyWalking plugins create ExitSpan (synchronous or asynchronous) when they initiate service calls.  The gateway receives the request and creates an asynchronous EntrySpan.
+The asynchronous EntrySpan needs to be concatenated with the synchronous or asynchronous ExitSpan, otherwise the link will be broken.&lt;/p&gt;
+&lt;p&gt;There are 2 types of tandem solutions：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Snapshot Delivery&lt;/strong&gt;:&lt;br&gt;
+Pass the snapshot after creating the EntrySpan to the thread that created the ExitSpan in some way.&lt;br&gt;
+Currently this approach is used in the asynchronous WebClient plugin, which can receive asynchronous snapshots. shenYu proxy Http service or SpringCloud service is to achieve span concatenation through snapshot passing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LocalSpan transit&lt;/strong&gt;:&lt;br&gt;
+Other RPC class plugins do not receive snapshots for concatenation like Asynchronous WebClient. Although you can modify other RPC plugins to receive snapshots for concatenation, it is not recommended or necessary to do so.
+This can be achieved by creating a LocalSpan in the thread where the ExitSpan is created, and then connecting the asynchronous EntrySpan and LocalSpan by &lt;code&gt;snapshot passing&lt;/code&gt;. This can be done without changing the original plugin code.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The span connection is shown below:&lt;br&gt;
+&lt;img src=&#34;span-connect.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You may ask if it is possible to create LocalSpan inside a generic plugin, instead of creating one separately for ShenYu RPC plugin?
+The answer is no, because you need to ensure that LocalSpan and ExitSpan are in the same thread, and ShenYu is fully linked asynchronously. The code to create LocalSpan is reused in the implementation.&lt;/p&gt;
+&lt;h2 id=&#34;3-adding-generalized-call-tracking-to-the-grpc-plugin-and-keeping-it-compatible&#34;&gt;3. Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/h2&gt;
+&lt;p&gt;The existing SkyWalking gRPC plugin only supports calls initiated by way of stubs. For the gateway there is no proto file, the gateway takes generalized calls (not through stubs), so tracing RPC requests, you will find that the link will break at the gateway node.
+In this case, it is necessary to make the gRPC plugin support generalized calls, while at the same time needing to remain compatible and not affect the original tracing method. This is achieved by determining whether the request parameter is a DynamicMessage, and if it is not, then the original tracing logic through the stub is used.
+If not, then the original tracing logic via stubs is used, and if not, then the generalized call tracing logic is used. The other compatibility is the difference between the old and new versions of gRPC, as well as the compatibility of various cases of obtaining server-side IP, for those interested in the source code.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-generic-call.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;4-shenyu-gateway-observability-practice&#34;&gt;4. ShenYu Gateway Observability Practice&lt;/h2&gt;
+&lt;p&gt;The above explains the principle of SkyWalking ShenYu plug-in implementation, the following deployment application to see the effect. SkyWalking powerful, in addition to the link tracking requires the development of plug-ins, other powerful features out of the box.
+Here only describe the link tracking and application performance analysis part, if you want to experience the power of SkyWalking features, please refer to the &lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking official documentation&lt;/a&gt;.&lt;br&gt;
+Version description:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;skywalking-java: &lt;code&gt;8.11.0-SNAPSHOT&lt;/code&gt; source code build. Note: The shenyu plugin will be released in version 8.11.0, and will probably release it initially in May or June. the Java agent is in the regular release phase.&lt;/li&gt;
+&lt;li&gt;skywalking: &lt;code&gt;9.0.0&lt;/code&gt; V9 version&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Usage instructions:&lt;br&gt;
+SkyWalking is designed to be very easy to use. Please refer to the official documentation for configuring and activating the shenyu plugin.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/readme/&#34;&gt;SkyWalking Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/readme/&#34;&gt;SkyWalking Java Agent Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;41-sending-requests-to-the-gateway&#34;&gt;4.1 Sending requests to the gateway&lt;/h3&gt;
+&lt;p&gt;Initiate various service requests to the gateway via the &lt;code&gt;postman&lt;/code&gt; client or &lt;code&gt;other means&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;42-request-topology-diagram&#34;&gt;4.2 Request Topology Diagram&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;topology2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;43-request-trace-in-the-case-of-grpc&#34;&gt;4.3 Request Trace (in the case of gRPC)&lt;/h3&gt;
+&lt;h4 id=&#34;normal-trace&#34;&gt;Normal Trace：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-ok.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;abnormal-trace&#34;&gt;Abnormal Trace：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Click on the link node to see the corresponding node information and exception information&lt;/p&gt;
+&lt;h4 id=&#34;service-provider-span&#34;&gt;Service Provider Span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;gateway-request-span&#34;&gt;Gateway request span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;gateway-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;44-service-metrics-monitoring&#34;&gt;4.4 Service Metrics Monitoring&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;overview.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;45-gateway-background-metrics-monitoring&#34;&gt;4.5 Gateway background metrics monitoring&lt;/h3&gt;
+&lt;h4 id=&#34;database-monitoring&#34;&gt;Database Monitoring:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;database.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;thread-pool-and-connection-pool-monitoring&#34;&gt;Thread pool and connection pool monitoring:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;img.png&#34; alt=&#34;img.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;46-jvm-monitoring&#34;&gt;4.6 JVM Monitoring&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;jvm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;47-endpoint-analysis&#34;&gt;4.7 Endpoint Analysis&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;endpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;48-exception-log-and-exception-link-analysis&#34;&gt;4.8 Exception log and exception link analysis&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/&#34;&gt;See official documentation for log configuration&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Log monitoring
+&lt;img src=&#34;log-trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Distributed link trace details corresponding to exception logs
+&lt;img src=&#34;log-trace-detail.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;5-summary&#34;&gt;5. Summary&lt;/h2&gt;
+&lt;p&gt;SkyWalking has very comprehensive support for metrics, link tracing, and logging in observability, and is powerful, easy to use, and designed for large distributed systems, microservices, cloud-native, container architectures, and has a rich ecosystem.
+Using SkyWalking to provide powerful observability support for Apache ShenYu (incubating) gives ShenYu a boost. Finally, if you are interested in high-performance responsive gateways, you can follow
+&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;.
+Also, thanks to SkyWalking such an excellent open source software to the industry contributions.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Integrating Apache SkyWalking with source code</title>
+      <link>/blog/2022-04-14-integrating-skywalking-with-source-code/</link>
+      <pubDate>Thu, 14 Apr 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-04-14-integrating-skywalking-with-source-code/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;The most profound technologies are those that disappear. They weave themselves into the fabric of everyday life until they are indistinguishable from it. - Mark Weiser&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Mark Weiser prophetically argued in the late 1980s, that the most far-reaching technologies are those which vanish into thin air. According to Weiser, &amp;ldquo;Whenever people learn something sufficiently well, they cease to be aware of it.&amp;rdquo; This disappearing act, as Weiser claimed, is not limited to technology but rather human psychology. It is this very experience that allows us to escape lower-level thinking into higher-level thinking. For once we are no longer impeded by mundane details, we are then free to focus on new goals.&lt;/p&gt;
+&lt;p&gt;This realization becomes more relevant as APMs become increasingly popular. As more applications are deployed with APMs, the number of abstract representations of the underlying source code also increases. While this provides great value to many non-development roles within an organization, it does pose additional challenges to those in development roles who must translate these representations into concepts they can work with (i.e. source code). Weiser sums this difficultly up rather succinctly when he states that &amp;ldquo;Programmers should no more be asked to work without access to source code than auto-mechanics should be asked to work without looking at the engine.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Still, APMs collect more information only to produce a plethora of new abstract representations. In this article, we will introduce a new concept in &lt;a href=&#34;https://github.com/sourceplusplus/live-platform&#34;&gt;Source++&lt;/a&gt;, the open-source live-coding platform, specifically designed to allow developers to monitor production applications more intuitively.&lt;/p&gt;
+&lt;h2 id=&#34;live-views&#34;&gt;Live Views&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;And we really don&amp;rsquo;t understand even yet, hundreds of metrics later, what make a program easier to understand or modify or reuse or borrow. I don&amp;rsquo;t think we&amp;rsquo;ll find out by looking away from programs to their abstract interfaces. The answers are in the source code. - Mark Weiser&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;As APMs move from the &amp;ldquo;nice to have&amp;rdquo; category to the &amp;ldquo;must-have&amp;rdquo; category, there is a fundamental feature holding them back from ubiquity. They must disappear from consciousness. As developers, we should feel no impulse to open our browsers to better understand the underlying source code. The answers are literally in the source code. Instead, we should improve our tools so the source code conveniently tells us what we need to know. Think of how simple life could be if failing code always indicated how and why it failed. This is the idea behind Source++.&lt;/p&gt;
+&lt;p&gt;In our last blog post, we discussed &lt;a href=&#34;https://skywalking.apache.org/blog/2021-12-06-extend-skywalking-with-nbb/&#34;&gt;Extending Apache SkyWalking with non-breaking breakpoints&lt;/a&gt;. In that post, we introduced a concept called &lt;strong&gt;Live Instruments&lt;/strong&gt;, which developers can use to easily debug live production applications without leaving their IDE. Today, we will discuss how existing SkyWalking installations can be integrated into your IDE via a new concept called &lt;strong&gt;Live Views&lt;/strong&gt;. Unlike Live Instruments, which are designed for debugging live applications, Live Views are designed for increasing application comprehension and awareness. This is accomplished through a variety of commands which are input into the Live Command Palette.&lt;/p&gt;
+&lt;h3 id=&#34;live-command-palette&#34;&gt;Live Command Palette&lt;/h3&gt;
+&lt;p&gt;The Live Command Palette (LCP) is a contextual command prompt, included in the &lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains&#34;&gt;Source++ JetBrains Plugin&lt;/a&gt;, that allows developers to control and query live applications from their IDE. Opened via keyboard shortcut (&lt;code&gt;Ctrl+Shift+S&lt;/code&gt;), the LCP allows developers to easily view metrics relevant to the source code they&amp;rsquo;re currently viewing. The following Live View commands are currently supported:&lt;/p&gt;
+&lt;h4 id=&#34;command-view-overviewactivitytraceslogs&#34;&gt;Command: view (overview/activity/traces/logs)&lt;/h4&gt;
+&lt;p&gt;The &lt;code&gt;view&lt;/code&gt; commands display contextual popups with live operational data of the current source code. These commands allow developers to view traditional SkyWalking operational data filtered down to the relevant metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;view_command.gif&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;command-watch-log&#34;&gt;Command: watch log&lt;/h4&gt;
+&lt;p&gt;The &lt;code&gt;watch log&lt;/code&gt; command allows developers to follow individual log statements of a running application in real-time. This command allows developers to negate the need for manually scrolling through the logs to find instances of a specific log statement.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;watch_log_command.gif&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;command-showhide-quick-stats&#34;&gt;Command: (show/hide) quick stats&lt;/h4&gt;
+&lt;p&gt;The &lt;code&gt;show quick stats&lt;/code&gt; command displays live endpoint metrics for a quick idea of an endpoint&amp;rsquo;s activity. Using this command, developers can quickly assess the status of an endpoint and determine if the endpoint is performing as expected.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;show_quick_stats_command.gif&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;future-work&#34;&gt;Future Work&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;A good tool is an invisible tool. By invisible, I mean that the tool does not intrude on your consciousness; you focus on the task, not the tool. Eyeglasses are a good tool &amp;ndash; you look at the world, not the eyeglasses. - Mark Weiser&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Source++ aims to extend SkyWalking in such a way that SkyWalking itself becomes invisible. To accomplish this, we plan to support custom developer commands. Developers will be able to build customized commands for themselves, as well as commands to share with their team. These commands will recognize context, types, and conditions allowing for a wide possibility of operations. As more commands are added, developers will be able to expose everything SkyWalking has to offer while focusing on what matters most, the source code.&lt;/p&gt;
+&lt;p&gt;If you find these features useful, please consider giving Source++ a try. You can install the plugin directly from your JetBrains IDE, or through the &lt;a href=&#34;https://plugins.jetbrains.com/plugin/12033-source-&#34;&gt;JetBrains Marketplace&lt;/a&gt;. If you have any issues or questions, please &lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains/issues&#34;&gt;open an issue&lt;/a&gt;. Feedback is always welcome!&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 将 Apache SkyWalking 与源代码集成</title>
+      <link>/zh/2022-04-14-integrating-skywalking-with-source-code/</link>
+      <pubDate>Thu, 14 Apr 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2022-04-14-integrating-skywalking-with-source-code/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;sub&gt;Read this post in original language: &lt;a href=&#34;https://skywalking.apache.org/blog/2022-04-14-integrating-skywalking-with-source-code/&#34;&gt;English&lt;/a&gt;&lt;/sub&gt;&lt;/p&gt;
+&lt;h2 id=&#34;介绍&#34;&gt;介绍&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;最具影响力的技术是那些消失的技术。他们交织在日常生活中，直到二者完全相融。 - 马克韦瑟&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;马克韦瑟在 1980 年代后期预言，影响最深远的技术是那些消失在空气中的技术。&lt;/p&gt;
+&lt;p&gt;“当人们足够熟知它，就不会再意识到它。”&lt;/p&gt;
+&lt;p&gt;正如韦瑟所说，这种消失的现象不只源于技术，更是人类的心理。
+正是这种经验使我们能够摆脱对底层的考量，进入更高层次的思考。
+一旦我们不再被平凡的细枝末节所阻碍，我们就可以自如地专注于新的目标。&lt;/p&gt;
+&lt;p&gt;随着 APM(应用性能管理系统) 变得越来越普遍，这种认识变得更加重要。随着更多的应用程序开始使用 APM 部署，底层源代码抽象表示的数量也在同步增加。
+虽然这为组织内的许多非开发角色提供了巨大的价值，但它确实也对开发人员提出了额外的挑战 -
+他们必须将这些表示转化为可操作的概念（即源代码）。
+对此，韦瑟相当简洁的总结道,“就像不应要求汽车机械师在不查看引擎的情况下工作一样，我们不应要求程序员在不访问源代码的情况下工作”。&lt;/p&gt;
+&lt;p&gt;尽管如此，APM 收集更多信息只是为了产生充足的新抽象表示。
+在本文中，我们将介绍开源实时编码平台 &lt;a href=&#34;https://github.com/sourceplusplus/live-platform&#34;&gt;Source++&lt;/a&gt; 中的一个新概念，旨在让开发人员更直观地监控生产应用程序。&lt;/p&gt;
+&lt;h2 id=&#34;实时查看&#34;&gt;实时查看&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;我们尚且不理解在收集了数百个指标之后，是什么让程序更容易理解、修改、重复使用或借用。
+我不认为我们能够通过原理程序本身而到它们的抽象接口中找到答案。答案就在源代码之中。 - 马克韦瑟&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;随着 APM 从“有了更好”转变为“必须拥有”，有一个基本特性阻碍了它们的普及。
+它们必须从意识中消失。作为开发人员，我们不应急于打开浏览器以更好地理解底层源代码，答案就在源代码中。
+相反，我们应该改进我们的工具，以便源代码直观地告诉我们需要了解的内容。
+想想如果失败的代码总是表明它是如何以及为什么失败的，生活会多么简单。这就是 Source++ 背后的理念。&lt;/p&gt;
+&lt;p&gt;在我们的上一篇博客中，我们讨论了不间断断点 &lt;a href=&#34;https://skywalking.apache.org/blog/2021-12-06-extend-skywalking-with-nbb/&#34;&gt;Extending Apache SkyWalking&lt;/a&gt;。
+我们介绍了一个名为 &lt;strong&gt;Live Instruments&lt;/strong&gt;(实时埋点) 的概念，开发人员可以使用它轻松调试实时生产应用程序，而无需离开他们的开发环境。
+而今天，我们将讨论如何通过一个名为 &lt;strong&gt;Live Views&lt;/strong&gt;（实时查看）的新概念将现有部署的 SkyWalking 集成到您的 IDE 中。
+与专为调试实时应用程序而设计的 Live Instruments (实时埋点) 不同，Live Views（实时查看）旨在提高对应用程序的理解和领悟。
+这将通过输入到 Live Command Palette (实时命令面板) 中的各种命令来完成。&lt;/p&gt;
+&lt;h3 id=&#34;实时命令面板&#34;&gt;实时命令面板&lt;/h3&gt;
+&lt;p&gt;Live Command Palette (LCP) 是一个当前上下文场景下的命令行面板，这个组件包含在 &lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains&#34;&gt;Source++ JetBrains 插件中&lt;/a&gt;，它允许开发人员从 IDE 中直接控制和对实时应用程序发起查询。&lt;/p&gt;
+&lt;p&gt;LCP 通过键盘快捷键 (&lt;code&gt;Ctrl+Shift+S&lt;/code&gt;) 打开，允许开发人员轻松了解与他们当前正在查看的源代码相关的运行指标。&lt;/p&gt;
+&lt;p&gt;目前 LCP 支持以下实时查看命令：&lt;/p&gt;
+&lt;h4 id=&#34;命令viewoverviewactivitytraceslogs--查看-总览活动追踪日志&#34;&gt;命令：&lt;code&gt;view&lt;/code&gt;（overview/activity/traces/Logs）- 查看 总览/活动/追踪/日志&lt;/h4&gt;
+&lt;p&gt;&lt;code&gt;view&lt;/code&gt; 查看命令会展示一个与当前源码的实时运维数据关联的弹窗。
+这些命令允许开发人员查看根据相关指标过滤的传统 SkyWalking 的运维数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;view_command.gif&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;命令watch-log---实时监听日志&#34;&gt;命令：&lt;code&gt;watch log&lt;/code&gt; - 实时监听日志&lt;/h4&gt;
+&lt;p&gt;本日志命令允许开发人员实时跟踪正在运行的应用程序的每一条日志。
+通过此命令开发人员无需手动查阅大量日志就可以查找特定日志语句的实例。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;watch_log_command.gif&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;命令showhide-quick-stats-显示隐藏快速统计&#34;&gt;命令：(show/hide) quick stats （显示/隐藏）快速统计&lt;/h4&gt;
+&lt;p&gt;&lt;code&gt;show quick stats&lt;/code&gt; 显示快速统计命令显示实时端点指标，以便快速了解端点的活动。
+使用此命令，开发人员可以快速评估端点的状态并确定端点是否按预期正常运行。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;show_quick_stats_command.gif&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;未来的工作&#34;&gt;未来的工作&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;好工具是无形的。我所指的无形，是指这个工具不会侵入你的意识；
+你专注于任务，而不是工具。
+眼镜就是很好的工具——你看的是世界，而不是眼镜。 - 马克韦瑟&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Source++ 旨在扩展 SkyWalking，使 SkyWalking 本身变得无需感知。
+为此，我们计划支持自定义的开发人员命令。
+开发人员将能够构建自定义命令，以及与团队共享的命令。
+这些命令将识别上下文、类型和条件，从而允许广泛的操作。
+随着更多命令的添加，开发人员将能够洞悉 SkyWalking 所提供的所有功能，同时专注于最重要的源码。&lt;/p&gt;
+&lt;p&gt;如果您觉得这些功能有用，请考虑尝试使用 Source++。
+您可以通过 &lt;a href=&#34;https://plugins.jetbrains.com/plugin/12033-source-&#34;&gt;JetBrains Marketplace&lt;/a&gt;
+或直接从您的 JetBrains IDE 安装插件。
+如果您有任何疑问，&lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains/issues&#34;&gt;请到这提 issue&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;欢迎随时反馈！&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache APISIX Integrates with SkyWalking to Create a Full Range of Log Processing</title>
+      <link>/blog/2021-12-08-apisix-integrate-skywalking-plugin/apisix-integrate-skywalking-plugin/</link>
+      <pubDate>Wed, 08 Dec 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-12-08-apisix-integrate-skywalking-plugin/apisix-integrate-skywalking-plugin/</guid>
+      <description>
+        
+        
+        &lt;p&gt;In the field of observability, the three main directions of data collection and analysis, Metrics, Logger and Tracing, are usually used to achieve insight into the operational status of applications.&lt;/p&gt;
+&lt;p&gt;Apache APISIX has integrated Apache SkyWaling Tracing capabilities as early as version 1.4, with features such as error logging and access log collection added in subsequent versions. Now with Apache SkyWalking&amp;rsquo;s support for Metrics, it enables Apache APISIX to implement a one-stop observable solution in integrated mode, covering both logging, metrics and call tracing.&lt;/p&gt;
+&lt;h2 id=&#34;feature-development-background&#34;&gt;Feature Development Background&lt;/h2&gt;
+&lt;p&gt;Those of you who are familiar with Apache APISIX should know that Apache APISIX produces two types of logs during operation, namely the access log and the error log.&lt;/p&gt;
+&lt;p&gt;Access logs record detailed information about each request and are logs generated within the scope of the request, so they can be directly associated with Tracing. Error logs, on the other hand, are Apache APISIX runtime output log messages, which are application-wide logs, but cannot be 100% associated with requests.&lt;/p&gt;
+&lt;p&gt;At present, Apache APISIX provides very rich log processing plug-ins, including TCP/HTTP/Kafka and other collection and reporting plug-ins, but they are weakly associated with Tracing. Take Apache SkyWalking as an example. We extract the SkyWalking Tracing Conetxt Header from the log records of Apache APISIX and export it to the file system, and then use the log processing framework (fluentbit) to convert the logs into a log format acceptable to SkyWalking. The Tracing Context is then parsed and extracted to obtain the Tracing ID to establish a connection with the Trace.&lt;/p&gt;
+&lt;p&gt;Obviously, the above way of handling the process is tedious and complicated, and requires additional conversion of log formats. For this reason, in &lt;a href=&#34;https://github.com/apache/apisix/pull/5550&#34;&gt;PR#5500&lt;/a&gt; we have implemented the Apache SkyWalking access log into the Apache APISIX plug-in ecosystem to make it easier for users to collect and process logs using Apache SkyWalking in Apache APISIX.&lt;/p&gt;
+&lt;h2 id=&#34;introduction-of-the-new-plugins&#34;&gt;Introduction of the New Plugins&lt;/h2&gt;
+&lt;h3 id=&#34;skywalking-logger-pulgin&#34;&gt;SkyWalking Logger Pulgin&lt;/h3&gt;
+&lt;p&gt;The SkyWalking Logger plugin parses the SkyWalking Tracing Context Header and prints the relevant Tracing Context information to the log, thus enabling the log to be associated with the call chain.&lt;/p&gt;
+&lt;p&gt;By using this plug-in, Apache APISIX can get the SkyWalking Tracing Context and associate it with Tracing even if the SkyWalking Tracing plug-in is not turned on, if Apache SkyWalking is already integrated downstream.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./log_content.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The above Content is the log content, where the Apache APISIX metadata configuration is used to collect request-related information. You can later modify the Log Format to customize the log content by Plugin Metadata, please refer to the &lt;a href=&#34;https://apisix.apache.org/docs/apisix/plugins/skywalking-logger#metadata&#34;&gt;official documentation.&lt;/a&gt;&lt;/p&gt;
+&lt;h4 id=&#34;how-to-use&#34;&gt;How to Use&lt;/h4&gt;
+&lt;p&gt;When using this plugin, since the SkyWalking plugin is &amp;ldquo;not enabled&amp;rdquo; by default, you need to manually modify the &lt;code&gt;plugins&lt;/code&gt; section in the &lt;code&gt;conf/default-apisix.yaml&lt;/code&gt; file to enable the plugin.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;plugins&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;...&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- error-log-logger&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;...&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then you can use the SkyWalking Tracing plug-in to get the tracing data directly, so you can verify that the Logging plug-in-related features are enabled and working properly.&lt;/p&gt;
+&lt;h5 id=&#34;step-1-create-a-route&#34;&gt;Step 1: Create a route&lt;/h5&gt;
+&lt;p&gt;Next, create a route and bind the SkyWalking Tracing plugin and the SkyWalking Logging plugin. More details of the plugin configuration can be found in the &lt;a href=&#34;https://apisix.apache.org/docs/apisix/plugins/skywalking-logger&#34;&gt;official Apache APISIX documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -X PUT &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;http://192.168.0.108:9080/apisix/admin/routes/1001&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;-H &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;X-API-KEY:  edd1c9f034335f136f87ad84b625c8f1&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;-H &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;-d &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    &amp;#34;uri&amp;#34;: &amp;#34;/get&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    &amp;#34;plugins&amp;#34;: {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        &amp;#34;skywalking&amp;#34;: {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;            &amp;#34;sample_ratio&amp;#34;: 1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        },
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        &amp;#34;skywalking-logger&amp;#34;: {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;            &amp;#34;endpoint_addr&amp;#34;: &amp;#34;http://127.0.0.1:12800&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    },
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    &amp;#34;upstream&amp;#34;: {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        &amp;#34;type&amp;#34;: &amp;#34;roundrobin&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        &amp;#34;nodes&amp;#34;: {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;            &amp;#34;httpbin.org:80&amp;#34;: 1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h5 id=&#34;step-2-log-processing&#34;&gt;Step 2: Log Processing&lt;/h5&gt;
+&lt;p&gt;On the Apache SkyWalking side, you can use LAL (Logger Analysis Language) scripts for log processing, such as Tag extraction, SkyWalking metadata correction, and so on.&lt;/p&gt;
+&lt;p&gt;The main purpose of Tag extraction here is to facilitate subsequent retrieval and to add dependencies to the Metrics statistics. The following code can be used to configure the SkyWalking LAL script to complete the Tag extraction. For more information on how to use the SkyWalking LAL script, please refer to the &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/concepts-and-designs/lal/&#34;&gt;official Apache SkyWalking documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# The default LAL script to save all logs, behaving like the versions before 8.5.0.&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;rules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;dsl&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;|&lt;span style=&#34;color:#d14&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      filter {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        json {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          abortOnFailure false
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        extractor {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          tag routeId: parsed.route_id
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          tag upstream: parsed.upstream
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          tag clientIp: parsed.client_ip
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          tag latency: parsed.latency
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        sink {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      }&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After configuring the above LAL script in SkyWalking OAP Server the following log will be displayed.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./LALscript_details.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Details of the expanded log are as follows.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./expanded_log.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;As you can see from the above, displaying &lt;code&gt;routeId&lt;/code&gt;, &lt;code&gt;upstream&lt;/code&gt; and &lt;code&gt;clientIp&lt;/code&gt; as key-value pairs is much easier than searching directly in the log body. This is because the Tag format not only supports log display format and search, but also generates information such as Metrics using MAL statistics.&lt;/p&gt;
+&lt;h3 id=&#34;skywalking-error-logger-plugin&#34;&gt;SkyWalking Error Logger Plugin&lt;/h3&gt;
+&lt;p&gt;The error-log-logger plug-in now supports the SkyWalking log format, and you can now use the http-error-log plug-in to quickly connect Apache APISIX error logs to Apache SkyWalking. Currently, error logs do not have access to SkyWalking Tracing Context information, and therefore cannot be directly associated with SkyWalking Tracing.&lt;/p&gt;
+&lt;p&gt;The main reason for the error log to be integrated into SkyWalking is to centralize the Apache APISIX log data and to make it easier to view all observable data within SkyWalking.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./skywalking_dashboard.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;how-to-use-1&#34;&gt;How to Use&lt;/h4&gt;
+&lt;p&gt;Since the error-log-logger plugin is &amp;ldquo;not enabled&amp;rdquo; by default, you still need to enable the plugin in the way mentioned above.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;plugins&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;...&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- error-log-logger&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;...&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h5 id=&#34;step-1-bind-the-route&#34;&gt;Step 1: Bind the route&lt;/h5&gt;
+&lt;p&gt;After enabling, you need to bind the plugin to routes or global rules. Here we take &amp;ldquo;bind routes&amp;rdquo; as an example.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;curl -X PUT &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;http://192.168.0.108:9080/apisix/admin/plugin_metadata/error-log-logger&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;-H &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;X-API-KEY:  edd1c9f034335f136f87ad84b625c8f1&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;-H &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;Content-Type: application/json&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;-d &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    &amp;#34;inactive_timeout&amp;#34;: 10,
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    &amp;#34;level&amp;#34;: &amp;#34;ERROR&amp;#34;,
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    &amp;#34;skywalking&amp;#34;: {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        &amp;#34;endpoint_addr&amp;#34;: &amp;#34;http://127.0.0.1:12800/v3/logs&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    }
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
+&lt;p&gt;Note that the &lt;code&gt;endpoint_addr&lt;/code&gt; is the SkyWalking OAP Server address and needs to have the URI (i.e. &lt;code&gt;/v3/logs&lt;/code&gt;).&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h5 id=&#34;step-2-lal-processing&#34;&gt;Step 2: LAL Processing&lt;/h5&gt;
+&lt;p&gt;In much the same way as the Access Log processing, the logs are also processed by LAL when they reach SkyWalking OAP Server. Therefore, we can still use the SkyWalking LAL script to analyze and process the log messages.&lt;/p&gt;
+&lt;p&gt;It is important to note that the Error Log message body is in text format. If you are extracting tags, you will need to use regular expressions to do this. Unlike Access Log, which handles the message body in a slightly different way, Acces Log uses JSON format and can directly reference the fields of the JSON object using JSON parsing, but the rest of the process is largely the same.&lt;/p&gt;
+&lt;p&gt;Tags can also be used to optimize the display and retrieval for subsequent metrics calculations using SkyWalking MAL.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-json&#34; data-lang=&#34;json&#34;&gt;&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;rules:&lt;/span&gt;
+  &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;-&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;name:&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;apisix-errlog&lt;/span&gt;
+    &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;dsl:&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;|&lt;/span&gt;
+      &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;filter&lt;/span&gt; {
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;text&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;{&lt;/span&gt;
+          &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;regexp&lt;/span&gt; &lt;span style=&#34;color:#000080&#34;&gt;&amp;#34;(?&amp;lt;datetime&amp;gt;\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}) \\[(?&amp;lt;level&amp;gt;\\w+)\\] \\d+\\#\\d+:( \\*\\d+ \\[(?&amp;lt;module&amp;gt;\\w+)\\] (?&amp;lt;position&amp;gt;.*\\.lua:\\d+): (?&amp;lt;function&amp;gt;\\w+\\(\\)):)* (?&amp;lt;msg&amp;gt;.+)&amp;#34;&lt;/span&gt;
+        }
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;extractor&lt;/span&gt; {
+          &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;tag&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;level:&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;parsed.level&lt;/span&gt;
+          &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;(parsed?.module)&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;{&lt;/span&gt;
+            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;tag&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;module:&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;parsed.module&lt;/span&gt;
+            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;tag&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;position:&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;parsed.position&lt;/span&gt;
+            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;tag&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;function:&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;parsed.function&lt;/span&gt;
+          }
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;}&lt;/span&gt;
+        &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;sink&lt;/span&gt; {
+        }
+      &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After the LAL script used by SkyWalking OAP Server, some of the Tags will be extracted from the logs, as shown below.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://static.apiseven.com/202108/1638781886771-b98c80de-4ea2-4cf3-ad1c-26250da231f7.png&#34; alt=&#34;Tags details&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary&lt;/h2&gt;
+&lt;p&gt;This article introduces two logging plug-ins for Apache APISIX that integrate with SkyWalking to provide a more convenient operation and environment for logging in Apache APISIX afterwards.&lt;/p&gt;
+&lt;p&gt;We hope that through this article, you will have a fuller understanding of the new features and be able to use Apache APISIX for centralized management of observable data more conveniently in the future.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Extending Apache SkyWalking with non-breaking breakpoints</title>
+      <link>/blog/2021-12-06-extend-skywalking-with-nbb/</link>
+      <pubDate>Mon, 06 Dec 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-12-06-extend-skywalking-with-nbb/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Non-breaking breakpoints are breakpoints specifically designed for live production environments. With non-breaking breakpoints, reproducing production bugs locally or in staging is conveniently replaced with capturing them directly in production.&lt;/p&gt;
+&lt;p&gt;Like regular breakpoints, non-breaking breakpoints can be:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;placed almost anywhere&lt;/li&gt;
+&lt;li&gt;added and removed at will&lt;/li&gt;
+&lt;li&gt;set to fire on specific conditions&lt;/li&gt;
+&lt;li&gt;expose internal application state&lt;/li&gt;
+&lt;li&gt;persist as long as desired (even between application reboots)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The last feature is especially useful given non-breaking breakpoints can be left in production for days, weeks, and even months at a time while waiting to capture behavior that happens rarely and unpredictably.&lt;/p&gt;
+&lt;h4 id=&#34;how-do-non-breaking-breakpoints-work&#34;&gt;How do non-breaking breakpoints work?&lt;/h4&gt;
+&lt;p&gt;If you&amp;rsquo;re familiar with general distributed tracing concepts, such as &amp;ldquo;traces&amp;rdquo; and &amp;ldquo;spans&amp;rdquo;, then you&amp;rsquo;re already broadly familiar with how non-breaking breakpoints work. Put simply, non-breaking breakpoints are small fragments of code added during runtime that, upon the proper conditions, save a portion of the application&amp;rsquo;s current state, and resume normal execution. In SkyWalking, this can be implemented by simply opening a new local span, adding some tags, and closing the local span.&lt;/p&gt;
+&lt;p&gt;While this process is relatively simple, the range of functionality that can be achieved through this technique is quite impressive.
+Save the current and global variables to create a non-breaking breakpoint; add the ability to format log messages to create just-in-time logging; add the ability to trigger metric telemetry to create real-time KPI monitoring. If you keep moving in this direction, you eventually enter the realm of live debugging/coding, and this is where Source++ comes in.&lt;/p&gt;
+&lt;h4 id=&#34;live-coding-platform&#34;&gt;Live Coding Platform&lt;/h4&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/sourceplusplus&#34;&gt;Source++&lt;/a&gt; is an open-source live coding platform designed for production environments, powered by Apache SkyWalking. Using Source++, developers can add breakpoints, logs, metrics, and distributed tracing to live production software in real-time on-demand, right from their IDE or CLI. While capable of stand-alone deployment, the latest version of Source++ makes it easier than ever to integrate into existing Apache SkyWalking installations. This process can be completed in a few minutes and is easy to customize for your specific needs.&lt;/p&gt;
+&lt;p&gt;For a better idea of how Source++ works, take a look at the following diagram:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./enhanced_sw_setup.svg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;In this diagram, blue components represent existing SkyWalking architecture, black components represent new Source++ architecture, and the red arrows show how non-breaking breakpoints make their way from production to IDEs. A process that is facilitated by Source++ components: Live Probe, Live Processors, Live Platform, and Live Interface.&lt;/p&gt;
+&lt;h4 id=&#34;live-probe&#34;&gt;Live Probe&lt;/h4&gt;
+&lt;p&gt;The Live Probe is currently available for &lt;a href=&#34;https://github.com/sourceplusplus/probe-jvm&#34;&gt;JVM&lt;/a&gt; and &lt;a href=&#34;https://github.com/sourceplusplus/probe-python&#34;&gt;Python&lt;/a&gt; applications. It runs alongside the SkyWalking agent and is responsible for dynamically adding and removing code fragments based on valid instrumentation requests from developers. These code fragments in turn make use of the SkyWalking agent&amp;rsquo;s internal APIs to facilitate production instrumentation.&lt;/p&gt;
+&lt;h4 id=&#34;live-processors&#34;&gt;Live Processors&lt;/h4&gt;
+&lt;p&gt;Live Processors are responsible for finding, extracting, and transforming data found in distributed traces produced via live probes. They run alongside SkyWalking collectors and implement additional post-processing logic, such as PII redaction. Live processors work via uniquely identifiable tags (prefix &lt;code&gt;spp.&lt;/code&gt;) added previously by live probes.&lt;/p&gt;
+&lt;p&gt;One could easily view a non-breaking breakpoint ready for processing using Rocketbot, however, it will look like this:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./rocketbot_nbb.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Even though the above does not resemble what&amp;rsquo;s normally thought of as a breakpoint, the necessary information is there. With live processors added to your SkyWalking installation, this data is refined and may be viewed more traditionally via live interfaces.&lt;/p&gt;
+&lt;h4 id=&#34;live-platform&#34;&gt;Live Platform&lt;/h4&gt;
+&lt;p&gt;The &lt;a href=&#34;https://github.com/sourceplusplus/live-platform&#34;&gt;Live Platform&lt;/a&gt; is the core part of the Source++ architecture. Unlike the live probe and processors, the live platform does not have a direct correlation with SkyWalking components. It is a standalone server responsible for validating and distributing production breakpoints, logs, metrics, and traces. Each component of the Source++ architecture (probes, processors, interfaces) communicates with each other through the live platform. It is important to ensure the live platform is accessible to all of these components.&lt;/p&gt;
+&lt;h4 id=&#34;live-interface&#34;&gt;Live Interface&lt;/h4&gt;
+&lt;p&gt;Finally, with all the previous parts installed, we&amp;rsquo;re now at the component software developers will find the most useful. A Live Interface is what developers use to create, manage, and view non-breaking breakpoints, and so on. There are a few live interfaces available:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains&#34;&gt;JetBrains Plugin&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/interface-cli&#34;&gt;CLI&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;With the &lt;a href=&#34;https://github.com/sourceplusplus/processor-live-instrument&#34;&gt;Live Instrument Processor&lt;/a&gt; enabled, and the &lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains&#34;&gt;JetBrains Plugin&lt;/a&gt; installed, non-breaking breakpoints appear as such:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./ide_breakpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The above should be a sight far more familiar to software developers. Beyond the fact that you can&amp;rsquo;t step through execution, non-breaking breakpoints look and feel just like regular breakpoints.&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;For more details and complete setup instructions, please visit:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/deploy-skywalking&#34;&gt;https://github.com/sourceplusplus/deploy-skywalking&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: End-User Tracing in a SkyWalking-Observed Browser</title>
+      <link>/blog/end-user-tracing-in-a-skywalking-observed-browser/</link>
+      <pubDate>Thu, 25 Mar 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/end-user-tracing-in-a-skywalking-observed-browser/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;aircraft.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Origin: &lt;a href=&#34;https://thenewstack.io/end-user-tracing-in-a-skywalking-observed-browser&#34;&gt;End-User Tracing in a SkyWalking-Observed Browser - The New Stack&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt;: an APM (application performance monitor) system, especially
+designed for microservices, cloud native, and container-based (Docker, Kubernetes, Mesos) architectures.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-client-js&#34;&gt;skywalking-client-js&lt;/a&gt;: a lightweight client-side JavaScript exception, performance, and tracing library. It provides metrics and error collection to the SkyWalking backend. It also makes the browser the starting point for distributed tracing.&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Web application performance affects the retention rate of users. If a page load time is too long, the user will give up. So we need to monitor the web application to understand performance and ensure that servers are stable, available and healthy. SkyWalking is an APM tool and the skywalking-client-js extends its monitoring to include the browser, providing performance metrics and error collection to the SkyWalking backend.&lt;/p&gt;
+&lt;h2 id=&#34;performance-metrics&#34;&gt;Performance Metrics&lt;/h2&gt;
+&lt;p&gt;The skywalking-client-js uses [window.performance] (&lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/Window/performance&#34;&gt;https://developer.mozilla.org/en-US/docs/Web/API/Window/performance&lt;/a&gt;) for performance data collection. From the MDN doc, the performance interface provides access to performance-related information for the current page. It&amp;rsquo;s part of the High Resolution Time API, but is enhanced by the &lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/Performance_Timeline&#34;&gt;Performance Timeline API&lt;/a&gt;,  the &lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/Navigation_timing_API&#34;&gt;Navigation Timing API&lt;/a&gt;, the &lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/User_Timing_API&#34;&gt;User Timing API&lt;/a&gt;, and the &lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/API/Resource_Timing_API&#34;&gt;Resource Timing API&lt;/a&gt;. In skywalking-client-js, all performance metrics  are calculated according to the &lt;a href=&#34;https://www.w3.org/TR/navigation-timing/?spm=a2c4g.11186623.2.12.2f495c7cmRef8Q#sec-navigation-timing-interface&#34;&gt;Navigation Timing API&lt;/a&gt; defined in the W3C specification. We can get a PerformanceTiming object describing our page using the window.performance.timing property. The PerformanceTiming interface contains properties that offer performance timing information for various events that occur during the loading and use of the current page.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;window.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;We can better understand these attributes when we see them together in the figure below from &lt;a href=&#34;https://www.w3.org/TR/navigation-timing/?spm=a2c4g.11186623.2.14.2f495c7cmRef8Q#processing-model&#34;&gt;W3C&lt;/a&gt;:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;w3c.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The following table contains performance metrics in skywalking-client-js.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Metrics Name&lt;/th&gt;
+&lt;th&gt;Describe&lt;/th&gt;
+&lt;th&gt;Calculating Formulae&lt;/th&gt;
+&lt;th&gt;Note&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;redirectTime&lt;/td&gt;
+&lt;td&gt;Page redirection time&lt;/td&gt;
+&lt;td&gt;redirectEnd - redirectStart&lt;/td&gt;
+&lt;td&gt;If the current document and the document that is redirected to are not from the same &lt;a href=&#34;http://tools.ietf.org/html/rfc6454&#34;&gt;origin&lt;/a&gt;, set redirectStart, redirectEnd to 0&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ttfbTime&lt;/td&gt;
+&lt;td&gt;Time to First Byte&lt;/td&gt;
+&lt;td&gt;responseStart - requestStart&lt;/td&gt;
+&lt;td&gt;According to &lt;a href=&#34;https://developers.google.com/web/tools/chrome-devtools/network/reference?spm=a2c4g.11186623.2.16.2f495c7cmRef8Q#timing&#34;&gt;Google Development&lt;/a&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;dnsTime&lt;/td&gt;
+&lt;td&gt;Time to DNS query&lt;/td&gt;
+&lt;td&gt;domainLookupEnd - domainLookupStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;tcpTime&lt;/td&gt;
+&lt;td&gt;Time to TCP link&lt;/td&gt;
+&lt;td&gt;connectEnd - connectStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;transTime&lt;/td&gt;
+&lt;td&gt;Time to content transfer&lt;/td&gt;
+&lt;td&gt;responseEnd - responseStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;sslTime&lt;/td&gt;
+&lt;td&gt;Time to SSL secure connection&lt;/td&gt;
+&lt;td&gt;connectEnd - secureConnectionStart&lt;/td&gt;
+&lt;td&gt;Only supports HTTPS&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;resTime&lt;/td&gt;
+&lt;td&gt;Time to resource loading&lt;/td&gt;
+&lt;td&gt;loadEventStart - domContentLoadedEventEnd&lt;/td&gt;
+&lt;td&gt;Represents a synchronized load resource in pages&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;fmpTime&lt;/td&gt;
+&lt;td&gt;Time to First Meaningful Paint&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;Listen for changes in page elements. Traverse each new element, and calculate the total score of these elements. If the element is visible, the score is 1 * weight; if the element is not visible, the score is 0&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;domAnalysisTime&lt;/td&gt;
+&lt;td&gt;Time to DOM analysis&lt;/td&gt;
+&lt;td&gt;domInteractive - responseEnd&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;fptTime&lt;/td&gt;
+&lt;td&gt;First Paint Time&lt;/td&gt;
+&lt;td&gt;responseEnd - fetchStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;domReadyTime&lt;/td&gt;
+&lt;td&gt;Time to DOM ready&lt;/td&gt;
+&lt;td&gt;domContentLoadedEventEnd - fetchStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;loadPageTime&lt;/td&gt;
+&lt;td&gt;Page full load time&lt;/td&gt;
+&lt;td&gt;loadEventStart - fetchStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;ttlTime&lt;/td&gt;
+&lt;td&gt;Time to interact&lt;/td&gt;
+&lt;td&gt;domInteractive - fetchStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;firstPackTime&lt;/td&gt;
+&lt;td&gt;Time to first package&lt;/td&gt;
+&lt;td&gt;responseStart - domainLookupStart&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Skywalking-client-js collects those performance metrics and sends them to the &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/concepts-and-designs/backend-overview/&#34;&gt;OAP (Observability Analysis Platform) server&lt;/a&gt; , which aggregates data on the back-end side that is then shown in visualizations on the UI side. Users can optimize the page according to these data.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;performance.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;exception-metrics&#34;&gt;Exception Metrics&lt;/h2&gt;
+&lt;p&gt;There are five kinds of errors that can be caught in skywalking-client-js:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The resource loading error  is captured  by &lt;code&gt;window.addeventlistener (&#39;error &#39;, callback, true)&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;window.onerror&lt;/code&gt; catches JS execution errors&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;window.addEventListener(&#39;unhandledrejection&#39;, callback)&lt;/code&gt; is used to catch the promise errors&lt;/li&gt;
+&lt;li&gt;the  Vue errors are captured by &lt;code&gt;Vue.config.errorHandler&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;the Ajax errors are captured by &lt;code&gt;addEventListener(&#39;error&#39;, callback); addEventListener(&#39;abort&#39;, callback); addEventListener(&#39;timeout&#39;, callback); &lt;/code&gt; in send callback.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The Skywalking-client-js traces error data to the OAP server, finally visualizing data on the UI side.  For an error overview of the App, there are several metrics for basic statistics and trends of errors, including the following metrics.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;App  Error Count, the total number of errors in the selected time period.&lt;/li&gt;
+&lt;li&gt;App JS Error Rate, the proportion of PV with JS errors in a selected time period to total PV.&lt;/li&gt;
+&lt;li&gt;All of  Apps Error Count, Top N Apps error count  ranking.&lt;/li&gt;
+&lt;li&gt;All of Apps JS Error Rate, Top N Apps JS error rate ranking.&lt;/li&gt;
+&lt;li&gt;Error Count of  Versions in the Selected App,  Top N Error Count of  Versions in the Selected App ranking.&lt;/li&gt;
+&lt;li&gt;Error Rate  of  Versions in the Selected App, Top N JS Error Rate of Versions in the Selected App ranking.&lt;/li&gt;
+&lt;li&gt;Error Count of the Selected App, Top N Error Count of the Selected App ranking.&lt;/li&gt;
+&lt;li&gt;Error Rate  of the Selected App, Top N JS Error Rate of the Selected App ranking.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;errors.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;For pages, we use several metrics for basic statistics and trends of errors, including the following metrics:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Top Unstable Pages / Error Rate, Top N Error Count pages of the Selected version ranking.&lt;/li&gt;
+&lt;li&gt;Top Unstable Pages / Error Count, Top N Error Count pages of the Selected version ranking.&lt;/li&gt;
+&lt;li&gt;Page Error Count Layout, data display of different errors in a period of time.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;trends-errors.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;user-metrics&#34;&gt;User Metrics&lt;/h2&gt;
+&lt;p&gt;SkyWalking browser monitoring also provides metrics about how the visitors use the monitored websites, such as PV(page views), UV(unique visitors), top N PV(page views), etc.&lt;/p&gt;
+&lt;p&gt;In SPAs (single page applications), the page will be refreshed only once. The traditional method only reports PV once after the page loading, but cannot count the PV of each sub-page, and can&amp;rsquo;t make other types of logs aggregate by sub-page.&lt;/p&gt;
+&lt;p&gt;SkyWalking browser monitoring provides two processing methods for SPA pages:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Enable SPA automatic parsing. This method is suitable for most single page application scenarios with URL hash as the route. In the initialized configuration item, set enableSPA to true, which will turn on the page&amp;rsquo;s hashchange event listener (trigger re reporting PV), and use URL hash as the page field in other data reporting.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Manual reporting. This method can be used in all single page application scenarios. This method can be used if the first method is not usable. The following example provides a set page method to manually update the page name when data is reported. When this method is called, the page PV will be re reported by default:&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-js&#34; data-lang=&#34;js&#34;&gt;app.on(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;routeChange&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;function&lt;/span&gt; (to) {
+    ClientMonitor.setPerformance({
+    collector&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;http://127.0.0.1:8080&amp;#39;&lt;/span&gt;,
+    service&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;browser-app&amp;#39;&lt;/span&gt;,
+    serviceVersion&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;1.0.0&amp;#39;&lt;/span&gt;,
+    pagePath&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; to.path,
+    autoTracePerf&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;,
+    enableSPA&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;,
+  });
+});
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Let&amp;rsquo;s take a look at the result found in the following image. It shows the most popular applications and versions, and the changes of PV over a period of time.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;user.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;make-the-browser-the-starting-point-for-distributed-tracing&#34;&gt;Make the browser the starting point for distributed tracing&lt;/h2&gt;
+&lt;p&gt;SkyWalking browser monitoring intercepts HTTP requests to trace segments and spans. It supports tracking these following modes of HTTP requests: XMLHttpRequest and fetch. It also supports tracking libraries and tools based on XMLHttpRequest and fetch - such as Axios, SuperAgent, OpenApi, and so on.&lt;/p&gt;
+&lt;p&gt;Let’s see how the SkyWalking browser monitoring intercepts HTTP requests:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;interceptor.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;After this, use &lt;code&gt;window.addEventListener(&#39;xhrReadyStateChange&#39;, callback)&lt;/code&gt; and set the readyState value to&lt;code&gt;sw8 = xxxx&lt;/code&gt; in the request header. At the same time, reporting requests information to the back-end side. Finally, we can view trace data on the trace page. The following graphic is from the trace page:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;trace.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;To see how we listen for fetch requests, let’s see the source code of &lt;a href=&#34;https://github.com/github/fetch/blob/90fb680c1f50181782f276122c1b1115535b1603/fetch.js#L506&#34;&gt;fetch&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;fetch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;As you can see, it creates a promise and a new XMLHttpRequest object. Because the code of the fetch is built into the browser, it must monitor the code execution first. Therefore, when we add listening events, we can&amp;rsquo;t monitor the code in the fetch. Just after monitoring the code execution, let&amp;rsquo;s rewrite the fetch:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-js&#34; data-lang=&#34;js&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;import&lt;/span&gt; { fetch } from &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;whatwg-fetch&amp;#39;&lt;/span&gt;; &lt;span style=&#34;color:#0086b3&#34;&gt;window&lt;/span&gt;.fetch &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; fetch;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In this way, we can intercept the fetch request through the above method.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;/blog/end-user-tracing-in-a-skywalking-observed-browser&#34;&gt;End-User Tracing in a SkyWalking-Observed Browser&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

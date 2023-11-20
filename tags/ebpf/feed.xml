@@ -1,0 +1,1304 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – eBPF</title>
+    <link>/tags/ebpf/</link>
+    <description>Recent content in eBPF on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 25 Jun 2023 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/ebpf/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Activating Automatical Performance Analysis -- Continuous Profiling</title>
+      <link>/blog/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;In previous articles, We have discussed how to use SkyWalking and eBPF for performance problem detection within &lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;processes&lt;/a&gt; and &lt;a href=&#34;blog/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;networks&lt;/a&gt;.
+They are good methods to locate issues, but still there are some challenges:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;The timing of the task initiation&lt;/strong&gt;: It&amp;rsquo;s always challenging to address the processes that require performance monitoring when problems occur.
+Typically, manual engagement is required to identify processes and the types of performance analysis necessary, which cause extra time during the crash recovery.
+The root cause locating and the time of crash recovery conflict with each other from time to time.
+In the real case, rebooting would be the first choice of recovery, meanwhile, it destroys the site of crashing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Resource consumption of tasks&lt;/strong&gt;: The difficulties to determine the profiling scope. Wider profiling causes more resources than it should.
+We need a method to manage resource consumption and understand which processes necessitate performance analysis.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Engineer capabilities&lt;/strong&gt;: On-call is usually covered by the whole team, which have junior and senior engineers, even senior engineers have their understanding limitation of the complex distributed system,
+it is nearly impossible to understand the whole system by a single one person.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The &lt;strong&gt;Continuous Profiling&lt;/strong&gt; is a new created mechanism to resolve the above issues.&lt;/p&gt;
+&lt;h1 id=&#34;automate-profiling&#34;&gt;Automate Profiling&lt;/h1&gt;
+&lt;p&gt;As profiling is resource costing and high experience required, how about introducing a method to narrow the scope and automate the profiling driven by polices creates by senior SRE engineer?
+So, in 9.5.0, SkyWalking first introduced preset policy rules for specific services to be monitored by the eBPF Agent in a low-energy manner, and run profiling when necessary automatically.&lt;/p&gt;
+&lt;h2 id=&#34;policy&#34;&gt;Policy&lt;/h2&gt;
+&lt;p&gt;Policy rules specify how to monitor target processes and determine the type of profiling task to initiate when certain threshold conditions are met.&lt;/p&gt;
+&lt;p&gt;These policy rules primarily consist of the following configuration information:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitoring type&lt;/strong&gt;: This specifies what kind of monitoring should be implemented on the target process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold determination&lt;/strong&gt;: This defines how to determine whether the target process requires the initiation of a profiling task.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigger task&lt;/strong&gt;: This specifies what kind of performance analysis task should be initiated.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;monitoring-type&#34;&gt;Monitoring type&lt;/h3&gt;
+&lt;p&gt;The type of monitoring is determined by observing the data values of a specified process to generate corresponding metrics.
+These metric values can then facilitate subsequent threshold judgment operations.
+In eBPF observation, we believe the following metrics can most directly reflect the current performance of the program:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Monitor Type&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;System Load&lt;/td&gt;
+&lt;td&gt;Load&lt;/td&gt;
+&lt;td&gt;System load average over a specified period.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process CPU&lt;/td&gt;
+&lt;td&gt;Percentage&lt;/td&gt;
+&lt;td&gt;The CPU usage of the process as a percentage.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Process Thread Count&lt;/td&gt;
+&lt;td&gt;Count&lt;/td&gt;
+&lt;td&gt;The number of threads in the process.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Error Rate&lt;/td&gt;
+&lt;td&gt;Percentage&lt;/td&gt;
+&lt;td&gt;The percentage of HTTP requests that result in error responses (e.g., 4xx or 5xx status codes).&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Avg Response Time&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The average response time for HTTP requests.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;network-related-monitoring&#34;&gt;Network related monitoring&lt;/h4&gt;
+&lt;p&gt;Monitoring network type metrics is not as simple as obtaining basic process information.
+It requires the initiation of eBPF programs and attaching them to the target process for observation.
+This is similar to the principles of &lt;a href=&#34;blog/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;network profiling task we introduced in the previous article&lt;/a&gt;,
+except that we no longer collect the full content of the data packets. Instead, we only collect the content of messages that match specified HTTP prefixes.&lt;/p&gt;
+&lt;p&gt;By using this method, we can significantly reduce the number of times the kernel sends data to the user space,
+and the user-space program can parse the data content with less system resource usage. This ultimately helps in conserving system resources.&lt;/p&gt;
+&lt;h4 id=&#34;metrics-collector&#34;&gt;Metrics collector&lt;/h4&gt;
+&lt;p&gt;The eBPF agent would report metrics of processes periodically as follows to indicate the process performance in time.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Name&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;The CPU usage percent&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The thread count of process&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The average system load for the last minute, each process have same value&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;The network request error rate percentage&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;ms&lt;/td&gt;
+&lt;td&gt;The network average response duration&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;threshold-determination&#34;&gt;Threshold determination&lt;/h3&gt;
+&lt;p&gt;For the threshold determination, the judgement is made by the eBPF Agent based on the target monitoring process in its own memory,
+rather than relying on calculations performed by the SkyWalking backend.
+The advantage of this approach is that it doesn&amp;rsquo;t have to wait for the results of complex backend computations,
+and it reduces potential issues brought about by complicated interactions.&lt;/p&gt;
+&lt;p&gt;By using this method, the eBPF Agent can swiftly initiate tasks immediately after conditions are met, without any delay.&lt;/p&gt;
+&lt;p&gt;It includes the following configuration items:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;: Check if the monitoring value meets the specified expectations.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;: The time period(seconds) for monitoring data, which can also be understood as the most recent duration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;: The number of times(seconds) the threshold is triggered within the detection period, which can also be understood as the total number of times the specified threshold rule is triggered in the most recent duration(seconds). Once the count check is met, the specified Profiling task will be started.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;trigger-task&#34;&gt;Trigger task&lt;/h3&gt;
+&lt;p&gt;When the eBPF Agent detects that the threshold determination in the specified policy meets the rules, it can initiate the corresponding task according to pre-configured rules.
+For each different target performance task, their task initiation parameters are different:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: It automatically performs performance analysis on processes that meet the conditions, defaulting to &lt;code&gt;10&lt;/code&gt; minutes of monitoring.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: It performs network performance analysis on all processes in the same &lt;strong&gt;Service Instance on the current machine&lt;/strong&gt;,
+to prevent the cause of the issue from being unrealizable due to too few process being collected, defaulting to &lt;code&gt;10&lt;/code&gt; minutes of monitoring.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Once the task is initiated, no new profiling tasks would be started for the current process for a certain period.
+The main reason for this is to prevent frequent task creation due to low threshold settings, which could affect program execution. The default time period is &lt;code&gt;20&lt;/code&gt; minutes.&lt;/p&gt;
+&lt;h2 id=&#34;data-flow&#34;&gt;Data Flow&lt;/h2&gt;
+&lt;p&gt;The figure 1 illustrates the data flow of the continuous profiling feature:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./data-flow.png&#34; alt=&#34;Figure 1: Data Flow of Continuous Profiling&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: Data Flow of Continuous Profiling&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ebpf-agent-with-process&#34;&gt;eBPF Agent with Process&lt;/h3&gt;
+&lt;p&gt;Firstly, we need to ensure that the eBPF Agent and the process to be monitored are deployed on the same host machine,
+so that we can collect relevant data from the process. When the eBPF Agent detects a threshold validation rule that conforms to the policy,
+it immediately triggers the profiling task for the target process, thereby reducing any intermediate steps and accelerating the ability to pinpoint performance issues.&lt;/p&gt;
+&lt;h4 id=&#34;sliding-window&#34;&gt;Sliding window&lt;/h4&gt;
+&lt;p&gt;The sliding window plays a crucial role in the eBPF Agent&amp;rsquo;s threshold determination process, as illustrated in the figure 2:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./sliding-window.png&#34; alt=&#34;Figure 2: Sliding Window in eBPF Agent&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: Sliding Window in eBPF Agent&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Each element in the array represents the data value for a specified second in time.
+When the sliding window needs to verify whether it is responsible for a rule,
+it fetches the content of each element from a certain number of recent elements (period parameter).
+If an element exceeds the threshold, it is marked in red and counted. If the number of red elements exceeds a certain number, it is deemed to trigger a task.&lt;/p&gt;
+&lt;p&gt;Using a sliding window offers the following two advantages:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Fast retrieval of recent content&lt;/strong&gt;: With a sliding window, complex calculations are unnecessary.
+You can know the data by simply reading a certain number of recent array elements.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Solving data spikes issues&lt;/strong&gt;: Validation through count prevents situations where a data point suddenly spikes and then quickly returns to normal.
+Verification with multiple values can reveal whether exceeding the threshold is frequent or occasional.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;ebpf-agent-with-skywalking-backend&#34;&gt;eBPF Agent with SkyWalking Backend&lt;/h3&gt;
+&lt;p&gt;The eBPF Agent communicates periodically with the SkyWalking backend, involving three most crucial operations:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Policy synchronization&lt;/strong&gt;: Through periodic policy synchronization, the eBPF Agent can keep processes on the local machine updated with the latest policy rules as much as possible.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics sending&lt;/strong&gt;: For processes that are already being monitored, the eBPF Agent periodically sends the collected data to the backend program.
+This facilitates real-time query of current data values by users, who can also compare this data with historical values or thresholds when problems arise.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Profiling task reporting&lt;/strong&gt;: When the eBPF detects that a certain process has triggered a policy rule, it automatically initiates a performance task,
+collects relevant information from the current process, and reports it to the SkyWalking backend. This allows users to know &lt;strong&gt;when, why, and what&lt;/strong&gt; type of profiling task was triggered from the interface.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;demo&#34;&gt;Demo&lt;/h1&gt;
+&lt;p&gt;Next, let&amp;rsquo;s quickly demonstrate the continuous profiling feature, so you can understand more specifically what it accomplishes.&lt;/p&gt;
+&lt;h2 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking.
+For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;create-continuous-profiling-policy&#34;&gt;Create Continuous Profiling Policy&lt;/h2&gt;
+&lt;p&gt;Currently, continues profiling feature is set by default in the &lt;strong&gt;Service Mesh&lt;/strong&gt; panel at the &lt;strong&gt;Service&lt;/strong&gt; level.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling.png&#34; alt=&#34;Figure 3: Continuous Policy Tab&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Continuous Policy Tab&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;By clicking on the edit button aside from the &lt;code&gt;Policy List&lt;/code&gt;, the polices of current service could be created or updated.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./edit-continuous-profiling-polocy.png&#34; alt=&#34;Figure 4: Edit Continuous Profiling Policy&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: Edit Continuous Profiling Policy&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Multiple polices are supported. Every policy has the following configurations.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;: Specifies the type of profiling task to be triggered when the threshold determination is met.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;: For profiling task of the same target, one or more validation items can be specified.
+As long as one validation item meets the threshold determination, the corresponding performance analysis task will be launched.
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;: Specifies the type of monitoring to be carried out for the target process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;: Depending on the type of monitoring, you need to fill in the corresponding threshold to complete the verification work.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;: Specifies the number of recent seconds of data you want to monitor.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;: Determines the total number of seconds triggered within the recent period.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI Regex/List&lt;/strong&gt;: This is applicable to HTTP monitoring types, allowing URL filtering.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;done&#34;&gt;Done&lt;/h2&gt;
+&lt;p&gt;After clicking the save button, you can see the currently created monitoring rules, as shown in the figure 5:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-monitoring.png&#34; alt=&#34;Figure 5: Continuous Profiling Monitoring Processes&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: Continuous Profiling Monitoring Processes&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The data can be divided into the following parts:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Policy list&lt;/strong&gt;: On the left, you can see the rule list you have created.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Monitoring Summary List&lt;/strong&gt;: Once a rule is selected, you can see which pods and processes would be monitored by this rule.
+It also summarizes how many profiling tasks have been triggered in the &lt;strong&gt;last 48 hours&lt;/strong&gt; by the current pod or process, as well as the last trigger time.
+This list is also sorted in descending order by the number of triggers to facilitate your quick review.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;When you click on a specific process, a new dashboard would show to list metrics and triggered profiling results.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-tasks.png&#34; alt=&#34;Figure 6: Continuous Profiling Triggered Tasks&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: Continuous Profiling Triggered Tasks&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The current figure contains the following data contents:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Task Timeline&lt;/strong&gt;: It lists all profiling tasks in the &lt;strong&gt;past 48 hours&lt;/strong&gt;. And when the mouse hovers over a task, it would also display detailed information:
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Task start and end time&lt;/strong&gt;: It indicates when the current performance analysis task was triggered.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trigger reason&lt;/strong&gt;: It would display the reason why the current process was profiled and list out the value of the metric exceeding the threshold when the profiling was triggered.
+so you can quickly understand the reason.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Task Detail&lt;/strong&gt;: Similar to the CPU Profiling and Network Profiling introduced in previous articles, this would display the flame graph or process topology map of the current task,
+depending on the profiling type.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Meanwhile, on the &lt;strong&gt;Metrics&lt;/strong&gt; tab, metrics relative to profiling policies are collected to retrieve the historical trend, in order to provide a comprehensive explanation of the trigger point about the profiling.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./continuous-profiling-metrics.png&#34; alt=&#34;Figure 7: Continuous Profiling Metrics&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Continuous Profiling Metrics&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, I have detailed how the continuous profiling feature in SkyWalking and eBPF works.
+In general, it involves deploying the eBPF Agent service on the same machine where the process to be monitored resides,
+and monitoring the target process with low resource consumption. When it meets the threshold conditions,
+it would initiate more complex CPU Profiling and Network Profiling tasks.&lt;/p&gt;
+&lt;p&gt;In the future, we will offer even more features. Stay tuned!&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter, &lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack. Send &lt;code&gt;Request to join SkyWalking slack&lt;/code&gt; mail to the mail list(&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;), we will invite you in.&lt;/li&gt;
+&lt;li&gt;Subscribe to our &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;medium list&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 自动化性能分析——持续剖析</title>
+      <link>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</link>
+      <pubDate>Sun, 25 Jun 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-06-25-intruducing-continuous-profiling-skywalking-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;背景&#34;&gt;背景&lt;/h1&gt;
+&lt;p&gt;在之前的文章中，我们讨论了如何使用 SkyWalking 和 eBPF 来检测性能问题，包括&lt;a href=&#34;/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf&#34;&gt;进程&lt;/a&gt;和&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络&lt;/a&gt;。这些方法可以很好地定位问题，但仍然存在一些挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务启动的时间&lt;/strong&gt;: 当需要进行性能监控时，解决需要性能监控的进程始终是一个挑战。通常需要手动参与，以标识进程和所需的性能分析类型，这会在崩溃恢复期间耗费额外的时间。根本原因定位和崩溃恢复时间有时会发生冲突。在实际情况中，重新启动可能是恢复的第一选择，同时也会破坏崩溃的现场。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务的资源消耗&lt;/strong&gt;: 确定分析范围的困难。过宽的分析范围会导致需要更多的资源。我们需要一种方法来管理资源消耗并了解哪些进程需要性能分析。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;工程师能力&lt;/strong&gt;: 通常由整个团队负责呼叫，其中有初级和高级工程师，即使是高级工程师也对复杂的分布式系统有其理解限制，单个人几乎无法理解整个系统。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;持续剖析（Continuous Profiling）&lt;/strong&gt; 是解决上述问题的新机制。&lt;/p&gt;
+&lt;h1 id=&#34;自动剖析&#34;&gt;自动剖析&lt;/h1&gt;
+&lt;p&gt;由于性能分析的资源消耗和高经验要求，因此引入一种方法以缩小范围并由高级 SRE 工程师创建策略自动剖析。因此，在 9.5.0 中，SkyWalking 首先引入了预设策略规则，以低功耗方式监视特定服务的 eBPF 代理，并在必要时自动运行剖析。&lt;/p&gt;
+&lt;h2 id=&#34;策略&#34;&gt;策略&lt;/h2&gt;
+&lt;p&gt;策略规则指定了如何监视目标进程并确定在满足某些阈值条件时应启动何种类型的分析任务。&lt;/p&gt;
+&lt;p&gt;这些策略规则主要包括以下配置信息：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;监测类型&lt;/strong&gt;: 这指定了应在目标进程上实施什么样的监测。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;阈值确定&lt;/strong&gt;: 这定义了如何确定目标进程是否需要启动分析任务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发任务&lt;/strong&gt;: 这指定了应启动什么类型的性能分析任务。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;监测类型&#34;&gt;监测类型&lt;/h3&gt;
+&lt;p&gt;监测类型是通过观察指定进程的数据值来生成相应的指标来确定的。这些指标值可以促进后续的阈值判断操作。在 eBPF 观测中，我们认为以下指标最能直接反映程序的当前性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;监测类型&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;系统负载&lt;/td&gt;
+&lt;td&gt;负载&lt;/td&gt;
+&lt;td&gt;在指定时间段内的系统负载平均值。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程 CPU&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;进程的 CPU 使用率百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;进程线程计数&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 错误率&lt;/td&gt;
+&lt;td&gt;百分比&lt;/td&gt;
+&lt;td&gt;导致错误响应（例如，4xx 或 5xx 状态代码）的 HTTP 请求的百分比。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP 平均响应时间&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;HTTP 请求的平均响应时间。&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;相关网络监测&#34;&gt;相关网络监测&lt;/h3&gt;
+&lt;p&gt;监测网络类型的指标不像获取基本进程信息那么简单。它需要启动 eBPF 程序并将其附加到目标进程以进行观测。这类似于我们在先前文章中介绍的&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf&#34;&gt;网络分析任务&lt;/a&gt;，不同的是我们不再收集数据包的完整内容。相反，我们仅收集与指定 HTTP 前缀匹配的消息的内容。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，我们可以大大减少内核向用户空间发送数据的次数，用户空间程序可以使用更少的系统资源来解析数据内容。这最终有助于节省系统资源。&lt;/p&gt;
+&lt;h3 id=&#34;指标收集器&#34;&gt;指标收集器&lt;/h3&gt;
+&lt;p&gt;eBPF 代理会定期报告以下进程度量，以指示进程性能：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;process_cpu&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;CPU 使用率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;process_thread_count&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;进程中的线程数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;system_load&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;最近一分钟的平均系统负载，每个进程的值相同&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_error_rate&lt;/td&gt;
+&lt;td&gt;(0-100)%&lt;/td&gt;
+&lt;td&gt;网络请求错误率百分比&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;http_avg_response_time&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;网络平均响应持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;阈值确定&#34;&gt;阈值确定&lt;/h3&gt;
+&lt;p&gt;对于阈值的确定，eBPF 代理是基于其自身内存中的目标监测进程进行判断，而不是依赖于 SkyWalking 后端执行的计算。这种方法的优点在于，它不必等待复杂后端计算的结果，减少了复杂交互所带来的潜在问题。&lt;/p&gt;
+&lt;p&gt;通过使用此方法，eBPF 代理可以在条件满足后立即启动任务，而无需任何延迟。&lt;/p&gt;
+&lt;p&gt;它包括以下配置项：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;阈值&lt;/strong&gt;: 检查监测值是否符合指定的期望值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;周期&lt;/strong&gt;: 监控数据的时间周期（秒），也可以理解为最近的持续时间。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;计数&lt;/strong&gt;: 检测期间触发阈值的次数（秒），也可以理解为最近持续时间内指定阈值规则触发的总次数（秒）。一旦满足计数检查，指定的分析任务将被开始。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;触发任务&#34;&gt;触发任务&lt;/h3&gt;
+&lt;p&gt;当 eBPF Agent 检测到指定策略中的阈值决策符合规则时，根据预配置的规则可以启动相应的任务。对于每个不同的目标性能任务，它们的任务启动参数都不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;On/Off CPU Profiling&lt;/strong&gt;: 它会自动对符合条件的进程进行性能分析，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Profiling&lt;/strong&gt;: 它会对当前机器上同一 &lt;strong&gt;Service Instance&lt;/strong&gt; 中的所有进程进行网络性能分析，以防问题的原因因被收集进程太少而无法实现，缺省情况下监控时间为 &lt;code&gt;10&lt;/code&gt; 分钟。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;一旦任务启动，当前进程将在一定时间内不会启动新的剖析任务。主要原因是为了防止因低阈值设置而频繁创建任务，从而影响程序执行。缺省时间为 &lt;code&gt;20&lt;/code&gt; 分钟。&lt;/p&gt;
+&lt;h2 id=&#34;数据流&#34;&gt;数据流&lt;/h2&gt;
+&lt;p&gt;图 1 展示了持续剖析功能的数据流：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;data-flow.png&#34; alt=&#34;图 1: 持续剖析的数据流&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1: 持续剖析的数据流&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;ebpf-agent进行进程跟踪&#34;&gt;eBPF Agent进行进程跟踪&lt;/h3&gt;
+&lt;p&gt;首先，我们需要确保 eBPF Agent 和要监测的进程部署在同一台主机上，以便我们可以从进程中收集相关数据。当 eBPF Agent 检测到符合策略的阈值验证规则时，它会立即为目标进程触发剖析任务，从而减少任何中间步骤并加速定位性能问题的能力。&lt;/p&gt;
+&lt;h3 id=&#34;滑动窗口&#34;&gt;滑动窗口&lt;/h3&gt;
+&lt;p&gt;滑动窗口在 eBPF Agent 的阈值决策过程中发挥着至关重要的作用，如图 2 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sliding-window.png&#34; alt=&#34;图 2: eBPF Agent 中的滑动窗口&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2: eBPF Agent 中的滑动窗口&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数组中的每个元素表示指定时间内的数据值。当滑动窗口需要验证是否负责某个规则时，它从最近的一定数量的元素 (period 参数) 中获取每个元素的内容。如果一个元素超过了阈值，则标记为红色并计数。如果红色元素的数量超过一定数量，则被认为触发了任务。&lt;/p&gt;
+&lt;p&gt;使用滑动窗口具有以下两个优点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;快速检索最近的内容&lt;/strong&gt;：使用滑动窗口，无需进行复杂的计算。你可以通过简单地读取一定数量的最近数组元素来了解数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;解决数据峰值问题&lt;/strong&gt;：通过计数进行验证，可以避免数据点突然增加然后快速返回正常的情况。使用多个值进行验证可以揭示超过阈值是频繁还是偶然发生的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;ebpf-agent与oap后端通讯&#34;&gt;eBPF Agent与OAP后端通讯&lt;/h3&gt;
+&lt;p&gt;eBPF Agent 定期与 SkyWalking 后端通信，涉及三个最关键的操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略同步&lt;/strong&gt;：通过定期的策略同步，eBPF Agent 可以尽可能地让本地机器上的进程与最新的策略规则保持同步。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;指标发送&lt;/strong&gt;：对于已经被监视的进程，eBPF Agent 定期将收集到的数据发送到后端程序。这就使用户能够实时查询当前数据值，用户也可以在出现问题时将此数据与历史值或阈值进行比较。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;剖析任务报告&lt;/strong&gt;：当 eBPF 检测到某个进程触发了策略规则时，它会自动启动性能任务，从当前进程收集相关信息，并将其报告给 SkyWalking 后端。这使用户可以从界面了解&lt;strong&gt;何时、为什么和触发了什么类型的剖析任务&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;演示&#34;&gt;演示&lt;/h1&gt;
+&lt;p&gt;接下来，让我们快速演示持续剖析功能，以便你更具体地了解它的功能。&lt;/p&gt;
+&lt;h2 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h2&gt;
+&lt;p&gt;SkyWalking Showcase 包含完整的示例服务，并可以使用 SkyWalking 进行监视。有关详细信息，请查看&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在此演示中，我们只部署服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.5.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.5.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，请运行以下脚本以打开 SkyWalking UI：http://localhost:8080/。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;创建持续剖析策略&#34;&gt;创建持续剖析策略&lt;/h2&gt;
+&lt;p&gt;目前，持续剖析功能在 &lt;strong&gt;Service Mesh&lt;/strong&gt; 面板的 &lt;strong&gt;Service&lt;/strong&gt; 级别中默认设置。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling.png&#34; alt=&#34;图 3: 持续策略选项卡&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3: 持续策略选项卡&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;通过点击 &lt;code&gt;Policy List&lt;/code&gt; 旁边的编辑按钮，可以创建或更新当前服务的策略。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;edit-continuous-profiling-polocy.png&#34; alt=&#34;图 4: 编辑持续剖析策略&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4: 编辑持续剖析策略&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;支持多个策略。每个策略都有以下配置。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Target Type&lt;/strong&gt;：指定符合阈值决策时要触发的剖析任务的类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Items&lt;/strong&gt;：对于相同目标的剖析任务，可以指定一个或多个验证项目。只要一个验证项目符合阈值决策，就会启动相应的性能分析任务。
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Monitor Type&lt;/strong&gt;：指定要为目标进程执行的监视类型。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Threshold&lt;/strong&gt;：根据监视类型的不同，需要填写相应的阈值才能完成验证工作。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Period&lt;/strong&gt;：指定你要监测的最近几秒钟的数据数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Count&lt;/strong&gt;：确定最近时间段内触发的总秒数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;URI 正则表达式/列表&lt;/strong&gt;：这适用于 HTTP 监控类型，允许 URL 过滤。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;完成&#34;&gt;完成&lt;/h2&gt;
+&lt;p&gt;单击保存按钮后，你可以看到当前已创建的监控规则，如图 5 所示：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-monitoring.png&#34; alt=&#34;图 5: 持续剖析监控进程&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5: 持续剖析监控进程&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;数据可以分为以下几个部分：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;策略列表&lt;/strong&gt;：在左侧，你可以看到已创建的规则列表。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;监测摘要列表&lt;/strong&gt;：选择规则后，你可以看到哪些 pod 和进程将受到该规则的监视。它还总结了当前 pod 或进程在&lt;strong&gt;过去 48 小时&lt;/strong&gt;内触发的性能分析任务数量，以及最后一个触发时间。该列表还按触发次数降序排列，以便你快速查看。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;当你单击特定进程时，将显示一个新的仪表板以列出指标和触发的剖析结果。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-tasks.png&#34; alt=&#34;图 6: 持续剖析触发的任务&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6: 持续剖析触发的任务&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当前图包含以下数据内容：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;任务时间轴：它列出了过去 48 小时的所有剖析任务。当鼠标悬停在任务上时，它还会显示详细信息：
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;任务的开始和结束时间&lt;/strong&gt;：它指示当前性能分析任务何时被触发。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;触发原因&lt;/strong&gt;：它会显示为什么会对当前进程进行剖析，并列出当剖析被触发时超过阈值的度量值，以便你快速了解原因。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;任务详情&lt;/strong&gt;：与前几篇文章介绍的 CPU 剖析和网络剖析类似，它会显示当前任务的火焰图或进程拓扑图，具体取决于剖析类型。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;同时，在 &lt;strong&gt;Metrics&lt;/strong&gt; 选项卡中，收集与剖析策略相关的指标以检索历史趋势，以便在剖析的触发点提供全面的解释。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;continuous-profiling-metrics.png&#34; alt=&#34;图 7: 持续剖析指标&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7: 持续剖析指标&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&#34;结论&#34;&gt;结论&lt;/h1&gt;
+&lt;p&gt;在本文中，我详细介绍了 SkyWalking 和 eBPF 中持续剖析功能的工作原理。通常情况下，它涉及将 eBPF Agent 服务部署在要监视的进程所在的同一台计算机上，并以低资源消耗监测目标进程。当它符合阈值条件时，它会启动更复杂的 CPU 剖析和网络剖析任务。&lt;/p&gt;
+&lt;p&gt;在未来，我们将提供更多功能。敬请期待！&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Twitter：&lt;a href=&#34;https://twitter.com/AsfSkyWalking&#34;&gt;ASFSkyWalking&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Slack：向邮件列表 (&lt;code&gt;dev@skywalking.apache.org&lt;/code&gt;) 发送“Request to join SkyWalking Slack”，我们会邀请你加入。&lt;/li&gt;
+&lt;li&gt;订阅我们的 &lt;a href=&#34;https://medium.com/@AsfSkyWalking&#34;&gt;Medium 列表&lt;/a&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: eBPF enhanced HTTP observability - L7 metrics and tracing</title>
+      <link>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
+      <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;banner&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking is an open-source Application Performance Management system that helps users collect and aggregate logs, traces, metrics, and events for display on a UI. In the &lt;a href=&#34;/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;previous article&lt;/a&gt;, we introduced how to use Apache SkyWalking Rover to analyze the network performance issue in the service mesh environment. However, in business scenarios, users often rely on mature layer 7 protocols, such as HTTP, for interactions between systems. In this article, we will discuss how to use eBPF techniques to analyze performance bottlenecks of layer 7 protocols and how to enhance the tracing system using network sampling.&lt;/p&gt;
+&lt;p&gt;This article will show how to use &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; with &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; to enhance metrics and traces in HTTP observability.&lt;/p&gt;
+&lt;h2 id=&#34;http-protocol-analysis&#34;&gt;HTTP Protocol Analysis&lt;/h2&gt;
+&lt;p&gt;HTTP is one of the most common Layer 7 protocols and is usually used to provide services to external parties and for inter-system communication. In the following sections, we will show how to identify and analyze HTTP/1.x protocols.&lt;/p&gt;
+&lt;h3 id=&#34;protocol-identification&#34;&gt;Protocol Identification&lt;/h3&gt;
+&lt;p&gt;In HTTP/1.x, the client and server communicate through a single file descriptor (FD) on each side. Figure 1 shows the process of communication involving the following steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Connect/accept: The client establishes a connection with the HTTP server, or the server accepts a connection from the client.&lt;/li&gt;
+&lt;li&gt;Read/write (multiple times): The client or server reads and writes HTTPS requests and responses. A single request-response pair occurs within the same connection on each side.&lt;/li&gt;
+&lt;li&gt;Close: The client and server close the connection.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;To obtain HTTP content, it’s necessary to read it from the second step of this process. As defined in the &lt;a href=&#34;http://rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC&lt;/a&gt;, the content is contained within the data of the Layer 4 protocol and can be obtained by parsing the data. The request and response pair can be correlated because they both occur within the same connection on each side.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.png&#34; alt=&#34;Figure 1: HTTP communication timeline.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: HTTP communication timeline.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;http-pipeline&#34;&gt;HTTP Pipeline&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/HTTP_pipelining&#34;&gt;HTTP pipelining&lt;/a&gt; is a feature of HTTP/1.1 that enables multiple HTTP requests to be sent over a single TCP connection without waiting for the corresponding responses. This feature is important because it ensures that the order of the responses on the server side matches the order of the requests.&lt;/p&gt;
+&lt;p&gt;Figure 2 illustrates how this works. Consider the following scenario: an HTTP client sends multiple requests to a server, and the server responds by sending the HTTP responses in the same order as the requests. This means that the first request sent by the client will receive the first response from the server, the second request will receive the second response, and so on.&lt;/p&gt;
+&lt;p&gt;When designing HTTP parsing, we should follow this principle by adding request data to a list and removing the first item when parsing a response. This ensures that the responses are processed in the correct order.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.png&#34; alt=&#34;Figure 2: HTTP/1.1  pipeline.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: HTTP/1.1  pipeline.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;metrics&#34;&gt;Metrics&lt;/h3&gt;
+&lt;p&gt;Based on the identification of the HTTP content and process topology diagram mentioned in the previous article, we can combine these two to generate process-to-process metrics data.&lt;/p&gt;
+&lt;p&gt;Figure 3 shows the metrics that currently support the analysis between the two processes. Based on the HTTP request and response data, we can analyze the following data:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;Metrics Name&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Type&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Unit&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;Description&lt;/strong&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Request CPM(Call Per Minute)&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The HTTP request count&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Response Status CPM(Call Per Minute)&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;The count of per HTTP response status code&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Request Package Size&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Byte&lt;/td&gt;
+&lt;td&gt;The request package size&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Response Package Size&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Byte&lt;/td&gt;
+&lt;td&gt;The response package size&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Client Duration&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The duration of single HTTP response on the client side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Server Duration&lt;/td&gt;
+&lt;td&gt;Counter/Histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The duration of single HTTP response on the server side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;img src=&#34;f3.png&#34; alt=&#34;Figure 3: Process-to-process metrics.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Process-to-process metrics.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;http-and-trace&#34;&gt;HTTP and Trace&lt;/h2&gt;
+&lt;p&gt;During the HTTP process, if we unpack the HTTP requests and responses from raw data, we can use this data to correlate with the existing tracing system.&lt;/p&gt;
+&lt;h3 id=&#34;trace-context-identification&#34;&gt;Trace Context Identification&lt;/h3&gt;
+&lt;p&gt;In order to track the flow of requests between multiple services, the trace system usually creates a trace context when a request enters a service and passes it along to other services during the request-response process. For example, when an HTTP request is sent to another server, the trace context is included in the request header.&lt;/p&gt;
+&lt;p&gt;Figure 4 displays the raw content of an HTTP request intercepted by Wireshark. The trace context information generated by the Zipkin Tracing system can be identified by the “X-B3” prefix in the header. By using eBPF to intercept the trace context in the HTTP header, we can connect the current request with the trace system.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.png&#34; alt=&#34;Figure 4: View of HTTP headers in Wireshark.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: View of HTTP headers in Wireshark.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;trace-event&#34;&gt;Trace Event&lt;/h3&gt;
+&lt;p&gt;We have added the concept of an &lt;em&gt;event&lt;/em&gt; to traces. An event can be attached to a span and consists of start and end times, tags, and summaries, allowing us to attach any desired information to the Trace.&lt;/p&gt;
+&lt;p&gt;When performing eBPF network profiling, two events can be generated based on the request-response data. Figure 5 illustrates what happens when a service performs an HTTP request with profiling. The trace system generates &lt;em&gt;trace context&lt;/em&gt; information and sends it in the request. When the service executes in the kernel, we can generate an event for the corresponding trace span by interacting with the request-response data and execution time in the kernel space.&lt;/p&gt;
+&lt;p&gt;Previously, we could only observe the execution status in the user space. However, by combining traces and eBPF technologies, we can now also get more information about the current trace in the kernel space, which would impact less performance for the target service if we do similar things in the tracing SDK and agent.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.png&#34; alt=&#34;Figure 5: Logical view of profiling an HTTP request and response.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: Logical view of profiling an HTTP request and response.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;sampling&#34;&gt;Sampling&lt;/h3&gt;
+&lt;p&gt;To ensure efficient data storage and minimize unnecessary data sampling, we use a sampling mechanism for traces in our system. This mechanism triggers sampling only when certain conditions are met. We also provide a list of the top &lt;em&gt;N&lt;/em&gt; traces, which allows users to quickly access the relevant request information for a specific trace.&lt;/p&gt;
+&lt;p&gt;To help users easily identify and analyze relevant events, we offer three different sampling rules:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Slow Traces&lt;/strong&gt;: Sampling is triggered when the response time for a request exceeds a specified threshold.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Status [400, 500)&lt;/strong&gt;: Sampling is triggered when the response status code is greater than or equal to 400 and less than 500.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Status [500, 600)&lt;/strong&gt;: Sampling is triggered when the response status code is greater than or equal to 500 and less than 600.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In addition, we recognize that not all request or response raw data may be necessary for analysis. For example, users may be more interested in requesting data when trying to identify performance issues, while they may be more interested in response data when troubleshooting errors. As such, we also provide configuration options for request or response events to allow users to specify which type of data they would like to sample.&lt;/p&gt;
+&lt;h2 id=&#34;profiling-in-a-service-mesh&#34;&gt;Profiling in a Service Mesh&lt;/h2&gt;
+&lt;p&gt;The SkyWalking and SkyWalking Rover projects have already implemented the HTTP protocol &lt;em&gt;analyze&lt;/em&gt; and &lt;em&gt;trace&lt;/em&gt; associations. How do they perform when running in a service mesh environment?&lt;/p&gt;
+&lt;h3 id=&#34;deployment&#34;&gt;Deployment&lt;/h3&gt;
+&lt;p&gt;Figure 6 demonstrates the deployment of SkyWalking and SkyWalking Rover in a service mesh environment. SkyWalking Rover is deployed as a DaemonSet on each machine where a service is located and communicates with the SkyWalking backend cluster. It automatically recognizes the services on the machine and reports metadata information to the SkyWalking backend cluster. When a new network profiling task arises, SkyWalking Rover senses the task and analyzes the designated processes, collecting and aggregating network data before ultimately reporting it back to the SkyWalking backend service.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.png&#34; alt=&#34;Figure 6: SkyWalking rover deployment topology in a service mesh.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: SkyWalking rover deployment topology in a service mesh.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-systems&#34;&gt;Tracing Systems&lt;/h3&gt;
+&lt;p&gt;Starting from version 9.3.0, the SkyWalking backend fully supports all functions in the Zipkin server. Therefore, the SkyWalking backend can collect traces from both the SkyWalking and Zipkin protocols. Similarly, SkyWalking Rover can identify and analyze trace context in both the SkyWalking and Zipkin trace systems. In the following two sections, network analysis results will be displayed in the SkyWalking and Zipkin UI respectively.&lt;/p&gt;
+&lt;h4 id=&#34;skywalking&#34;&gt;SkyWalking&lt;/h4&gt;
+&lt;p&gt;When SkyWalking performs network profiling, similar to the TCP metrics in the &lt;a href=&#34;/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;previous article&lt;/a&gt;, the SkyWalking UI will first display the topology between processes. When you open the dashboard of the line representing the traffic metrics between processes, you can see the metrics of HTTP traffic from the “HTTP/1.x” tab and the sampled HTTP requests with tracing in the “HTTP Requests” tab.&lt;/p&gt;
+&lt;p&gt;As shown in Figure 7, there are three lists in the tab, each corresponding to a condition in the event sampling rules. Each list displays the traces that meet the pre-specified conditions. When you click on an item in the trace list, you can view the complete trace.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.png&#34; alt=&#34;Figure 7: Sampled HTTP requests within tracing context.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Sampled HTTP requests within tracing context.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you click on an item in the trace list, you can quickly view the specified trace. In Figure 8, we can see that in the current service-related span, there is a tag with a number indicating how many HTTP events are related to that trace span.&lt;/p&gt;
+&lt;p&gt;Since we are in a service mesh environment, each service involves interacting with Envoy. Therefore, the current span includes Envoy’s request and response information. Additionally, since the current service has both incoming and outgoing requests, there are events in the corresponding span.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.png&#34; alt=&#34;Figure 8: Events in the trace detail.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 8: Events in the trace detail.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When the span is clicked, the details of the span will be displayed. If there are events in the current span, the relevant event information will be displayed on a time axis. As shown in Figure 9, there are a total of 6 related events in the current Span. Each event represents a data sample of an HTTP request/response. One of the events spans multiple time ranges, indicating a longer system call time. It may be due to a blocked system call, depending on the implementation details of the HTTP request in different languages. This can also help us query the possible causes of errors.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.png&#34; alt=&#34;Figure 9: Events in one trace span.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 9: Events in one trace span.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Finally, we can click on a specific event to see its complete information. As shown in Figure 10, it displays the sampling information of a request, including the SkyWalking trace context protocol contained in the request header from the HTTP raw data. The raw request data allows you to quickly re-request the request to solve any issues.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.png&#34; alt=&#34;Figure 10: The detail of the event.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 10: The detail of the event.&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;zipkin&#34;&gt;Zipkin&lt;/h4&gt;
+&lt;p&gt;Zipkin is one of the most widely used distributed tracing systems in the world. SkyWalking can function as an &lt;a href=&#34;https://zipkin.io/pages/extensions_choices.html&#34;&gt;alternative server&lt;/a&gt; to provide advanced features for Zipkin users. Here, we use this way to bring the feature into the Zipkin ecosystem out-of-box. The new events would also be treated as a kind of Zipkin’s tags and annotations.&lt;/p&gt;
+&lt;p&gt;To add events to a Zipkin span, we need to do the following:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Split the start and end times of each event into two annotations with a canonical name.&lt;/li&gt;
+&lt;li&gt;Add the sampled HTTP raw data from the event to the Zipkin span tags, using the same event name for corresponding purposes.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Figures 11 and 12 show annotations and tags in the same span. In these figures, we can see that the span includes at least two events with the same event name and sequence suffix (e.g., “Start/Finished HTTP Request/Response Sampling-x” in the figure). Both events have separate timestamps to represent their relative times within the span. In the tags, the data content of the corresponding event is represented by the event name and sequence number, respectively.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.png&#34; alt=&#34;Figure 11: Event timestamp in the Zipkin span annotation.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 11: Event timestamp in the Zipkin span annotation.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.png&#34; alt=&#34;Figure 12: Event raw data in the Zipkin span tag.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 12: Event raw data in the Zipkin span tag.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, we demonstrate how to perform network profiling in a service mesh and complete metrics collection and HTTP raw data sampling. To follow along, you will need a running Kubernetes environment.&lt;/p&gt;
+&lt;h3 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking. For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.4.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;start-network-profiling-task&#34;&gt;Start Network Profiling Task&lt;/h3&gt;
+&lt;p&gt;Currently, we can select the specific instances that we wish to monitor by clicking the &lt;strong&gt;Data Plane&lt;/strong&gt; item in the &lt;strong&gt;Service Mesh&lt;/strong&gt; panel and the &lt;strong&gt;Service&lt;/strong&gt; item in the &lt;strong&gt;Kubernetes&lt;/strong&gt; panel.&lt;/p&gt;
+&lt;p&gt;In figure 13, we have selected an instance with a list of tasks in the network profiling tab.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f13.png&#34; alt=&#34;Figure 13: Network Profiling tab in the Data Plane.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 13: Network Profiling tab in the Data Plane.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When we click the Start button, as shown in Figure 14, we need to specify the sampling rules for the profiling task. The sampling rules consist of one or more rules, each of which is distinguished by a different URI regular expression. When the HTTP request URI matches the regular expression, the rule is used. If the URI regular expression is empty, the default rule is used. Using multiple rules can help us make different sampling configurations for different requests.&lt;/p&gt;
+&lt;p&gt;Each rule has three parameters to determine if sampling is needed:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Minimal Request Duration (ms)&lt;/strong&gt;: requests with a response time exceeding the specified time will be sampled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling response status code between 400 and 499&lt;/strong&gt;: all status codes in the range [400-499) will be sampled.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling response status code between 500 and 599&lt;/strong&gt;: all status codes in the range [500-599) will be sampled.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Once the sampling configuration is complete, we can create the task.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f14.png&#34; alt=&#34;Figure 14: Create network profiling task page.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 14: Create network profiling task page.&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;After a few seconds, you will see the process topology appear on the right side of the page.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f15.png&#34; alt=&#34;Figure 15&#34;&gt;&lt;/p&gt;
+&lt;p&gt;When you click on the line between processes, you can view the data between the two processes, which is divided into three tabs:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;TCP&lt;/strong&gt;: displays TCP-related metrics.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/1.x&lt;/strong&gt;: displays metrics in the HTTP 1 protocol.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP Requests&lt;/strong&gt;: displays the analyzed request and saves it to a list according to the sampling rule.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f16.png&#34; alt=&#34;Figure 16: TCP metrics in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 16: TCP metrics in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f17.png&#34; alt=&#34;Figure 17: HTTP/1.x metrics in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 17: HTTP/1.x metrics in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f18.png&#34; alt=&#34;Figure 18: HTTP sampled requests in a network profiling task.&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 18: HTTP sampled requests in a network profiling task.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we detailed the overview of how to analyze the Layer 7 HTTP/1.x protocol in network analysis, and how to associate it with existing trace systems. This allows us to extend the scope of data we can observe from just user space to also include kernel-space data.&lt;/p&gt;
+&lt;p&gt;In the future, we will delve further into the analysis of kernel data, such as collecting information on TCP packet size, transmission frequency, network card, and help on enhancing distributed tracing from another perspective.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/next/readme/&#34;&gt;SkyWalking Rover Documentation ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;Diagnose Service Mesh Network Performance with eBPF blog post &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/&#34;&gt;SkyWalking Profiling Documentation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/&#34;&gt;SkyWalking Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;Zipkin Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC - Hypertext Transfer Protocol – HTTP/1.1 &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 使用 eBPF 提升 HTTP 可观测性 - L7 指标和追踪</title>
+      <link>/zh/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
+      <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;banner&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 是一个开源应用性能管理系统，帮助用户收集和聚合日志、追踪、指标和事件，并在 UI 上显示。在&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;上一篇文章&lt;/a&gt;中，我们介绍了如何使用 Apache SkyWalking Rover 分析服务网格环境中的网络性能问题。但是，在商业场景中，用户通常依靠成熟的第 7 层协议（如 HTTP）来进行系统之间的交互。在本文中，我们将讨论如何使用 eBPF 技术来分析第 7 层协议的性能瓶颈，以及如何使用网络采样来增强追踪系统。&lt;/p&gt;
+&lt;p&gt;本文将演示如何使用 &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; 与 &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; 来增强 HTTP 可观察性中的指标和追踪。&lt;/p&gt;
+&lt;h2 id=&#34;http-协议分析&#34;&gt;HTTP 协议分析&lt;/h2&gt;
+&lt;p&gt;HTTP 是最常用的 7 层协议之一，通常用于为外部方提供服务和进行系统间通信。在下面的章节中，我们将展示如何识别和分析 HTTP/1.x 协议。&lt;/p&gt;
+&lt;h3 id=&#34;协议识别&#34;&gt;协议识别&lt;/h3&gt;
+&lt;p&gt;在 HTTP/1.x 中，客户端和服务器通过两端的单个文件描述符（File Descriptor）进行通信。图 1 显示了涉及以下步骤的通信过程：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Connect/Accept：客户端与 HTTP 服务器建立连接，或者服务器接受客户端的连接。&lt;/li&gt;
+&lt;li&gt;Read/Write（多次）：客户端或服务器读取和写入 HTTPS 请求和响应。单个请求 - 响应对在每边的同一连接内发生。&lt;/li&gt;
+&lt;li&gt;Close：客户端和服务器关闭连接。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为了获取 HTTP 内容，必须从此过程的第二步读取它。根据 &lt;a href=&#34;http://rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC&lt;/a&gt; 定义，内容包含在 4 层协议的数据中，可以通过解析数据来获取。请求和响应对可以相关联，因为它们都在两端的同一连接内发生。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.png&#34; alt=&#34;图 1：HTTP 通信时间线。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1：HTTP 通信时间线。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;http-管线化&#34;&gt;HTTP 管线化&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/HTTP_pipelining&#34;&gt;HTTP 管线化（Pipelining）&lt;/a&gt;是 HTTP/1.1 的一个特性，允许在等待对应的响应的情况下在单个 TCP 连接上发送多个 HTTP 请求。这个特性很重要，因为它确保了服务器端的响应顺序必须与请求的顺序匹配。&lt;/p&gt;
+&lt;p&gt;图 2 说明了这是如何工作的，考虑以下情况：HTTP 客户端向服务器发送多个请求，服务器通过按照请求的顺序发送 HTTP 响应来响应。这意味着客户端发送的第一个请求将收到服务器的第一个响应，第二个请求将收到第二个响应，以此类推。&lt;/p&gt;
+&lt;p&gt;在设计 HTTP 解析时，我们应该遵循这个原则，将请求数据添加到列表中，并在解析响应时删除第一个项目。这可以确保响应按正确的顺序处理。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.png&#34; alt=&#34;图 2： HTTP/1.1 管道。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2： HTTP/1.1 管道。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;指标&#34;&gt;指标&lt;/h3&gt;
+&lt;p&gt;根据前文提到的 HTTP 内容和流程拓扑图的识别，我们可以将这两者结合起来生成进程间的指标数据。&lt;/p&gt;
+&lt;p&gt;图 3 显示了目前支持两个进程间分析的指标。基于 HTTP 请求和响应数据，可以分析以下数据：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;指标名称&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;类型&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;请求 CPM（Call Per Minute）&lt;/td&gt;
+&lt;td&gt;计数器&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;HTTP 请求计数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;响应状态 CPM (Call Per Minute)&lt;/td&gt;
+&lt;td&gt;计数器&lt;/td&gt;
+&lt;td&gt;计数&lt;/td&gt;
+&lt;td&gt;每个 HTTP 响应状态码的计数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;请求包大小&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;字节&lt;/td&gt;
+&lt;td&gt;请求包大小&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;响应包大小&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;字节&lt;/td&gt;
+&lt;td&gt;响应包大小&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;客户端持续时间&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;客户端单个 HTTP 响应的持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;服务器持续时间&lt;/td&gt;
+&lt;td&gt;计数器 / 直方图&lt;/td&gt;
+&lt;td&gt;毫秒&lt;/td&gt;
+&lt;td&gt;服务器端单个 HTTP 响应的持续时间&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;img src=&#34;f3.png&#34; alt=&#34;图 3：进程到进程指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3：进程到进程指标。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;http-和追踪&#34;&gt;HTTP 和追踪&lt;/h2&gt;
+&lt;p&gt;在 HTTP 过程中，如果我们能够从原始数据中解包 HTTP 请求和响应，就可以使用这些数据与现有的追踪系统进行关联。&lt;/p&gt;
+&lt;h3 id=&#34;追踪上下文标识&#34;&gt;追踪上下文标识&lt;/h3&gt;
+&lt;p&gt;为了追踪多个服务之间的请求流，追踪系统通常在请求进入服务时创建追踪上下文，并在请求 - 响应过程中将其传递给其他服务。例如，当 HTTP 请求发送到另一个服务器时，追踪上下文包含在请求头中。&lt;/p&gt;
+&lt;p&gt;图 4 显示了 Wireshark 拦截的 HTTP 请求的原始内容。由 Zipkin Tracing 系统生成的追踪上下文信息可以通过头中的 “X-B3” 前缀进行标识。通过使用 eBPF 拦截 HTTP 头中的追踪上下文，可以将当前请求与追踪系统连接起来。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.png&#34; alt=&#34;图 4：Wireshark 中的 HTTP Header 视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4：Wireshark 中的 HTTP Header 视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;trace-事件&#34;&gt;Trace 事件&lt;/h3&gt;
+&lt;p&gt;我们已经将事件这个概念加入了追踪中。事件可以附加到跨度上，并包含起始和结束时间、标签和摘要，允许我们将任何所需的信息附加到追踪中。&lt;/p&gt;
+&lt;p&gt;在执行 eBPF 网络分析时，可以根据请求 - 响应数据生成两个事件。图 5 说明了在带分析的情况下执行 HTTP 请求时发生的情况。追踪系统生成追踪上下文信息并将其发送到请求中。当服务在内核中执行时，我们可以通过与内核空间中的请求 - 响应数据和执行时间交互，为相应的追踪跨度生成事件。&lt;/p&gt;
+&lt;p&gt;以前，我们只能观察用户空间的执行状态。现在，通过结合追踪和 eBPF 技术，我们还可以在内核空间获取更多关于当前追踪的信息，如果我们在追踪 SDK 和代理中执行类似的操作，将对目标服务的性能产生较小的影响。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.png&#34; alt=&#34;图 5：分析 HTTP 请求和响应的逻辑视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5：分析 HTTP 请求和响应的逻辑视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;抽样&#34;&gt;抽样&lt;/h3&gt;
+&lt;p&gt;该机制仅在满足特定条件时触发抽样。我们还提供了前 N 条追踪的列表，允许用户快速访问特定追踪的相关请求信息。为了帮助用户轻松识别和分析相关事件，我们提供了三种不同的抽样规则：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;慢速追踪&lt;/strong&gt;：当请求的响应时间超过指定阈值时触发抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应状态 [400,500)&lt;/strong&gt;：当响应状态代码大于或等于 400 且小于 500 时触发抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应状态 [500,600)&lt;/strong&gt;：当响应状态代码大于或等于 500 且小于 600 时触发抽样。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;此外，我们认识到分析时可能并不需要所有请求或响应的原始数据。例如，当试图识别性能问题时，用户可能更感兴趣于请求数据，而在解决错误时，他们可能更感兴趣于响应数据。因此，我们还提供了请求或响应事件的配置选项，允许用户指定要抽样的数据类型。&lt;/p&gt;
+&lt;h2 id=&#34;服务网格中的分析&#34;&gt;服务网格中的分析&lt;/h2&gt;
+&lt;p&gt;SkyWalking Rover 项目已经实现了 HTTP 协议的分析和追踪关联。当在服务网格环境中运行时它们的表现如何？&lt;/p&gt;
+&lt;h3 id=&#34;部署&#34;&gt;部署&lt;/h3&gt;
+&lt;p&gt;图 6 演示了 SkyWalking 和 SkyWalking Rover 在服务网格环境中的部署方式。SkyWalking Rover 作为一个 DaemonSet 部署在每台服务所在的机器上，并与 SkyWalking 后端集群通信。它会自动识别机器上的服务并向 SkyWalking 后端集群报告元数据信息。当出现新的网络分析任务时，SkyWalking Rover 会感知该任务并对指定的进程进行分析，在最终将数据报告回 SkyWalking 后端服务之前，收集和聚合网络数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.png&#34; alt=&#34;图 6：服务网格中的 SkyWalking rover 部署拓扑。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6：服务网格中的 SkyWalking rover 部署拓扑。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;追踪系统&#34;&gt;追踪系统&lt;/h3&gt;
+&lt;p&gt;从版本 9.3.0 开始，SkyWalking 后端完全支持 Zipkin 服务器中的所有功能。因此，SkyWalking 后端可以收集来自 SkyWalking 和 Zipkin 协议的追踪。同样，SkyWalking Rover 可以在 SkyWalking 和 Zipkin 追踪系统中识别和分析追踪上下文。在接下来的两节中，网络分析结果将分别在 SkyWalking 和 Zipkin UI 中显示。&lt;/p&gt;
+&lt;h4 id=&#34;skywalking&#34;&gt;SkyWalking&lt;/h4&gt;
+&lt;p&gt;当 SkyWalking 执行网络分析时，与&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;前文中&lt;/a&gt;的 TCP 指标类似，SkyWalking UI 会首先显示进程间的拓扑图。当打开代表进程间流量指标的线的仪表板时，您可以在 “HTTP/1.x” 选项卡中看到 HTTP 流量的指标，并在 “HTTP Requests” 选项卡中看到带追踪的抽样的 HTTP 请求。&lt;/p&gt;
+&lt;p&gt;如图 7 所示，选项卡中有三个列表，每个列表对应事件抽样规则中的一个条件。每个列表显示符合预先规定条件的追踪。当您单击追踪列表中的一个项目时，就可以查看完整的追踪。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.png&#34; alt=&#34;图 7：Tracing 上下文中的采样 HTTP 请求。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7：Tracing 上下文中的采样 HTTP 请求。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您单击追踪列表中的一个项目时，就可以快速查看指定的追踪。在图 8 中，我们可以看到在当前的服务相关的跨度中，有一个带有数字的标签，表示与该追踪跨度相关的 HTTP 事件数。&lt;/p&gt;
+&lt;p&gt;由于我们在服务网格环境中，每个服务都涉及与 Envoy 交互。因此，当前的跨度包括 Envoy 的请求和响应信息。此外，由于当前的服务有传入和传出的请求，因此相应的跨度中有事件。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.png&#34; alt=&#34;图 8：Tracing 详细信息中的事件。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 8：Tracing 详细信息中的事件。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当单击跨度时，将显示跨度的详细信息。如果当前跨度中有事件，则相关事件信息将在时间轴上显示。如图 9 所示，当前跨度中一共有 6 个相关事件。每个事件代表一个 HTTP 请求 / 响应的数据样本。其中一个事件跨越多个时间范围，表示较长的系统调用时间。这可能是由于系统调用被阻塞，具体取决于不同语言中的 HTTP 请求的实现细节。这也可以帮助我们查询错误的可能原因。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.png&#34; alt=&#34;图 9：一个 Tracing 范围内的事件。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 9：一个 Tracing 范围内的事件。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;最后，我们可以单击特定的事件查看它的完整信息。如图 10 所示，它显示了一个请求的抽样信息，包括从 HTTP 原始数据中的请求头中包含的 SkyWalking 追踪上下文协议。原始请求数据允许您快速重新请求以解决任何问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.png&#34; alt=&#34;图 10：事件的详细信息。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 10：事件的详细信息。&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;zipkin&#34;&gt;Zipkin&lt;/h4&gt;
+&lt;p&gt;Zipkin 是世界上广泛使用的分布式追踪系统。SkyWalking 可以作为&lt;a href=&#34;https://zipkin.io/pages/extensions_choices.html&#34;&gt;替代服务器&lt;/a&gt;，提供高级功能。在这里，我们使用这种方式将功能无缝集成到 Zipkin 生态系统中。新事件也将被视为 Zipkin 的标签和注释的一种。&lt;/p&gt;
+&lt;p&gt;为 Zipkin 跨度添加事件，需要执行以下操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;将每个事件的开始时间和结束时间分别拆分为两个具有规范名称的注释。&lt;/li&gt;
+&lt;li&gt;将抽样的 HTTP 原始数据从事件添加到 Zipkin 跨度标签中，使用相同的事件名称用于相应的目的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;图 11 和图 12 显示了同一跨度中的注释和标签。在这些图中，我们可以看到跨度包含至少两个具有相同事件名称和序列后缀的事件（例如，图中的 “Start/Finished HTTP Request/Response Sampling-x”）。这两个事件均具有单独的时间戳，用于表示其在跨度内的相对时间。在标签中，对应事件的数据内容分别由事件名称和序列号表示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.png&#34; alt=&#34;图 11：Zipkin span 注释中的事件时间戳。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 11：Zipkin span 注释中的事件时间戳。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.png&#34; alt=&#34;图 12：Zipkin span 标签中的事件原始数据。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 12：Zipkin span 标签中的事件原始数据。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;演示&#34;&gt;演示&lt;/h2&gt;
+&lt;p&gt;在本节中，我们将演示如何在服务网格中执行网络分析，并完成指标收集和 HTTP 原始数据抽样。要进行操作，您需要一个运行中的 Kubernetes 环境。&lt;/p&gt;
+&lt;h3 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase 包含一套完整的示例服务，可以使用 SkyWalking 进行监控。有关详细信息，请参阅&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在本演示中，我们只部署了服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.3.0
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.4.0
+
+&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，运行下面的脚本启动 SkyWalking UI：&lt;a href=&#34;http://localhost:8080/&#34;&gt;http://localhost:8080/&lt;/a&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;启动网络分析任务&#34;&gt;启动网络分析任务&lt;/h3&gt;
+&lt;p&gt;目前，我们可以通过单击服务网格面板中的 &lt;strong&gt;Data Plane&lt;/strong&gt; 项和 &lt;strong&gt;Kubernetes&lt;/strong&gt; 面板中的 &lt;strong&gt;Service&lt;/strong&gt; 项来选择要监视的特定实例。&lt;/p&gt;
+&lt;p&gt;在图 13 中，我们已在网络分析选项卡中选择了一个具有任务列表的实例。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f13.png&#34; alt=&#34;图 13：数据平面中的网络分析选项卡。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 13：数据平面中的网络分析选项卡。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当我们单击 “开始” 按钮时，如图 14 所示，我们需要为分析任务指定抽样规则。抽样规则由一个或多个规则组成，每个规则都由不同的 URI 正则表达式区分。当 HTTP 请求的 URI 与正则表达式匹配时，将使用该规则。如果 URI 正则表达式为空，则使用默认规则。使用多个规则可以帮助我们为不同的请求配置不同的抽样配置。&lt;/p&gt;
+&lt;p&gt;每个规则都有三个参数来确定是否需要抽样：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;最小请求持续时间（毫秒）&lt;/strong&gt;：响应时间超过指定时间的请求将被抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 400 和 499 之间的抽样响应状态代码&lt;/strong&gt;：范围 [400-499) 中的所有状态代码将被抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 500 和 599 之间的抽样响应状态代码&lt;/strong&gt;：范围 [500-599) 中的所有状态码将被抽样。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;抽样配置完成后，我们就可以创建任务了。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f14.png&#34; alt=&#34;图 14：创建网络分析任务页面。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 14：创建网络分析任务页面。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;完成&#34;&gt;完成&lt;/h3&gt;
+&lt;p&gt;几秒钟后，你会看到页面的右侧出现进程拓扑结构。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f15.png&#34; alt=&#34;图 15：网络分析任务中的流程拓扑。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 15：网络分析任务中的流程拓扑。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您单击进程之间的线时，您可以查看两个过程之间的数据，它被分为三个选项卡：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;TCP&lt;/strong&gt;：显示与 TCP 相关的指标。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/1.x&lt;/strong&gt;：显示 HTTP 1 协议中的指标。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP 请求&lt;/strong&gt;：显示已分析的请求，并根据抽样规则保存到列表中。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f16.png&#34; alt=&#34;图 16：网络分析任务中的 TCP 指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 16：网络分析任务中的 TCP 指标。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f17.png&#34; alt=&#34;图 17：网络分析任务中的 HTTP/1.x 指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 17：网络分析任务中的 HTTP/1.x 指标。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f18.png&#34; alt=&#34;图 18：网络分析任务中的 HTTP 采样请求。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 18：网络分析任务中的 HTTP 采样请求。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;在本文中，我们详细介绍了如何在网络分析中分析 7 层 HTTP/1.x 协议，以及如何将其与现有追踪系统相关联。这使我们能够将我们能够观察到的数据从用户空间扩展到内核空间数据。&lt;/p&gt;
+&lt;p&gt;在未来，我们将进一步探究内核数据的分析，例如收集 TCP 包大小、传输频率、网卡等信息，并从另一个角度提升分布式追踪。&lt;/p&gt;
+&lt;h2 id=&#34;其他资源&#34;&gt;其他资源&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/&#34;&gt;SkyWalking Rover Documentation ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;Diagnose Service Mesh Network Performance with eBPF blog post &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/&#34;&gt;SkyWalking Profiling Documentation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/&#34;&gt;SkyWalking Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;Zipkin Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC - Hypertext Transfer Protocol – HTTP/1.1 &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Diagnose Service Mesh Network Performance with eBPF</title>
+      <link>/blog/diagnose-service-mesh-network-performance-with-ebpf/</link>
+      <pubDate>Tue, 27 Sep 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/diagnose-service-mesh-network-performance-with-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;This article will show how to use &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; with &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; to make network troubleshooting easier in a service mesh environment.&lt;/p&gt;
+&lt;p&gt;Apache SkyWalking is an application performance monitor tool for distributed systems. It observes metrics, logs, traces, and events in the service mesh environment and uses that data to generate a dependency graph of your pods and services. This dependency graph can provide quick insights into your system, especially when there&amp;rsquo;s an issue.&lt;/p&gt;
+&lt;p&gt;However, when troubleshooting network issues in SkyWalking&amp;rsquo;s service topology, it is not always easy to pinpoint where the error actually is. There are two reasons for the difficulty:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Traffic through the Envoy sidecar is not easy to observe.&lt;/strong&gt; Data from Envoy&amp;rsquo;s &lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/accesslog/v3/als.proto&#34;&gt;Access Log Service (ALS)&lt;/a&gt; shows traffic between services (sidecar-to-sidecar), but not metrics on communication between the Envoy sidecar and the service it proxies. Without that information, it is more difficult to understand the impact of the sidecar.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;There is a lack of data from transport layer (OSI Layer 4) communication.&lt;/strong&gt; Since services generally use application layer (OSI Layer 7) protocols such as HTTP, observability data is generally restricted to application layer communication. However, the root cause may actually be in the transport layer, which is typically opaque to observability tools.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Access to metrics from Envoy-to-service and transport layer communication can make it easier to diagnose service issues. To this end, SkyWalking needs to collect and analyze transport layer metrics between processes inside Kubernetes pods - a task well suited to eBPF. We investigated using eBPF for this purpose and present our results and
+a demo below.&lt;/p&gt;
+&lt;h2 id=&#34;monitoring-kubernetes-networks-with-ebpf&#34;&gt;Monitoring Kubernetes Networks with eBPF&lt;/h2&gt;
+&lt;p&gt;With its origins as the Extended Berkeley Packet Filter, eBPF is a general purpose mechanism for injecting and running your own code into the Linux kernel and is an excellent tool for monitoring network traffic in Kubernetes Pods. In the next few sections, we&#39;ll provide an overview of how to use eBPF for network monitoring as background for introducing &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;Skywalking Rover&lt;/a&gt;, a metrics collector and profiler powered by eBPF to diagnose CPU and network performance.&lt;/p&gt;
+&lt;h3 id=&#34;how-applications-and-the-network-interact&#34;&gt;How Applications and the Network Interact&lt;/h3&gt;
+&lt;p&gt;Interactions between the application and the network can generally be
+divided into the following steps from higher to lower levels of
+abstraction:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f0.svg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;User Code:&lt;/strong&gt; Application code uses high-level network libraries in the application stack to exchange data across the network, like sending and receiving HTTP requests.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Network Library:&lt;/strong&gt; When the network library receives a network request, it interacts with the language API to send the network data.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Language API:&lt;/strong&gt; Each language provides an API for operating the network, system, etc. When a request is received, it interacts with the system API. In Linux, this API is called syscalls.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Linux API:&lt;/strong&gt; When the Linux kernel receives the request through the API, it communicates with the socket to send the data, which is usually closer to an OSI Layer 4 protocol, such as TCP, UDP, etc.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Socket Ops:&lt;/strong&gt; Sending or receiving the data to/from the NIC.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Our hypothesis is that eBPF can monitor the network. There are two ways
+to implement the interception: &lt;strong&gt;User space (uprobe)&lt;/strong&gt; or &lt;strong&gt;Kernel space
+(kprobe)&lt;/strong&gt;. The table below summarizes the differences.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;Pros&lt;/th&gt;
+&lt;th&gt;Cons&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;uprobe&lt;/td&gt;
+&lt;td&gt;•	Get more application-related contexts, such as whether the current request is HTTP or HTTPS.&lt;/br&gt;•	Requests and responses can be intercepted by a single method&lt;/td&gt;
+&lt;td&gt;•	Data structures can be unstable, so it is more difficult to get the desired data. &lt;/br&gt; •	Implementation may differ between language/library versions. &lt;/br&gt; •	Does not work in applications without &lt;a href=&#34;https://en.wikipedia.org/wiki/Symbol_table&#34;&gt;symbol tables&lt;/a&gt;.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;kprobe&lt;/td&gt;
+&lt;td&gt;•	Available for all languages. &lt;/br&gt; •	The data structure and methods are stable and do not require much adaptation. &lt;/br&gt; •	Easier correlation with underlying data, such as getting the destination address of TCP, OSI Layer 4 protocol metrics, etc.&lt;/td&gt;
+&lt;td&gt;•	A single request and response may be split into multiple probes. &lt;/br&gt; •	Contextual information is not easy to get for stateful requests. For example header compression in HTTP/2.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For the general network performance monitor, we chose to use the kprobe (intercept the syscalls) for the following reasons:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;It&amp;rsquo;s available for applications written in any programming language, and it&amp;rsquo;s stable, so it saves a lot of development/adaptation costs.&lt;/li&gt;
+&lt;li&gt;It can be correlated with metrics from the system level, which makes it easier to troubleshoot.&lt;/li&gt;
+&lt;li&gt;As a single request and response are split into multiple probes, we can use technology to correlate them.&lt;/li&gt;
+&lt;li&gt;For contextual information, It&amp;rsquo;s usually used in OSI Layer 7 protocol network analysis. So, if we just monitor the network performance, then they can be ignored.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;kprobes-and-network-monitoring&#34;&gt;Kprobes and network monitoring&lt;/h3&gt;
+&lt;p&gt;Following the &lt;a href=&#34;http://linasm.sourceforge.net/docs/syscalls/network.php&#34;&gt;network syscalls of Linux documentation&lt;/a&gt;, we can implement network monitoring by intercepting two types of methods: &lt;strong&gt;socket operations&lt;/strong&gt; and &lt;strong&gt;send/receive&lt;/strong&gt; methods.&lt;/p&gt;
+&lt;h4 id=&#34;socket-operations&#34;&gt;Socket Operations&lt;/h4&gt;
+&lt;p&gt;When accepting or connecting with another socket, we can get the
+following information:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Connection information&lt;/strong&gt;: Includes the remote address from the connection which helps us to understand which pod is connected.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Connection statics:&lt;/strong&gt; Includes basic metrics from sockets, such as round-trip time (&lt;a href=&#34;https://en.wikipedia.org/wiki/Round-trip_delay&#34;&gt;RTT&lt;/a&gt;), lost packet count in TCP, etc.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Socket and file descriptor (&lt;a href=&#34;https://en.wikipedia.org/wiki/File_descriptor&#34;&gt;FD&lt;/a&gt;) mapping:&lt;/strong&gt; Includes the relationship between the Linux file descriptor and socket object. It is useful when sending and receiving data through a Linux file descriptor.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;sendreceive&#34;&gt;Send/Receive&lt;/h4&gt;
+&lt;p&gt;The interface related to sending or receiving data is the focus of
+performance analysis. It mainly contains the following parameters:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Socket file descriptor:&lt;/strong&gt; The file descriptor of the current operation corresponding to the socket.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Buffer:&lt;/strong&gt; The data sent or received, passed as a byte array.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Based on the above parameters, we can analyze the following data:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Bytes:&lt;/strong&gt; The size of the packet in bytes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Protocol:&lt;/strong&gt; The protocol analysis according to the buffer data, such as HTTP, MySQL, etc.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Execution Time:&lt;/strong&gt; The time it takes to send/receive the data.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;At this point (Figure 1) we can analyze the following steps for the
+whole lifecycle of the connection:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Connect/Accept:&lt;/strong&gt; When the connection is created.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Transform:&lt;/strong&gt; Sending and receiving data on the connection.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Close:&lt;/strong&gt; When the connection is closed.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f1.svg&#34; alt=&#34;Figure 1&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 1&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;protocol-and-tls&#34;&gt;Protocol and TLS&lt;/h3&gt;
+&lt;p&gt;The previous section described how to analyze connections using send or receive buffer data. For example, following the &lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html#section-4.1&#34;&gt;HTTP/1.1 message specification&lt;/a&gt; to analyze the connection. However, this does not work for TLS requests/responses.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.svg&#34; alt=&#34;Figure 2&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 2&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When TLS is in use, the Linux Kernel transmits data encrypted in user space. In the figure above, The application usually transmits SSL data through a third-party library (such as OpenSSL). For this case, the Linux API can only get the encrypted data, so it cannot recognize any higher layer protocol. To decrypt inside eBPF, we need to follow these steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Read unencrypted data through uprobe:&lt;/strong&gt; Compatible multiple languages, using uprobe to capture the data that is not encrypted before sending or after receiving. In this way, we can get the original data and associate it with the socket.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Associate with socket:&lt;/strong&gt; We can associate unencrypted data with the socket.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;openssl-use-case&#34;&gt;OpenSSL Use case&lt;/h4&gt;
+&lt;p&gt;For example, the most common way to send/receive SSL data is to use OpenSSL as a shared library, specifically the &lt;a href=&#34;https://www.openssl.org/docs/man1.1.1/man3/SSL_read.html&#34;&gt;SSL_read&lt;/a&gt; and &lt;a href=&#34;https://www.openssl.org/docs/man1.1.1/man3/SSL_write.html&#34;&gt;SSL_write&lt;/a&gt; methods to submit the buffer data with the socket.&lt;/p&gt;
+&lt;p&gt;Following the &lt;a href=&#34;https://www.openssl.org/docs/man1.1.1/man7/ssl.html&#34;&gt;documentation&lt;/a&gt;, we can intercept these two methods, which are almost identical to the API in Linux. The source code of the SSL structure in OpenSSL shows that the &lt;a href=&#34;https://github.com/openssl/openssl/blob/9eae491721209f302a9a475bffd271370e8bcb8f/crypto/bio/bio_local.h#L115-L125&#34;&gt;Socket FD&lt;/a&gt; exists in the &lt;a href=&#34;https://github.com/openssl/openssl/blob/9eae491721209f302a9a475bffd271370e8bcb8f/ssl/ssl_local.h#L1068-L1083&#34;&gt;BIO object of the SSL structure&lt;/a&gt;, and we can get it by the offset.&lt;/p&gt;
+&lt;p&gt;In summary, with knowledge of how OpenSSL works, we can read unencrypted data in an eBPF function.&lt;/p&gt;
+&lt;h2 id=&#34;introducing-skywalking-rover-an-ebpf-based-metrics-collector-and-profiler&#34;&gt;Introducing SkyWalking Rover, an eBPF-based Metrics Collector and Profiler&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; introduces the eBPF network profiling feature into the SkyWalking ecosystem. It&amp;rsquo;s currently supported in a Kubernetes environment, so must be deployed inside a Kubernetes cluster. Once the deployment is complete, SkyWalking Rover can monitor the network for all processes inside a given Pod. Based on the monitoring data, SkyWalking can generate the topology relationship diagram and metrics between processes.&lt;/p&gt;
+&lt;h3 id=&#34;topology-diagram&#34;&gt;Topology Diagram&lt;/h3&gt;
+&lt;p&gt;The topology diagram can help us understand the network access between processes inside the same Pod, and between the process and external environment (other Pod or service). Additionally, it can identify the data direction of traffic based on the line flow direction.&lt;/p&gt;
+&lt;p&gt;In Figure 3 below, all nodes within the hexagon are the internal process of a Pod, and nodes outside the hexagon are externally associated services or Pods. Nodes are connected by lines, which indicate the direction of requests or responses between nodes (client or server). The protocol is indicated on the line, and it&amp;rsquo;s either HTTP(S), TCP, or TCP(TLS). Also, we can see in this figure that the line between Envoy and Python applications is bidirectional because Envoy intercepts all application traffic.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;Figure 3&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 3&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;metrics&#34;&gt;Metrics&lt;/h3&gt;
+&lt;p&gt;Once we recognize the network call relationship between processes through the topology, we can select a specific line and view the TCP metrics between the two processes.&lt;/p&gt;
+&lt;p&gt;The diagram below (Figure 4) shows the metrics of network monitoring between two processes. There are four metrics in each line. Two on the left side are on the client side, and two on the right side are on the server side. If the remote process is not in the same Pod, only one side of the metrics is displayed.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;Figure 4&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 4&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The following two metric types are available:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Counter:&lt;/strong&gt; Records the total number of data in a certain period. Each counter contains the following data:
+a.  &lt;strong&gt;Count:&lt;/strong&gt; Execution count.
+b.  &lt;strong&gt;Bytes:&lt;/strong&gt; Packet size in bytes.
+c.  &lt;strong&gt;Execution time:&lt;/strong&gt; Execution duration.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Histogram:&lt;/strong&gt; Records the distribution of data in the buckets.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Based on the above data types, the following metrics are exposed:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Name&lt;/th&gt;
+&lt;th&gt;Type&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Write&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket write counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Read&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket read counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Write RTT&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Microsecond&lt;/td&gt;
+&lt;td&gt;The socket write round trip time (RTT) counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Connect&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket connect/accept with another server/client counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Close&lt;/td&gt;
+&lt;td&gt;Counter and histogram&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket with other socket counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Retransmit&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket retransmit package counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Drop&lt;/td&gt;
+&lt;td&gt;Counter&lt;/td&gt;
+&lt;td&gt;Millisecond&lt;/td&gt;
+&lt;td&gt;The socket drop package counter.&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, we demonstrate how to perform network profiling in the
+service mesh. To follow along, you will need a running Kubernetes
+environment.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;NOTE:&lt;/strong&gt; All commands and scripts are available &lt;a href=&#34;https://github.com/mrproliu/skywalking-network-profiling-demo&#34;&gt;in this GitHub repository&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;install-istio&#34;&gt;Install Istio&lt;/h3&gt;
+&lt;p&gt;Istio is the most widely deployed service mesh, and comes with a complete demo application that we can use for testing. To install Istio and the demo application, follow these steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Install Istio using the demo configuration profile.&lt;/li&gt;
+&lt;li&gt;Label the default namespace, so Istio automatically injects Envoy sidecar proxies when we&amp;rsquo;ll deploy the application.&lt;/li&gt;
+&lt;li&gt;Deploy the bookinfo application to the cluster.&lt;/li&gt;
+&lt;li&gt;Deploy the traffic generator to generate some traffic to the application.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;ISTIO_VERSION&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;1.13.1
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# install istio&lt;/span&gt;
+istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# deploy the bookinfo applications&lt;/span&gt;
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# generate traffic&lt;/span&gt;
+kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/traffic-generator.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;install-skywalking&#34;&gt;Install SkyWalking&lt;/h3&gt;
+&lt;p&gt;The following will install the storage, backend, and UI needed for SkyWalking:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;git clone https://github.com/apache/skywalking-kubernetes.git
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; skywalking-kubernetes
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; chart
+helm dep up skywalking
+helm -n istio-system install skywalking skywalking &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set &lt;span style=&#34;color:#008080&#34;&gt;fullnameOverride&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set elasticsearch.minimumMasterNodes&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set elasticsearch.imageTag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;7.5.1 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.replicas&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set ui.image.repository&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-ui &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set ui.image.tag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;9.2.0 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.image.tag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;9.2.0 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.envoy.als.enabled&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.image.repository&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.storageType&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;elasticsearch &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt; --set oap.env.SW_METER_ANALYZER_ACTIVE_FILES&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;network-profiling&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;install-skywalking-rover&#34;&gt;Install SkyWalking Rover&lt;/h3&gt;
+&lt;p&gt;SkyWalking Rover is deployed on every node in Kubernetes, and it automatically detects the services in the Kubernetes cluster. The network profiling feature has been released in the version 0.3.0 of SkyWalking Rover. When a network monitoring task is created, the SkyWalking rover sends the data to the SkyWalking backend.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/skywalking-rover.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;start-the-network-profiling-task&#34;&gt;Start the Network Profiling Task&lt;/h3&gt;
+&lt;p&gt;Once all deployments are completed, we must create a network profiling task for a specific instance of the service in the SkyWalking UI.&lt;/p&gt;
+&lt;p&gt;To open SkyWalking UI, run:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl port-forward svc/skywalking-ui 8080:80 --namespace
+istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Currently, we can select the specific instances that we wish to monitor by clicking the &lt;strong&gt;Data Plane&lt;/strong&gt; item in the Service Mesh panel and the &lt;strong&gt;Service&lt;/strong&gt; item in the &lt;strong&gt;Kubernetes&lt;/strong&gt; panel.&lt;/p&gt;
+&lt;p&gt;In the figure below, we have selected an instance with a list of tasks in the network profiling tab. When we click the start button, the SkyWalking Rover starts monitoring this instance&amp;rsquo;s network.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;Figure 5&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 5&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;After a few seconds, you will see the process topology appear on the right side of the page.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;Figure 6&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 6&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;When you click on the line between processes, you can see the TCP metrics between the two processes.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.jpg&#34; alt=&#34;Figure 7&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Figure 7&lt;/strong&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we detailed a problem that makes troubleshooting service mesh architectures difficult: lack of context between layers in the network stack. These are the cases when eBPF begins to really help with debugging/productivity when existing service mesh/envoy cannot. Then, we researched how eBPF could be applied to common communication, such as TLS. Finally, we demo the implementation of this process with SkyWalking Rover.&lt;/p&gt;
+&lt;p&gt;For now, we have completed the performance analysis for OSI layer 4 (mostly TCP). In the future, we will also introduce the analysis for OSI layer 7 protocols like HTTP.&lt;/p&gt;
+&lt;h2 id=&#34;get-started-with-istio&#34;&gt;Get Started with Istio&lt;/h2&gt;
+&lt;p&gt;To &lt;a href=&#34;https://istio.tetratelabs.io/&#34;&gt;get started with service mesh today, Tetrate Istio Distro&lt;/a&gt; is the easiest way to install, manage, and upgrade Istio. It provides a vetted upstream distribution of Istio that&amp;rsquo;s tested and optimized for specific platforms by Tetrate plus a CLI that facilitates acquiring, installing, and configuring multiple Istio versions. Tetrate Istio Distro also offers &lt;a href=&#34;https://www.tetrate.io/blog/tetrate-istio-distro-achieves-fips-certification/&#34;&gt;FIPS certified Istio builds&lt;/a&gt; for FedRAMP environments.&lt;/p&gt;
+&lt;p&gt;For enterprises that need a unified and consistent way to secure and manage services and traditional workloads across complex, heterogeneous deployment environments, we offer &lt;a href=&#34;https://www.tetrate.io/tetrate-service-bridge/&#34;&gt;Tetrate Service Bridge&lt;/a&gt;, our flagship edge-to-workload application connectivity platform built on Istio and Envoy.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.tetrate.io/contact/&#34;&gt;Contact us to learn more&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/&#34;&gt;SkyWalking Rover Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/&#34;&gt;Pinpoint Service Mesh Critical Performance impact by using eBPF blog post&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=yUF5qRk4rYY&#34;&gt;Apache SkyWalking with Native eBPF Agent presentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://ebpf.io/what-is-ebpf#hook-overview&#34;&gt;eBPF hook overview&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Pinpoint Service Mesh Critical Performance Impact by using eBPF</title>
+      <link>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</link>
+      <pubDate>Tue, 05 Jul 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; observes metrics, logs, traces, and events for services deployed into the service mesh. When troubleshooting, SkyWalking error analysis can be an invaluable tool helping to pinpoint where an error occurred. However, performance problems are more difficult: It’s often impossible to locate the root cause of performance problems with pre-existing observation data. To move beyond the status quo, dynamic debugging and troubleshooting are essential service performance tools. In this article, we&amp;rsquo;ll discuss how to use eBPF technology to improve the profiling feature in SkyWalking and analyze the performance impact in the service mesh.&lt;/p&gt;
+&lt;h1 id=&#34;trace-profiling-in-skywalking&#34;&gt;Trace Profiling in SkyWalking&lt;/h1&gt;
+&lt;p&gt;Since SkyWalking 7.0.0, Trace Profiling has helped developers find performance problems by periodically sampling the thread stack to let developers know which lines of code take more time. However, Trace Profiling is not suitable for the following scenarios:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Thread Model&lt;/strong&gt;: Trace Profiling is most useful for profiling code that executes in a single thread. It is less useful for middleware that relies heavily on async execution models. For example Goroutines in Go or Kotlin Coroutines.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Language&lt;/strong&gt;: Currently, Trace Profiling is only supported in Java and Python, since it’s not easy to obtain the thread stack in the runtimes of some languages such as Go and Node.js.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: Trace Profiling requires Agent installation, which can be tricky depending on the language (e.g., PHP has to rely on its C kernel; Rust and C/C++ require manual instrumentation to make install).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace Correlation&lt;/strong&gt;: Since Trace Profiling is only associated with a single request it can be hard to determine which request is causing the problem.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Short Lifecycle Services&lt;/strong&gt;: Trace Profiling doesn&amp;rsquo;t support short-lived services for (at least) two reasons:
+&lt;ol&gt;
+&lt;li&gt;It&amp;rsquo;s hard to differentiate system performance from class code manipulation in the booting stage.&lt;/li&gt;
+&lt;li&gt;Trace profiling is linked to an endpoint to identify performance impact, but there is no endpoint to match these short-lived services.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Fortunately, there are techniques that can go further than Trace Profiling in these situations.&lt;/p&gt;
+&lt;h1 id=&#34;introduce-ebpf&#34;&gt;Introduce eBPF&lt;/h1&gt;
+&lt;p&gt;We have found that eBPF — a technology that can run sandboxed programs in an operating system kernel and thus safely and efficiently extend the capabilities of the kernel without requiring kernel modifications or loading kernel modules — can help us fill gaps left by Trace Profiling. eBPF is a trending technology because it breaks the traditional barrier between user and kernel space. Programs can now inject bytecode that runs in the kernel, instead of having to recompile the kernel to customize it. This is naturally a good fit for observability.&lt;/p&gt;
+&lt;p&gt;In the figure below, we can see that when the system executes the execve syscalls, the eBPF program is triggered, and the current process runtime information is obtained by using function calls.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;eBPF-hook-points.png&#34; alt=&#34;eBPF Hook Point&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Using eBPF technology, we can expand the scope of Skywalking&amp;rsquo;s profiling capabilities:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Global Performance Analysis&lt;/strong&gt;: Before eBPF, data collection was limited to what agents can observe. Since eBPF programs run in the kernel, they can observe all threads. This is especially useful when you are not sure whether a performance problem is caused by a particular request.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Data Content&lt;/strong&gt;: eBPF can dump both user and kernel space thread stacks, so if a performance issue happens in kernel space, it’s easier to find.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: All modern Linux kernels support eBPF, so there is no need to install anything. This means it is an orchestration-free vs an agent model. This reduces friction caused by built-in software which may not have the correct agents installed, such as Envoy in a Service Mesh.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling Type&lt;/strong&gt;: Unlike Trace Profiling, eBPF is event-driven and, therefore, not constrained by interval polling. For example, eBPF can trigger events and collect more data depending on a transfer size threshold. This can allow the system to triage and prioritize data collection under extreme load.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;ebpf-limitations&#34;&gt;eBPF Limitations&lt;/h2&gt;
+&lt;p&gt;While eBPF offers significant advantages for hunting performance bottlenecks, no technology is perfect. eBPF has a number of limitations described below. Fortunately, since SkyWalking does not require eBPF, the impact is limited.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Linux Version Requirement&lt;/strong&gt;: eBPF programs require a Linux kernel version above 4.4, with later kernel versions offering more data to be collected. The BCC has &lt;a href=&#34;https://github.com/iovisor/bcc/blob/13b5563c11f7722a61a17c6ca0a1a387d2fa7788/docs/kernel-versions.md#main-features&#34;&gt;documented the features supported by different Linux kernel versions&lt;/a&gt;, with the differences between versions usually being what data can be collected with eBPF.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Privileges Required&lt;/strong&gt;: All processes that intend to load eBPF programs into the Linux kernel must be running in privileged mode. As such, bugs or other issues in such code may have a big impact.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Weak Support for Dynamic Language&lt;/strong&gt;: eBPF has weak support for JIT-based dynamic languages, such as Java. It also depends on what data you want to collect. For Profiling, eBPF does not support parsing the symbols of the program, which is why most eBPF-based profiling technologies only support static languages like C, C++, Go, and Rust. However, symbol mapping can sometimes be solved through tools provided by the language. For example, in Java, &lt;a href=&#34;https://github.com/jvm-profiling-tools/perf-map-agent#architecture&#34;&gt;perf-map-agent&lt;/a&gt; can be used to generate the symbol mapping. However, dynamic languages don&amp;rsquo;t support the attach (uprobe) functionality that would allow us to trace execution events through symbols.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;introducing-skywalking-rover&#34;&gt;Introducing SkyWalking Rover&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; introduces the eBPF profiling feature into the SkyWalking ecosystem. The figure below shows the overall architecture of SkyWalking Rover. SkyWalking Rover is currently supported in Kubernetes environments and must be deployed inside a Kubernetes cluster. After establishing a connection with the SkyWalking backend server, it saves information about the processes on the current machine to SkyWalking. When the user creates an eBPF profiling task via the user interface, SkyWalking Rover receives the task and executes it in the relevant C, C++, Golang, and Rust language-based programs.&lt;/p&gt;
+&lt;p&gt;Other than an eBPF-capable kernel, there are no additional prerequisites for deploying SkyWalking Rover.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;architecture.png&#34; alt=&#34;architecture&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;cpu-profiling-with-rover&#34;&gt;CPU Profiling with Rover&lt;/h2&gt;
+&lt;p&gt;CPU profiling is the most intuitive way to show service performance. Inspired by &lt;a href=&#34;https://www.brendangregg.com/offcpuanalysis.html&#34;&gt;Brendan Gregg‘s blog post&lt;/a&gt;, we&amp;rsquo;ve divided CPU profiling into two types that we have implemented in Rover:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;On-CPU Profiling&lt;/strong&gt;: Where threads are spending time running on-CPU.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Off-CPU Profiling&lt;/strong&gt;: Where time is spent waiting while blocked on I/O, locks, timers, paging/swapping, etc.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;profiling-envoy-with-ebpf&#34;&gt;Profiling Envoy with eBPF&lt;/h1&gt;
+&lt;p&gt;Envoy is a popular proxy, used as the data plane by the Istio service mesh. In a Kubernetes cluster, Istio injects Envoy into each service’s pod as a sidecar where it transparently intercepts and processes incoming and outgoing traffic. As the data plane, any performance issues in Envoy can affect all service traffic in the mesh. In this scenario, it’s more powerful to use &lt;strong&gt;eBPF profiling&lt;/strong&gt; to analyze issues in production caused by service mesh configuration.&lt;/p&gt;
+&lt;h2 id=&#34;demo-environment&#34;&gt;Demo Environment&lt;/h2&gt;
+&lt;p&gt;If you want to see this scenario in action, we&amp;rsquo;ve built a demo environment where we deploy an Nginx service for stress testing. Traffic is intercepted by Envoy and forwarded to Nginx. The commands to install the whole environment can be accessed through &lt;a href=&#34;https://github.com/mrproliu/skywalking-rover-profiling-demo&#34;&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;h1 id=&#34;on-cpu-profiling&#34;&gt;On-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;On-CPU profiling is suitable for analyzing thread stacks when service CPU usage is high. If the stack is dumped more times, it means that the thread stack occupies more CPU resources.&lt;/p&gt;
+&lt;p&gt;When installing Istio using the demo configuration profile, we found there are two places where we can optimize performance:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Zipkin Tracing&lt;/strong&gt;: Different Zipkin sampling percentages have a direct impact on QPS.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Access Log Format&lt;/strong&gt;: Reducing the fields of the Envoy access log can improve QPS.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;zipkin-tracing&#34;&gt;Zipkin Tracing&lt;/h2&gt;
+&lt;h3 id=&#34;zipkin-with-100-sampling&#34;&gt;Zipkin with 100% sampling&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, Envoy is using 100% sampling as default tracing policy. How does that impact the performance?&lt;/p&gt;
+&lt;p&gt;As shown in the figure below, using the &lt;strong&gt;on-CPU profiling&lt;/strong&gt;, we found that it takes about &lt;strong&gt;16%&lt;/strong&gt; of the CPU overhead. At a fixed consumption of &lt;strong&gt;2 CPUs&lt;/strong&gt;, its QPS can reach &lt;strong&gt;5.7K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;zipkin-sampling-100.png&#34; alt=&#34;Zipkin with 100% sampling&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-zipkin-tracing&#34;&gt;Disable Zipkin tracing&lt;/h3&gt;
+&lt;p&gt;At this point, we found that if Zipkin is not necessary, the sampling percentage can be reduced or we can even disable tracing. Based on the &lt;a href=&#34;https://istio.io/latest/docs/reference/config/istio.mesh.v1alpha1/#Tracing&#34;&gt;Istio documentation&lt;/a&gt;, we can disable tracing when installing the service mesh using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.enableTracing=false&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.defaultConfig.tracing.sampling=0.0&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling tracing, we performed on-CPU profiling again. According to the figure below, we found that Zipkin has disappeared from the flame graph. With the same &lt;strong&gt;2 CPU&lt;/strong&gt; consumption as in the previous example, the QPS reached &lt;strong&gt;9K&lt;/strong&gt;, which is an almost &lt;strong&gt;60%&lt;/strong&gt; increase.
+&lt;img src=&#34;zipkin-disable-tracing.png&#34; alt=&#34;Disable Zipkin tracing&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-with-throughput&#34;&gt;Tracing with Throughput&lt;/h3&gt;
+&lt;p&gt;With the same CPU usage, we&amp;rsquo;ve discovered that Envoy performance greatly improves when the tracing feature is disabled. Of course, this requires us to make trade-offs between the number of samples Zipkin collects and the desired performance of Envoy (QPS).&lt;/p&gt;
+&lt;p&gt;The table below illustrates how different Zipkin sampling percentages under the same CPU usage affect QPS.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Zipkin sampling %&lt;/th&gt;
+&lt;th&gt;QPS&lt;/th&gt;
+&lt;th&gt;CPUs&lt;/th&gt;
+&lt;th&gt;Note&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;100% &lt;strong&gt;(default)&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;5.7K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;16% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;1%&lt;/td&gt;
+&lt;td&gt;8.1K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0.3% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;disabled&lt;/td&gt;
+&lt;td&gt;9.2K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;access-log-format&#34;&gt;Access Log Format&lt;/h2&gt;
+&lt;h3 id=&#34;default-log-format&#34;&gt;Default Log Format&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/logs/access-log/#default-access-log-format&#34;&gt;the default Access Log format&lt;/a&gt; contains a lot of data. The flame graph below shows various functions involved in parsing the data such as request headers, response headers, and streaming the body.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;log-format-default.png&#34; alt=&#34;Default Log Format&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;simplifying-access-log-format&#34;&gt;Simplifying Access Log Format&lt;/h3&gt;
+&lt;p&gt;Typically, we don’t need all the information in the access log, so we can often simplify it to get what we need. The following command simplifies the access log format to only display basic information:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set meshConfig.accessLogFormat&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;[%START_TIME%] \&amp;#34;%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\&amp;#34; %RESPONSE_CODE%\n&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After simplifying the access log format, we found that the QPS increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;. When executing the on-CPU profiling again, the CPU usage of log formatting dropped from &lt;strong&gt;2.4%&lt;/strong&gt; to &lt;strong&gt;0.7%&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Simplifying the log format helped us to improve the performance.&lt;/p&gt;
+&lt;h1 id=&#34;off-cpu-profiling&#34;&gt;Off-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;Off-CPU profiling is suitable for performance issues that are not caused by high CPU usage. For example, when there are too many threads in one service, using off-CPU profiling could reveal which threads spend more time context switching.&lt;/p&gt;
+&lt;p&gt;We provide data aggregation in two dimensions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Switch count&lt;/strong&gt;: The number of times a thread switches context. When the thread returns to the CPU, it completes one context switch. A thread stack with a higher switch count spends more time context switching.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Switch duration&lt;/strong&gt;: The time it takes a thread to switch the context. A thread stack with a higher switch duration spends more time off-CPU.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;write-access-log&#34;&gt;Write Access Log&lt;/h2&gt;
+&lt;h3 id=&#34;enable-write&#34;&gt;Enable Write&lt;/h3&gt;
+&lt;p&gt;Using the same environment and settings as before in the on-CPU test, we performed off-CPU profiling. As shown below, we found that access log writes accounted for about &lt;strong&gt;28%&lt;/strong&gt; of the total context switches. The &amp;ldquo;__write&amp;rdquo; shown below also indicates that this method is the Linux kernel method.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-enable.png&#34; alt=&#34;Enable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-write&#34;&gt;Disable Write&lt;/h3&gt;
+&lt;p&gt;SkyWalking implements Envoy&amp;rsquo;s Access Log Service (ALS) feature which allows us to send access logs to the SkyWalking Observability Analysis Platform (OAP) using the gRPC protocol. Even by disabling the access logging, we can still use ALS to capture/aggregate the logs. We&amp;rsquo;ve disabled writing to the access log using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo --set meshConfig.accessLogFile&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling the Access Log feature, we performed the off-CPU profiling. File writing entries have disappeared as shown in the figure below. Envoy throughput also increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-disable.png&#34; alt=&#34;Disable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, we&amp;rsquo;ve examined the insights Apache Skywalking&amp;rsquo;s Trace Profiling can give us and how much more can be achieved with eBPF profiling. All of these features are implemented in &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;skywalking-rover&lt;/a&gt;. In addition to on- and off-CPU profiling, you will also find the following features:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Continuous profiling&lt;/strong&gt;, helps you automatically profile without manual intervention. For example, when Rover detects that the CPU exceeds a configurable threshold, it automatically executes the on-CPU profiling task.&lt;/li&gt;
+&lt;li&gt;More profiling types to enrich usage scenarios, such as network, and memory profiling.&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

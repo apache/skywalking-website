@@ -1,0 +1,297 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Logging</title>
+    <link>/tags/logging/</link>
+    <description>Recent content in Logging on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 29 Oct 2023 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/logging/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Zh: 使用 LAL 收集并分析 Nginx access log</title>
+      <link>/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/</link>
+      <pubDate>Sun, 29 Oct 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;Nginx access log 中包含了丰富的信息，例如：日志时间、状态码、响应时间、body 大小等。通过收集并分析 access log，我们可以实现对 Nginx 中接口状态的监控。&lt;/p&gt;
+&lt;p&gt;在本案例中，将由 &lt;a href=&#34;https://fluentbit.io/&#34;&gt;fluent-bit&lt;/a&gt; 收集 access log，并通过 HTTP 将日志信息发送给 SkyWalking OAP Server 进行进一步的分析。&lt;/p&gt;
+&lt;h2 id=&#34;环境准备&#34;&gt;环境准备&lt;/h2&gt;
+&lt;p&gt;实验需要的 Nginx 及 Fluent-bit 相关配置文件都被上传到了&lt;a href=&#34;https://github.com/weixiang1862/nginx-fluent-bit&#34;&gt;Github&lt;/a&gt;，有需要的读者可以自行 git clone 并通过 docker compose 启动，本文中将介绍配置文件中几个关键点。&lt;/p&gt;
+&lt;h3 id=&#34;nginx日志格式配置&#34;&gt;Nginx日志格式配置&lt;/h3&gt;
+&lt;p&gt;LAL 目前支持 JSON、YAML 及 REGEX 日志解析，为了方便获取到日志中的指标字段，我们将 Nginx 的日志格式定义为 JSON.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http {
+    ...
+    ...
+
+    log_format  main  &#39;{&amp;quot;remote_addr&amp;quot;: &amp;quot;$remote_addr&amp;quot;,&#39;
+            &#39;&amp;quot;remote_user&amp;quot;: &amp;quot;$remote_user&amp;quot;,&#39;
+            &#39;&amp;quot;request&amp;quot;: &amp;quot;$request&amp;quot;,&#39;
+            &#39;&amp;quot;time&amp;quot;: &amp;quot;$time_iso8601&amp;quot;,&#39;
+            &#39;&amp;quot;status&amp;quot;: &amp;quot;$status&amp;quot;,&#39;
+            &#39;&amp;quot;request_time&amp;quot;:&amp;quot;$request_time&amp;quot;,&#39;
+            &#39;&amp;quot;body_bytes_sent&amp;quot;: &amp;quot;$body_bytes_sent&amp;quot;,&#39;
+            &#39;&amp;quot;http_referer&amp;quot;: &amp;quot;$http_referer&amp;quot;,&#39;
+            &#39;&amp;quot;http_user_agent&amp;quot;: &amp;quot;$http_user_agent&amp;quot;,&#39;
+            &#39;&amp;quot;http_x_forwarded_for&amp;quot;: &amp;quot;$http_x_forwarded_for&amp;quot;}&#39;;
+
+    access_log  /var/log/nginx/access.log  main;
+    
+    ...
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;fluent-bit-filter&#34;&gt;Fluent bit Filter&lt;/h3&gt;
+&lt;p&gt;我们通过 Fluent bit 的 lua filter 进行日志格式的改写，将其调整为 SkyWalking 所需要的格式，record的各个字段含义如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;body：日志内容体&lt;/li&gt;
+&lt;li&gt;service：服务名称&lt;/li&gt;
+&lt;li&gt;serviceInstance：实例名称&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;function rewrite_body(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;body&amp;quot;] = { json = { json = record.log } }
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;localhost&amp;quot;
+    return 1, timestamp, newRecord
+end
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;oap-日志分析&#34;&gt;OAP 日志分析&lt;/h2&gt;
+&lt;h3 id=&#34;lal定义&#34;&gt;LAL定义&lt;/h3&gt;
+&lt;p&gt;在 filter 中，我们通过条件判断，只处理 &lt;code&gt;service=nginx::nginx&lt;/code&gt; 的服务，其他服务依旧走默认逻辑：&lt;/p&gt;
+&lt;p&gt;第一步，使用 json 指令对日志进行解析，解析的结果会被存放到 parsed 字段中，通过 parsed 字段我们可以获取 json 日志中的字段信息。&lt;/p&gt;
+&lt;p&gt;第二步，使用 timestamp 指令解析 parsed.time 并将其赋值给日志的 timestamp 字段，这里的 time 就是access log json 中的 time。&lt;/p&gt;
+&lt;p&gt;第三步，使用 tag 指令给日志打上对应的标签，标签的值依然可以通过 parsed 字段获取。&lt;/p&gt;
+&lt;p&gt;第四步，使用 metrics 指令从日志中提取出指标信息，我们共提取了四个指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;nginx_log_count&lt;/code&gt;：Nginx 每次请求都会生成一条 access log，该指标可以帮助我们统计 Nginx 当前的请求数。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_request_time&lt;/code&gt;：access log 中会记录请求时间，该指标可以帮助我们统计上游接口的响应时长。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_body_bytes_sent&lt;/code&gt;：body 大小指标可以帮助我们了解网关上的流量情况。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_status_code&lt;/code&gt;：状态码指标可以实现对状态码的监控，如果出现异常上涨可以结合 alarm 进行告警。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;rules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;layer&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;GENERAL&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;dsl&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;|&lt;span style=&#34;color:#d14&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      filter {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        if (log.service == &amp;#34;nginx::nginx&amp;#34;) {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          json {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;            abortOnFailure true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          }&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;          &lt;/span&gt;extractor {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;timestamp parsed.time as String, &amp;#34;yyyy-MM-dd&amp;#39;T&amp;#39;HH:mm:ssXXX&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tag status&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.status&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tag remote_addr&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.remote_addr&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_log_count&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value 1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_request_time&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value parsed.request_time as Double&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_body_bytes_sent&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value parsed.body_bytes_sent as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance: log.serviceInstance, status&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.status&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_status_code&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value 1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;          &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;sink {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;经过 LAL 处理后，我们已经可以在日志面板看到日志信息了，接下来我们将对 LAL 中提取的指标进行进一步分析：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./nginx-log.jpg&#34; alt=&#34;nginx-log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;mal定义&#34;&gt;MAL定义&lt;/h3&gt;
+&lt;p&gt;在 MAL 中，我们可以对上一步 LAL 中提取的指标进行进一步的分析聚合，下面的例子里：&lt;/p&gt;
+&lt;p&gt;nginx_log_count、nginx_request_time、nginx_status_code 使用 sum 聚合函数处理，并使用 SUM 方式 downsampling，&lt;/p&gt;
+&lt;p&gt;nginx_request_time 使用 avg 聚合函数求平均值，默认使用 AVG 方式 downsampling。&lt;/p&gt;
+&lt;p&gt;完成聚合分析后，SkyWalking Meter System 会完成对上述指标的持久化。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;expSuffix&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;service([&amp;#39;service&amp;#39;], Layer.GENERAL)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metricPrefix&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metricsRules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;cpm&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_log_count.sum([&amp;#39;service&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;avg_request_time&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_request_time.avg([&amp;#39;service&amp;#39;])&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;body_bytes_sent_count&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_body_bytes_sent.sum([&amp;#39;service&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;status_code_count&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_status_code.sum([&amp;#39;service&amp;#39;,&amp;#39;status&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;最后，我们便可以来到 SkyWalking UI 页面新建 Nginx 仪表板，使用刚刚 MAL 中定义的指标信息创建 Nginx Dashboard（也可以通过上文提到&lt;a href=&#34;https://github.com/weixiang1862/nginx-fluent-bit&#34;&gt;仓库&lt;/a&gt;中的 dashboard.json 直接导入测试）：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./nginx-metric.jpg&#34; alt=&#34;nginx-metric&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;参考文档&#34;&gt;参考文档&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.fluentbit.io/manual/pipeline/filters/lua&#34;&gt;Fluent Bit lua Filter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/lal/&#34;&gt;Log Analysis Language&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;Meter Analysis Language&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: New Features of SkyWalking Go 0.2.0</title>
+      <link>/blog/2023-07-31-skywalking-go-0.2.0-release/</link>
+      <pubDate>Mon, 31 Jul 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-07-31-skywalking-go-0.2.0-release/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;announcing-apache-skywalking-go-020&#34;&gt;Announcing Apache SkyWalking Go 0.2.0&lt;/h1&gt;
+&lt;p&gt;I&amp;rsquo;m excited to announce the release of Apache SkyWalking Go 0.2.0! This version packs several awesome new features that I&amp;rsquo;ll overview below.&lt;/p&gt;
+&lt;h1 id=&#34;log-reporting&#34;&gt;Log Reporting&lt;/h1&gt;
+&lt;p&gt;The log reporting feature allows the Go agent to automatically collect log content from supported logging frameworks like &lt;a href=&#34;https://github.com/sirupsen/logrus&#34;&gt;logrus&lt;/a&gt; and &lt;a href=&#34;https://pkg.go.dev/go.uber.org/zap&#34;&gt;zap&lt;/a&gt;.
+The logs are organized and sent to the SkyWalking backend for visualization. You can see how the logs appear for each service in the SkyWalking UI:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;reported_logging.png&#34; alt=&#34;Reported Logging&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;making-logs-searchable&#34;&gt;Making Logs Searchable&lt;/h2&gt;
+&lt;p&gt;You can configure certain log fields to make them searchable in SkyWalking. Set the &lt;code&gt;SW_AGENT_LOG_REPORTER_LABEL_KEYS&lt;/code&gt; environment variable to include additional fields beyond the default log level.&lt;/p&gt;
+&lt;p&gt;For example, with logrus:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-go&#34; data-lang=&#34;go&#34;&gt;&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;#&lt;/span&gt; define log with fields
+logrus.&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;WithField&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;module&amp;#34;&lt;/span&gt;, &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;test-service&amp;#34;&lt;/span&gt;).&lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;Info&lt;/span&gt;(&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;test log&amp;#34;&lt;/span&gt;)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;metrics-reporting&#34;&gt;Metrics Reporting&lt;/h2&gt;
+&lt;p&gt;The agent can now collect and report custom metrics data from &lt;code&gt;runtime/metrics&lt;/code&gt; to the backend. Supported metrics are documented &lt;a href=&#34;https://pkg.go.dev/runtime/metrics#hdr-Metric_key_format&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;metrics.png&#34; alt=&#34;Runtime Metrics&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;automatic-instrumentation&#34;&gt;Automatic Instrumentation&lt;/h1&gt;
+&lt;p&gt;In 0.1.0, you had to manually integrate the agent into your apps. Now, the new commands can automatically analyze and instrument projects at a specified path, no code changes needed!
+Try using the following command to import &lt;code&gt;skywalking-go&lt;/code&gt; into your project:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# inject to project at current path&lt;/span&gt;
+skywalking-go-agent -inject&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;./ -all
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Or you can still use the original manual &lt;a href=&#34;https://github.com/apache/skywalking-go/blob/main/docs/en/setup/gobuild.md#22-code-dependency&#34;&gt;approach&lt;/a&gt; if preferred.&lt;/p&gt;
+&lt;h1 id=&#34;get-it-now&#34;&gt;Get It Now!&lt;/h1&gt;
+&lt;p&gt;Check out the &lt;a href=&#34;https://skywalking.apache.org/events/release-apache-skwaylking-go-0.2.0/&#34;&gt;CHANGELOG&lt;/a&gt; for the full list of additions and fixes. I encourage you to try out SkyWalking Go 0.2.0 today! Let me know if you have any feedback.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache ShenYu(incubating) plugin implementation principles and observability practices</title>
+      <link>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</link>
+      <pubDate>Sun, 08 May 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-Introduction-of-SkyWalking-and-ShenYu&#34;&gt;Introduction of SkyWalking and ShenYu&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-Apache-ShenYu-plugin-implementation-principle&#34;&gt;Apache ShenYu plugin implementation principle&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-Adding-generalized-call-tracking-to-the-gRPC-plugin-and-keeping-it-compatible&#34;&gt;Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-ShenYu-Gateway-Observability-Practice&#34;&gt;ShenYu Gateway Observability Practice&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-Summary&#34;&gt;Summary&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1-introduction-of-skywalking-and-shenyu&#34;&gt;1. Introduction of SkyWalking and ShenYu&lt;/h2&gt;
+&lt;h3 id=&#34;11-skywalking&#34;&gt;1.1 SkyWalking&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/hutaishi/skywalking&#34;&gt;SkyWalking&lt;/a&gt; is an Application Performance Monitoring (APM) and Observability Analysis Platform (OAP) for microservices, distributed systems, and cloud natives,
+Has powerful features that provide a multi-dimensional means of application performance analysis, including distributed topology diagrams, application performance metrics, distributed link tracing, log correlation analysis and alerts. Also has a very rich ecology. Widely used in various companies and open source projects.&lt;/p&gt;
+&lt;h3 id=&#34;12-apache-shenyu-incubating&#34;&gt;1.2 Apache ShenYu (incubating)&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;
+High-performance,multi-protocol,extensible,responsive API Gateway. Compatible with a variety of mainstream framework systems, support hot plug,
+users can customize the development, meet the current situation and future needs of users in a variety of scenarios, experienced the temper of large-scale scenes.
+Rich protocol support: &lt;code&gt;Http&lt;/code&gt;, &lt;code&gt;Spring Cloud&lt;/code&gt;, &lt;code&gt;gRPC&lt;/code&gt;, &lt;code&gt;Dubbo&lt;/code&gt;, &lt;code&gt;SOFARPC&lt;/code&gt;, &lt;code&gt;Motan&lt;/code&gt;, &lt;code&gt;Tars&lt;/code&gt;, etc.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;shenyu-arch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2-apache-shenyu-plugin-implementation-principle&#34;&gt;2. Apache ShenYu plugin implementation principle&lt;/h2&gt;
+&lt;p&gt;ShenYu&amp;rsquo;s asynchrony is a little different from previous exposure to asynchrony, it is a full-link asynchrony, the execution of each plug-in is asynchronous, and thread switching is not a single fixed situation (and the individual plug-in implementation is related).
+The gateway initiates service calls of various protocol types, and the existing SkyWalking plugins create ExitSpan (synchronous or asynchronous) when they initiate service calls.  The gateway receives the request and creates an asynchronous EntrySpan.
+The asynchronous EntrySpan needs to be concatenated with the synchronous or asynchronous ExitSpan, otherwise the link will be broken.&lt;/p&gt;
+&lt;p&gt;There are 2 types of tandem solutions：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Snapshot Delivery&lt;/strong&gt;:&lt;br&gt;
+Pass the snapshot after creating the EntrySpan to the thread that created the ExitSpan in some way.&lt;br&gt;
+Currently this approach is used in the asynchronous WebClient plugin, which can receive asynchronous snapshots. shenYu proxy Http service or SpringCloud service is to achieve span concatenation through snapshot passing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LocalSpan transit&lt;/strong&gt;:&lt;br&gt;
+Other RPC class plugins do not receive snapshots for concatenation like Asynchronous WebClient. Although you can modify other RPC plugins to receive snapshots for concatenation, it is not recommended or necessary to do so.
+This can be achieved by creating a LocalSpan in the thread where the ExitSpan is created, and then connecting the asynchronous EntrySpan and LocalSpan by &lt;code&gt;snapshot passing&lt;/code&gt;. This can be done without changing the original plugin code.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The span connection is shown below:&lt;br&gt;
+&lt;img src=&#34;span-connect.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You may ask if it is possible to create LocalSpan inside a generic plugin, instead of creating one separately for ShenYu RPC plugin?
+The answer is no, because you need to ensure that LocalSpan and ExitSpan are in the same thread, and ShenYu is fully linked asynchronously. The code to create LocalSpan is reused in the implementation.&lt;/p&gt;
+&lt;h2 id=&#34;3-adding-generalized-call-tracking-to-the-grpc-plugin-and-keeping-it-compatible&#34;&gt;3. Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/h2&gt;
+&lt;p&gt;The existing SkyWalking gRPC plugin only supports calls initiated by way of stubs. For the gateway there is no proto file, the gateway takes generalized calls (not through stubs), so tracing RPC requests, you will find that the link will break at the gateway node.
+In this case, it is necessary to make the gRPC plugin support generalized calls, while at the same time needing to remain compatible and not affect the original tracing method. This is achieved by determining whether the request parameter is a DynamicMessage, and if it is not, then the original tracing logic through the stub is used.
+If not, then the original tracing logic via stubs is used, and if not, then the generalized call tracing logic is used. The other compatibility is the difference between the old and new versions of gRPC, as well as the compatibility of various cases of obtaining server-side IP, for those interested in the source code.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-generic-call.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;4-shenyu-gateway-observability-practice&#34;&gt;4. ShenYu Gateway Observability Practice&lt;/h2&gt;
+&lt;p&gt;The above explains the principle of SkyWalking ShenYu plug-in implementation, the following deployment application to see the effect. SkyWalking powerful, in addition to the link tracking requires the development of plug-ins, other powerful features out of the box.
+Here only describe the link tracking and application performance analysis part, if you want to experience the power of SkyWalking features, please refer to the &lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking official documentation&lt;/a&gt;.&lt;br&gt;
+Version description:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;skywalking-java: &lt;code&gt;8.11.0-SNAPSHOT&lt;/code&gt; source code build. Note: The shenyu plugin will be released in version 8.11.0, and will probably release it initially in May or June. the Java agent is in the regular release phase.&lt;/li&gt;
+&lt;li&gt;skywalking: &lt;code&gt;9.0.0&lt;/code&gt; V9 version&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Usage instructions:&lt;br&gt;
+SkyWalking is designed to be very easy to use. Please refer to the official documentation for configuring and activating the shenyu plugin.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/readme/&#34;&gt;SkyWalking Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/readme/&#34;&gt;SkyWalking Java Agent Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;41-sending-requests-to-the-gateway&#34;&gt;4.1 Sending requests to the gateway&lt;/h3&gt;
+&lt;p&gt;Initiate various service requests to the gateway via the &lt;code&gt;postman&lt;/code&gt; client or &lt;code&gt;other means&lt;/code&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;42-request-topology-diagram&#34;&gt;4.2 Request Topology Diagram&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;topology2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;43-request-trace-in-the-case-of-grpc&#34;&gt;4.3 Request Trace (in the case of gRPC)&lt;/h3&gt;
+&lt;h4 id=&#34;normal-trace&#34;&gt;Normal Trace：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-ok.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;abnormal-trace&#34;&gt;Abnormal Trace：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Click on the link node to see the corresponding node information and exception information&lt;/p&gt;
+&lt;h4 id=&#34;service-provider-span&#34;&gt;Service Provider Span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;gateway-request-span&#34;&gt;Gateway request span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;gateway-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;44-service-metrics-monitoring&#34;&gt;4.4 Service Metrics Monitoring&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;overview.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;45-gateway-background-metrics-monitoring&#34;&gt;4.5 Gateway background metrics monitoring&lt;/h3&gt;
+&lt;h4 id=&#34;database-monitoring&#34;&gt;Database Monitoring:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;database.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;thread-pool-and-connection-pool-monitoring&#34;&gt;Thread pool and connection pool monitoring:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;img.png&#34; alt=&#34;img.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;46-jvm-monitoring&#34;&gt;4.6 JVM Monitoring&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;jvm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;47-endpoint-analysis&#34;&gt;4.7 Endpoint Analysis&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;endpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;48-exception-log-and-exception-link-analysis&#34;&gt;4.8 Exception log and exception link analysis&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/&#34;&gt;See official documentation for log configuration&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Log monitoring
+&lt;img src=&#34;log-trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Distributed link trace details corresponding to exception logs
+&lt;img src=&#34;log-trace-detail.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;5-summary&#34;&gt;5. Summary&lt;/h2&gt;
+&lt;p&gt;SkyWalking has very comprehensive support for metrics, link tracing, and logging in observability, and is powerful, easy to use, and designed for large distributed systems, microservices, cloud-native, container architectures, and has a rich ecosystem.
+Using SkyWalking to provide powerful observability support for Apache ShenYu (incubating) gives ShenYu a boost. Finally, if you are interested in high-performance responsive gateways, you can follow
+&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;.
+Also, thanks to SkyWalking such an excellent open source software to the industry contributions.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

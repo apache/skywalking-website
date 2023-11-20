@@ -1,0 +1,453 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – User Manual</title>
+    <link>/tags/user-manual/</link>
+    <description>Recent content in User Manual on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Tue, 19 Apr 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/user-manual/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: How to use the java agent injector?</title>
+      <link>/blog/2022-04-19-how-to-use-the-java-agent-injector/</link>
+      <pubDate>Tue, 19 Apr 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-04-19-how-to-use-the-java-agent-injector/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;content:&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-Introduction&#34;&gt;Introduction&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-Features&#34;&gt;Features&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-Install-SWCK&#34;&gt;Install SWCK&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-Deploy-a-demo-application&#34;&gt;Deploy a demo application&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-Verify-the-injector&#34;&gt;Verify the injector&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#6.-Concluding-remarks&#34;&gt;Concluding remarks&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
+&lt;h3 id=&#34;11-whats-swck&#34;&gt;1.1 What&amp;rsquo;s SWCK?&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck&#34;&gt;SWCK&lt;/a&gt; is a platform for the SkyWalking user, provisions, upgrades, maintains SkyWalking relevant components, and makes them work natively on Kubernetes.&lt;/p&gt;
+&lt;p&gt;In fact, SWCK is an operator developed based on &lt;a href=&#34;https://book.kubebuilder.io/introduction.html&#34;&gt;kubebuilder&lt;/a&gt;, providing users with Custom Resources ( CR ) and controllers for managing resources ( Controller ), all CustomResourceDefinitions（CRDs）are as follows:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#javaagent&#34;&gt;JavaAgent&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#oap&#34;&gt;OAP&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#ui&#34;&gt;UI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#storage&#34;&gt;Storage&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#satellite&#34;&gt;Satellite&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#fetcher&#34;&gt;Fetcher&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;12-whats-the-java-agent-injector&#34;&gt;1.2 What&amp;rsquo;s the java agent injector?&lt;/h3&gt;
+&lt;p&gt;For a java application, users need to inject the java agent into the application to get metadata and send it to the SkyWalking backend. To make users use the java agent more natively, we propose the java agent injector to inject the java agent sidecar into a pod. The java agent injector is actually a &lt;a href=&#34;https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/&#34;&gt;Kubernetes Mutation Webhook Controller&lt;/a&gt;. The controller intercepts pod events and applies mutations to the pod if annotations exist within the request.&lt;/p&gt;
+&lt;h2 id=&#34;2-features&#34;&gt;2. Features&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Transparent&lt;/strong&gt;. User’s applications generally run in normal containers while the java agent runs in the init container, and both belong to the same pod. Each container in the pod mounts a shared memory volume that provides a storage path for the java agent. When the pod starts, the java agent in the init container will run before the application container, and the injector will store the java agent file in the shared memory volume. When the application container starts, the injector injects the agent file into the application by setting the JVM parameter. Users can inject the java agent in this way without rebuilding the container image containing the java agent.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Configurability.&lt;/strong&gt; The injector provides two ways to configure the java agent: global configuration and custom configuration. The default global configuration is stored in the &lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/configmap/&#34;&gt;configmap&lt;/a&gt;, you can update it as your own global configuration, such as &lt;code&gt;backend_service&lt;/code&gt;. In addition, you can also set custom configuration for some applications via &lt;a href=&#34;https://kubernetes.io/zh/docs/concepts/overview/working-with-objects/annotations/&#34;&gt;annotation&lt;/a&gt;, such as “service_name”. For more information, please see &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/java-agent-injector.md&#34;&gt;java-agent-injector&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Observability.&lt;/strong&gt; For each injected java agent, we provide &lt;a href=&#34;https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/&#34;&gt;CustomDefinitionResources&lt;/a&gt; called &lt;code&gt;JavaAgent&lt;/code&gt; to observe the final agent configuration. Please refer to &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/javaagent.md&#34;&gt;javaagent&lt;/a&gt; to get more details.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;3-install-swck&#34;&gt;3. Install SWCK&lt;/h2&gt;
+&lt;p&gt;In the next steps, we will show how to build a stand-alone Kubernetes cluster and deploy the 0.6.1 version of SWCK on the platform.&lt;/p&gt;
+&lt;h3 id=&#34;31-tool-preparation&#34;&gt;3.1 Tool Preparation&lt;/h3&gt;
+&lt;p&gt;Firstly, you need to install some tools as follows:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;http://kind.sigs.k8s.io&#34;&gt;kind&lt;/a&gt;, which is used to create a stand-alone Kubernetes cluster.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/&#34;&gt;kubectl&lt;/a&gt;, which is used to communicate with the Kubernetes cluster.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;32-install-stand-alone-kubernetes-cluster&#34;&gt;3.2 Install stand-alone Kubernetes cluster&lt;/h3&gt;
+&lt;p&gt;After installing &lt;code&gt;kind&lt;/code&gt; , you could use the following command to create a stand-alone Kubernetes cluster.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Notice! If your terminal is configured with a proxy, you need to close it before the cluster is created to avoid some errors.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kind create cluster --image&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;kindest/node:v1.19.1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After creating a cluster, you can get the pods as below.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -A                          
+NAMESPACE            NAME                                         READY   STATUS    RESTARTS   AGE
+kube-system          coredns-f9fd979d6-57xpc                      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          coredns-f9fd979d6-8zj8h                      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          etcd-kind-control-plane                      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+kube-system          kindnet-gc9gt                                1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          kube-apiserver-kind-control-plane            1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+kube-system          kube-controller-manager-kind-control-plane   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+kube-system          kube-proxy-6zbtb                             1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+kube-system          kube-scheduler-kind-control-plane            1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m23s
+local-path-storage   local-path-provisioner-78776bfc44-jwwcs      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          7m16s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;33-install-certificates-mangercert-manger&#34;&gt;3.3 Install certificates manger(cert-manger)&lt;/h3&gt;
+&lt;p&gt;The certificates of SWCK are distributed and verified by the certificate manager. You need to install the &lt;a href=&#34;https://cert-manager.io/docs/&#34;&gt;cert-manager&lt;/a&gt; through the following command.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.1/cert-manager.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Verify whether cert-manager is installed successfully.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n cert-manager
+NAME                                       READY   STATUS    RESTARTS   AGE
+cert-manager-7dd5854bb4-slcmd              1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          73s
+cert-manager-cainjector-64c949654c-tfmt2   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          73s
+cert-manager-webhook-6bdffc7c9d-h8cfv      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          73s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;34-install-swck&#34;&gt;3.4 Install SWCK&lt;/h3&gt;
+&lt;p&gt;The java agent injector is a component of the operator, so please follow the next steps to install the operator first.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Get the deployment yaml file of SWCK and deploy it.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ curl -Ls https://archive.apache.org/dist/skywalking/swck/0.6.1/skywalking-swck-0.6.1-bin.tgz | tar -zxf - -O ./config/operator-bundle.yaml | kubectl apply -f -
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;Check SWCK as below.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n skywalking-swck-system
+NAME                                                  READY   STATUS    RESTARTS   AGE
+skywalking-swck-controller-manager-7f64f996fc-qh8s9   2/2     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          94s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;35-install-skywalking-components--oapserver-and-ui&#34;&gt;3.5 Install Skywalking components — OAPServer and UI&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;Deploy the OAPServer and UI in the &lt;code&gt;default&lt;/code&gt; namespace.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f https://raw.githubusercontent.com/apache/skywalking-swck/master/operator/config/samples/default.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;Check the OAPServer.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get oapserver
+NAME      INSTANCES   RUNNING   ADDRESS
+default   &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;         default-oap.default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;Check the UI.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get ui
+NAME      INSTANCES   RUNNING   INTERNALADDRESS      EXTERNALIPS   PORTS
+default   &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;           &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;         default-ui.default                 &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;80&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;4-deploy-a-demo-application&#34;&gt;4. Deploy a demo application&lt;/h2&gt;
+&lt;p&gt;In the third step, we have installed SWCK and related Skywalking components. Next, we will show how to use the java agent injector in SWCK through two java application examples in two ways: global configuration and custom configuration.&lt;/p&gt;
+&lt;h3 id=&#34;41-set-the-global-configuration&#34;&gt;4.1 Set the global configuration&lt;/h3&gt;
+&lt;p&gt;When we have installed SWCK, the default configuration is the configmap in the system namespace, we can get it as follows.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$  kubectl get configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system -oyaml
+apiVersion: v1
+data:
+  agent.config: |-
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# The service name in UI&lt;/span&gt;
+    agent.service_name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;Your_ApplicationName&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Backend service addresses.&lt;/span&gt;
+    collector.backend_service&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_COLLECTOR_BACKEND_SERVICES&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;127&lt;/span&gt;.0.0.1:&lt;span style=&#34;color:#008080&#34;&gt;11800&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Please refer to https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/configurations/#table-of-agent-configuration-properties to get more details.&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In the cluster created by &lt;code&gt;kind&lt;/code&gt;, the &lt;code&gt;backend_service&lt;/code&gt; may not be correct, we need to use the real OAPServer&amp;rsquo;s address &lt;code&gt;default-oap.default&lt;/code&gt; to replace the default &lt;code&gt;127.0.0.1&lt;/code&gt;, so we can edit the configmap as follow.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl edit configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system
+configmap/skywalking-swck-java-agent-configmap edited
+
+$ kubectl get configmap skywalking-swck-java-agent-configmap -n skywalking-swck-system -oyaml
+apiVersion: v1
+data:
+  agent.config: |-
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# The service name in UI&lt;/span&gt;
+    agent.service_name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_NAME&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;Your_ApplicationName&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Backend service addresses.&lt;/span&gt;
+    collector.backend_service&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;${&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;SW_AGENT_COLLECTOR_BACKEND_SERVICES&lt;/span&gt;:&lt;span style=&#34;color:#008080&#34;&gt;default&lt;/span&gt;-oap.default:&lt;span style=&#34;color:#008080&#34;&gt;11800&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;}&lt;/span&gt;
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Please refer to https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/configurations/#table-of-agent-configuration-properties to get more details.&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;42-set-the-custom-configuration&#34;&gt;4.2 Set the custom configuration&lt;/h3&gt;
+&lt;p&gt;In some cases, we need to use the Skywalking component to monitor different java applications, so the agent configuration of different applications may be different, such as the name of the application, and the plugins that the application needs to use, etc. Next, we will take two simple java applications developed based on &lt;code&gt;spring boot&lt;/code&gt; and &lt;code&gt;spring cloud gateway&lt;/code&gt; as examples for a detailed description. You can use the &lt;a href=&#34;https://github.com/dashanji/swck-spring-cloud-k8s-demo&#34;&gt;source code&lt;/a&gt; to build the image.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# build the springboot and springcloudgateway image &lt;/span&gt;
+$ git clone https://github.com/dashanji/swck-spring-cloud-k8s-demo 
+$ &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; swck-spring-cloud-k8s-demo &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; make
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# check the image&lt;/span&gt;
+$ docker images
+REPOSITORY     TAG       IMAGE ID       CREATED          SIZE
+gateway        v0.0.1    51d16251c1d5   &lt;span style=&#34;color:#099&#34;&gt;48&lt;/span&gt; minutes ago   723MB
+app            v0.0.1    62f4dbcde2ed   &lt;span style=&#34;color:#099&#34;&gt;48&lt;/span&gt; minutes ago   561MB
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# load the image into the cluster&lt;/span&gt;
+$ kind load docker-image app:v0.0.1 &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; kind load docker-image gateway:v0.0.1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;43-deploy-spring-boot-application&#34;&gt;4.3 deploy spring boot application&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;Create the &lt;code&gt;springboot-system&lt;/code&gt; namespace.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl create namespace springboot-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;Label the &lt;code&gt;springboot-system&lt;/code&gt;namespace to enable the java agent injector.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl label namespace springboot-system swck-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;Deploy the corresponding deployment file &lt;code&gt;springboot.yaml&lt;/code&gt; for the spring boot application, which uses annotation to override the default agent configuration, such as &lt;code&gt;service_name&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Notice! Before using the annotation to override the agent configuration, you need to add &lt;code&gt;strategy.skywalking.apache.org/agent.Overlay: &amp;quot;true&amp;quot;&lt;/code&gt; to make the override take effect.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;apps/v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Deployment&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;springboot-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;matchLabels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;template&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;swck-java-agent-injected&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# enable the java agent injector&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;annotations&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;strategy.skywalking.apache.org/agent.Overlay&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# enable the agent overlay&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;agent.skywalking.apache.org/agent.service_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;backend-service&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;containers&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;imagePullPolicy&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;IfNotPresent&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;app:v0.0.1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;args&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;-jar&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/app.jar&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#555&#34;&gt;---&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Service&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;springboot-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ClusterIP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;8085&lt;/span&gt;-tcp&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;port&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;8085&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;protocol&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;TCP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;targetPort&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;8085&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-springboot&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;Deploy a &lt;code&gt;spring boot&lt;/code&gt; application in the &lt;code&gt;springboot-system&lt;/code&gt; namespace.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f springboot.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;Check for deployment.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n springboot-system
+NAME                               READY   STATUS    RESTARTS   AGE
+demo-springboot-7c89f79885-dvk8m   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          11s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;6&#34;&gt;
+&lt;li&gt;Get the finnal injected java agent configuration through &lt;code&gt;JavaAgent&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get javaagent -n springboot-system
+NAME                            PODSELECTOR           SERVICENAME       BACKENDSERVICE
+app-demo-springboot-javaagent   &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-springboot   backend-service   default-oap.default:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;44-deploy-spring-cloud-gateway-application&#34;&gt;4.4 deploy spring cloud gateway application&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;Create the &lt;code&gt;gateway-system&lt;/code&gt; namespace.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl create namespace gateway-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;Label the &lt;code&gt;gateway-system&lt;/code&gt;namespace to enable the java agent injector.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl label namespace gateway-system swck-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;Deploy the corresponding deployment file &lt;code&gt;springgateway.yaml&lt;/code&gt; for the spring cloud gateway application, which uses annotation to override the default agent configuration, such as &lt;code&gt;service_name&lt;/code&gt;. In addition, when using &lt;code&gt;spring cloud gateway&lt;/code&gt;, we need to add the &lt;code&gt;spring cloud gateway&lt;/code&gt; plugin to the agent configuration.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Notice! Before using the annotation to override the agent configuration, you need to add &lt;code&gt;strategy.skywalking.apache.org/agent.Overlay: &amp;quot;true&amp;quot;&lt;/code&gt; to make the override take effect.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;apps/v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Deployment&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;matchLabels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;template&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;swck-java-agent-injected&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;annotations&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;strategy.skywalking.apache.org/agent.Overlay&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;true&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;agent.skywalking.apache.org/agent.service_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;gateway-service&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;optional.skywalking.apache.org&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;cloud-gateway-3.x&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# add spring cloud gateway plugin&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;containers&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway:v0.0.1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;args&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;-jar&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;/gateway.jar&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#555&#34;&gt;---&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;apiVersion&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;v1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;kind&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Service&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metadata&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;service-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;namespace&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gateway-system&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;spec&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;ClusterIP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;-tcp&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;port&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;protocol&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;TCP&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;targetPort&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;selector&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;app&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;demo-gateway&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;Deploy a &lt;code&gt;spring cloud gateway&lt;/code&gt; application in the &lt;code&gt;gateway-system&lt;/code&gt; namespace.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl apply -f springgateway.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;Check for deployment.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get pod -n gateway-system
+NAME                           READY   STATUS    RESTARTS   AGE
+demo-gateway-5bb77f6d85-9j7c6   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          15s
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;6&#34;&gt;
+&lt;li&gt;Get the finnal injected java agent configuration through &lt;code&gt;JavaAgent&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get javaagent -n gateway-system
+NAME                         PODSELECTOR        SERVICENAME       BACKENDSERVICE
+app-demo-gateway-javaagent   &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-gateway   gateway-service   default-oap.default:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;5-verify-the-injector&#34;&gt;5. Verify the injector&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;After completing the above steps, we can view detailed state of the injected pod, like the injected &lt;code&gt;agent&lt;/code&gt; container.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# get all injected pod&lt;/span&gt;
+$ kubectl get pod -A -lswck-java-agent-injected&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt;
+NAMESPACE           NAME                               READY   STATUS    RESTARTS   AGE
+gateway-system      demo-gateway-5bb77f6d85-lt4z7      1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          69s
+springboot-system   demo-springboot-7c89f79885-lkb5j   1/1     Running   &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;          75s
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# view detailed state of the injected pod [demo-springboot]&lt;/span&gt;
+$ kubectl describe pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-springboot -n springboot-system
+...
+Events:
+  Type   Reason   Age                From                           Message
+  ----   ------  ----                ----                           -------
+  ...
+  Normal Created  91s  kubelet,kind-control-plane Created  container inject-skywalking-agent
+  Normal Started  91s  kubelet,kind-control-plane Started  container inject-skywalking-agent
+  ...
+  Normal Created  90s  kubelet,kind-control-plane Created  container springboot
+  Normal Started  90s  kubelet,kind-control-plane Started  container springboot
+
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# view detailed state of the injected pod [demo-gateway] &lt;/span&gt;
+$ kubectl describe pod -l &lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo-gateway -n gateway-system
+...
+Events:
+  Type   Reason   Age            From                         Message
+  ----   ------  ----            ----                         -------
+  ...
+  Normal Created 2m20s kubelet,kind-control-plane Created container inject-skywalking-agent
+  Normal Started 2m20s kubelet,kind-control-plane Started container inject-skywalking-agent
+  ...
+  Normal Created 2m20s kubelet,kind-control-plane Created container gateway
+  Normal Started 2m20s kubelet,kind-control-plane Started container gateway
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;Now we can expose the service and watch the data displayed on the web. First of all, we need to get the &lt;code&gt;gateway&lt;/code&gt; service and the &lt;code&gt;ui&lt;/code&gt; service as follows.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl get service service-gateway -n gateway-system
+NAME              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;S&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;    AGE
+service-gateway   ClusterIP   10.99.181.145   &amp;lt;none&amp;gt;        9999/TCP   9m19s
+
+$ kubectl get service default-ui
+NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;S&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;   AGE
+default-ui   ClusterIP   10.111.39.250   &amp;lt;none&amp;gt;        80/TCP    82m
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;Then open two terminals to expose the service:  &lt;code&gt;service-gateway&lt;/code&gt;、&lt;code&gt;default-ui&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl port-forward service/service-gateway -n gateway-system 9999:9999
+Forwarding from 127.0.0.1:9999 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;
+Forwarding from &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;::1&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt;:9999 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;9999&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ kubectl port-forward service/default-ui 8090:80                     
+Forwarding from 127.0.0.1:8090 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;8080&lt;/span&gt;
+Forwarding from &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;::1&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt;:8090 -&amp;gt; &lt;span style=&#34;color:#099&#34;&gt;8080&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;Use the following commands to access the &lt;code&gt;spring boot&lt;/code&gt; demo 10 times through the &lt;code&gt;spring cloud gateway&lt;/code&gt; service.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;$ &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; i in &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;1..10&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;do&lt;/span&gt; curl http://127.0.0.1:9999/gateway/hello &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;done&lt;/span&gt;
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;We can see the Dashboard by accessing &lt;code&gt;http://127.0.0.1:8090&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;dashboard.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;6&#34;&gt;
+&lt;li&gt;All services&#39; topology is shown below.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;7&#34;&gt;
+&lt;li&gt;We can see the trace information of &lt;code&gt;gateway-service&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;gateway.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;8&#34;&gt;
+&lt;li&gt;We can see the trace information of &lt;code&gt;backend-service&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;backend.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;6-concluding-remarks&#34;&gt;6. Concluding remarks&lt;/h2&gt;
+&lt;p&gt;If your application is deployed in the Kubernetes platform and requires Skywalking to provide monitoring services, SWCK can help you deploy, upgrade and maintain the Skywalking components in the Kubernetes cluster. In addition to this blog, you can also view &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/operator.md#operator-Usage-Guide&#34;&gt;swck document&lt;/a&gt; and &lt;a href=&#34;https://github.com/apache/skywalking-swck/blob/master/docs/java-agent-injector.md&#34;&gt;Java agent injector documentation&lt;/a&gt; for more information. If you find this project useful, please give &lt;a href=&#34;https://github.com/apache/skywalking-swck&#34;&gt;SWCK&lt;/a&gt; a star! If you have any questions, welcome to ask in &lt;a href=&#34;https://github.com/apache/skywalking/issues&#34;&gt;Issues&lt;/a&gt; or &lt;a href=&#34;https://github.com/apache/skywalking/discussions&#34;&gt;Discussions&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: SkyWalking alarm webhook sharing</title>
+      <link>/blog/2019-09-25-alarm-webhook-share/</link>
+      <pubDate>Wed, 25 Sep 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2019-09-25-alarm-webhook-share/</guid>
+      <description>
+        
+        
+        &lt;ul&gt;
+&lt;li&gt;Author: Wei Qiang&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/weiqiang333&#34;&gt;GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;SkyWalking backend provides the alarm function, we can define some Alarm rules, call webhook after the rule is triggered. I share my implementation&lt;/p&gt;
+&lt;h2 id=&#34;demonstration&#34;&gt;Demonstration&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-UI-alarm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;SkyWalking alarm UI&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-dingding-notify.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p align=&#34;center&#34;&gt;dingtalk message body&lt;/p&gt;
+&lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;install&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;go get -u github.com/weiqiang333/infra-skywalking-webhook
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;$GOPATH&lt;/span&gt;/src/github.com/weiqiang333/infra-skywalking-webhook/
+bash build/build.sh
+./bin/infra-skywalking-webhook &lt;span style=&#34;color:#0086b3&#34;&gt;help&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;Configuration&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;main configs file&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;configs/production.yml&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;dingtalk&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;p3&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;token...&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;Example&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;./bin/infra-skywalking-webhook --config configs/production.yml --address 0.0.0.0:8000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ul&gt;
+&lt;li&gt;SkyWalking backend alarm settings&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;webhooks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- http://127.0.0.1:8000/dingtalk&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;collaboration&#34;&gt;Collaboration&lt;/h2&gt;
+&lt;p&gt;Hope that we can improve together &lt;a href=&#34;https://github.com/weiqiang333/infra-skywalking-webhook&#34;&gt;webhook&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;SkyWalking alarm rules may add more metric names (eg priority name), we can send different channels by locating different levels of alerts (dingtalk / SMS / phone)&lt;/p&gt;
+&lt;p&gt;Thanks.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

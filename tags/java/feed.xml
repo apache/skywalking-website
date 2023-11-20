@@ -1,0 +1,150 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Java</title>
+    <link>/tags/java/</link>
+    <description>Recent content in Java on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Tue, 09 Feb 2021 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/java/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Apache SkyWalking: How to propagate context between threads when using ThreadPoolExecutor</title>
+      <link>/blog/2021-02-09-skywalking-trace-threadpool/</link>
+      <pubDate>Tue, 09 Feb 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2021-02-09-skywalking-trace-threadpool/</guid>
+      <description>
+        
+        
+        &lt;p&gt;When using SkyWalking java agent, people usually propagate context easily. They even do not need to change the business
+code. However, it becomes harder when you want to propagate context between threads when using ThreadPoolExecutor.
+You can use the RunnableWrapper in the maven artifact org.apache.skywalking:apm-toolkit-trace. This way you must change
+your code. The developer manager usually don&amp;rsquo;t like this because there may be lots of projects, or lots of runnable code.
+If they don&amp;rsquo;t use SkyWalking some day, the code added will be superfluous and inelegant.&lt;/p&gt;
+&lt;p&gt;Is there a way to propagate context without changing the business code? Yes.&lt;/p&gt;
+&lt;p&gt;Skywalking java agent enhances a class by add a field and implement an interface. The ThreadPoolExecutor is a special
+class that is used widely. We even don&amp;rsquo;t know when and where it is loaded. Most JVMs do not allow changes in the class
+file format for classes that have been loaded previously. So SkyWalking should not enhance the ThreadPoolExecutor successfully by retransforming when the ThreadPoolExecutor has been loaded.
+However, we can apply advice to the ThreadPoolExecutor#execute method and wrap the Runnable param using our
+own agent, then enhance the wrapper class by SkyWalking java agent. An advice do not change the layout of a class.&lt;/p&gt;
+&lt;p&gt;Now we should decide how to do this. You can use the RunnableWrapper in the maven artifact
+org.apache.skywalking:apm-toolkit-trace to wrap the param, but you need to face another problem. This RunnableWrapper
+has a plugin whose active condition is checking if there is @TraceCrossThread. Agent core uses net.bytebuddy.pool.TypePool.Default.WithLazyResolution.LazyTypeDescription to find the annotations
+of a class. The LazyTypeDescription finds annotations by using a URLClassLoader with no urls if the classloader is
+null(bootstrap classloader). So it can not find the @TraceCrossThread class unless you change the LocationStrategy of
+SkyWalking java agent builder.&lt;/p&gt;
+&lt;p&gt;In &lt;a href=&#34;https://github.com/libinglong/skywalking-threadpool-agent&#34;&gt;this project&lt;/a&gt;, I write my own wrapper class,
+and simply add a plugin with a name match condition.
+Next, Let me show you how these two agents work together.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Move the plugin to the skywalking &amp;ldquo;plugins&amp;rdquo; directory.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;plugin.png&#34; alt=&#34;plugin&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;sky-plugins.png&#34; alt=&#34;plugins directory&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Add this agent after the SkyWalking agent since the wrapper class should not be loaded before
+SkyWalking agent instrumentation have finished. For example,&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;java -javaagent:/path/to/skywalking-agent.jar -javaagent:/path/to/skywalking-tool-agent-v1.0.0.jar &amp;hellip;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;agent.png&#34; alt=&#34;agent.png&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;When our application runs&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;SkyWalking java agent adds a transformer by parsing the plugin for enhancing the wrapper class in the tool agent.&lt;/li&gt;
+&lt;li&gt;The tool agent loads the wrapper class into bootstrap classloader. This triggers the previous transformer.&lt;/li&gt;
+&lt;li&gt;The tool agent applies an advice to the ThreadPoolExecutor class, wrapping the java.lang.Runnable param of &amp;ldquo;execute&amp;rdquo; method with the wrapper class.&lt;/li&gt;
+&lt;li&gt;Now SkyWalking propagates the context with the wrapper class.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Enjoy tracing with ThreadPoolExecutor in SkyWalking!&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Apache SkyWalking: Use Profiling to Fix the Blind Spot of Distributed Tracing</title>
+      <link>/blog/2020-04-13-apache-skywalking-profiling/</link>
+      <pubDate>Mon, 13 Apr 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2020-04-13-apache-skywalking-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;This post originally appears on &lt;a href=&#34;https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/&#34;&gt;The New Stack&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;This post introduces a way to automatically profile code in production with &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;Apache SkyWalking&lt;/a&gt;. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis.&lt;/p&gt;
+&lt;h3 id=&#34;limitations-of-the-distributed-tracing&#34;&gt;Limitations of the Distributed Tracing&lt;/h3&gt;
+&lt;p&gt;In the early days, metrics and logging systems were the key solutions in monitoring platforms. With the adoption of microservice and distributed system-based architecture, distributed tracing has become more important. Distributed tracing provides relevant service context, such as system topology map and RPC parent-child relationships.&lt;/p&gt;
+&lt;p&gt;Some claim that distributed tracing is the best way to discover the cause of performance issues in a distributed system. It’s good at finding issues at the RPC abstraction, or in the scope of components instrumented with spans. However, it isn’t that perfect.&lt;/p&gt;
+&lt;p&gt;Have you been surprised to find a span duration longer than expected, but no insight into why? What should you do next? Some may think that the next step is to add more instrumentation, more spans into the trace, thinking that you would eventually find the root cause, with more data points. We’ll argue this is not a good option within a production environment. Here’s why:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;There is a risk of application overhead and system overload. Ad-hoc spans measure the performance of specific scopes or methods, but picking the right place can be difficult. To identify the precise cause, you can “instrument” (add spans to) many suspicious places. The additional instrumentation costs more CPU and memory in the production environment. Next, ad-hoc instrumentation that didn’t help is often forgotten, not deleted. This creates a valueless overhead load. In the worst case, excess instrumentation can cause performance problems in the production app or overload the tracing system.&lt;/li&gt;
+&lt;li&gt;The process of ad-hoc (manual) instrumentation usually implies at least a restart. Trace instrumentation libraries, like Zipkin Brave, are integrated into many framework libraries. To instrument a method’s performance typically implies changing code, even if only an annotation. This implies a re-deploy. Even if you have the way to do auto instrumentation, like Apache SkyWalking, you still need to change the configuration and reboot the app. Otherwise, you take the risk of GC caused by hot dynamic instrumentation.&lt;/li&gt;
+&lt;li&gt;Injecting instrumentation into an uninstrumented third party library is hard and complex. It takes more time and many won’t know how to do this.&lt;/li&gt;
+&lt;li&gt;Usually, we don’t have code line numbers in the distributed tracing. Particularly when lambdas are in use, it can be difficult to identify the line of code associated with a span.
+Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Regardless of the above choices, to dive deeper requires collaboration with your Ops or SRE team, and a shared deep level of knowledge in distributed tracing.&lt;/p&gt;
+&lt;h3 id=&#34;profiling-in-production&#34;&gt;Profiling in Production&lt;/h3&gt;
+&lt;h4 id=&#34;introduction&#34;&gt;Introduction&lt;/h4&gt;
+&lt;p&gt;To reuse distributed tracing to achieve method scope precision requires an understanding of the above limitations and a different approach. We called it PROFILE.&lt;/p&gt;
+&lt;p&gt;Most high-level languages build and run on a thread concept. The profile approach takes continuous thread dumps. We merge the thread dumps to estimate the execution time of every method shown in the thread dumps. The key for distributed tracing is the tracing context, identifiers active (or current) for the profiled method. Using this trace context, we can weave data harvested from profiling into existing traces. This allows the system to automate otherwise ad-hoc instrumentation. Let’s dig deeper into how profiling works:&lt;/p&gt;
+&lt;p&gt;We consider a method invocation with the same stack depth and signature (method, line number etc), the same operation. We derive span timestamps from the thread dumps the same operation is in. Let’s put this visually:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-1.png&#34; alt=&#34;span timespaces&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Above, represents 10 successive thread dumps. If this method is in dumps 4-8, we assume it started before dump 4 and finished after dump 8. We can’t tell exactly when the method started and stopped. but the timestamps of thread dumps are close enough.&lt;/p&gt;
+&lt;p&gt;To reduce overhead caused by thread dumps, we only profile methods enclosed by a specific entry point, such as a URI or MVC Controller method. We identify these entry points through the trace context and the APM system.&lt;/p&gt;
+&lt;p&gt;The profile does thread dump analysis and gives us:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The root cause, precise to the line number in the code.&lt;/li&gt;
+&lt;li&gt;Reduced maintenance as ad-hoc instrumentation is obviated.&lt;/li&gt;
+&lt;li&gt;Reduced overload risk caused by ad-hoc instrumentation.&lt;/li&gt;
+&lt;li&gt;Dynamic activation: only when necessary and with a very clear profile target.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;implementing-precise-profiling-with-apache-skywalking-7&#34;&gt;Implementing Precise Profiling with Apache SkyWalking 7&lt;/h3&gt;
+&lt;p&gt;Distributed profiling is built-into Apache SkyWalking application performance monitoring (APM). Let’s demonstrate how the profiling approach locates the root cause of the performance issue.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;final CountDownLatchcountDownLatch= new CountDownLatch(2);
+ 
+threadPool.submit(new Task1(countDownLatch));
+threadPool.submit(new Task2(countDownLatch));
+ 
+try {
+   countDownLatch.await(500, TimeUnit.MILLISECONDS);
+} catch (InterruptedExceptione) {
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Task1 and Task2 have a race condition and unstable execution time: they will impact the performance of each other and anything calling them. While this code looks suspicious, it is representative of real life. People in the OPS/SRE team are not usually aware of all code changes and who did them. They only know something in the new code is causing a problem.&lt;/p&gt;
+&lt;p&gt;To make matters interesting, the above code is not always slow: it only happens when the condition is locked. In SkyWalking APM, we have metrics of endpoint p99/p95 latency, so, we are easy to find out the p99 of this endpoint is far from the avg response time. However, this is not the same as understanding the cause of the latency. To locate the root cause, add a profile condition to this endpoint: duration greater than 500ms. This means faster executions will not add profiling load.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-2.png&#34; alt=&#34;profiled segment&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is a typical profiled trace segment (part of the whole distributed trace) shown on the SkyWalking UI. We now notice the “service/processWithThreadPool” span is slow as we expected, but why? This method is the one we added the faulty code to. As the UI shows that method, we know the profiler is working. Now, let’s see what the profile analysis result say.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-blindspot-3.png&#34; alt=&#34;profile analysis&#34;&gt;&lt;/p&gt;
+&lt;p&gt;This is the profile analysis stack view. We see the stack element names, duration (include/exclude the children) and slowest methods have been highlighted. It shows clearly, “sun.misc.Unsafe.park” costs the most time. If we look for the caller, it is the code we added: &lt;strong&gt;CountDownLatch.await&lt;/strong&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;the-limitations-of-the-profile-method&#34;&gt;The Limitations of the Profile Method&lt;/h3&gt;
+&lt;p&gt;No diagnostic tool can fit all cases, not even the profile method.&lt;/p&gt;
+&lt;p&gt;The first consideration is mistaking a repeatedly called method for a slow method. Thread dumps are periodic. If there is a loop of calling one method, the profile analysis result would say the target method is slow because it is captured every time in the dump process. There could be another reason. A method called many times can also end up captured in each thread dump. Even so, the profile did what it is designed for. It still helps the OPS/SRE team to locate the code having the issue.&lt;/p&gt;
+&lt;p&gt;The second consideration is overhead, the impact of repeated thread dumps is real and can’t be ignored. In SkyWalking, we set the profile dump period to at least 10ms. This means we can’t locate method performance issues if they complete in less than 10ms. SkyWalking has a threshold to control the maximum parallel degree as well.&lt;/p&gt;
+&lt;p&gt;Understanding the above keeps distributed tracing and APM systems useful for your OPS/SRE team.&lt;/p&gt;
+&lt;h3 id=&#34;how-to-try-this&#34;&gt;How to Try This&lt;/h3&gt;
+&lt;p&gt;Everything we discussed, including the Apache SkyWalking Java Agent, profile analysis code, and UI, could be found in our GitHub repository. We hope you enjoyed this new profile method, and love Apache SkyWalking. If so, &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt; to encourage us.&lt;/p&gt;
+&lt;p&gt;SkyWalking 7 has just been released. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Follow &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;SkyWalking twitter&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Subscribe mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt;. Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe to the mail list.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Adrian Cole works in the Spring Cloud team at VMware, mostly on Zipkin&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Han Liu is a tech expert at Lagou. He is an Apache SkyWalking committer&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

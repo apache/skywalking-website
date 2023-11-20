@@ -1,0 +1,122 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Logging</title>
+    <link>/zh_tags/logging/</link>
+    <description>Recent content in Logging on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 08 May 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/zh_tags/logging/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Zh: Apache ShenYu (incubating)插件实现原理和可观测性实践</title>
+      <link>/zh/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</link>
+      <pubDate>Sun, 08 May 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;目录&#34;&gt;目录&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;#1.-SkyWalking%E5%92%8CShenYu%E4%BB%8B%E7%BB%8D&#34;&gt;SkyWalking和ShenYu介绍&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#2.-ApacheShenYu%E6%8F%92%E4%BB%B6%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86&#34;&gt;ApacheShenYu插件实现原理&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#3.-%E7%BB%99gRPC%E6%8F%92%E4%BB%B6%E5%A2%9E%E5%8A%A0%E6%B3%9B%E5%8C%96%E8%B0%83%E7%94%A8%E8%BF%BD%E8%B8%AA%E5%B9%B6%E4%BF%9D%E6%8C%81%E5%85%BC%E5%AE%B9&#34;&gt;给gRPC插件增加泛化调用追踪并保持兼容&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#4.-ShenYu%E7%BD%91%E5%85%B3%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E5%AE%9E%E8%B7%B5&#34;&gt;ShenYu网关可观测性实践&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#5.-%E6%80%BB%E7%BB%93&#34;&gt;总结&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;1skywalking和shenyu介绍&#34;&gt;1.SkyWalking和ShenYu介绍&lt;/h2&gt;
+&lt;h3 id=&#34;11-skywalking&#34;&gt;1.1 SkyWalking&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/hutaishi/skywalking&#34;&gt;SkyWalking&lt;/a&gt;是一个针对微服务、分布式系统、云原生的应用性能监控(APM)和可观测性分析平台(OAP),
+拥有强大的功能，提供了多维度应用性能分析手段，包含分布式拓扑图、应用性能指标、分布式链路追踪、日志关联分析和告警。同时还拥有非常丰富的生态。广泛应用于各个公司和开源项目。&lt;/p&gt;
+&lt;h3 id=&#34;12-apache-shenyu-incubating&#34;&gt;1.2 Apache ShenYu (incubating)&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;是一个高性能，多协议，易扩展，响应式的API网关。
+兼容各种主流框架体系，支持热插拔，用户可以定制化开发，满足用户各种场景的现状和未来需求，经历过大规模场景的锤炼。
+支持丰富的协议：&lt;code&gt;Http&lt;/code&gt;、&lt;code&gt;Spring Cloud&lt;/code&gt;、&lt;code&gt;gRPC&lt;/code&gt;、&lt;code&gt;Dubbo&lt;/code&gt;、&lt;code&gt;SOFARPC&lt;/code&gt;、&lt;code&gt;Motan&lt;/code&gt;、&lt;code&gt;Tars&lt;/code&gt;等等。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;shenyu-arch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2apacheshenyu插件实现原理&#34;&gt;2.ApacheShenYu插件实现原理&lt;/h2&gt;
+&lt;p&gt;ShenYu的异步和以往接触的异步有一点不一样，是一种全链路异步，每一个插件的执行都是异步的，并且线程切换并不是单一固定的情况(和各个插件实现有关)。
+网关会发起各种协议类型的服务调用，现有的SkyWalking插件发起服务调用的时候会创建ExitSpan(同步或异步).  网关接收到请求会创建异步的EntrySpan。
+异步的EntrySpan需要和同步或异步的ExitSpan串联起来，否则链路会断。
+串联方案有2种：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;快照传递&lt;/strong&gt;： 将创建EntrySpan之后的快照通过某种方式传递到创建ExitSpan的线程中。&lt;br&gt;
+目前这种方式应用在异步的WebClient插件中，该插件能接收异步快照。ShenYu代理Http服务或SpringCloud服务便是通过快照传递实现span串联。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LocalSpan中转&lt;/strong&gt;：
+其它RPC类插件不像异步WebClient那样可以接收快照实现串联。尽管你可以改动其它RPC插件让其接收快照实现串联，但不推荐也没必要，
+因为可以通过在创建ExitSpan的线程中，创建一个LocalSpan就可以实现和ExitSpan串联，然后将异步的EntrySpan和LocalSpan通过&lt;code&gt;快照传递&lt;/code&gt;的方式串联。这样实现完全可以不改动原先插件的代码。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;span连接如下图所示:&lt;br&gt;
+&lt;img src=&#34;span-connect.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;也许你会问是否可以在一个通用的插件里面创建LocalSpan,而不是ShenYu RPC插件分别创建一个？
+答案是不行，因为需要保证LocalSpan和ExitSpan在同一个线程，而ShenYu是全链路异步. 在实现上创建LocalSpan的代码是复用的。&lt;/p&gt;
+&lt;h2 id=&#34;3-给grpc插件增加泛化调用追踪并保持兼容&#34;&gt;3. 给gRPC插件增加泛化调用追踪并保持兼容&lt;/h2&gt;
+&lt;p&gt;现有的SkyWalking gRPC插件只支持通过存根的方式发起的调用。而对于网关而言并没有proto文件，网关采取的是泛化调用(不通过存根)，所以追踪rpc请求，你会发现链路会在网关节点断掉。
+在这种情况下，需要让gRPC插件支持泛化调用，而同时需要保持兼容，不影响原先的追踪方式。实现上通过判断请求参数是否是动态消息(DynamicMessage)，如果不是则走原先通过存根的追踪逻辑，
+如果是则走泛化调用追踪逻辑。另外的兼容则是在gRPC新旧版本的差异，以及获取服务端IP各种情况的兼容，感兴趣的可以看看源码。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-generic-call.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;4-shenyu网关可观测性实践&#34;&gt;4. ShenYu网关可观测性实践&lt;/h2&gt;
+&lt;p&gt;上面讲解了SkyWalking ShenYu插件的实现原理，下面部署应用看下效果。SkyWalking功能强大，除了了链路追踪需要开发插件外，其它功能强大功能开箱即用。
+这里只描述链路追踪和应用性能剖析部分，如果想体验SkyWalking功能的强大，请参考&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking官方文档&lt;/a&gt;。&lt;br&gt;
+版本说明：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;skywalking-java: &lt;code&gt;8.11.0-SNAPSHOT&lt;/code&gt;源码构建。说明：shenyu插件会在8.11.0版本发布，可能会在5月或6月初步发布它。Java代理正处于常规发布阶段。&lt;/li&gt;
+&lt;li&gt;skywalking: &lt;code&gt;9.0.0&lt;/code&gt; V9 版本&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;用法说明:&lt;br&gt;
+SkyWalking的设计非常易用，配置和激活插件请参考官方文档。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/readme/&#34;&gt;SkyWalking Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/readme/&#34;&gt;SkyWalking Java Agent Documentation&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;41-向网关发起请求&#34;&gt;4.1 向网关发起请求&lt;/h3&gt;
+&lt;p&gt;通过&lt;code&gt;postman&lt;/code&gt;客户端或者其它方式向网关发起各种服务请求&lt;/p&gt;
+&lt;h3 id=&#34;42-请求拓扑图&#34;&gt;4.2 请求拓扑图&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;topology2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;43-请求链路以grpc为例&#34;&gt;4.3 请求链路(以gRPC为例)&lt;/h3&gt;
+&lt;h4 id=&#34;正常链路&#34;&gt;正常链路：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-ok.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;异常链路&#34;&gt;异常链路：&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;点击链路节点变可以看到对应的节点信息和异常信息&lt;/p&gt;
+&lt;h4 id=&#34;服务提供者span&#34;&gt;服务提供者span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;grpc-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;网关请求span&#34;&gt;网关请求span&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;gateway-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;44-服务指标监控&#34;&gt;4.4 服务指标监控&lt;/h3&gt;
+&lt;p&gt;服务指标监控
+&lt;img src=&#34;overview.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;45-网关后台指标监控&#34;&gt;4.5 网关后台指标监控&lt;/h3&gt;
+&lt;h4 id=&#34;数据库监控&#34;&gt;数据库监控:&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;database.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;线程池和连接池监控&#34;&gt;线程池和连接池监控&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;img.png&#34; alt=&#34;img.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;46-jvm监控&#34;&gt;4.6 JVM监控&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;jvm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;47-接口分析&#34;&gt;4.7 接口分析&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;endpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;48-异常日志和异常链路分析&#34;&gt;4.8 异常日志和异常链路分析&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/&#34;&gt;日志配置见官方文档&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;日志监控
+&lt;img src=&#34;log-trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;异常日志对应的分布式链路追踪详情
+&lt;img src=&#34;log-trace-detail.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;5-总结&#34;&gt;5. 总结&lt;/h2&gt;
+&lt;p&gt;SkyWalking在可观测性方面对指标、链路追踪、日志有着非常全面的支持，功能强大，简单易用，专为大型分布式系统、微服务、云原生、容器架构而设计，拥有丰富的生态。
+使用SkyWalking为Apache ShenYu (incubating)提供强大的可观测性支持，让ShenYu如虎添翼。最后，如果你对高性能响应式网关感兴趣，可以关注
+&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt; 。
+同时感谢SkyWalking这么优秀的开源软件对行业所作的贡献。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

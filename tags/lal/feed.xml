@@ -1,0 +1,156 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – LAL</title>
+    <link>/tags/lal/</link>
+    <description>Recent content in LAL on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sun, 29 Oct 2023 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/lal/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Zh: 使用 LAL 收集并分析 Nginx access log</title>
+      <link>/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/</link>
+      <pubDate>Sun, 29 Oct 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;Nginx access log 中包含了丰富的信息，例如：日志时间、状态码、响应时间、body 大小等。通过收集并分析 access log，我们可以实现对 Nginx 中接口状态的监控。&lt;/p&gt;
+&lt;p&gt;在本案例中，将由 &lt;a href=&#34;https://fluentbit.io/&#34;&gt;fluent-bit&lt;/a&gt; 收集 access log，并通过 HTTP 将日志信息发送给 SkyWalking OAP Server 进行进一步的分析。&lt;/p&gt;
+&lt;h2 id=&#34;环境准备&#34;&gt;环境准备&lt;/h2&gt;
+&lt;p&gt;实验需要的 Nginx 及 Fluent-bit 相关配置文件都被上传到了&lt;a href=&#34;https://github.com/weixiang1862/nginx-fluent-bit&#34;&gt;Github&lt;/a&gt;，有需要的读者可以自行 git clone 并通过 docker compose 启动，本文中将介绍配置文件中几个关键点。&lt;/p&gt;
+&lt;h3 id=&#34;nginx日志格式配置&#34;&gt;Nginx日志格式配置&lt;/h3&gt;
+&lt;p&gt;LAL 目前支持 JSON、YAML 及 REGEX 日志解析，为了方便获取到日志中的指标字段，我们将 Nginx 的日志格式定义为 JSON.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http {
+    ...
+    ...
+
+    log_format  main  &#39;{&amp;quot;remote_addr&amp;quot;: &amp;quot;$remote_addr&amp;quot;,&#39;
+            &#39;&amp;quot;remote_user&amp;quot;: &amp;quot;$remote_user&amp;quot;,&#39;
+            &#39;&amp;quot;request&amp;quot;: &amp;quot;$request&amp;quot;,&#39;
+            &#39;&amp;quot;time&amp;quot;: &amp;quot;$time_iso8601&amp;quot;,&#39;
+            &#39;&amp;quot;status&amp;quot;: &amp;quot;$status&amp;quot;,&#39;
+            &#39;&amp;quot;request_time&amp;quot;:&amp;quot;$request_time&amp;quot;,&#39;
+            &#39;&amp;quot;body_bytes_sent&amp;quot;: &amp;quot;$body_bytes_sent&amp;quot;,&#39;
+            &#39;&amp;quot;http_referer&amp;quot;: &amp;quot;$http_referer&amp;quot;,&#39;
+            &#39;&amp;quot;http_user_agent&amp;quot;: &amp;quot;$http_user_agent&amp;quot;,&#39;
+            &#39;&amp;quot;http_x_forwarded_for&amp;quot;: &amp;quot;$http_x_forwarded_for&amp;quot;}&#39;;
+
+    access_log  /var/log/nginx/access.log  main;
+    
+    ...
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;fluent-bit-filter&#34;&gt;Fluent bit Filter&lt;/h3&gt;
+&lt;p&gt;我们通过 Fluent bit 的 lua filter 进行日志格式的改写，将其调整为 SkyWalking 所需要的格式，record的各个字段含义如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;body：日志内容体&lt;/li&gt;
+&lt;li&gt;service：服务名称&lt;/li&gt;
+&lt;li&gt;serviceInstance：实例名称&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;function rewrite_body(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;body&amp;quot;] = { json = { json = record.log } }
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;localhost&amp;quot;
+    return 1, timestamp, newRecord
+end
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;oap-日志分析&#34;&gt;OAP 日志分析&lt;/h2&gt;
+&lt;h3 id=&#34;lal定义&#34;&gt;LAL定义&lt;/h3&gt;
+&lt;p&gt;在 filter 中，我们通过条件判断，只处理 &lt;code&gt;service=nginx::nginx&lt;/code&gt; 的服务，其他服务依旧走默认逻辑：&lt;/p&gt;
+&lt;p&gt;第一步，使用 json 指令对日志进行解析，解析的结果会被存放到 parsed 字段中，通过 parsed 字段我们可以获取 json 日志中的字段信息。&lt;/p&gt;
+&lt;p&gt;第二步，使用 timestamp 指令解析 parsed.time 并将其赋值给日志的 timestamp 字段，这里的 time 就是access log json 中的 time。&lt;/p&gt;
+&lt;p&gt;第三步，使用 tag 指令给日志打上对应的标签，标签的值依然可以通过 parsed 字段获取。&lt;/p&gt;
+&lt;p&gt;第四步，使用 metrics 指令从日志中提取出指标信息，我们共提取了四个指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;nginx_log_count&lt;/code&gt;：Nginx 每次请求都会生成一条 access log，该指标可以帮助我们统计 Nginx 当前的请求数。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_request_time&lt;/code&gt;：access log 中会记录请求时间，该指标可以帮助我们统计上游接口的响应时长。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_body_bytes_sent&lt;/code&gt;：body 大小指标可以帮助我们了解网关上的流量情况。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;nginx_status_code&lt;/code&gt;：状态码指标可以实现对状态码的监控，如果出现异常上涨可以结合 alarm 进行告警。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;rules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;layer&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;GENERAL&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;dsl&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;|&lt;span style=&#34;color:#d14&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      filter {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        if (log.service == &amp;#34;nginx::nginx&amp;#34;) {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          json {
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;            abortOnFailure true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;          }&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;          &lt;/span&gt;extractor {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;timestamp parsed.time as String, &amp;#34;yyyy-MM-dd&amp;#39;T&amp;#39;HH:mm:ssXXX&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tag status&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.status&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tag remote_addr&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.remote_addr&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_log_count&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value 1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_request_time&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value parsed.request_time as Double&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;log.serviceInstance&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_body_bytes_sent&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value parsed.body_bytes_sent as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;metrics {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;timestamp log.timestamp as Long&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels service: log.service, instance: log.serviceInstance, status&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;parsed.status&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;name &amp;#34;nginx_status_code&amp;#34;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;              &lt;/span&gt;value 1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;            &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;          &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;sink {&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;        &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;}&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;经过 LAL 处理后，我们已经可以在日志面板看到日志信息了，接下来我们将对 LAL 中提取的指标进行进一步分析：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./nginx-log.jpg&#34; alt=&#34;nginx-log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;mal定义&#34;&gt;MAL定义&lt;/h3&gt;
+&lt;p&gt;在 MAL 中，我们可以对上一步 LAL 中提取的指标进行进一步的分析聚合，下面的例子里：&lt;/p&gt;
+&lt;p&gt;nginx_log_count、nginx_request_time、nginx_status_code 使用 sum 聚合函数处理，并使用 SUM 方式 downsampling，&lt;/p&gt;
+&lt;p&gt;nginx_request_time 使用 avg 聚合函数求平均值，默认使用 AVG 方式 downsampling。&lt;/p&gt;
+&lt;p&gt;完成聚合分析后，SkyWalking Meter System 会完成对上述指标的持久化。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;expSuffix&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;service([&amp;#39;service&amp;#39;], Layer.GENERAL)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metricPrefix&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metricsRules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;cpm&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_log_count.sum([&amp;#39;service&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;avg_request_time&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_request_time.avg([&amp;#39;service&amp;#39;])&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;body_bytes_sent_count&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_body_bytes_sent.sum([&amp;#39;service&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;status_code_count&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;nginx_status_code.sum([&amp;#39;service&amp;#39;,&amp;#39;status&amp;#39;]).downsampling(SUM)&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;最后，我们便可以来到 SkyWalking UI 页面新建 Nginx 仪表板，使用刚刚 MAL 中定义的指标信息创建 Nginx Dashboard（也可以通过上文提到&lt;a href=&#34;https://github.com/weixiang1862/nginx-fluent-bit&#34;&gt;仓库&lt;/a&gt;中的 dashboard.json 直接导入测试）：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./nginx-metric.jpg&#34; alt=&#34;nginx-metric&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;参考文档&#34;&gt;参考文档&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.fluentbit.io/manual/pipeline/filters/lua&#34;&gt;Fluent Bit lua Filter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/lal/&#34;&gt;Log Analysis Language&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/mal/&#34;&gt;Meter Analysis Language&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

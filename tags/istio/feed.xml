@@ -1,0 +1,844 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Istio</title>
+    <link>/tags/istio/</link>
+    <description>Recent content in Istio on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Wed, 14 Dec 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/istio/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: How to Use SkyWalking for Distributed Tracing in Istio?</title>
+      <link>/blog/how-to-use-skywalking-for-distributed-tracing-in-istio/</link>
+      <pubDate>Wed, 14 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/how-to-use-skywalking-for-distributed-tracing-in-istio/</guid>
+      <description>
+        
+        
+        &lt;p&gt;In cloud native applications, a request often needs to be processed through a series of APIs or backend services, some of which are parallel and some serial and located on different platforms or nodes. How do we determine the service paths and nodes a call goes through to help us troubleshoot the problem? This is where distributed tracing comes into play.&lt;/p&gt;
+&lt;p&gt;This article covers:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;How distributed tracing works&lt;/li&gt;
+&lt;li&gt;How to choose distributed tracing software&lt;/li&gt;
+&lt;li&gt;How to use distributed tracing in Istio&lt;/li&gt;
+&lt;li&gt;How to view distributed tracing data using Bookinfo and SkyWalking as examples&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;distributed-tracing-basics&#34;&gt;Distributed Tracing Basics&lt;/h2&gt;
+&lt;p&gt;Distributed tracing is a method for tracing requests in a distributed system to help users better understand, control, and optimize distributed systems. There are two concepts used in distributed tracing: TraceID and SpanID. You can see them in Figure 1 below.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;TraceID&lt;/strong&gt; is a globally unique ID that identifies the trace information of a request. All traces of a request belong to the same TraceID, and the TraceID remains constant throughout the trace of the request.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SpanID&lt;/strong&gt; is a locally unique ID that identifies a request’s trace information at a certain time. A request generates different SpanIDs at different periods, and SpanIDs are used to distinguish trace information for a request at different periods.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;TraceID and SpanID are the basis of distributed tracing. They provide a uniform identifier for request tracing in distributed systems and facilitate users’ ability to query, manage, and analyze the trace information of requests.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: Trace and span&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The following is the process of distributed tracing:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;When a system receives a request, the distributed tracing system assigns a TraceID to the request, which is used to chain together the entire chain of invocations.&lt;/li&gt;
+&lt;li&gt;The distributed trace system generates a SpanID and ParentID for each service call within the system for the request, which is used to record the parent-child relationship of the call; a Span without a ParentID is used as the entry point of the call chain.&lt;/li&gt;
+&lt;li&gt;TraceID and SpanID are to be passed during each service call.&lt;/li&gt;
+&lt;li&gt;When viewing a distributed trace, query the full process of a particular request by TraceID.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;how-istio-implements-distributed-tracing&#34;&gt;How Istio Implements Distributed Tracing&lt;/h2&gt;
+&lt;p&gt;Istio’s distributed tracing is based on information collected by the Envoy proxy in the data plane. After a service request is intercepted by Envoy, Envoy adds tracing information as headers to the request forwarded to the destination workload. The following headers are relevant for distributed tracing:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;As TraceID: x-request-id&lt;/li&gt;
+&lt;li&gt;Used to establish parent-child relationships for Span in the LightStep trace: x-ot-span-context&amp;lt;/li&lt;/li&gt;
+&lt;li&gt;Used for Zipkin, also for Jaeger, SkyWalking, see &lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;b3-propagation&lt;/a&gt;:
+&lt;ul&gt;
+&lt;li&gt;&lt;em&gt;x-b3-traceid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-traceid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-spanid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-parentspanid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-sampled&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-flags&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;b3&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;For Datadog:
+&lt;ul&gt;
+&lt;li&gt;&lt;em&gt;x-datadog-trace-id&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-datadog-parent-id&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-datadog-sampling-priority&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;For SkyWalking: &lt;em&gt;sw8&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;For AWS X-Ray: &lt;em&gt;x-amzn-trace-id&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For more information on how to use these headers, please see the &lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers&#34;&gt;Envoy documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Regardless of the language of your application, Envoy will generate the appropriate tracing headers for you at the Ingress Gateway and forward these headers to the upstream cluster. However, in order to utilize the distributed tracing feature, you must modify your application code to attach the tracing headers to upstream requests. Since neither the service mesh nor the application can automatically propagate these headers, you can integrate the agent for distributed tracing into the application or manually propagate these headers in the application code itself. Once the tracing headers are propagated to all upstream requests, Envoy will send the tracing data to the tracer’s back-end processing, and then you can view the tracing data in the UI.&lt;/p&gt;
+&lt;p&gt;For example, look at the code of the Productpage service in the &lt;a href=&#34;https://istio.io/latest/docs/examples/bookinfo/&#34;&gt;Bookinfo application&lt;/a&gt;. You can see that it integrates the Jaeger client library and synchronizes the header generated by Envoy with the HTTP requests to the Details and Reviews services in the &lt;em&gt;getForwardHeaders (request)&lt;/em&gt; function.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;getForwardHeaders&lt;/span&gt;(request):
+    headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Using Jaeger agent to get the x-b3-* headers&lt;/span&gt;
+    span &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; get_current_span()
+    carrier &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+    tracer&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;inject(
+        span_context&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;span&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;context,
+        format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;Format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;HTTP_HEADERS,
+        carrier&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;carrier)
+
+    headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;update(carrier)
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Dealing with the non x-b3-* header manually&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; session:
+        headers[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;end-user&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; session[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt;]
+    incoming_headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-request-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-ot-span-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-trace-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-parent-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-sampling-priority&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;traceparent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;tracestate&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-cloud-trace-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;grpc-trace-bin&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;sw8&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user-agent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;cookie&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;authorization&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;jwt&amp;#39;&lt;/span&gt;,
+    ]
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; ihdr &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; incoming_headers:
+        val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; request&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;get(ihdr)
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;is&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; &lt;span style=&#34;color:#999&#34;&gt;None&lt;/span&gt;:
+            headers[ihdr] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; val
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; headers
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;For more information, the &lt;a href=&#34;https://istio.io/latest/about/faq/#distributed-tracing&#34;&gt;Istio documentation&lt;/a&gt; provides answers to frequently asked questions about distributed tracing in Istio.&lt;/p&gt;
+&lt;h2 id=&#34;how-to-choose-a-distributed-tracing-system&#34;&gt;How to Choose A Distributed Tracing System&lt;/h2&gt;
+&lt;p&gt;Distributed tracing systems are similar in principle. There are many such systems on the market, such as &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt;, &lt;a href=&#34;https://github.com/jaegertracing/jaeger&#34;&gt;Jaeger&lt;/a&gt;, &lt;a href=&#34;https://github.com/openzipkin/zipkin/&#34;&gt;Zipkin&lt;/a&gt;, &lt;a href=&#34;https://lightstep.com/&#34;&gt;Lightstep&lt;/a&gt;, &lt;a href=&#34;https://github.com/pinpoint-apm/pinpoint&#34;&gt;Pinpoint&lt;/a&gt;, and so on. For our purposes here, we will choose three of them and compare them in several dimensions. Here are our inclusion criteria:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;They are currently the most popular open-source distributed tracing systems.&lt;/li&gt;
+&lt;li&gt;All are based on the OpenTracing specification.&lt;/li&gt;
+&lt;li&gt;They support integration with Istio and Envoy.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Items&lt;/th&gt;
+&lt;th&gt;Apache SkyWalking&lt;/th&gt;
+&lt;th&gt;Jaeger&lt;/th&gt;
+&lt;th&gt;Zipkin&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Implementations&lt;/td&gt;
+&lt;td&gt;Language-based probes, service mesh probes, eBPF agent, third-party instrumental libraries (Zipkin currently supported)&lt;/td&gt;
+&lt;td&gt;Language-based probes&lt;/td&gt;
+&lt;td&gt;Language-based probes&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Database&lt;/td&gt;
+&lt;td&gt;ES, H2, MySQL, TiDB, Sharding-sphere, BanyanDB&lt;/td&gt;
+&lt;td&gt;ES, MySQL, Cassandra, Memory&lt;/td&gt;
+&lt;td&gt;ES, MySQL, Cassandra, Memory&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Supported Languages&lt;/td&gt;
+&lt;td&gt;Java, Rust, PHP, NodeJS, Go, Python, C++, .Net, Lua&lt;/td&gt;
+&lt;td&gt;Java, Go, Python, NodeJS, C#, PHP, Ruby, C++&lt;/td&gt;
+&lt;td&gt;Java, Go, Python, NodeJS, C#, PHP, Ruby, C++&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Initiator&lt;/td&gt;
+&lt;td&gt;Personal&lt;/td&gt;
+&lt;td&gt;Uber&lt;/td&gt;
+&lt;td&gt;Twitter&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Governance&lt;/td&gt;
+&lt;td&gt;Apache Foundation&lt;/td&gt;
+&lt;td&gt;CNCF&lt;/td&gt;
+&lt;td&gt;CNCF&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Version&lt;/td&gt;
+&lt;td&gt;9.3.0&lt;/td&gt;
+&lt;td&gt;1.39.0&lt;/td&gt;
+&lt;td&gt;2.23.19&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Stars&lt;/td&gt;
+&lt;td&gt;20.9k&lt;/td&gt;
+&lt;td&gt;16.8k&lt;/td&gt;
+&lt;td&gt;15.8k&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Although Apache SkyWalking’s agent does not support as many languages as Jaeger and Zipkin, SkyWalking’s implementation is richer and compatible with Jaeger and Zipkin trace data, and development is more active, so it is one of the best choices for building a telemetry platform.&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;Refer to the &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/distributed-tracing/skywalking/&#34;&gt;Istio documentation&lt;/a&gt; to install and configure Apache SkyWalking.&lt;/p&gt;
+&lt;h3 id=&#34;environment-description&#34;&gt;Environment Description&lt;/h3&gt;
+&lt;p&gt;The following is the environment for our demo:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Kubernetes 1.24.5&lt;/li&gt;
+&lt;li&gt;Istio 1.16&lt;/li&gt;
+&lt;li&gt;SkyWalking 9.1.0&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;install-istio&#34;&gt;Install Istio&lt;/h3&gt;
+&lt;p&gt;Before installing Istio, you can check the environment for any problems:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ istioctl experimental precheck
+✔ No issues found when checking the cluster. Istio is safe to install or upgrade!
+  To get started, check out https://istio.io/latest/docs/setup/getting-started/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then install Istio and configure the destination for sending tracing messages as SkyWalking:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Initial Istio Operator&lt;/span&gt;
+istioctl operator init
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Configure tracing destination&lt;/span&gt;
+kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: install.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: IstioOperator
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: istio-with-skywalking
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  meshConfig:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    defaultProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      - &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    enableTracing: true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    extensionProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    - name: &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      skywalking:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        service: tracing.istio-system.svc.cluster.local
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        port: 11800
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;deploy-apache-skywalking&#34;&gt;Deploy Apache SkyWalking&lt;/h2&gt;
+&lt;p&gt;Istio 1.16 supports distributed tracing using Apache SkyWalking. Install SkyWalking by executing the following code:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f 
+https://raw.githubusercontent.com/istio/istio/release-1.16/samples/addons/extras/skywalking.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;It will install the following components under the &lt;em&gt;istio-system&lt;/em&gt; namespace:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/concepts-and-designs/backend-overview/&#34;&gt;SkyWalking Observability Analysis Platform (OAP)&lt;/a&gt;: Used to receive trace data, supports SkyWalking native data formats, Zipkin v1 and v2 and Jaeger format.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/ui/readme/&#34;&gt;UI&lt;/a&gt;: Used to query distributed trace data.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For more information about SkyWalking, please refer to the &lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/readme/&#34;&gt;SkyWalking documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;deploy-the-bookinfo-application&#34;&gt;Deploy the Bookinfo Application&lt;/h2&gt;
+&lt;p&gt;Execute the following command to install the bookinfo application:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Launch the SkyWalking UI:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;istioctl dashboard skywalking
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Figure 2 shows all the services available in the bookinfo application:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: SkyWalking General Service page&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;You can also see information about instances, endpoints, topology, tracing, etc. For example, Figure 3 shows the service topology of the bookinfo application:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Topology diagram of the Bookinfo application&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Tracing views in SkyWalking can be displayed in a variety of formats, including list, tree, table, and statistics. See Figure 4:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: SkyWalking General Service trace supports multiple display formats&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;To facilitate our examination, set the sampling rate of the trace to 100%:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: telemetry.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: Telemetry
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: mesh-default
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  - randomSamplingPercentage: 100.00
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Important:&lt;/strong&gt; &lt;em&gt;It’s generally not good practice to set the sampling rate to 100% in a production environment. To avoid the overhead of generating too many trace logs in production, please adjust the sampling strategy (sampling percentage).&lt;/em&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;uninstall&#34;&gt;Uninstall&lt;/h2&gt;
+&lt;p&gt;After experimenting, uninstall Istio and SkyWalking by executing the following command.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;samples/bookinfo/platform/kube/cleanup.sh
+istioctl unintall --purge
+kubectl delete namespace istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;understanding-the-bookinfo-tracing-information&#34;&gt;Understanding the Bookinfo Tracing Information&lt;/h2&gt;
+&lt;p&gt;Navigate to the General Service tab in the Apache SkyWalking UI, and you can see the trace information for the most recent &lt;em&gt;istio-ingressgateway&lt;/em&gt; service, as shown in Figure 5. Click on each span to see the details.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: The table view shows the basic information about each span.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Switching to the list view, you can see the execution order and duration of each span, as shown in Figure 6:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: List display&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;You might want to know why such a straightforward application generates so much span data. Because after we inject the Envoy proxy into the pod, every request between services will be intercepted and processed by Envoy, as shown in Figure 7:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Envoy intercepts requests to generate a span&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The tracing process is shown in Figure 8:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 8: Trace of the Bookinfo application&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;We give each span a label with a serial number, and the time taken is indicated in parentheses. For illustration purposes, we have summarized all spans in the table below.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;No.&lt;/th&gt;
+&lt;th&gt;Endpoint&lt;/th&gt;
+&lt;th&gt;Total Duration (ms)&lt;/th&gt;
+&lt;th&gt;Component Duration (ms)&lt;/th&gt;
+&lt;th&gt;Current Service&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;190&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;190&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td&gt;Ingress -&amp;gt; Productpage network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;3&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;189&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;188&lt;/td&gt;
+&lt;td&gt;21&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;5&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;8&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;6&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;7&lt;/td&gt;
+&lt;td&gt;3&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Productpage -&amp;gt; Details network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;7&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;details&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;8&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;details&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;9&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;159&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;10&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;159&lt;/td&gt;
+&lt;td&gt;14&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Productpage -&amp;gt; Reviews network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;11&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;145&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;12&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;144&lt;/td&gt;
+&lt;td&gt;109&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;13&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;35&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;14&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;33&lt;/td&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Reviews -&amp;gt; Ratings network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;15&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;17&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;ratings&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;ratings&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;From the above information, it can be seen that:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The total time consumed for this request is 190 ms.&lt;/li&gt;
+&lt;li&gt;In Istio sidecar mode, each traffic flow in and out of the application container must pass through the Envoy proxy once, each time taking 0 to 2 ms.&lt;/li&gt;
+&lt;li&gt;Network requests between Pods take between 1 and 16ms.&lt;/li&gt;
+&lt;li&gt;This is because the data itself has errors and the start time of the Span is not necessarily equal to the end time of the parent Span.&lt;/li&gt;
+&lt;li&gt;We can see that the most time-consuming part is the Reviews application, which takes 109 ms so that we can optimize it for that application.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary&lt;/h2&gt;
+&lt;p&gt;Distributed tracing is an indispensable tool for analyzing performance and troubleshooting modern distributed applications. In this tutorial, we’ve seen how, with just a few minor changes to your application code to propagate tracing headers, Istio makes distributed tracing simple to use. We’ve also reviewed &lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; as one of the best distributed tracing systems that Istio supports. It is a fully functional platform for cloud native application analytics, with features such as metrics and log collection, alerting, Kubernetes monitoring, &lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;service mesh performance diagnosis using eBPF&lt;/a&gt;, and more.&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;If you’re new to service mesh and Kubernetes security, we have a bunch of free online courses &lt;a href=&#34;https://tetr8.io/academy&#34;&gt;available at Tetrate Academy&lt;/a&gt; that will quickly get you up to speed with Istio and Envoy.&lt;/p&gt;
+&lt;p&gt;If you’re looking for a fast way to get to production with Istio, check out &lt;a href=&#34;https://tetr8.io/tid&#34;&gt;Tetrate Istio Distribution (TID)&lt;/a&gt;. TID is Tetrate’s hardened, fully upstream Istio distribution, with FIPS-verified builds and support available. It’s a great way to get started with Istio knowing you have a trusted distribution to begin with, have an expert team supporting you, and also have the option to get to FIPS compliance quickly if you need to.&lt;/p&gt;
+&lt;p&gt;Once you have Istio up and running, you will probably need simpler ways to manage and secure your services beyond what’s available in Istio, that’s where Tetrate Service Bridge comes in. You can learn more about how Tetrate Service Bridge makes service mesh more secure, manageable, and resilient &lt;a href=&#34;https://tetr8.io/tsb&#34;&gt;here&lt;/a&gt;, or &lt;a href=&#34;https://tetr8.io/contact&#34;&gt;contact us for a quick demo&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 如何在 Istio 中使用 SkyWalking 进行分布式追踪？</title>
+      <link>/zh/how-to-use-skywalking-for-distributed-tracing-in-istio/</link>
+      <pubDate>Wed, 14 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/how-to-use-skywalking-for-distributed-tracing-in-istio/</guid>
+      <description>
+        
+        
+        &lt;p&gt;在云原生应用中，一次请求往往需要经过一系列的 API 或后台服务处理才能完成，这些服务有些是并行的，有些是串行的，而且位于不同的平台或节点。那么如何确定一次调用的经过的服务路径和节点以帮助我们进行问题排查？这时候就需要使用到分布式追踪。&lt;/p&gt;
+&lt;p&gt;本文将向你介绍：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;分布式追踪的原理&lt;/li&gt;
+&lt;li&gt;如何选择分布式追踪软件&lt;/li&gt;
+&lt;li&gt;在 Istio 中如何使用分布式追踪&lt;/li&gt;
+&lt;li&gt;以 Bookinfo 和 SkyWalking 为例说明如何查看分布式追踪数据&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;分布式追踪基础&#34;&gt;分布式追踪基础&lt;/h2&gt;
+&lt;p&gt;分布式追踪是一种用来跟踪分布式系统中请求的方法，它可以帮助用户更好地理解、控制和优化分布式系统。分布式追踪中用到了两个概念：TraceID 和 SpanID。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;TraceID 是一个全局唯一的 ID，用来标识一个请求的追踪信息。一个请求的所有追踪信息都属于同一个 TraceID，TraceID 在整个请求的追踪过程中都是不变的；&lt;/li&gt;
+&lt;li&gt;SpanID 是一个局部唯一的 ID，用来标识一个请求在某一时刻的追踪信息。一个请求在不同的时间段会产生不同的 SpanID，SpanID 用来区分一个请求在不同时间段的追踪信息；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;TraceID 和 SpanID 是分布式追踪的基础，它们为分布式系统中请求的追踪提供了一个统一的标识，方便用户查询、管理和分析请求的追踪信息。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;下面是分布式追踪的过程：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;当一个系统收到请求后，分布式追踪系统会为该请求分配一个 TraceID，用于串联起整个调用链；&lt;/li&gt;
+&lt;li&gt;分布式追踪系统会为该请求在系统内的每一次服务调用生成一个 SpanID 和 ParentID，用于记录调用的父子关系，没有 ParentID 的 Span 将作为调用链的入口；&lt;/li&gt;
+&lt;li&gt;每个服务调用过程中都要传递 TraceID 和 SpanID；&lt;/li&gt;
+&lt;li&gt;在查看分布式追踪时，通过 TraceID 查询某次请求的全过程；&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;istio-如何实现分布式追踪&#34;&gt;Istio 如何实现分布式追踪&lt;/h2&gt;
+&lt;p&gt;Istio 中的分布式追踪是基于数据平面中的 Envoy 代理实现的。服务请求在被劫持到 Envoy 中后，Envoy 在转发请求时会附加大量 Header，其中与分布式追踪相关的有：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;作为 TraceID：&lt;code&gt;x-request-id&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;用于在 LightStep 追踪系统中建立 Span 的父子关系：&lt;code&gt;x-ot-span-context&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;用于 Zipkin，同时适用于 Jaeger、SkyWalking，详见 &lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;b3-propagation&lt;/a&gt;：
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;x-b3-traceid&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-spanid&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-parentspanid&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-sampled&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-flags&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;b3&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;用于 Datadog：
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;x-datadog-trace-id&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-datadog-parent-id&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-datadog-sampling-priority&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;用于 SkyWalking：&lt;code&gt;sw8&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;用于 AWS X-Ray：&lt;code&gt;x-amzn-trace-id&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;关于这些 Header 的详细用法请参考 &lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers&#34;&gt;Envoy 文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;p&gt;Envoy 会在 Ingress Gateway 中为你产生用于追踪的 Header，不论你的应用程序使用何种语言开发，Envoy 都会将这些 Header 转发到上游集群。但是，你还要对应用程序代码做一些小的修改，才能为使用分布式追踪功能。这是因为应用程序无法自动传播这些 Header，可以在程序中集成分布式追踪的 Agent，或者在代码中手动传播这些 Header。Envoy 会将追踪数据发送到 tracer 后端处理，然后就可以在 UI 中查看追踪数据了。&lt;/p&gt;
+&lt;p&gt;例如在 Bookinfo 应用中的 Productpage 服务，如果你查看它的代码可以发现，其中集成了 Jaeger 客户端库，并在 &lt;code&gt;getForwardHeaders (request)&lt;/code&gt; 方法中将 Envoy 生成的 Header 同步给对 Details 和 Reviews 服务的 HTTP 请求：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;getForwardHeaders&lt;/span&gt;(request):
+    headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 使用 Jaeger agent 获取 x-b3-* header&lt;/span&gt;
+    span &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; get_current_span()
+    carrier &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+    tracer&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;inject(
+        span_context&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;span&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;context,
+        format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;Format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;HTTP_HEADERS,
+        carrier&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;carrier)
+
+    headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;update(carrier)
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 手动处理非 x-b3-* header&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; session:
+        headers[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;end-user&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; session[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt;]
+    incoming_headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-request-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-ot-span-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-trace-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-parent-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-sampling-priority&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;traceparent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;tracestate&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-cloud-trace-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;grpc-trace-bin&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;sw8&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user-agent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;cookie&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;authorization&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;jwt&amp;#39;&lt;/span&gt;,
+    ]
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; ihdr &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; incoming_headers:
+        val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; request&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;get(ihdr)
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;is&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; &lt;span style=&#34;color:#999&#34;&gt;None&lt;/span&gt;:
+            headers[ihdr] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; val
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; headers
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;关于 Istio 中分布式追踪的常见问题请见 &lt;a href=&#34;https://istio.io/latest/zh/about/faq/#distributed-tracing&#34;&gt;Istio 文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;h2 id=&#34;分布式追踪系统如何选择&#34;&gt;分布式追踪系统如何选择&lt;/h2&gt;
+&lt;p&gt;分布式追踪系统的原理类似，市面上也有很多这样的系统，例如 &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; 、&lt;a href=&#34;https://github.com/jaegertracing/jaeger&#34;&gt;Jaeger&lt;/a&gt; 、&lt;a href=&#34;https://github.com/openzipkin/zipkin/&#34;&gt;Zipkin&lt;/a&gt; 、&lt;a href=&#34;https://lightstep.com/&#34;&gt;LightStep&lt;/a&gt; 、&lt;a href=&#34;https://github.com/pinpoint-apm/pinpoint&#34;&gt;Pinpoint&lt;/a&gt; 等。我们将选择其中三个，从多个维度进行对比。之所以选择它们是因为：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;它们是当前最流行的开源分布式追踪系统；&lt;/li&gt;
+&lt;li&gt;都是基于 OpenTracing 规范；&lt;/li&gt;
+&lt;li&gt;都支持与 Istio 及 Envoy 集成；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;类别&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Apache SkyWalking&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Jaeger&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Zipkin&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;实现方式&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;基于语言的探针、服务网格探针、eBPF agent、第三方指标库（当前支持 Zipkin）&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;基于语言的探针&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;基于语言的探针&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;数据存储&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ES、H2、MySQL、TiDB、Sharding-sphere、BanyanDB&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ES、MySQL、Cassandra、内存&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ES、MySQL、Cassandra、内存&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;支持语言&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Java、Rust、PHP、NodeJS、Go、Python、C++、.NET、Lua&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Java、Go、Python、NodeJS、C#、PHP、Ruby、C++&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Java、Go、Python、NodeJS、C#、PHP、Ruby、C++&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;发起者&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;个人&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Uber&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Twitter&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;治理方式&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Apache Foundation&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;CNCF&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;CNCF&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;版本&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;9.3.0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1.39.0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;2.23.19&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Star 数量&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;20.9k&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16.8k&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;15.8k&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;分布式追踪系统对比表（数据截止时间 2022-12-07）&lt;/p&gt;
+&lt;p&gt;虽然 Apache SkyWalking 的 Agent 支持的语言没有 Jaeger 和 Zipkin 多，但是 SkyWalking 的实现方式更丰富，并且与 Jaeger、Zipkin 的追踪数据兼容，开发更为活跃，且为国人开发，中文资料丰富，是构建遥测平台的最佳选择之一。&lt;/p&gt;
+&lt;h2 id=&#34;实验&#34;&gt;实验&lt;/h2&gt;
+&lt;p&gt;参考 &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/distributed-tracing/skywalking/&#34;&gt;Istio 文档&lt;/a&gt; 来安装和配置 Apache SkyWalking。&lt;/p&gt;
+&lt;h3 id=&#34;环境说明&#34;&gt;环境说明&lt;/h3&gt;
+&lt;p&gt;以下是我们实验的环境：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Kubernetes 1.24.5&lt;/li&gt;
+&lt;li&gt;Istio 1.16&lt;/li&gt;
+&lt;li&gt;SkyWalking 9.1.0&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;安装-istio&#34;&gt;安装 Istio&lt;/h3&gt;
+&lt;p&gt;安装之前可以先检查下环境是否有问题:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ istioctl experimental precheck
+✔ No issues found when checking the cluster. Istio is safe to install or upgrade!
+  To get started, check out https://istio.io/latest/docs/setup/getting-started/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后安装 Istio 同时配置发送追踪信息的目的地为 SkyWalking：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 初始化 Istio Operator&lt;/span&gt;
+istioctl operator init
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 安装 Istio 并配置使用 SkyWalking&lt;/span&gt;
+kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: install.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: IstioOperator
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: istio-with-skywalking
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  meshConfig:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    defaultProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      - &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    enableTracing: true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    extensionProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    - name: &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      skywalking:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        service: tracing.istio-system.svc.cluster.local
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        port: 11800
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;部署-apache-skywalking&#34;&gt;部署 Apache SkyWalking&lt;/h3&gt;
+&lt;p&gt;Istio 1.16 支持使用 Apache SkyWalking 进行分布式追踪，执行下面的代码安装 SkyWalking：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.16/samples/addons/extras/skywalking.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;它将在 &lt;code&gt;istio-system&lt;/code&gt; 命名空间下安装：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/concepts-and-designs/backend-overview/&#34;&gt;SkyWalking OAP&lt;/a&gt; (Observability Analysis Platform) ：用于接收追踪数据，支持 SkyWalking 原生数据格式，Zipkin v1 和 v2 以及 Jaeger 格式。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/ui/readme/&#34;&gt;UI&lt;/a&gt; ：用于查询分布式追踪数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;关于 SkyWalking 的详细信息请参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/readme/&#34;&gt;SkyWalking 文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;h3 id=&#34;部署-bookinfo-应用&#34;&gt;部署 Bookinfo 应用&lt;/h3&gt;
+&lt;p&gt;执行下面的命令安装 bookinfo 示例：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;打开 SkyWalking UI：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;istioctl dashboard skywalking
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;SkyWalking 的 General Service 页面展示了 bookinfo 应用中的所有服务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;你还可以看到实例、端点、拓扑、追踪等信息。例如下图展示了 bookinfo 应用的服务拓扑。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;SkyWalking 的追踪视图有多种显示形式，如列表、树形、表格和统计。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;img&#34;&gt;SkyWalking 通用服务追踪支持多种显示样式&lt;/p&gt;
+&lt;p&gt;为了方便我们检查，将追踪的采样率设置为 100%：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: telemetry.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: Telemetry
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: mesh-default
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  - randomSamplingPercentage: 100.00
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;卸载&#34;&gt;卸载&lt;/h3&gt;
+&lt;p&gt;在实验完后，执行下面的命令卸载 Istio 和 SkyWalking：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;samples/bookinfo/platform/kube/cleanup.sh
+istioctl unintall --purge
+kubectl delete namespace istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;bookinfo-demo-追踪信息说明&#34;&gt;Bookinfo demo 追踪信息说明&lt;/h2&gt;
+&lt;p&gt;在 Apache SkyWalking UI 中导航到 General Service 分页，查看最近的 &lt;code&gt;istio-ingressgateway&lt;/code&gt; 服务的追踪信息，表视图如下所示。图中展示了此次请求所有 Span 的基本信息，点击每个 Span 可以查看详细信息。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;切换为列表视图，可以看到每个 Span 的执行顺序及持续时间，如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;你可能会感到困惑，为什么这么简单的一个应用会产生如此多的 Span 信息？因为我们为 Pod 注入了 Envoy 代理之后，每个服务间的请求都会被 Envoy 拦截和处理，如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;整个追踪流程如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;图中给每一个 Span 标记了序号，并在括号里注明了耗时。为了便于说明我们将所有 Span 汇总在下面的表格中。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;序号&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;方法&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;总耗时（ms）&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;组件耗时（ms）&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;当前服务&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;190&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;2&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;190&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Ingress -&amp;gt; Productpage 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;3&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;189&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;188&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;21&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部处理&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;5&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;8&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;6&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;7&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;3&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Productpage -&amp;gt; Details 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;7&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;details&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;8&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;details&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;9&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;159&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;10&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;159&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;14&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Productpage -&amp;gt; Reviews 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;11&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;145&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;12&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;144&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;109&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部处理&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;13&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;35&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;2&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;14&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;33&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Reviews -&amp;gt; Ratings 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;15&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;17&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ratings&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ratings&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部处理&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;从以上信息可以发现：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本次请求总耗时 190ms；&lt;/li&gt;
+&lt;li&gt;在 Istio sidecar 模式下，每次流量在进出应用容器时都需要经过一次 Envoy 代理，每次耗时在 0 到 2 ms；&lt;/li&gt;
+&lt;li&gt;在 Pod 间的网络请求耗时在 1 到 16ms 之间；&lt;/li&gt;
+&lt;li&gt;将耗时做多的调用链 Ingress Gateway -&amp;gt; Productpage -&amp;gt; Reviews -&amp;gt; Ratings 上的所有耗时累计 182 ms，小于请求总耗时 190ms，这是因为数据本身有误差，以及 Span 的开始时间并不一定等于父 Span 的结束时间，如果你在 SkyWalking 的追踪页面，选择「列表」样式查看追踪数据（见图 2）可以更直观的发现这个问题；&lt;/li&gt;
+&lt;li&gt;我们可以查看到最耗时的部分是 Reviews 应用，耗时 109ms，因此我们可以针对该应用进行优化；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;只要对应用代码稍作修改就可以在 Istio 很方便的使用分布式追踪功能。在 Istio 支持的众多分布式追踪系统中，&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; 是其中的佼佼者。它不仅支持分布式追踪，还支持指标和日志收集、报警、Kubernetes 和服务网格监控，&lt;a href=&#34;https://skywalking.apache.org/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;使用 eBPF 诊断服务网格性能&lt;/a&gt; 等功能，是一个功能完备的云原生应用分析平台。本文中为了方便演示，将追踪采样率设置为了 100%，在生产使用时请根据需要调整采样策略（采样百分比），防止产生过多的追踪日志。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;如果您不熟悉服务网格和 Kubernetes 安全性，我们在 &lt;a href=&#34;https://tetr8.io/academy&#34;&gt;Tetrate Academy&lt;/a&gt; 提供了一系列免费在线课程，可以让您快速了解 Istio 和 Envoy。&lt;/p&gt;
+&lt;p&gt;如果您正在寻找一种快速将 Istio 投入生产的方法，请查看 &lt;a href=&#34;https://tetr8.io/tid&#34;&gt;Tetrate Istio Distribution (TID)&lt;/a&gt;。TID 是 Tetrate 的强化、完全上游的 Istio 发行版，具有经过 FIPS 验证的构建和支持。这是开始使用 Istio 的好方法，因为您知道您有一个值得信赖的发行版，有一个支持您的专家团队，并且如果需要，还可以选择快速获得 FIPS 合规性。&lt;/p&gt;
+&lt;p&gt;一旦启动并运行 Istio，您可能需要更简单的方法来管理和保护您的服务，而不仅仅是 Istio 中可用的方法，这就是 Tetrate Service Bridge 的用武之地。您可以&lt;a href=&#34;https://tetr8.io/tsb&#34;&gt;在这里&lt;/a&gt;详细了解 Tetrate Service Bridge 如何使服务网格更安全、更易于管理和弹性，或&lt;a href=&#34;https://tetr8.io/contact&#34;&gt;联系我们进行快速演示&lt;/a&gt;。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>

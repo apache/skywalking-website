@@ -1,0 +1,1412 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Service Mesh</title>
+    <link>/tags/service-mesh/</link>
+    <description>Recent content in Service Mesh on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Wed, 14 Dec 2022 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/service-mesh/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: How to Use SkyWalking for Distributed Tracing in Istio?</title>
+      <link>/blog/how-to-use-skywalking-for-distributed-tracing-in-istio/</link>
+      <pubDate>Wed, 14 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/how-to-use-skywalking-for-distributed-tracing-in-istio/</guid>
+      <description>
+        
+        
+        &lt;p&gt;In cloud native applications, a request often needs to be processed through a series of APIs or backend services, some of which are parallel and some serial and located on different platforms or nodes. How do we determine the service paths and nodes a call goes through to help us troubleshoot the problem? This is where distributed tracing comes into play.&lt;/p&gt;
+&lt;p&gt;This article covers:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;How distributed tracing works&lt;/li&gt;
+&lt;li&gt;How to choose distributed tracing software&lt;/li&gt;
+&lt;li&gt;How to use distributed tracing in Istio&lt;/li&gt;
+&lt;li&gt;How to view distributed tracing data using Bookinfo and SkyWalking as examples&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;distributed-tracing-basics&#34;&gt;Distributed Tracing Basics&lt;/h2&gt;
+&lt;p&gt;Distributed tracing is a method for tracing requests in a distributed system to help users better understand, control, and optimize distributed systems. There are two concepts used in distributed tracing: TraceID and SpanID. You can see them in Figure 1 below.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;TraceID&lt;/strong&gt; is a globally unique ID that identifies the trace information of a request. All traces of a request belong to the same TraceID, and the TraceID remains constant throughout the trace of the request.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SpanID&lt;/strong&gt; is a locally unique ID that identifies a request’s trace information at a certain time. A request generates different SpanIDs at different periods, and SpanIDs are used to distinguish trace information for a request at different periods.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;TraceID and SpanID are the basis of distributed tracing. They provide a uniform identifier for request tracing in distributed systems and facilitate users’ ability to query, manage, and analyze the trace information of requests.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 1: Trace and span&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The following is the process of distributed tracing:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;When a system receives a request, the distributed tracing system assigns a TraceID to the request, which is used to chain together the entire chain of invocations.&lt;/li&gt;
+&lt;li&gt;The distributed trace system generates a SpanID and ParentID for each service call within the system for the request, which is used to record the parent-child relationship of the call; a Span without a ParentID is used as the entry point of the call chain.&lt;/li&gt;
+&lt;li&gt;TraceID and SpanID are to be passed during each service call.&lt;/li&gt;
+&lt;li&gt;When viewing a distributed trace, query the full process of a particular request by TraceID.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;how-istio-implements-distributed-tracing&#34;&gt;How Istio Implements Distributed Tracing&lt;/h2&gt;
+&lt;p&gt;Istio’s distributed tracing is based on information collected by the Envoy proxy in the data plane. After a service request is intercepted by Envoy, Envoy adds tracing information as headers to the request forwarded to the destination workload. The following headers are relevant for distributed tracing:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;As TraceID: x-request-id&lt;/li&gt;
+&lt;li&gt;Used to establish parent-child relationships for Span in the LightStep trace: x-ot-span-context&amp;lt;/li&lt;/li&gt;
+&lt;li&gt;Used for Zipkin, also for Jaeger, SkyWalking, see &lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;b3-propagation&lt;/a&gt;:
+&lt;ul&gt;
+&lt;li&gt;&lt;em&gt;x-b3-traceid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-traceid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-spanid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-parentspanid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-sampled&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-b3-flags&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;b3&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;For Datadog:
+&lt;ul&gt;
+&lt;li&gt;&lt;em&gt;x-datadog-trace-id&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-datadog-parent-id&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;x-datadog-sampling-priority&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;For SkyWalking: &lt;em&gt;sw8&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;For AWS X-Ray: &lt;em&gt;x-amzn-trace-id&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For more information on how to use these headers, please see the &lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers&#34;&gt;Envoy documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Regardless of the language of your application, Envoy will generate the appropriate tracing headers for you at the Ingress Gateway and forward these headers to the upstream cluster. However, in order to utilize the distributed tracing feature, you must modify your application code to attach the tracing headers to upstream requests. Since neither the service mesh nor the application can automatically propagate these headers, you can integrate the agent for distributed tracing into the application or manually propagate these headers in the application code itself. Once the tracing headers are propagated to all upstream requests, Envoy will send the tracing data to the tracer’s back-end processing, and then you can view the tracing data in the UI.&lt;/p&gt;
+&lt;p&gt;For example, look at the code of the Productpage service in the &lt;a href=&#34;https://istio.io/latest/docs/examples/bookinfo/&#34;&gt;Bookinfo application&lt;/a&gt;. You can see that it integrates the Jaeger client library and synchronizes the header generated by Envoy with the HTTP requests to the Details and Reviews services in the &lt;em&gt;getForwardHeaders (request)&lt;/em&gt; function.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;getForwardHeaders&lt;/span&gt;(request):
+    headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Using Jaeger agent to get the x-b3-* headers&lt;/span&gt;
+    span &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; get_current_span()
+    carrier &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+    tracer&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;inject(
+        span_context&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;span&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;context,
+        format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;Format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;HTTP_HEADERS,
+        carrier&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;carrier)
+
+    headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;update(carrier)
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Dealing with the non x-b3-* header manually&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; session:
+        headers[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;end-user&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; session[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt;]
+    incoming_headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-request-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-ot-span-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-trace-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-parent-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-sampling-priority&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;traceparent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;tracestate&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-cloud-trace-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;grpc-trace-bin&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;sw8&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user-agent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;cookie&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;authorization&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;jwt&amp;#39;&lt;/span&gt;,
+    ]
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; ihdr &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; incoming_headers:
+        val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; request&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;get(ihdr)
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;is&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; &lt;span style=&#34;color:#999&#34;&gt;None&lt;/span&gt;:
+            headers[ihdr] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; val
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; headers
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;For more information, the &lt;a href=&#34;https://istio.io/latest/about/faq/#distributed-tracing&#34;&gt;Istio documentation&lt;/a&gt; provides answers to frequently asked questions about distributed tracing in Istio.&lt;/p&gt;
+&lt;h2 id=&#34;how-to-choose-a-distributed-tracing-system&#34;&gt;How to Choose A Distributed Tracing System&lt;/h2&gt;
+&lt;p&gt;Distributed tracing systems are similar in principle. There are many such systems on the market, such as &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt;, &lt;a href=&#34;https://github.com/jaegertracing/jaeger&#34;&gt;Jaeger&lt;/a&gt;, &lt;a href=&#34;https://github.com/openzipkin/zipkin/&#34;&gt;Zipkin&lt;/a&gt;, &lt;a href=&#34;https://lightstep.com/&#34;&gt;Lightstep&lt;/a&gt;, &lt;a href=&#34;https://github.com/pinpoint-apm/pinpoint&#34;&gt;Pinpoint&lt;/a&gt;, and so on. For our purposes here, we will choose three of them and compare them in several dimensions. Here are our inclusion criteria:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;They are currently the most popular open-source distributed tracing systems.&lt;/li&gt;
+&lt;li&gt;All are based on the OpenTracing specification.&lt;/li&gt;
+&lt;li&gt;They support integration with Istio and Envoy.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Items&lt;/th&gt;
+&lt;th&gt;Apache SkyWalking&lt;/th&gt;
+&lt;th&gt;Jaeger&lt;/th&gt;
+&lt;th&gt;Zipkin&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Implementations&lt;/td&gt;
+&lt;td&gt;Language-based probes, service mesh probes, eBPF agent, third-party instrumental libraries (Zipkin currently supported)&lt;/td&gt;
+&lt;td&gt;Language-based probes&lt;/td&gt;
+&lt;td&gt;Language-based probes&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Database&lt;/td&gt;
+&lt;td&gt;ES, H2, MySQL, TiDB, Sharding-sphere, BanyanDB&lt;/td&gt;
+&lt;td&gt;ES, MySQL, Cassandra, Memory&lt;/td&gt;
+&lt;td&gt;ES, MySQL, Cassandra, Memory&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Supported Languages&lt;/td&gt;
+&lt;td&gt;Java, Rust, PHP, NodeJS, Go, Python, C++, .Net, Lua&lt;/td&gt;
+&lt;td&gt;Java, Go, Python, NodeJS, C#, PHP, Ruby, C++&lt;/td&gt;
+&lt;td&gt;Java, Go, Python, NodeJS, C#, PHP, Ruby, C++&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Initiator&lt;/td&gt;
+&lt;td&gt;Personal&lt;/td&gt;
+&lt;td&gt;Uber&lt;/td&gt;
+&lt;td&gt;Twitter&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Governance&lt;/td&gt;
+&lt;td&gt;Apache Foundation&lt;/td&gt;
+&lt;td&gt;CNCF&lt;/td&gt;
+&lt;td&gt;CNCF&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Version&lt;/td&gt;
+&lt;td&gt;9.3.0&lt;/td&gt;
+&lt;td&gt;1.39.0&lt;/td&gt;
+&lt;td&gt;2.23.19&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Stars&lt;/td&gt;
+&lt;td&gt;20.9k&lt;/td&gt;
+&lt;td&gt;16.8k&lt;/td&gt;
+&lt;td&gt;15.8k&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Although Apache SkyWalking’s agent does not support as many languages as Jaeger and Zipkin, SkyWalking’s implementation is richer and compatible with Jaeger and Zipkin trace data, and development is more active, so it is one of the best choices for building a telemetry platform.&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;Refer to the &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/distributed-tracing/skywalking/&#34;&gt;Istio documentation&lt;/a&gt; to install and configure Apache SkyWalking.&lt;/p&gt;
+&lt;h3 id=&#34;environment-description&#34;&gt;Environment Description&lt;/h3&gt;
+&lt;p&gt;The following is the environment for our demo:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Kubernetes 1.24.5&lt;/li&gt;
+&lt;li&gt;Istio 1.16&lt;/li&gt;
+&lt;li&gt;SkyWalking 9.1.0&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;install-istio&#34;&gt;Install Istio&lt;/h3&gt;
+&lt;p&gt;Before installing Istio, you can check the environment for any problems:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ istioctl experimental precheck
+✔ No issues found when checking the cluster. Istio is safe to install or upgrade!
+  To get started, check out https://istio.io/latest/docs/setup/getting-started/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then install Istio and configure the destination for sending tracing messages as SkyWalking:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Initial Istio Operator&lt;/span&gt;
+istioctl operator init
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Configure tracing destination&lt;/span&gt;
+kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: install.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: IstioOperator
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: istio-with-skywalking
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  meshConfig:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    defaultProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      - &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    enableTracing: true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    extensionProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    - name: &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      skywalking:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        service: tracing.istio-system.svc.cluster.local
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        port: 11800
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;deploy-apache-skywalking&#34;&gt;Deploy Apache SkyWalking&lt;/h2&gt;
+&lt;p&gt;Istio 1.16 supports distributed tracing using Apache SkyWalking. Install SkyWalking by executing the following code:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f 
+https://raw.githubusercontent.com/istio/istio/release-1.16/samples/addons/extras/skywalking.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;It will install the following components under the &lt;em&gt;istio-system&lt;/em&gt; namespace:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/concepts-and-designs/backend-overview/&#34;&gt;SkyWalking Observability Analysis Platform (OAP)&lt;/a&gt;: Used to receive trace data, supports SkyWalking native data formats, Zipkin v1 and v2 and Jaeger format.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/ui/readme/&#34;&gt;UI&lt;/a&gt;: Used to query distributed trace data.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For more information about SkyWalking, please refer to the &lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/readme/&#34;&gt;SkyWalking documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;deploy-the-bookinfo-application&#34;&gt;Deploy the Bookinfo Application&lt;/h2&gt;
+&lt;p&gt;Execute the following command to install the bookinfo application:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Launch the SkyWalking UI:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;istioctl dashboard skywalking
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Figure 2 shows all the services available in the bookinfo application:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 2: SkyWalking General Service page&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;You can also see information about instances, endpoints, topology, tracing, etc. For example, Figure 3 shows the service topology of the bookinfo application:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 3: Topology diagram of the Bookinfo application&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Tracing views in SkyWalking can be displayed in a variety of formats, including list, tree, table, and statistics. See Figure 4:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 4: SkyWalking General Service trace supports multiple display formats&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;To facilitate our examination, set the sampling rate of the trace to 100%:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: telemetry.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: Telemetry
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: mesh-default
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  - randomSamplingPercentage: 100.00
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Important:&lt;/strong&gt; &lt;em&gt;It’s generally not good practice to set the sampling rate to 100% in a production environment. To avoid the overhead of generating too many trace logs in production, please adjust the sampling strategy (sampling percentage).&lt;/em&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;uninstall&#34;&gt;Uninstall&lt;/h2&gt;
+&lt;p&gt;After experimenting, uninstall Istio and SkyWalking by executing the following command.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;samples/bookinfo/platform/kube/cleanup.sh
+istioctl unintall --purge
+kubectl delete namespace istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;understanding-the-bookinfo-tracing-information&#34;&gt;Understanding the Bookinfo Tracing Information&lt;/h2&gt;
+&lt;p&gt;Navigate to the General Service tab in the Apache SkyWalking UI, and you can see the trace information for the most recent &lt;em&gt;istio-ingressgateway&lt;/em&gt; service, as shown in Figure 5. Click on each span to see the details.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 5: The table view shows the basic information about each span.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Switching to the list view, you can see the execution order and duration of each span, as shown in Figure 6:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 6: List display&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;You might want to know why such a straightforward application generates so much span data. Because after we inject the Envoy proxy into the pod, every request between services will be intercepted and processed by Envoy, as shown in Figure 7:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 7: Envoy intercepts requests to generate a span&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The tracing process is shown in Figure 8:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Figure 8: Trace of the Bookinfo application&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;We give each span a label with a serial number, and the time taken is indicated in parentheses. For illustration purposes, we have summarized all spans in the table below.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;No.&lt;/th&gt;
+&lt;th&gt;Endpoint&lt;/th&gt;
+&lt;th&gt;Total Duration (ms)&lt;/th&gt;
+&lt;th&gt;Component Duration (ms)&lt;/th&gt;
+&lt;th&gt;Current Service&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;190&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;190&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td&gt;Ingress -&amp;gt; Productpage network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;3&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;189&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;/productpage&lt;/td&gt;
+&lt;td&gt;188&lt;/td&gt;
+&lt;td&gt;21&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;5&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;8&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;6&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;7&lt;/td&gt;
+&lt;td&gt;3&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Productpage -&amp;gt; Details network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;7&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;details&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;8&lt;/td&gt;
+&lt;td&gt;/details/0&lt;/td&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;4&lt;/td&gt;
+&lt;td&gt;details&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;9&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;159&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;10&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;159&lt;/td&gt;
+&lt;td&gt;14&lt;/td&gt;
+&lt;td&gt;productpage&lt;/td&gt;
+&lt;td&gt;Productpage -&amp;gt; Reviews network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;11&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;145&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;12&lt;/td&gt;
+&lt;td&gt;/reviews/0&lt;/td&gt;
+&lt;td&gt;144&lt;/td&gt;
+&lt;td&gt;109&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;13&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;35&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;14&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;33&lt;/td&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;reviews&lt;/td&gt;
+&lt;td&gt;Reviews -&amp;gt; Ratings network transmission&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;15&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;17&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;ratings&lt;/td&gt;
+&lt;td&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;/ratings/0&lt;/td&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;16&lt;/td&gt;
+&lt;td&gt;ratings&lt;/td&gt;
+&lt;td&gt;Application internal processing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;From the above information, it can be seen that:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The total time consumed for this request is 190 ms.&lt;/li&gt;
+&lt;li&gt;In Istio sidecar mode, each traffic flow in and out of the application container must pass through the Envoy proxy once, each time taking 0 to 2 ms.&lt;/li&gt;
+&lt;li&gt;Network requests between Pods take between 1 and 16ms.&lt;/li&gt;
+&lt;li&gt;This is because the data itself has errors and the start time of the Span is not necessarily equal to the end time of the parent Span.&lt;/li&gt;
+&lt;li&gt;We can see that the most time-consuming part is the Reviews application, which takes 109 ms so that we can optimize it for that application.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary&lt;/h2&gt;
+&lt;p&gt;Distributed tracing is an indispensable tool for analyzing performance and troubleshooting modern distributed applications. In this tutorial, we’ve seen how, with just a few minor changes to your application code to propagate tracing headers, Istio makes distributed tracing simple to use. We’ve also reviewed &lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; as one of the best distributed tracing systems that Istio supports. It is a fully functional platform for cloud native application analytics, with features such as metrics and log collection, alerting, Kubernetes monitoring, &lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;service mesh performance diagnosis using eBPF&lt;/a&gt;, and more.&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;If you’re new to service mesh and Kubernetes security, we have a bunch of free online courses &lt;a href=&#34;https://tetr8.io/academy&#34;&gt;available at Tetrate Academy&lt;/a&gt; that will quickly get you up to speed with Istio and Envoy.&lt;/p&gt;
+&lt;p&gt;If you’re looking for a fast way to get to production with Istio, check out &lt;a href=&#34;https://tetr8.io/tid&#34;&gt;Tetrate Istio Distribution (TID)&lt;/a&gt;. TID is Tetrate’s hardened, fully upstream Istio distribution, with FIPS-verified builds and support available. It’s a great way to get started with Istio knowing you have a trusted distribution to begin with, have an expert team supporting you, and also have the option to get to FIPS compliance quickly if you need to.&lt;/p&gt;
+&lt;p&gt;Once you have Istio up and running, you will probably need simpler ways to manage and secure your services beyond what’s available in Istio, that’s where Tetrate Service Bridge comes in. You can learn more about how Tetrate Service Bridge makes service mesh more secure, manageable, and resilient &lt;a href=&#34;https://tetr8.io/tsb&#34;&gt;here&lt;/a&gt;, or &lt;a href=&#34;https://tetr8.io/contact&#34;&gt;contact us for a quick demo&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 如何在 Istio 中使用 SkyWalking 进行分布式追踪？</title>
+      <link>/zh/how-to-use-skywalking-for-distributed-tracing-in-istio/</link>
+      <pubDate>Wed, 14 Dec 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/how-to-use-skywalking-for-distributed-tracing-in-istio/</guid>
+      <description>
+        
+        
+        &lt;p&gt;在云原生应用中，一次请求往往需要经过一系列的 API 或后台服务处理才能完成，这些服务有些是并行的，有些是串行的，而且位于不同的平台或节点。那么如何确定一次调用的经过的服务路径和节点以帮助我们进行问题排查？这时候就需要使用到分布式追踪。&lt;/p&gt;
+&lt;p&gt;本文将向你介绍：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;分布式追踪的原理&lt;/li&gt;
+&lt;li&gt;如何选择分布式追踪软件&lt;/li&gt;
+&lt;li&gt;在 Istio 中如何使用分布式追踪&lt;/li&gt;
+&lt;li&gt;以 Bookinfo 和 SkyWalking 为例说明如何查看分布式追踪数据&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;分布式追踪基础&#34;&gt;分布式追踪基础&lt;/h2&gt;
+&lt;p&gt;分布式追踪是一种用来跟踪分布式系统中请求的方法，它可以帮助用户更好地理解、控制和优化分布式系统。分布式追踪中用到了两个概念：TraceID 和 SpanID。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;TraceID 是一个全局唯一的 ID，用来标识一个请求的追踪信息。一个请求的所有追踪信息都属于同一个 TraceID，TraceID 在整个请求的追踪过程中都是不变的；&lt;/li&gt;
+&lt;li&gt;SpanID 是一个局部唯一的 ID，用来标识一个请求在某一时刻的追踪信息。一个请求在不同的时间段会产生不同的 SpanID，SpanID 用来区分一个请求在不同时间段的追踪信息；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;TraceID 和 SpanID 是分布式追踪的基础，它们为分布式系统中请求的追踪提供了一个统一的标识，方便用户查询、管理和分析请求的追踪信息。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;下面是分布式追踪的过程：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;当一个系统收到请求后，分布式追踪系统会为该请求分配一个 TraceID，用于串联起整个调用链；&lt;/li&gt;
+&lt;li&gt;分布式追踪系统会为该请求在系统内的每一次服务调用生成一个 SpanID 和 ParentID，用于记录调用的父子关系，没有 ParentID 的 Span 将作为调用链的入口；&lt;/li&gt;
+&lt;li&gt;每个服务调用过程中都要传递 TraceID 和 SpanID；&lt;/li&gt;
+&lt;li&gt;在查看分布式追踪时，通过 TraceID 查询某次请求的全过程；&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;istio-如何实现分布式追踪&#34;&gt;Istio 如何实现分布式追踪&lt;/h2&gt;
+&lt;p&gt;Istio 中的分布式追踪是基于数据平面中的 Envoy 代理实现的。服务请求在被劫持到 Envoy 中后，Envoy 在转发请求时会附加大量 Header，其中与分布式追踪相关的有：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;作为 TraceID：&lt;code&gt;x-request-id&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;用于在 LightStep 追踪系统中建立 Span 的父子关系：&lt;code&gt;x-ot-span-context&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;用于 Zipkin，同时适用于 Jaeger、SkyWalking，详见 &lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;b3-propagation&lt;/a&gt;：
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;x-b3-traceid&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-spanid&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-parentspanid&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-sampled&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-b3-flags&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;b3&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;用于 Datadog：
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;x-datadog-trace-id&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-datadog-parent-id&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;x-datadog-sampling-priority&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;用于 SkyWalking：&lt;code&gt;sw8&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;用于 AWS X-Ray：&lt;code&gt;x-amzn-trace-id&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;关于这些 Header 的详细用法请参考 &lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers&#34;&gt;Envoy 文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;p&gt;Envoy 会在 Ingress Gateway 中为你产生用于追踪的 Header，不论你的应用程序使用何种语言开发，Envoy 都会将这些 Header 转发到上游集群。但是，你还要对应用程序代码做一些小的修改，才能为使用分布式追踪功能。这是因为应用程序无法自动传播这些 Header，可以在程序中集成分布式追踪的 Agent，或者在代码中手动传播这些 Header。Envoy 会将追踪数据发送到 tracer 后端处理，然后就可以在 UI 中查看追踪数据了。&lt;/p&gt;
+&lt;p&gt;例如在 Bookinfo 应用中的 Productpage 服务，如果你查看它的代码可以发现，其中集成了 Jaeger 客户端库，并在 &lt;code&gt;getForwardHeaders (request)&lt;/code&gt; 方法中将 Envoy 生成的 Header 同步给对 Details 和 Reviews 服务的 HTTP 请求：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#900;font-weight:bold&#34;&gt;getForwardHeaders&lt;/span&gt;(request):
+    headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 使用 Jaeger agent 获取 x-b3-* header&lt;/span&gt;
+    span &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; get_current_span()
+    carrier &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; {}
+    tracer&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;inject(
+        span_context&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;span&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;context,
+        format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;Format&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;HTTP_HEADERS,
+        carrier&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;carrier)
+
+    headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;update(carrier)
+
+    &lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 手动处理非 x-b3-* header&lt;/span&gt;
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; session:
+        headers[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;end-user&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; session[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user&amp;#39;&lt;/span&gt;]
+    incoming_headers &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; [
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-request-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-ot-span-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-trace-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-parent-id&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-datadog-sampling-priority&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;traceparent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;tracestate&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;x-cloud-trace-context&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;grpc-trace-bin&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;sw8&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;user-agent&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;cookie&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;authorization&amp;#39;&lt;/span&gt;,
+        &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;jwt&amp;#39;&lt;/span&gt;,
+    ]
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; ihdr &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; incoming_headers:
+        val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; request&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;headers&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;get(ihdr)
+        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;if&lt;/span&gt; val &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;is&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; &lt;span style=&#34;color:#999&#34;&gt;None&lt;/span&gt;:
+            headers[ihdr] &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; val
+
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;return&lt;/span&gt; headers
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;关于 Istio 中分布式追踪的常见问题请见 &lt;a href=&#34;https://istio.io/latest/zh/about/faq/#distributed-tracing&#34;&gt;Istio 文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;h2 id=&#34;分布式追踪系统如何选择&#34;&gt;分布式追踪系统如何选择&lt;/h2&gt;
+&lt;p&gt;分布式追踪系统的原理类似，市面上也有很多这样的系统，例如 &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; 、&lt;a href=&#34;https://github.com/jaegertracing/jaeger&#34;&gt;Jaeger&lt;/a&gt; 、&lt;a href=&#34;https://github.com/openzipkin/zipkin/&#34;&gt;Zipkin&lt;/a&gt; 、&lt;a href=&#34;https://lightstep.com/&#34;&gt;LightStep&lt;/a&gt; 、&lt;a href=&#34;https://github.com/pinpoint-apm/pinpoint&#34;&gt;Pinpoint&lt;/a&gt; 等。我们将选择其中三个，从多个维度进行对比。之所以选择它们是因为：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;它们是当前最流行的开源分布式追踪系统；&lt;/li&gt;
+&lt;li&gt;都是基于 OpenTracing 规范；&lt;/li&gt;
+&lt;li&gt;都支持与 Istio 及 Envoy 集成；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;类别&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Apache SkyWalking&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Jaeger&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Zipkin&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;实现方式&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;基于语言的探针、服务网格探针、eBPF agent、第三方指标库（当前支持 Zipkin）&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;基于语言的探针&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;基于语言的探针&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;数据存储&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ES、H2、MySQL、TiDB、Sharding-sphere、BanyanDB&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ES、MySQL、Cassandra、内存&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ES、MySQL、Cassandra、内存&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;支持语言&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Java、Rust、PHP、NodeJS、Go、Python、C++、.NET、Lua&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Java、Go、Python、NodeJS、C#、PHP、Ruby、C++&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Java、Go、Python、NodeJS、C#、PHP、Ruby、C++&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;发起者&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;个人&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Uber&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Twitter&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;治理方式&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Apache Foundation&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;CNCF&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;CNCF&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;版本&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;9.3.0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1.39.0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;2.23.19&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Star 数量&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;20.9k&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16.8k&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;15.8k&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;分布式追踪系统对比表（数据截止时间 2022-12-07）&lt;/p&gt;
+&lt;p&gt;虽然 Apache SkyWalking 的 Agent 支持的语言没有 Jaeger 和 Zipkin 多，但是 SkyWalking 的实现方式更丰富，并且与 Jaeger、Zipkin 的追踪数据兼容，开发更为活跃，且为国人开发，中文资料丰富，是构建遥测平台的最佳选择之一。&lt;/p&gt;
+&lt;h2 id=&#34;实验&#34;&gt;实验&lt;/h2&gt;
+&lt;p&gt;参考 &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/distributed-tracing/skywalking/&#34;&gt;Istio 文档&lt;/a&gt; 来安装和配置 Apache SkyWalking。&lt;/p&gt;
+&lt;h3 id=&#34;环境说明&#34;&gt;环境说明&lt;/h3&gt;
+&lt;p&gt;以下是我们实验的环境：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Kubernetes 1.24.5&lt;/li&gt;
+&lt;li&gt;Istio 1.16&lt;/li&gt;
+&lt;li&gt;SkyWalking 9.1.0&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;安装-istio&#34;&gt;安装 Istio&lt;/h3&gt;
+&lt;p&gt;安装之前可以先检查下环境是否有问题:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;$ istioctl experimental precheck
+✔ No issues found when checking the cluster. Istio is safe to install or upgrade!
+  To get started, check out https://istio.io/latest/docs/setup/getting-started/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后安装 Istio 同时配置发送追踪信息的目的地为 SkyWalking：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 初始化 Istio Operator&lt;/span&gt;
+istioctl operator init
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# 安装 Istio 并配置使用 SkyWalking&lt;/span&gt;
+kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: install.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: IstioOperator
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: istio-with-skywalking
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  meshConfig:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    defaultProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      - &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    enableTracing: true
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    extensionProviders:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;    - name: &amp;#34;skywalking&amp;#34;
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;      skywalking:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        service: tracing.istio-system.svc.cluster.local
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;        port: 11800
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;部署-apache-skywalking&#34;&gt;部署 Apache SkyWalking&lt;/h3&gt;
+&lt;p&gt;Istio 1.16 支持使用 Apache SkyWalking 进行分布式追踪，执行下面的代码安装 SkyWalking：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.16/samples/addons/extras/skywalking.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;它将在 &lt;code&gt;istio-system&lt;/code&gt; 命名空间下安装：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/concepts-and-designs/backend-overview/&#34;&gt;SkyWalking OAP&lt;/a&gt; (Observability Analysis Platform) ：用于接收追踪数据，支持 SkyWalking 原生数据格式，Zipkin v1 和 v2 以及 Jaeger 格式。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/en/ui/readme/&#34;&gt;UI&lt;/a&gt; ：用于查询分布式追踪数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;关于 SkyWalking 的详细信息请参考 &lt;a href=&#34;https://skywalking.apache.org/docs/main/v9.3.0/readme/&#34;&gt;SkyWalking 文档&lt;/a&gt; 。&lt;/p&gt;
+&lt;h3 id=&#34;部署-bookinfo-应用&#34;&gt;部署 Bookinfo 应用&lt;/h3&gt;
+&lt;p&gt;执行下面的命令安装 bookinfo 示例：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;打开 SkyWalking UI：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;istioctl dashboard skywalking
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;SkyWalking 的 General Service 页面展示了 bookinfo 应用中的所有服务。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;你还可以看到实例、端点、拓扑、追踪等信息。例如下图展示了 bookinfo 应用的服务拓扑。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;SkyWalking 的追踪视图有多种显示形式，如列表、树形、表格和统计。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;img&#34;&gt;SkyWalking 通用服务追踪支持多种显示样式&lt;/p&gt;
+&lt;p&gt;为了方便我们检查，将追踪的采样率设置为 100%：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;kubectl apply -f - &lt;span style=&#34;color:#d14&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;apiVersion: telemetry.istio.io/v1alpha1
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;kind: Telemetry
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;metadata:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  name: mesh-default
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  namespace: istio-system
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;spec:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  tracing:
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;  - randomSamplingPercentage: 100.00
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;EOF&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;卸载&#34;&gt;卸载&lt;/h3&gt;
+&lt;p&gt;在实验完后，执行下面的命令卸载 Istio 和 SkyWalking：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;samples/bookinfo/platform/kube/cleanup.sh
+istioctl unintall --purge
+kubectl delete namespace istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;bookinfo-demo-追踪信息说明&#34;&gt;Bookinfo demo 追踪信息说明&lt;/h2&gt;
+&lt;p&gt;在 Apache SkyWalking UI 中导航到 General Service 分页，查看最近的 &lt;code&gt;istio-ingressgateway&lt;/code&gt; 服务的追踪信息，表视图如下所示。图中展示了此次请求所有 Span 的基本信息，点击每个 Span 可以查看详细信息。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;切换为列表视图，可以看到每个 Span 的执行顺序及持续时间，如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;你可能会感到困惑，为什么这么简单的一个应用会产生如此多的 Span 信息？因为我们为 Pod 注入了 Envoy 代理之后，每个服务间的请求都会被 Envoy 拦截和处理，如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;整个追踪流程如下图所示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.svg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;图中给每一个 Span 标记了序号，并在括号里注明了耗时。为了便于说明我们将所有 Span 汇总在下面的表格中。&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;序号&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;方法&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;总耗时（ms）&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;组件耗时（ms）&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;当前服务&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;190&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;2&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;190&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;istio-ingressgateway&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Ingress -&amp;gt; Productpage 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;3&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;189&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;188&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;21&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部处理&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;5&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;8&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;6&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;7&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;3&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Productpage -&amp;gt; Details 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;7&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;details&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;8&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/details/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;4&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;details&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;9&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;159&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;10&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;159&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;14&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;productpage&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Productpage -&amp;gt; Reviews 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;11&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;145&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;12&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/reviews/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;144&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;109&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部处理&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;13&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;35&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;2&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Outbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;14&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;33&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;reviews&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Reviews -&amp;gt; Ratings 网络传输&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;15&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;17&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;1&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ratings&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Envoy Inbound&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;/ratings/0&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;16&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ratings&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;应用内部处理&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;从以上信息可以发现：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本次请求总耗时 190ms；&lt;/li&gt;
+&lt;li&gt;在 Istio sidecar 模式下，每次流量在进出应用容器时都需要经过一次 Envoy 代理，每次耗时在 0 到 2 ms；&lt;/li&gt;
+&lt;li&gt;在 Pod 间的网络请求耗时在 1 到 16ms 之间；&lt;/li&gt;
+&lt;li&gt;将耗时做多的调用链 Ingress Gateway -&amp;gt; Productpage -&amp;gt; Reviews -&amp;gt; Ratings 上的所有耗时累计 182 ms，小于请求总耗时 190ms，这是因为数据本身有误差，以及 Span 的开始时间并不一定等于父 Span 的结束时间，如果你在 SkyWalking 的追踪页面，选择「列表」样式查看追踪数据（见图 2）可以更直观的发现这个问题；&lt;/li&gt;
+&lt;li&gt;我们可以查看到最耗时的部分是 Reviews 应用，耗时 109ms，因此我们可以针对该应用进行优化；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;只要对应用代码稍作修改就可以在 Istio 很方便的使用分布式追踪功能。在 Istio 支持的众多分布式追踪系统中，&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; 是其中的佼佼者。它不仅支持分布式追踪，还支持指标和日志收集、报警、Kubernetes 和服务网格监控，&lt;a href=&#34;https://skywalking.apache.org/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;使用 eBPF 诊断服务网格性能&lt;/a&gt; 等功能，是一个功能完备的云原生应用分析平台。本文中为了方便演示，将追踪采样率设置为了 100%，在生产使用时请根据需要调整采样策略（采样百分比），防止产生过多的追踪日志。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;如果您不熟悉服务网格和 Kubernetes 安全性，我们在 &lt;a href=&#34;https://tetr8.io/academy&#34;&gt;Tetrate Academy&lt;/a&gt; 提供了一系列免费在线课程，可以让您快速了解 Istio 和 Envoy。&lt;/p&gt;
+&lt;p&gt;如果您正在寻找一种快速将 Istio 投入生产的方法，请查看 &lt;a href=&#34;https://tetr8.io/tid&#34;&gt;Tetrate Istio Distribution (TID)&lt;/a&gt;。TID 是 Tetrate 的强化、完全上游的 Istio 发行版，具有经过 FIPS 验证的构建和支持。这是开始使用 Istio 的好方法，因为您知道您有一个值得信赖的发行版，有一个支持您的专家团队，并且如果需要，还可以选择快速获得 FIPS 合规性。&lt;/p&gt;
+&lt;p&gt;一旦启动并运行 Istio，您可能需要更简单的方法来管理和保护您的服务，而不仅仅是 Istio 中可用的方法，这就是 Tetrate Service Bridge 的用武之地。您可以&lt;a href=&#34;https://tetr8.io/tsb&#34;&gt;在这里&lt;/a&gt;详细了解 Tetrate Service Bridge 如何使服务网格更安全、更易于管理和弹性，或&lt;a href=&#34;https://tetr8.io/contact&#34;&gt;联系我们进行快速演示&lt;/a&gt;。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Pinpoint Service Mesh Critical Performance Impact by using eBPF</title>
+      <link>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</link>
+      <pubDate>Tue, 05 Jul 2022 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2022-07-05-pinpoint-service-mesh-critical-performance-impact-by-using-ebpf/</guid>
+      <description>
+        
+        
+        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
+&lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; observes metrics, logs, traces, and events for services deployed into the service mesh. When troubleshooting, SkyWalking error analysis can be an invaluable tool helping to pinpoint where an error occurred. However, performance problems are more difficult: It’s often impossible to locate the root cause of performance problems with pre-existing observation data. To move beyond the status quo, dynamic debugging and troubleshooting are essential service performance tools. In this article, we&amp;rsquo;ll discuss how to use eBPF technology to improve the profiling feature in SkyWalking and analyze the performance impact in the service mesh.&lt;/p&gt;
+&lt;h1 id=&#34;trace-profiling-in-skywalking&#34;&gt;Trace Profiling in SkyWalking&lt;/h1&gt;
+&lt;p&gt;Since SkyWalking 7.0.0, Trace Profiling has helped developers find performance problems by periodically sampling the thread stack to let developers know which lines of code take more time. However, Trace Profiling is not suitable for the following scenarios:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Thread Model&lt;/strong&gt;: Trace Profiling is most useful for profiling code that executes in a single thread. It is less useful for middleware that relies heavily on async execution models. For example Goroutines in Go or Kotlin Coroutines.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Language&lt;/strong&gt;: Currently, Trace Profiling is only supported in Java and Python, since it’s not easy to obtain the thread stack in the runtimes of some languages such as Go and Node.js.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: Trace Profiling requires Agent installation, which can be tricky depending on the language (e.g., PHP has to rely on its C kernel; Rust and C/C++ require manual instrumentation to make install).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace Correlation&lt;/strong&gt;: Since Trace Profiling is only associated with a single request it can be hard to determine which request is causing the problem.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Short Lifecycle Services&lt;/strong&gt;: Trace Profiling doesn&amp;rsquo;t support short-lived services for (at least) two reasons:
+&lt;ol&gt;
+&lt;li&gt;It&amp;rsquo;s hard to differentiate system performance from class code manipulation in the booting stage.&lt;/li&gt;
+&lt;li&gt;Trace profiling is linked to an endpoint to identify performance impact, but there is no endpoint to match these short-lived services.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Fortunately, there are techniques that can go further than Trace Profiling in these situations.&lt;/p&gt;
+&lt;h1 id=&#34;introduce-ebpf&#34;&gt;Introduce eBPF&lt;/h1&gt;
+&lt;p&gt;We have found that eBPF — a technology that can run sandboxed programs in an operating system kernel and thus safely and efficiently extend the capabilities of the kernel without requiring kernel modifications or loading kernel modules — can help us fill gaps left by Trace Profiling. eBPF is a trending technology because it breaks the traditional barrier between user and kernel space. Programs can now inject bytecode that runs in the kernel, instead of having to recompile the kernel to customize it. This is naturally a good fit for observability.&lt;/p&gt;
+&lt;p&gt;In the figure below, we can see that when the system executes the execve syscalls, the eBPF program is triggered, and the current process runtime information is obtained by using function calls.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;eBPF-hook-points.png&#34; alt=&#34;eBPF Hook Point&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Using eBPF technology, we can expand the scope of Skywalking&amp;rsquo;s profiling capabilities:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Global Performance Analysis&lt;/strong&gt;: Before eBPF, data collection was limited to what agents can observe. Since eBPF programs run in the kernel, they can observe all threads. This is especially useful when you are not sure whether a performance problem is caused by a particular request.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Data Content&lt;/strong&gt;: eBPF can dump both user and kernel space thread stacks, so if a performance issue happens in kernel space, it’s easier to find.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Agent Binding&lt;/strong&gt;: All modern Linux kernels support eBPF, so there is no need to install anything. This means it is an orchestration-free vs an agent model. This reduces friction caused by built-in software which may not have the correct agents installed, such as Envoy in a Service Mesh.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sampling Type&lt;/strong&gt;: Unlike Trace Profiling, eBPF is event-driven and, therefore, not constrained by interval polling. For example, eBPF can trigger events and collect more data depending on a transfer size threshold. This can allow the system to triage and prioritize data collection under extreme load.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;ebpf-limitations&#34;&gt;eBPF Limitations&lt;/h2&gt;
+&lt;p&gt;While eBPF offers significant advantages for hunting performance bottlenecks, no technology is perfect. eBPF has a number of limitations described below. Fortunately, since SkyWalking does not require eBPF, the impact is limited.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Linux Version Requirement&lt;/strong&gt;: eBPF programs require a Linux kernel version above 4.4, with later kernel versions offering more data to be collected. The BCC has &lt;a href=&#34;https://github.com/iovisor/bcc/blob/13b5563c11f7722a61a17c6ca0a1a387d2fa7788/docs/kernel-versions.md#main-features&#34;&gt;documented the features supported by different Linux kernel versions&lt;/a&gt;, with the differences between versions usually being what data can be collected with eBPF.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Privileges Required&lt;/strong&gt;: All processes that intend to load eBPF programs into the Linux kernel must be running in privileged mode. As such, bugs or other issues in such code may have a big impact.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Weak Support for Dynamic Language&lt;/strong&gt;: eBPF has weak support for JIT-based dynamic languages, such as Java. It also depends on what data you want to collect. For Profiling, eBPF does not support parsing the symbols of the program, which is why most eBPF-based profiling technologies only support static languages like C, C++, Go, and Rust. However, symbol mapping can sometimes be solved through tools provided by the language. For example, in Java, &lt;a href=&#34;https://github.com/jvm-profiling-tools/perf-map-agent#architecture&#34;&gt;perf-map-agent&lt;/a&gt; can be used to generate the symbol mapping. However, dynamic languages don&amp;rsquo;t support the attach (uprobe) functionality that would allow us to trace execution events through symbols.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;introducing-skywalking-rover&#34;&gt;Introducing SkyWalking Rover&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; introduces the eBPF profiling feature into the SkyWalking ecosystem. The figure below shows the overall architecture of SkyWalking Rover. SkyWalking Rover is currently supported in Kubernetes environments and must be deployed inside a Kubernetes cluster. After establishing a connection with the SkyWalking backend server, it saves information about the processes on the current machine to SkyWalking. When the user creates an eBPF profiling task via the user interface, SkyWalking Rover receives the task and executes it in the relevant C, C++, Golang, and Rust language-based programs.&lt;/p&gt;
+&lt;p&gt;Other than an eBPF-capable kernel, there are no additional prerequisites for deploying SkyWalking Rover.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;architecture.png&#34; alt=&#34;architecture&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;cpu-profiling-with-rover&#34;&gt;CPU Profiling with Rover&lt;/h2&gt;
+&lt;p&gt;CPU profiling is the most intuitive way to show service performance. Inspired by &lt;a href=&#34;https://www.brendangregg.com/offcpuanalysis.html&#34;&gt;Brendan Gregg‘s blog post&lt;/a&gt;, we&amp;rsquo;ve divided CPU profiling into two types that we have implemented in Rover:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;On-CPU Profiling&lt;/strong&gt;: Where threads are spending time running on-CPU.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Off-CPU Profiling&lt;/strong&gt;: Where time is spent waiting while blocked on I/O, locks, timers, paging/swapping, etc.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;profiling-envoy-with-ebpf&#34;&gt;Profiling Envoy with eBPF&lt;/h1&gt;
+&lt;p&gt;Envoy is a popular proxy, used as the data plane by the Istio service mesh. In a Kubernetes cluster, Istio injects Envoy into each service’s pod as a sidecar where it transparently intercepts and processes incoming and outgoing traffic. As the data plane, any performance issues in Envoy can affect all service traffic in the mesh. In this scenario, it’s more powerful to use &lt;strong&gt;eBPF profiling&lt;/strong&gt; to analyze issues in production caused by service mesh configuration.&lt;/p&gt;
+&lt;h2 id=&#34;demo-environment&#34;&gt;Demo Environment&lt;/h2&gt;
+&lt;p&gt;If you want to see this scenario in action, we&amp;rsquo;ve built a demo environment where we deploy an Nginx service for stress testing. Traffic is intercepted by Envoy and forwarded to Nginx. The commands to install the whole environment can be accessed through &lt;a href=&#34;https://github.com/mrproliu/skywalking-rover-profiling-demo&#34;&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;h1 id=&#34;on-cpu-profiling&#34;&gt;On-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;On-CPU profiling is suitable for analyzing thread stacks when service CPU usage is high. If the stack is dumped more times, it means that the thread stack occupies more CPU resources.&lt;/p&gt;
+&lt;p&gt;When installing Istio using the demo configuration profile, we found there are two places where we can optimize performance:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Zipkin Tracing&lt;/strong&gt;: Different Zipkin sampling percentages have a direct impact on QPS.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Access Log Format&lt;/strong&gt;: Reducing the fields of the Envoy access log can improve QPS.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;zipkin-tracing&#34;&gt;Zipkin Tracing&lt;/h2&gt;
+&lt;h3 id=&#34;zipkin-with-100-sampling&#34;&gt;Zipkin with 100% sampling&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, Envoy is using 100% sampling as default tracing policy. How does that impact the performance?&lt;/p&gt;
+&lt;p&gt;As shown in the figure below, using the &lt;strong&gt;on-CPU profiling&lt;/strong&gt;, we found that it takes about &lt;strong&gt;16%&lt;/strong&gt; of the CPU overhead. At a fixed consumption of &lt;strong&gt;2 CPUs&lt;/strong&gt;, its QPS can reach &lt;strong&gt;5.7K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;zipkin-sampling-100.png&#34; alt=&#34;Zipkin with 100% sampling&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-zipkin-tracing&#34;&gt;Disable Zipkin tracing&lt;/h3&gt;
+&lt;p&gt;At this point, we found that if Zipkin is not necessary, the sampling percentage can be reduced or we can even disable tracing. Based on the &lt;a href=&#34;https://istio.io/latest/docs/reference/config/istio.mesh.v1alpha1/#Tracing&#34;&gt;Istio documentation&lt;/a&gt;, we can disable tracing when installing the service mesh using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.enableTracing=false&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;meshConfig.defaultConfig.tracing.sampling=0.0&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling tracing, we performed on-CPU profiling again. According to the figure below, we found that Zipkin has disappeared from the flame graph. With the same &lt;strong&gt;2 CPU&lt;/strong&gt; consumption as in the previous example, the QPS reached &lt;strong&gt;9K&lt;/strong&gt;, which is an almost &lt;strong&gt;60%&lt;/strong&gt; increase.
+&lt;img src=&#34;zipkin-disable-tracing.png&#34; alt=&#34;Disable Zipkin tracing&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;tracing-with-throughput&#34;&gt;Tracing with Throughput&lt;/h3&gt;
+&lt;p&gt;With the same CPU usage, we&amp;rsquo;ve discovered that Envoy performance greatly improves when the tracing feature is disabled. Of course, this requires us to make trade-offs between the number of samples Zipkin collects and the desired performance of Envoy (QPS).&lt;/p&gt;
+&lt;p&gt;The table below illustrates how different Zipkin sampling percentages under the same CPU usage affect QPS.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Zipkin sampling %&lt;/th&gt;
+&lt;th&gt;QPS&lt;/th&gt;
+&lt;th&gt;CPUs&lt;/th&gt;
+&lt;th&gt;Note&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;100% &lt;strong&gt;(default)&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;5.7K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;16% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;1%&lt;/td&gt;
+&lt;td&gt;8.1K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0.3% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;disabled&lt;/td&gt;
+&lt;td&gt;9.2K&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;0% used by Zipkin&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;access-log-format&#34;&gt;Access Log Format&lt;/h2&gt;
+&lt;h3 id=&#34;default-log-format&#34;&gt;Default Log Format&lt;/h3&gt;
+&lt;p&gt;In the default demo configuration profile, &lt;a href=&#34;https://istio.io/latest/docs/tasks/observability/logs/access-log/#default-access-log-format&#34;&gt;the default Access Log format&lt;/a&gt; contains a lot of data. The flame graph below shows various functions involved in parsing the data such as request headers, response headers, and streaming the body.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;log-format-default.png&#34; alt=&#34;Default Log Format&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;simplifying-access-log-format&#34;&gt;Simplifying Access Log Format&lt;/h3&gt;
+&lt;p&gt;Typically, we don’t need all the information in the access log, so we can often simplify it to get what we need. The following command simplifies the access log format to only display basic information:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;   --set meshConfig.accessLogFormat&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;[%START_TIME%] \&amp;#34;%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\&amp;#34; %RESPONSE_CODE%\n&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After simplifying the access log format, we found that the QPS increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;. When executing the on-CPU profiling again, the CPU usage of log formatting dropped from &lt;strong&gt;2.4%&lt;/strong&gt; to &lt;strong&gt;0.7%&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Simplifying the log format helped us to improve the performance.&lt;/p&gt;
+&lt;h1 id=&#34;off-cpu-profiling&#34;&gt;Off-CPU Profiling&lt;/h1&gt;
+&lt;p&gt;Off-CPU profiling is suitable for performance issues that are not caused by high CPU usage. For example, when there are too many threads in one service, using off-CPU profiling could reveal which threads spend more time context switching.&lt;/p&gt;
+&lt;p&gt;We provide data aggregation in two dimensions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Switch count&lt;/strong&gt;: The number of times a thread switches context. When the thread returns to the CPU, it completes one context switch. A thread stack with a higher switch count spends more time context switching.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Switch duration&lt;/strong&gt;: The time it takes a thread to switch the context. A thread stack with a higher switch duration spends more time off-CPU.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;write-access-log&#34;&gt;Write Access Log&lt;/h2&gt;
+&lt;h3 id=&#34;enable-write&#34;&gt;Enable Write&lt;/h3&gt;
+&lt;p&gt;Using the same environment and settings as before in the on-CPU test, we performed off-CPU profiling. As shown below, we found that access log writes accounted for about &lt;strong&gt;28%&lt;/strong&gt; of the total context switches. The &amp;ldquo;__write&amp;rdquo; shown below also indicates that this method is the Linux kernel method.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-enable.png&#34; alt=&#34;Enable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;disable-write&#34;&gt;Disable Write&lt;/h3&gt;
+&lt;p&gt;SkyWalking implements Envoy&amp;rsquo;s Access Log Service (ALS) feature which allows us to send access logs to the SkyWalking Observability Analysis Platform (OAP) using the gRPC protocol. Even by disabling the access logging, we can still use ALS to capture/aggregate the logs. We&amp;rsquo;ve disabled writing to the access log using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install -y --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo --set meshConfig.accessLogFile&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After disabling the Access Log feature, we performed the off-CPU profiling. File writing entries have disappeared as shown in the figure below. Envoy throughput also increased from &lt;strong&gt;5.7K&lt;/strong&gt; to &lt;strong&gt;5.9K&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;access-log-write-disable.png&#34; alt=&#34;Disable Write Access Log&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;In this article, we&amp;rsquo;ve examined the insights Apache Skywalking&amp;rsquo;s Trace Profiling can give us and how much more can be achieved with eBPF profiling. All of these features are implemented in &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;skywalking-rover&lt;/a&gt;. In addition to on- and off-CPU profiling, you will also find the following features:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Continuous profiling&lt;/strong&gt;, helps you automatically profile without manual intervention. For example, when Rover detects that the CPU exceeds a configurable threshold, it automatically executes the on-CPU profiling task.&lt;/li&gt;
+&lt;li&gt;More profiling types to enrich usage scenarios, such as network, and memory profiling.&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Observe VM Service Meshes with Apache SkyWalking and the Envoy Access Log Service</title>
+      <link>/blog/obs-service-mesh-vm-with-sw-and-als/</link>
+      <pubDate>Sun, 21 Feb 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/obs-service-mesh-vm-with-sw-and-als/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;stone-arch.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Origin: &lt;a href=&#34;https://thenewstack.io/observe-virtual-machine-service-meshes-with-apache-skywalking-and-the-envoy-access-log-service&#34;&gt;Observe VM Service Meshes with Apache SkyWalking and the Envoy Access Log Service - The New Stack&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt;: an APM (application performance monitor) system, especially
+designed for microservices, cloud native, and container-based (Docker, Kubernetes, Mesos) architectures.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/api-v2/service/accesslog/v2/als.proto&#34;&gt;Envoy Access Log Service&lt;/a&gt;: Access
+Log Service (ALS) is an Envoy extension that emits detailed access logs of all requests going through Envoy.&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;In the &lt;a href=&#34;/blog/obs-service-mesh-with-sw-and-als&#34;&gt;previous post&lt;/a&gt;, we talked about the observability of service mesh under
+Kubernetes environment, and applied it to the bookinfo application in practice. We also mentioned that, in order to map
+the IP addresses into services, SkyWalking needs access to the service metadata from a Kubernetes cluster, which is not
+available for services deployed in virtual machines (VMs). In this post, we will introduce a new analyzer in SkyWalking
+that leverages Envoy’s metadata exchange mechanism to decouple with Kubernetes. The analyzer is designed to work in
+Kubernetes environments, VM environments, and hybrid environments. If there are virtual machines in your service mesh,
+you might want to try out this new analyzer for better observability, which we will demonstrate in this tutorial.&lt;/p&gt;
+&lt;h2 id=&#34;how-it-works&#34;&gt;How it works&lt;/h2&gt;
+&lt;p&gt;The mechanism of how the analyzer works is the same as what we discussed in
+the &lt;a href=&#34;/blog/obs-service-mesh-with-sw-and-als&#34;&gt;previous post&lt;/a&gt;. What makes VMs different from Kubernetes is that, for VM
+services, there are no places where we can fetch the metadata to map the IP addresses into services.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The basic idea we present in this article is to carry the metadata along with Envoy’s access logs, which is called
+metadata-exchange mechanism in Envoy. When Istio pilot-agent starts an Envoy proxy as a sidecar of a service, it
+collects the metadata of that service from the Kubernetes platform, or a file on the VM where that service is deployed,
+and injects the metadata into the bootstrap configuration of Envoy. Envoy will carry the metadata transparently when
+emitting access logs to the SkyWalking receiver.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;But how does Envoy compose a piece of a complete access log that involves the client side and server side? When a
+request goes out from Envoy, a plugin of istio-proxy named &amp;ldquo;metadata-exchange&amp;rdquo; injects the metadata into the http
+headers (with a prefix like &lt;code&gt;x-envoy-downstream-&lt;/code&gt;), and the metadata is propagated to the server side. The Envoy sidecar
+of the server side receives the request and parses the headers into metadata, and puts the metadata into the access log,
+keyed by &lt;code&gt;wasm.downstream_peer&lt;/code&gt;. The server side Envoy also puts its own metadata into the access log keyed
+by &lt;code&gt;wasm.upstream_peer.&lt;/code&gt; Hence the two sides of a single request are completed.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;With the metadata-exchange mechanism, we can use the metadata directly without any extra query.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image4.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;example&#34;&gt;Example&lt;/h2&gt;
+&lt;p&gt;In this tutorial, we will use another demo
+application &lt;a href=&#34;http://github.com/GoogleCloudPlatform/microservices-demo&#34;&gt;Online Boutique&lt;/a&gt; that consists of 10+ services so
+that we can deploy some of them in VMs and make them communicate with other services deployed in Kubernetes.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image5.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Topology of Online Boutique In order to cover as many cases as possible, we will deploy &lt;code&gt;CheckoutService&lt;/code&gt;
+and &lt;code&gt;PaymentService&lt;/code&gt; on VM and all the other services on Kubernetes, so that we can cover the cases like Kubernetes →
+VM (e.g. &lt;code&gt;Frontend&lt;/code&gt; → &lt;code&gt;CheckoutService&lt;/code&gt;), VM → Kubernetes (e.g. &lt;code&gt;CheckoutService&lt;/code&gt; → &lt;code&gt;ShippingService&lt;/code&gt;), and VM → VM (
+e.g. &lt;code&gt;CheckoutService&lt;/code&gt; → &lt;code&gt;PaymentService&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;NOTE&lt;/strong&gt;: All the commands used in this tutorial are accessible
+on &lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts&#34;&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;git clone https://github.com/SkyAPMTest/sw-als-vm-demo-scripts
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; sw-als-vm-demo-scripts
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Make sure to init the &lt;code&gt;gcloud&lt;/code&gt; SDK properly before moving on. Modify the &lt;code&gt;GCP_PROJECT&lt;/code&gt; in file &lt;code&gt;env.sh&lt;/code&gt; to your own
+project name. Most of the other variables should be OK to work if you keep them intact. If you would like to
+use &lt;code&gt;ISTIO_VERSION&lt;/code&gt; &amp;gt;/= 1.8.0, please make sure &lt;a href=&#34;https://github.com/istio/istio/pull/28956&#34;&gt;this patch&lt;/a&gt; is included.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Prepare Kubernetes cluster and VM instances
+&lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/00-create-cluster-and-vms.sh&#34;&gt;&lt;code&gt;00-create-cluster-and-vms.sh&lt;/code&gt;&lt;/a&gt;
+creates a new GKE cluster and 2 VM instances that will be used through the entire tutorial, and sets up some necessary
+firewall rules for them to communicate with each other.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Install Istio and SkyWalking
+&lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/01a-install-istio.sh&#34;&gt;&lt;code&gt;01a-install-istio.sh&lt;/code&gt;&lt;/a&gt;
+installs Istio Operator with spec &lt;code&gt;resources/vmintegration.yaml&lt;/code&gt;. In the YAML file, we enable the &lt;code&gt;meshExpansion&lt;/code&gt; that
+supports VM in mesh. We also enable the Envoy access log service and specify the
+address &lt;code&gt;skywalking-oap.istio-system.svc.cluster.local:11800&lt;/code&gt; to which Envoy emits the access logs.
+&lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/01b-install-skywalking.sh&#34;&gt;&lt;code&gt;01b-install-skywalking.sh&lt;/code&gt;&lt;/a&gt;
+installs Apache SkyWalking and sets the analyzer to &lt;code&gt;mx-mesh&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Create files to initialize the VM
+&lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/02-create-files-to-transfer-to-vm.sh&#34;&gt;&lt;code&gt;02-create-files-to-transfer-to-vm.sh&lt;/code&gt;&lt;/a&gt;
+creates necessary files that will be used to initialize the VMs.
+&lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/03-copy-work-files-to-vm.sh&#34;&gt;&lt;code&gt;03-copy-work-files-to-vm.sh&lt;/code&gt;&lt;/a&gt;
+securely transfers the generated files to the VMs with &lt;code&gt;gcloud scp&lt;/code&gt; command. Now use &lt;code&gt;./ssh.sh checkoutservice&lt;/code&gt;
+and &lt;code&gt;./ssh.sh paymentservice&lt;/code&gt; to log into the two VMs respectively, and &lt;code&gt;cd&lt;/code&gt; to the &lt;code&gt;~/work&lt;/code&gt; directory,
+execute &lt;code&gt;./prep-checkoutservice.sh&lt;/code&gt; on &lt;code&gt;checkoutservice&lt;/code&gt; VM instance and &lt;code&gt;./prep-paymentservice.sh&lt;/code&gt;
+on &lt;code&gt;paymentservice&lt;/code&gt; VM instance. The Istio sidecar should be installed and started properly. To verify that,
+use &lt;code&gt;tail -f /var/logs/istio/istio.log&lt;/code&gt; to check the Istio logs. The output should be something like:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;2020-12-12T08:07:07.348329Z	info	sds	resource:default new connection
+2020-12-12T08:07:07.348401Z	info	sds	Skipping waiting for gateway secret
+2020-12-12T08:07:07.348401Z	info	sds	Skipping waiting for gateway secret
+2020-12-12T08:07:07.568676Z	info	cache	Root cert has changed, start rotating root cert for SDS clients
+2020-12-12T08:07:07.568718Z	info	cache	GenerateSecret default
+2020-12-12T08:07:07.569398Z	info	sds	resource:default pushed key/cert pair to proxy
+2020-12-12T08:07:07.949156Z	info	cache	Loaded root cert from certificate ROOTCA
+2020-12-12T08:07:07.949348Z	info	sds	resource:ROOTCA pushed root cert to proxy
+2020-12-12T20:12:07.384782Z	info	sds	resource:default pushed key/cert pair to proxy
+2020-12-12T20:12:07.384832Z	info	sds	Dynamic push for secret default
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;The dnsmasq configuration &lt;code&gt;address=/.svc.cluster.local/{ISTIO_SERVICE_IP_STUB}&lt;/code&gt; also resolves the domain names ended
+with &lt;code&gt;.svc.cluster.local&lt;/code&gt; to Istio service IP, so that you are able to access the Kubernetes services in the VM by
+fully qualified domain name (FQDN) such as &lt;code&gt;httpbin.default.svc.cluster.local&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Deploy demo application Because we want to deploy &lt;code&gt;CheckoutService&lt;/code&gt; and &lt;code&gt;PaymentService&lt;/code&gt; manually on
+VM, &lt;code&gt;resources/google-demo.yaml&lt;/code&gt; removes the two services
+from &lt;a href=&#34;https://github.com/GoogleCloudPlatform/microservices-demo/blob/master/release/kubernetes-manifests.yaml&#34;&gt;the original YAML&lt;/a&gt;
+.
+&lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/04a-deploy-demo-app.sh&#34;&gt;&lt;code&gt;04a-deploy-demo-app.sh&lt;/code&gt;&lt;/a&gt;
+deploys the other services on Kubernetes. Then log into the 2 VMs, run &lt;code&gt;~/work/deploy-checkoutservice.sh&lt;/code&gt;
+and &lt;code&gt;~/work/deploy-paymentservice.sh&lt;/code&gt; respectively to deploy &lt;code&gt;CheckoutService&lt;/code&gt; and &lt;code&gt;PaymentService&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Register VMs to Istio Services on VMs can access the services on Kubernetes by FQDN, but that’s not the case when the
+Kubernetes services want to talk to the VM services. The mesh has no idea where to forward the requests such
+as &lt;code&gt;checkoutservice.default.svc.cluster.local&lt;/code&gt; because &lt;code&gt;checkoutservice&lt;/code&gt; is isolated in the VM. Therefore, we need to
+register the services to the
+mesh. &lt;a href=&#34;https://github.com/SkyAPMTest/sw-als-vm-demo-scripts/blob/2179d04270c98b9f87cf3998f5af775870ed53a7/04b-register-vm-with-istio.sh&#34;&gt;&lt;code&gt;04b-register-vm-with-istio.sh&lt;/code&gt;&lt;/a&gt;
+registers the VM services to the mesh by creating a &amp;ldquo;dummy&amp;rdquo; service without running Pods, and a &lt;code&gt;WorkloadEntry&lt;/code&gt; to
+bridge the &amp;ldquo;dummy&amp;rdquo; service with the VM service.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;done&#34;&gt;Done!&lt;/h2&gt;
+&lt;p&gt;The demo application contains a &lt;code&gt;load generator&lt;/code&gt; service that performs requests repeatedly. We only need to wait a few
+seconds, and then open the SkyWalking web UI to check the results.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;export POD_NAME=$(kubectl get pods --namespace istio-system -l &amp;quot;app=skywalking,release=skywalking,component=ui&amp;quot; -o jsonpath=&amp;quot;{.items[0].metadata.name}&amp;quot;)
+echo &amp;quot;Visit http://127.0.0.1:8080 to use your application&amp;quot;
+kubectl port-forward $POD_NAME 8080:8080 --namespace istio-system
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Navigate the browser to http://localhost:8080 . The metrics, topology should be there.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image6.png&#34; alt=&#34;Topology&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image7.png&#34; alt=&#34;Global metrics&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image8.png&#34; alt=&#34;Metrics of CheckoutService&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;image9.png&#34; alt=&#34;Metrics of PaymentService&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;troubleshooting&#34;&gt;Troubleshooting&lt;/h2&gt;
+&lt;p&gt;If you face any trouble when walking through the steps, here are some common problems and possible solutions:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;VM service cannot access Kubernetes services? It’s likely the DNS on the VM doesn’t correctly resolve the fully
+qualified domain names. Try to verify that with &lt;code&gt;nslookup istiod.istio-system.svc.cluster.local&lt;/code&gt;. If it doesn’t
+resolve to the Kubernetes CIDR address, recheck the step in &lt;code&gt;prep-checkoutservice.sh&lt;/code&gt; and &lt;code&gt;prep-paymentservice.sh&lt;/code&gt;. If
+the DNS works correctly, try to verify that Envoy has fetched the upstream clusters from the control plane
+with &lt;code&gt;curl http://localhost:15000/clusters&lt;/code&gt;. If it doesn’t contain the target service,
+recheck &lt;code&gt;prep-checkoutservice.sh&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Services are normal but nothing on SkyWalking WebUI? Check the SkyWalking OAP logs
+via &lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=oap&amp;quot; -o name)&lt;/code&gt;
+and WebUI logs
+via &lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=ui&amp;quot; -o name)&lt;/code&gt;
+to see whether there are any error logs . Also, make sure the time zone at the bottom-right of the browser is set
+to &lt;code&gt;UTC +0&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;/blog/obs-service-mesh-with-sw-and-als&#34;&gt;Observe a Service Mesh with Envoy ALS&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Observe Service Mesh with SkyWalking and Envoy Access Log Service</title>
+      <link>/blog/2020-12-03-obs-service-mesh-with-sw-and-als/</link>
+      <pubDate>Thu, 03 Dec 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2020-12-03-obs-service-mesh-with-sw-and-als/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;canyonhorseshoe.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Author: Zhenxu Ke, Sheng Wu, and Tevah Platt. tetrate.io&lt;/li&gt;
+&lt;li&gt;Original link, &lt;a href=&#34;https://www.tetrate.io/blog/observe-service-mesh-with-skywalking-and-envoy-access-log-service/&#34;&gt;Tetrate.io blog&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Dec. 03th, 2020&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt;: an APM (application performance monitor) system, especially designed for microservices, cloud native, and container-based (Docker, Kubernetes, Mesos) architectures.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/api-v2/service/accesslog/v2/als.proto&#34;&gt;Envoy Access Log Service&lt;/a&gt;: Access Log Service (ALS) is an Envoy extension that emits detailed access logs of all requests going through Envoy.&lt;/p&gt;
+&lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking has long supported observability in service mesh with Istio Mixer adapter. But since v1.5, Istio began to deprecate Mixer due to its poor performance in large scale clusters. Mixer’s functionalities have been moved into the Envoy proxies, and is supported only through the 1.7 Istio release.
+On the other hand, &lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;Sheng Wu&lt;/a&gt; and &lt;a href=&#34;https://github.com/lizan&#34;&gt;Lizan Zhou&lt;/a&gt; presented a better solution based on the Apache SkyWalking and Envoy ALS on &lt;a href=&#34;https://kccncosschn19eng.sched.com/event/NroB/observability-in-service-mesh-powered-by-envoy-and-apache-skywalking-sheng-wu-lizan-zhou-tetrate&#34;&gt;KubeCon China 2019&lt;/a&gt;,  to reduce the performance impact brought by Mixer, while retaining the same observability in service mesh. This solution was initially implemented by Sheng Wu, &lt;a href=&#34;https://github.com/hanahmily&#34;&gt;Hongtao Gao&lt;/a&gt;, Lizan Zhou, and &lt;a href=&#34;https://github.com/dio&#34;&gt;Dhi Aurrahman&lt;/a&gt; at Tetrate.io.
+If you are looking for a more efficient solution to observe your service mesh instead of using a Mixer-based solution, this is exactly what you need. In this tutorial, we will explain a little bit how the new solution works, and apply it to the bookinfo application in practice.&lt;/p&gt;
+&lt;h2 id=&#34;how-it-works&#34;&gt;How it works&lt;/h2&gt;
+&lt;p&gt;From a perspective of observability, Envoy can be typically deployed in 2 modes, sidecar, and router. As a sidecar, Envoy mostly represents a single service to receive and send requests (2 and 3 in the picture below). While as a proxy, Envoy may represent many services (1 in the picture below).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.25.17-PM.png&#34; alt=&#34;Example of Envoy deployment, as front proxy and sidecar&#34;&gt;&lt;/p&gt;
+&lt;p&gt;In both modes, the logs emitted by ALS include a node identifier. The identifier starts with &lt;code&gt;router~&lt;/code&gt; (or &lt;code&gt;ingress~&lt;/code&gt;) in router mode and &lt;code&gt;sidecar~&lt;/code&gt; in sidecar proxy mode.&lt;/p&gt;
+&lt;p&gt;Apart from the node identifier, there are &lt;a href=&#34;https://github.com/envoyproxy/envoy/blob/549164c42cae84b59154ca4c36009e408aa10b52/generated_api_shadow/envoy/data/accesslog/v2/accesslog.proto&#34;&gt;several noteworthy properties in the access logs&lt;/a&gt; that will be used in this solution:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;downstream_direct_remote_address&lt;/code&gt;: This field is the downstream direct remote address on which the request from the user was received. Note: This is always the physical peer, even if the remote address is inferred from for example the &lt;code&gt;x-forwarded-for&lt;/code&gt; header, proxy protocol, etc.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;downstream_remote_address&lt;/code&gt;: The remote/origin address on which the request from the user was received.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;downstream_local_address&lt;/code&gt;: The local/destination address on which the request from the user was received.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;upstream_remote_address&lt;/code&gt;: The upstream remote/destination address that handles this exchange.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;upstream_local_address&lt;/code&gt;: The upstream local/origin address that handles this exchange.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;upstream_cluster&lt;/code&gt;: The upstream cluster that &lt;em&gt;upstream_remote_address&lt;/em&gt; belongs to.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We will discuss more about the properties in the following sections.&lt;/p&gt;
+&lt;h3 id=&#34;sidecar&#34;&gt;Sidecar&lt;/h3&gt;
+&lt;p&gt;When serving as a sidecar, Envoy is deployed alongside a service, and delegates all the incoming/outgoing requests to/from the service.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Delegating incoming requests:&lt;/strong&gt; in this case, Envoy acts as a server side sidecar, and sets the &lt;code&gt;upstream_cluster&lt;/code&gt; in form of &lt;code&gt;inbound|portNumber|portName|Hostname[or]SidecarScopeID&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.37.49-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The SkyWalking analyzer checks whether either &lt;code&gt;downstream_remote_address&lt;/code&gt; can be mapped to a Kubernetes service:&lt;/p&gt;
+&lt;p&gt;a. If there is a service (say &lt;code&gt;Service B&lt;/code&gt;) whose implementation is running in this IP(and port), then we have a service-to-service relation, &lt;code&gt;Service B -&amp;gt; Service A&lt;/code&gt;, which can be used to build the topology. Together with the &lt;code&gt;start_time&lt;/code&gt; and &lt;code&gt;duration&lt;/code&gt; fields in the access log, we have the latency metrics now.&lt;/p&gt;
+&lt;p&gt;b. If there is no service that can be mapped to &lt;code&gt;downstream_remote_address&lt;/code&gt;, then the request may come from a service out of the mesh. Since SkyWalking cannot identify the source service where the requests come from, it simply generates the metrics without source service, according to the &lt;a href=&#34;https://wu-sheng.github.io/STAM/&#34;&gt;topology analysis method&lt;/a&gt;. The topology can be built as accurately as possible, and the metrics detected from server side are still correct.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Delegating outgoing requests:&lt;/strong&gt; in this case, Envoy acts as a client-side sidecar, and sets the &lt;code&gt;upstream_cluster&lt;/code&gt; in form of &lt;code&gt;outbound|&amp;lt;port&amp;gt;|&amp;lt;subset&amp;gt;|&amp;lt;serviceFQDN&amp;gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.43.16-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Client side detection is relatively simpler than (1. Delegating incoming requests). If &lt;code&gt;upstream_remote_address&lt;/code&gt; is another sidecar or proxy, we simply get the mapped service name and generate the topology and metrics. Otherwise, we have no idea what it is and consider it an &lt;code&gt;UNKNOWN&lt;/code&gt; service.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;proxy-role&#34;&gt;Proxy role&lt;/h3&gt;
+&lt;p&gt;When Envoy is deployed as a proxy, it is an independent service itself and doesn&amp;rsquo;t represent any other service like a sidecar does. Therefore, we can build client-side metrics as well as server-side metrics.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-2.46.56-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;example&#34;&gt;Example&lt;/h2&gt;
+&lt;p&gt;In this section, we will use the typical &lt;a href=&#34;https://istio.io/latest/docs/examples/bookinfo/&#34;&gt;bookinfo application&lt;/a&gt; to demonstrate how  Apache SkyWalking 8.3.0+ (the latest version up to Nov. 30th, 2020) works together with Envoy ALS to observe a service mesh.&lt;/p&gt;
+&lt;h3 id=&#34;installing-kubernetes&#34;&gt;Installing Kubernetes&lt;/h3&gt;
+&lt;p&gt;SkyWalking 8.3.0 supports the Envoy ALS solution under both Kubernetes environment and virtual machines (VM) environment, in this tutorial, we’ll only focus on the Kubernetes scenario, for VM solution, please stay tuned for our next blog, so we need to install Kubernetes before taking further steps.&lt;/p&gt;
+&lt;p&gt;In this tutorial, we will use the &lt;a href=&#34;https://minikube.sigs.k8s.io/docs/&#34;&gt;Minikube&lt;/a&gt; tool to quickly set up a local Kubernetes(v1.17) cluster for testing. In order to run all the needed components, including the bookinfo application, the SkyWalking OAP and WebUI, the cluster may need up to 4GB RAM and 2 CPU cores.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;minikube start --memory&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;4096&lt;/span&gt; --cpus&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;2&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Next, run &lt;code&gt;kubectl get pods --namespace=kube-system --watch&lt;/code&gt; to check whether all the Kubernetes components are ready. If not, wait for the readiness before going on.&lt;/p&gt;
+&lt;h3 id=&#34;installing-istio&#34;&gt;Installing Istio&lt;/h3&gt;
+&lt;p&gt;Istio provides a very convenient way to configure the Envoy proxy and enable the access log service. The built-in configuration profiles free us from lots of manual operations. So, for demonstration purposes, we will use Istio through this tutorial.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;ISTIO_VERSION&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;1.7.1
+curl -L https://istio.io/downloadIstio | sh - 
+sudo mv &lt;span style=&#34;color:#008080&#34;&gt;$PWD&lt;/span&gt;/istio-&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/bin/istioctl /usr/local/bin/
+istioctl  install --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Run &lt;code&gt;kubectl get pods --namespace=istio-system --watch&lt;/code&gt; to check whether all the Istio components are ready. If not, wait for the readiness before going on.&lt;/p&gt;
+&lt;h3 id=&#34;enabling-als&#34;&gt;Enabling ALS&lt;/h3&gt;
+&lt;p&gt;The &lt;code&gt;demo&lt;/code&gt; profile doesn’t enable ALS by default. We need to reconfigure it to enable ALS via some configuration.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl  manifest install &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set meshConfig.enableEnvoyAccessLogService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set meshConfig.defaultConfig.envoyAccessLogService.address&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking-oap.istio-system:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The example command &lt;code&gt;--set meshConfig.enableEnvoyAccessLogService=true&lt;/code&gt; enables the Envoy access log service in the mesh. And as we said earlier, ALS is essentially a gRPC service that emits requests logs. The config &lt;code&gt;meshConfig.defaultConfig.envoyAccessLogService.address=skywalking-oap.istio-system:11800&lt;/code&gt; tells this gRPC service  where to emit the logs, say &lt;code&gt;skywalking-oap.istio-system:11800&lt;/code&gt;, where we will deploy the SkyWalking ALS receiver later.&lt;/p&gt;
+&lt;p&gt;NOTE:
+You can also enable the ALS when installing Istio so that you don’t need to restart Istio after installation:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;istioctl install --set &lt;span style=&#34;color:#008080&#34;&gt;profile&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;demo &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set meshConfig.enableEnvoyAccessLogService&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set meshConfig.defaultConfig.envoyAccessLogService.address&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;skywalking-oap.istio-system:11800
+kubectl label namespace default istio-injection&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;enabled
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;deploying-apache-skywalking&#34;&gt;Deploying Apache SkyWalking&lt;/h3&gt;
+&lt;p&gt;The SkyWalking community provides a &lt;a href=&#34;https://helm.sh&#34;&gt;Helm&lt;/a&gt; Chart to make it easier to deploy SkyWalking and its dependent services in Kubernetes. The Helm Chart can be found at the &lt;a href=&#34;https://github.com/apache/skywalking-kubernetes&#34;&gt;GitHub repository&lt;/a&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Install Helm&lt;/span&gt;
+curl -sSLO https://get.helm.sh/helm-v3.0.0-linux-amd64.tar.gz
+sudo tar xz -C /usr/local/bin --strip-components&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; linux-amd64/helm -f helm-v3.0.0-linux-amd64.tar.gz
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Clone SkyWalking Helm Chart&lt;/span&gt;
+git clone https://github.com/apache/skywalking-kubernetes
+&lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; skywalking-kubernetes/chart
+git reset --hard dd749f25913830c47a97430618cefc4167612e75
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Update dependencies&lt;/span&gt;
+helm dep up skywalking
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# Deploy SkyWalking&lt;/span&gt;
+helm -n istio-system install skywalking skywalking &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set oap.storageType&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;h2&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set ui.image.tag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;8.3.0 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set oap.image.tag&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;8.3.0-es7 &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set oap.replicas&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;k8s-mesh &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set oap.env.JAVA_OPTS&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;-Dmode=&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set oap.envoy.als.enabled&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;true&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;\
+&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&lt;/span&gt;               --set elasticsearch.enabled&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;false&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;We deploy SkyWalking to the namespace &lt;code&gt;istio-system&lt;/code&gt;, so that SkyWalking OAP service can be accessed by &lt;code&gt;skywalking-oap.istio-system:11800&lt;/code&gt;, to which we told ALS to emit their logs, in the previous step.&lt;/p&gt;
+&lt;p&gt;We also enable the ALS analyzer in the SkyWalking OAP: &lt;code&gt;oap.env.SW_ENVOY_METRIC_ALS_HTTP_ANALYSIS=k8s-mesh&lt;/code&gt;. The analyzer parses the access logs and maps the IP addresses in the logs to the real service names in the Kubernetes, to build a topology.&lt;/p&gt;
+&lt;p&gt;In order to retrieve the metadata (such as Pod IP and service names) from a Kubernetes cluster for IP mappings, we also set &lt;code&gt;oap.envoy.als.enabled=true&lt;/code&gt;, to apply for a &lt;code&gt;ClusterRole&lt;/code&gt; that has access to the metadata.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;POD_NAME&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get pods -A -l &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;app=skywalking,release=skywalking,component=ui&amp;#34;&lt;/span&gt; -o name&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#0086b3&#34;&gt;echo&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;$POD_NAME&lt;/span&gt;
+kubectl -n istio-system port-forward &lt;span style=&#34;color:#008080&#34;&gt;$POD_NAME&lt;/span&gt; 8080:8080
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Now navigate your browser to http://localhost:8080 . You should be able to see the SkyWalking dashboard. The dashboard is empty for now, but after we deploy the demo application and generate traffic, it should be filled up later.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-3.01.03-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;deploying-bookinfo-application&#34;&gt;Deploying Bookinfo application&lt;/h3&gt;
+&lt;p&gt;Run:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;ISTIO_VERSION&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;1.7.1
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/&lt;span style=&#34;color:#008080&#34;&gt;$ISTIO_VERSION&lt;/span&gt;/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl &lt;span style=&#34;color:#0086b3&#34;&gt;wait&lt;/span&gt; --for&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;condition&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;Ready pods --all --timeout&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;1200s
+minikube tunnel
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then navigate your browser to http://localhost/productpage. You should be able to see the typical bookinfo application. Refresh the webpage several times to generate enough access logs.&lt;/p&gt;
+&lt;h3 id=&#34;done&#34;&gt;Done!&lt;/h3&gt;
+&lt;p&gt;And you’re all done! Check out the SkyWalking WebUI again. You should see the topology of the bookinfo application, as well the metrics of each individual service of the bookinfo application.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;Screen-Shot-2020-12-02-at-3.05.24-PM.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;Screen-Shot-2020-12-02-at-3.11.55-PM.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;troubleshooting&#34;&gt;Troubleshooting&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Check all pods status: &lt;code&gt;kubectl get pods -A&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;SkyWalking OAP logs: &lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=oap&amp;quot; -o name)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;SkyWalking WebUI logs: &lt;code&gt;kubectl -n istio-system logs -f $(kubectl get pod -A -l &amp;quot;app=skywalking,release=skywalking,component=ui&amp;quot; -o name)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Make sure the time zone at the bottom-right of the WebUI is set to &lt;code&gt;UTC +0&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;customizing-service-names&#34;&gt;Customizing Service Names&lt;/h2&gt;
+&lt;p&gt;The SkyWalking community brought more improvements to the ALS solution in the 8.3.0 version. You can decide how to compose the service names when mapping from the IP addresses, with variables &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;pod&lt;/code&gt;. For instance, configuring &lt;code&gt;K8S_SERVICE_NAME_RULE&lt;/code&gt; to the expression &lt;code&gt;${service.metadata.name}-${pod.metadata.labels.version}&lt;/code&gt; gets service names with version label such as &lt;code&gt;reviews-v1&lt;/code&gt;, &lt;code&gt;reviews-v2&lt;/code&gt;, and &lt;code&gt;reviews-v3&lt;/code&gt;, instead of a single service &lt;code&gt;reviews&lt;/code&gt;, see &lt;a href=&#34;https://github.com/apache/skywalking/pull/5722&#34;&gt;the PR&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;working-als-with-vm&#34;&gt;Working ALS with VM&lt;/h2&gt;
+&lt;p&gt;Kubernetes is popular, but what about VMs? From what we discussed above, in order to map the IPs to services, SkyWalking needs access to the Kubernetes cluster, fetching service metadata and Pod IPs. But in a VM environment, there is no source from which we can fetch those metadata.
+In the next post, we will introduce another ALS analyzer based on the Envoy metadata exchange mechanism. With this analyzer, you are able to observe a service mesh in the VM environment. Stay tuned!
+If you want to  have commercial support for the ALS solution or hybrid mesh observability, &lt;a href=&#34;https://www.tetrate.io/tetrate-service-bridge/&#34;&gt;Tetrate Service Bridge, TSB&lt;/a&gt; is another good option out there.&lt;/p&gt;
+&lt;h2 id=&#34;additional-resources&#34;&gt;Additional Resources&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;KubeCon 2019 Recorded &lt;a href=&#34;https://www.youtube.com/watch?v=tERm39ju9ew&#34;&gt;Video&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Get more SkyWalking updates on &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;the official website&lt;/a&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;Apache SkyWalking founder Sheng Wu, SkyWalking core maintainer Zhenxu Ke are Tetrate engineers, and Tevah Platt is a content writer for Tetrate. Tetrate helps organizations adopt open source service mesh tools, including Istio, Envoy, and Apache SkyWalking, so they can manage microservices, run service mesh on any infrastructure, and modernize their applications.&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: SkyWalking v6 is Service Mesh ready</title>
+      <link>/blog/2018-12-12-skywalking-service-mesh-ready/</link>
+      <pubDate>Wed, 05 Dec 2018 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2018-12-12-skywalking-service-mesh-ready/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Original link, &lt;a href=&#34;https://www.tetrate.io/blog/apache-skywalking-v6/&#34;&gt;Tetrate.io blog&lt;/a&gt;&lt;/p&gt;
+&lt;h1 id=&#34;context&#34;&gt;Context&lt;/h1&gt;
+&lt;p&gt;The integration of SkyWalking and Istio Service Mesh yields an essential open-source tool for resolving the chaos created by the proliferation of siloed, cloud-based services.&lt;/p&gt;
+&lt;p&gt;Apache SkyWalking is an open, modern performance management tool for distributed services, designed especially for microservices, cloud native and container-based (Docker, K8s, Mesos) architectures. We at Tetrate believe it is going to be an important project for understanding the performance of microservices. The recently released v6 integrates with Istio Service Mesh and focuses on metrics and tracing. It natively understands the most common language runtimes (Java, .Net, and NodeJS). With its new core code, SkyWalking v6 also supports Istrio telemetry data formats, providing consistent analysis, persistence, and visualization.&lt;/p&gt;
+&lt;p&gt;SkyWalking has evolved into an Observability Analysis Platform that enables observation and monitoring of hundreds of services all at once. It promises solutions for some of the trickiest problems faced by system administrators using complex arrays of abundant services: Identifying why and where a request is slow, distinguishing normal from deviant system performance, comparing apples-to-apples metrics across apps regardless of programming language, and attaining a complete and meaningful view of performance.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2ctge1g5j31pc0s8h04.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;skywalking-history&#34;&gt;SkyWalking History&lt;/h1&gt;
+&lt;p&gt;Launched in China by Wu Sheng in 2015, SkyWalking started as just a distributed tracing system, like Zipkin, but with auto instrumentation from a Java agent. This enabled JVM users to see distributed traces without any change to their source code. In the last two years, it has been used for research and production by more than &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/powered-by.md&#34;&gt;50 companies&lt;/a&gt;. With its expanded capabilities, we expect to see it adopted more globally.&lt;/p&gt;
+&lt;h1 id=&#34;whats-new&#34;&gt;What&amp;rsquo;s new&lt;/h1&gt;
+&lt;h2 id=&#34;service-mesh-integration&#34;&gt;Service Mesh Integration&lt;/h2&gt;
+&lt;p&gt;Istio has picked up a lot of steam as the framework of choice for distributed services. Based on all the interest in the Istio project, and community feedback, some SkyWalking (P)PMC members decided to integrate with Istio Service Mesh to move SkyWalking to a higher level.&lt;/p&gt;
+&lt;p&gt;So now you can use Skywalking to get metrics and understand the topology of your applications. This works not just for Java, .NET and Node using our language agents, but also for microservices running under the Istio service mesh. You can get a full topology of both kinds of applications.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cjmhi3uj31h80m5jwn.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;observability-analysis-platform&#34;&gt;Observability analysis platform&lt;/h2&gt;
+&lt;p&gt;With its roots in tracing, SkyWalking is now transitioning into an open-standards based &lt;strong&gt;Observability Analysis Platform&lt;/strong&gt;, which means the following:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;It can accept different kinds and formats of telemetry data from mesh like Istio telemetry.&lt;/li&gt;
+&lt;li&gt;Its agents support various popular software technologies and frameworks like Tomcat, Spring, Kafka. The whole supported framework list is &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/en/setup/service-agent/java-agent/Supported-list.md&#34;&gt;here&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;It can accept data from other compliant sources like Zipkin-formatted traces reported from Zipkin, Jaeger, or OpenCensus clients.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cqo4yctj31ok0s07hh.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;p&gt;SkyWalking is logically split into four parts: Probes, Platform Backend, Storage and UI:&lt;/p&gt;
+&lt;p&gt;There are two kinds of &lt;strong&gt;probes&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Language agents or SDKs following SkyWalking across-thread propagation formats and trace formats, run in the user’s application process.&lt;/li&gt;
+&lt;li&gt;The Istio mixer adaptor, which collects telemetry from the Service Mesh.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The platform &lt;strong&gt;backend&lt;/strong&gt; provides gRPC and RESTful HTTP endpoints for all SkyWalking-supported trace and metric telemetry data. For example, you can stream these metrics into an analysis system.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Storage&lt;/strong&gt; supports multiple implementations such as ElasticSearch, H2 (alpha), MySQL, and Apache ShardingSphere for MySQL Cluster. TiDB will be supported in next release.&lt;/p&gt;
+&lt;p&gt;SkyWalking’s built-in &lt;strong&gt;UI&lt;/strong&gt; with a GraphQL endpoint for data allows intuitive, customizable integration.&lt;/p&gt;
+&lt;p&gt;Some examples of SkyWalking’s UI:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Observe a Spring app using the SkyWalking JVM-agent&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2ckeyyxlj31h70lvdjf.jpg&#34; alt=&#34;Topology&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Observe on Istio without any agent, no matter what langugage the service is written in&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2ckwr65mj31h80m5jwn.jpg&#34; alt=&#34;Topology&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;See fine-grained metrics like request/Call per Minute, P99/95/90/75/50 latency, avg response time, heatmap&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cmxcrdqj31gz0qmdja.jpg&#34; alt=&#34;Dashboard&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Service dependencies and metrics&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;0081Kckwly1gl2cngbu84j31h00oxadw.jpg&#34; alt=&#34;Service&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;service-focused&#34;&gt;Service Focused&lt;/h1&gt;
+&lt;p&gt;At Tetrate, we are focused on discovery, reliability, and security of your running services.
+This is why we are embracing Skywalking, which makes service performance observable.&lt;/p&gt;
+&lt;p&gt;Behind this admittedly cool UI, the aggregation logic is very easy to understand, making it easy to customize SkyWalking in its Observability Analysis Language (OAL) script.&lt;/p&gt;
+&lt;p&gt;We’ll post more about OAL for developers looking to customize SkyWalking, and you can read the official &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/en/concepts-and-designs/oal.md&#34;&gt;OAL introduction&lt;/a&gt; document.&lt;/p&gt;
+&lt;p&gt;Scripts are based on three core concepts:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Service&lt;/strong&gt; represents a group of workloads that provide the same behaviours for incoming requests. You can define the service name whether you are using instrument agents or SDKs. Otherwise, SkyWalking uses the name you defined in the underlying platform, such as Istio.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Service Instance&lt;/strong&gt; Each workload in the Service group is called an instance. Like &lt;em&gt;Pods&lt;/em&gt; in Kubernetes, it doesn&amp;rsquo;t need  to be a single OS process. If you are using an instrument agent, an instance does map to one OS process.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Endpoint&lt;/strong&gt; is a path in a certain service that handles incoming requests, such as HTTP paths or a gRPC service + method. Mesh telemetry and trace data are formatted as source objects (aka scope). These are the input for the aggregation, with the script describing how to aggregate, including input, conditions, and the resulting metric name.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;core-features&#34;&gt;Core Features&lt;/h1&gt;
+&lt;p&gt;The other core features in SkyWalking v6 are:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Service, service instance, endpoint metrics analysis.&lt;/li&gt;
+&lt;li&gt;Consistent visualization in Service Mesh and no mesh.&lt;/li&gt;
+&lt;li&gt;Topology discovery, Service dependency analysis.&lt;/li&gt;
+&lt;li&gt;Distributed tracing.&lt;/li&gt;
+&lt;li&gt;Slow services and endpoints detected.&lt;/li&gt;
+&lt;li&gt;Alarms.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Of course, SkyWalking has some more upgrades from v5, such as:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;ElasticSearch 6 as storage is supported.&lt;/li&gt;
+&lt;li&gt;H2 storage implementor is back.&lt;/li&gt;
+&lt;li&gt;Kubernetes cluster management is provided. You don’t need Zookeeper to keep the backend running in cluster mode.&lt;/li&gt;
+&lt;li&gt;Totally new alarm core. Easier configuration.&lt;/li&gt;
+&lt;li&gt;More cloud native style.&lt;/li&gt;
+&lt;li&gt;MySQL will be supported in the next release.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1 id=&#34;please-test-and-provide-feedback&#34;&gt;Please: Test and Provide Feedback!&lt;/h1&gt;
+&lt;p&gt;We would love everyone to try to test our new version. You can find everything you need in our &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;Apache repository&lt;/a&gt;,read the &lt;a href=&#34;https://github.com/apache/incubator-skywalking/blob/master/docs/README.md&#34;&gt;document&lt;/a&gt; for further details. You can contact the project team through the following channels:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Submit an issue on &lt;a href=&#34;https://github.com/apache/incubator-skywalking/issues/new&#34;&gt;GitHub repository&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Mailing list: &lt;a href=&#34;mailto:dev@skywalking.apache.org&#34;&gt;dev@skywalking.apache.org&lt;/a&gt; . Send to &lt;a href=&#34;mailto:dev-subscribe@kywalking.apache.org&#34;&gt;dev-subscribe@kywalking.apache.org&lt;/a&gt; to subscribe the mail list.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://gitter.im/OpenSkywalking/Lobby&#34;&gt;Gitter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;Project twitter&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Oh, and one last thing! If you like our project, don&amp;rsquo;t forget to &lt;a href=&#34;https://github.com/apache/incubator-skywalking&#34;&gt;give us a star on GitHub&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>
