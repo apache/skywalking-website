@@ -11,12 +11,12 @@ SkyWalking 9.7.0 is released. Go to [downloads](/downloads) page to find release
 #### Dark Mode
 The dafult style mode is changed to the dark mode, and light mode is still available.
 
-<img src=".dark-mode.png">
+<img src="dark-mode.png">
 
 #### New Design Log View
 A new design for the log view is currently available. Easier to locate the logs, and more space for the raw text.
 
-<img src="logs.png>
+<img src="logs.png">
 
 #### Project
 
