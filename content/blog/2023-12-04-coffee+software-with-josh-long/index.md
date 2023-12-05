@@ -2,7 +2,6 @@
 title: "[Video] Coffee + Software with Josh Long - Apache SkyWalking with Sheng Wu and Apache ShardingSphere with Trista Pan"
 date: 2023-12-04
 author: Sheng Wu, Josh Long, Trista Pan
-description: "🚀 Dive into the World of Cutting-Edge Technology with Apache's Finest! 🌐 Join me today as we embark on an exhilarating journey with two of Apache's most brilliant minds - Sheng Wu and Trista Pan. We're exploring the realms of Apache SkyWalking and Apache ShardingSphere, two groundbreaking initiatives that are reshaping the landscape of open-source technology. 🌟"
 tags:
 - Video
 ---
