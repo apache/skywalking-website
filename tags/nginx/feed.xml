@@ -4,7 +4,7 @@
     <link>/tags/nginx/</link>
     <description>Recent content in Nginx on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
-    <lastBuildDate>Sun, 29 Oct 2023 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 23 Dec 2023 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/nginx/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -13,6 +13,272 @@
         
       
     
+    
+    <item>
+      <title>Zh: 使用 SkyWalking 监控 Nginx</title>
+      <link>/zh/2023-12-23-monitoring-nginx-by-skywalking/</link>
+      <pubDate>Sat, 23 Dec 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2023-12-23-monitoring-nginx-by-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;在前面的 Blog &lt;a href=&#34;https://skywalking.apache.org/zh/2023-10-29-collect-and-analyse-nginx-accesslog-by-lal/&#34;&gt;使用 LAL 收集并分析 Nginx access log&lt;/a&gt; 中，我们以 Nginx access log 为切入点，
+演示了 SkyWalking LAL 的日志分析能力。&lt;/p&gt;
+&lt;p&gt;为了实现对 Nginx 更全面的监控能力，我们在 SkyWalking 9.7 中引入了 Nginx 监控面板，本文将演示该监控面板的使用，并介绍相关指标的含义。&lt;/p&gt;
+&lt;h2 id=&#34;监控面板接入&#34;&gt;监控面板接入&lt;/h2&gt;
+&lt;h3 id=&#34;metric-定义与采集&#34;&gt;Metric 定义与采集&lt;/h3&gt;
+&lt;p&gt;由于使用了 &lt;a href=&#34;https://github.com/knyar/nginx-lua-prometheus&#34;&gt;nginx-lua-prometheus&lt;/a&gt; 来定义及暴露指标，
+我们需要为 Nginx 安装 &lt;a href=&#34;https://github.com/openresty/lua-nginx-module&#34;&gt;lua_nginx_module&lt;/a&gt;， 或者直接使用&lt;a href=&#34;https://openresty.org&#34;&gt;OpenResty&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;下面的例子中，我们通过 nginx-lua-prometheus 定义了四个指标，并通过 ip:9145/metrics 暴露指标接口：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;histogram: nginx_http_latency，监控 http 延时&lt;/li&gt;
+&lt;li&gt;gauge: nginx_http_connections，监控 http 连接数&lt;/li&gt;
+&lt;li&gt;counter: nginx_http_size_bytes，监控 http 请求和响应大小&lt;/li&gt;
+&lt;li&gt;counter: nginx_http_requests_total，监控 http 请求次数&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;http {
+    log_format  main  &#39;$remote_addr - $remote_user [$time_local] &amp;quot;$request&amp;quot; &#39;
+                      &#39;$status $body_bytes_sent &amp;quot;$http_referer&amp;quot; &#39;
+                      &#39;&amp;quot;$http_user_agent&amp;quot; &amp;quot;$http_x_forwarded_for&amp;quot;&#39;;
+
+    access_log  /var/log/nginx/access.log  main;
+
+    lua_shared_dict prometheus_metrics 10M;
+    # lua_package_path &amp;quot;/path/to/nginx-lua-prometheus/?.lua;;&amp;quot;;
+
+    init_worker_by_lua_block {
+      prometheus = require(&amp;quot;prometheus&amp;quot;).init(&amp;quot;prometheus_metrics&amp;quot;)
+
+      metric_bytes = prometheus:counter(
+        &amp;quot;nginx_http_size_bytes&amp;quot;, &amp;quot;Total size of HTTP&amp;quot;, {&amp;quot;type&amp;quot;, &amp;quot;route&amp;quot;})
+      metric_requests = prometheus:counter(
+        &amp;quot;nginx_http_requests_total&amp;quot;, &amp;quot;Number of HTTP requests&amp;quot;, {&amp;quot;status&amp;quot;, &amp;quot;route&amp;quot;})
+      metric_latency = prometheus:histogram(
+        &amp;quot;nginx_http_latency&amp;quot;, &amp;quot;HTTP request latency&amp;quot;, {&amp;quot;route&amp;quot;})
+      metric_connections = prometheus:gauge(
+        &amp;quot;nginx_http_connections&amp;quot;, &amp;quot;Number of HTTP connections&amp;quot;, {&amp;quot;state&amp;quot;})
+    }
+
+    server {
+        listen 8080;
+
+        location /test {
+          default_type application/json;
+          return 200  &#39;{&amp;quot;code&amp;quot;: 200, &amp;quot;message&amp;quot;: &amp;quot;success&amp;quot;}&#39;;
+
+          log_by_lua_block {
+            metric_bytes:inc(tonumber(ngx.var.request_length), {&amp;quot;request&amp;quot;, &amp;quot;/test/**&amp;quot;})
+            metric_bytes:inc(tonumber(ngx.var.bytes_send), {&amp;quot;response&amp;quot;, &amp;quot;/test/**&amp;quot;})
+            metric_requests:inc(1, {ngx.var.status, &amp;quot;/test/**&amp;quot;})
+            metric_latency:observe(tonumber(ngx.var.request_time), {&amp;quot;/test/**&amp;quot;})
+          }
+        }
+    }
+
+    server {
+      listen 9145;
+      location /metrics {
+        content_by_lua_block {
+          metric_connections:set(ngx.var.connections_reading, {&amp;quot;reading&amp;quot;})
+          metric_connections:set(ngx.var.connections_waiting, {&amp;quot;waiting&amp;quot;})
+          metric_connections:set(ngx.var.connections_writing, {&amp;quot;writing&amp;quot;})
+          prometheus:collect()
+        }
+      }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;上面的例子中，我们暴露了 route 级别的指标，你也可以根据监控粒度的需要，选择暴露 host 指标：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http {
+  log_by_lua_block {
+      metric_bytes:inc(tonumber(ngx.var.request_length), {&amp;quot;request&amp;quot;, ngx.var.host})
+      metric_bytes:inc(tonumber(ngx.var.bytes_send), {&amp;quot;response&amp;quot;, ngx.var.host})
+      metric_requests:inc(1, {ngx.var.status, ngx.var.host})
+      metric_latency:observe(tonumber(ngx.var.request_time), {ngx.var.host})
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;或者 upstream 指标：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;upstream backend {
+  server ip:port;
+}
+
+server {
+  
+  location /test_upstream {
+  
+    proxy_pass http://backend;
+  
+    log_by_lua_block {
+      metric_bytes:inc(tonumber(ngx.var.request_length), {&amp;quot;request&amp;quot;, &amp;quot;upstream/backend&amp;quot;})
+      metric_bytes:inc(tonumber(ngx.var.bytes_send), {&amp;quot;response&amp;quot;, &amp;quot;upstream/backend&amp;quot;})
+      metric_requests:inc(1, {ngx.var.status, &amp;quot;upstream/backend&amp;quot;})
+      metric_latency:observe(tonumber(ngx.var.request_time), {&amp;quot;upstream/backend&amp;quot;})
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;完成指标定义后，我们启动 nginx 和 opentelemetry-collector，将指标采集到 SkyWalking 后端进行分析和存储。&lt;/p&gt;
+&lt;p&gt;请确保&lt;code&gt;job_name: &#39;nginx-monitoring&#39;&lt;/code&gt;，否则上报的数据将被 SkyWalking 忽略。如果你有多个 Nginx 实例，你可以通过&lt;code&gt;service&lt;/code&gt;及&lt;code&gt;service_instance_id&lt;/code&gt;这两个 label 进行区分：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: &#39;nginx-monitoring&#39;
+          scrape_interval: 5s
+          metrics_path: &amp;quot;/metrics&amp;quot;
+          static_configs:
+            - targets: [&#39;nginx:9145&#39;]
+              labels:
+                service: nginx
+                service_instance_id: nginx-instance
+processors:
+  batch:
+
+exporters:
+  otlp:
+    endpoint: oap:11800
+    tls:
+      insecure: true
+service:
+  pipelines:
+    metrics:
+      receivers:
+        - prometheus
+      processors:
+        - batch
+      exporters:
+        - otlp
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;如果一切顺利，你将在 skywalking-ui 的网关菜单下看到 nginx 上报的指标数据：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;nginx-metric.png&#34; alt=&#34;nginx-metric&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;access--error-log-采集&#34;&gt;Access &amp;amp; Error Log 采集&lt;/h3&gt;
+&lt;p&gt;SkyWalking Nginx 监控提供了日志采集及错误日志统计功能，我们可以借助 &lt;a href=&#34;https://fluentbit.io/&#34;&gt;fluent-bit&lt;/a&gt; 采集并上报 access log、error log 给 SkyWalking 分析存储。&lt;/p&gt;
+&lt;p&gt;下面 fluent-bit 配置定义了日志采集目录为&lt;code&gt;/var/log/nginx/&lt;/code&gt;，access 和 error log 经过 &lt;code&gt;rewrite_access_log&lt;/code&gt; 和 &lt;code&gt;rewrite_error_log&lt;/code&gt; 处理后会通过 oap 12800 端口进行上报：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;[SERVICE]
+    Flush          5
+    Daemon         Off
+    Log_Level      warn
+[INPUT]
+    Name           tail
+    Tag            access
+    Path           /var/log/nginx/access.log
+[INPUT]
+    Name           tail
+    Tag            error
+    Path           /var/log/nginx/error.log
+[FILTER]
+    Name           lua
+    Match          access
+    Script         fluent-bit-script.lua
+    Call           rewrite_access_log
+[FILTER]
+    Name           lua
+    Match          error
+    Script         fluent-bit-script.lua
+    Call           rewrite_error_log
+[OUTPUT]
+    Name            stdout
+    Match           *
+    Format          json
+[OUTPUT]
+    Name            http
+    Match           *
+    Host            oap
+    Port            12800
+    URI             /v3/logs
+    Format          json
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;在 fluent-bit-script.lua 中，我们通过 LOG_KIND 来区分 access log 和 error log。&lt;/p&gt;
+&lt;p&gt;为了能够关联上文采集的 metric，请确保 service 和 serviceInstance 值与上文中指标采集定义一致。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;function rewrite_access_log(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;layer&amp;quot;] = &amp;quot;NGINX&amp;quot;
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;nginx-instance&amp;quot;
+    newRecord[&amp;quot;body&amp;quot;] = { text = { text = record.log } }
+    newRecord[&amp;quot;tags&amp;quot;] = { data = {{ key = &amp;quot;LOG_KIND&amp;quot;, value = &amp;quot;NGINX_ACCESS_LOG&amp;quot;}}}
+    return 1, timestamp, newRecord
+end
+
+function rewrite_error_log(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;layer&amp;quot;] = &amp;quot;NGINX&amp;quot;
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;nginx-instance&amp;quot;
+    newRecord[&amp;quot;body&amp;quot;] = { text = { text = record.log } }
+    newRecord[&amp;quot;tags&amp;quot;] = { data = {{ key = &amp;quot;LOG_KIND&amp;quot;, value = &amp;quot;NGINX_ERROR_LOG&amp;quot; }}}
+    return 1, timestamp, newRecord
+end
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;启动 fluent-it 后，我们便可以在监控面板的 Log tab 看到采集到的日志信息：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;nginx-log.png&#34; alt=&#34;nginx-log&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;面板指标含义&#34;&gt;面板指标含义&lt;/h2&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;面板名称&lt;/th&gt;
+&lt;th&gt;单位&lt;/th&gt;
+&lt;th&gt;指标含义&lt;/th&gt;
+&lt;th&gt;数据源&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Request Trend&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;td&gt;每秒钟平均请求数&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Latency&lt;/td&gt;
+&lt;td&gt;ms&lt;/td&gt;
+&lt;td&gt;平均响应延时&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Bandwidth&lt;/td&gt;
+&lt;td&gt;KB&lt;/td&gt;
+&lt;td&gt;请求响应流量&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Connections&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;td&gt;nginx http 连接数&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Status Trend&lt;/td&gt;
+&lt;td&gt;%&lt;/td&gt;
+&lt;td&gt;每分钟 http 状态码统计&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Status 4xx Percent&lt;/td&gt;
+&lt;td&gt;%&lt;/td&gt;
+&lt;td&gt;4xx状态码比例&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Status 5xx Percent&lt;/td&gt;
+&lt;td&gt;%&lt;/td&gt;
+&lt;td&gt;5xx状态码比例&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Error Log Count&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;td&gt;每分钟错误日志数统计&lt;/td&gt;
+&lt;td&gt;fluent-bit&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;参考文档&#34;&gt;参考文档&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/knyar/nginx-lua-prometheus&#34;&gt;nginx-lua-prometheus&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.fluentbit.io/manual/pipeline/filters/lua&#34;&gt;fluent-bit-lua-filter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-apisix-monitoring&#34;&gt;skywalking-apisix-monitoring&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Zh: 使用 LAL 收集并分析 Nginx access log</title>
