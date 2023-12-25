@@ -13,6 +13,274 @@
     
     
     <item>
+      <title>Blog: Monitoring Nginx with SkyWalking</title>
+      <link>/blog/2023-12-23-monitoring-nginx-by-skywalking/</link>
+      <pubDate>Sat, 23 Dec 2023 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2023-12-23-monitoring-nginx-by-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; is an open-source application performance management system that helps users collect and aggregate logs, traces, metrics, and events, and display them on the UI.&lt;/p&gt;
+&lt;p&gt;In order to achieve monitoring capabilities for Nginx, we have introduced the Nginx monitoring dashboard in SkyWalking 9.7,
+and this article will demonstrate the use of this monitoring dashboard and introduce the meaning of related metrics.&lt;/p&gt;
+&lt;h2 id=&#34;setup-monitoring-dashboard&#34;&gt;Setup Monitoring Dashboard&lt;/h2&gt;
+&lt;h3 id=&#34;metric-define-and-collection&#34;&gt;Metric Define and Collection&lt;/h3&gt;
+&lt;p&gt;Since &lt;a href=&#34;https://github.com/knyar/nginx-lua-prometheus&#34;&gt;nginx-lua-prometheus&lt;/a&gt; is used to define and expose metrics,
+we need to install &lt;a href=&#34;https://github.com/openresty/lua-nginx-module&#34;&gt;lua_nginx_module&lt;/a&gt; for Nginx, or use &lt;a href=&#34;https://openresty.org&#34;&gt;OpenResty&lt;/a&gt; directly.&lt;/p&gt;
+&lt;p&gt;In the following example, we define four metrics via nginx-lua-prometheus and expose the metrics interface via nginx ip:9145/metrics:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;histogram: nginx_http_latency，monitoring http latency&lt;/li&gt;
+&lt;li&gt;gauge: nginx_http_connections，monitoring nginx http connections&lt;/li&gt;
+&lt;li&gt;counter: nginx_http_size_bytes，monitoring http size of request and response&lt;/li&gt;
+&lt;li&gt;counter: nginx_http_requests_total，monitoring total http request numbers&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;http {
+    log_format  main  &#39;$remote_addr - $remote_user [$time_local] &amp;quot;$request&amp;quot; &#39;
+                      &#39;$status $body_bytes_sent &amp;quot;$http_referer&amp;quot; &#39;
+                      &#39;&amp;quot;$http_user_agent&amp;quot; &amp;quot;$http_x_forwarded_for&amp;quot;&#39;;
+
+    access_log  /var/log/nginx/access.log  main;
+
+    lua_shared_dict prometheus_metrics 10M;
+    # lua_package_path &amp;quot;/path/to/nginx-lua-prometheus/?.lua;;&amp;quot;;
+
+    init_worker_by_lua_block {
+      prometheus = require(&amp;quot;prometheus&amp;quot;).init(&amp;quot;prometheus_metrics&amp;quot;)
+
+      metric_bytes = prometheus:counter(
+        &amp;quot;nginx_http_size_bytes&amp;quot;, &amp;quot;Total size of HTTP&amp;quot;, {&amp;quot;type&amp;quot;, &amp;quot;route&amp;quot;})
+      metric_requests = prometheus:counter(
+        &amp;quot;nginx_http_requests_total&amp;quot;, &amp;quot;Number of HTTP requests&amp;quot;, {&amp;quot;status&amp;quot;, &amp;quot;route&amp;quot;})
+      metric_latency = prometheus:histogram(
+        &amp;quot;nginx_http_latency&amp;quot;, &amp;quot;HTTP request latency&amp;quot;, {&amp;quot;route&amp;quot;})
+      metric_connections = prometheus:gauge(
+        &amp;quot;nginx_http_connections&amp;quot;, &amp;quot;Number of HTTP connections&amp;quot;, {&amp;quot;state&amp;quot;})
+    }
+
+    server {
+        listen 8080;
+
+        location /test {
+          default_type application/json;
+          return 200  &#39;{&amp;quot;code&amp;quot;: 200, &amp;quot;message&amp;quot;: &amp;quot;success&amp;quot;}&#39;;
+
+          log_by_lua_block {
+            metric_bytes:inc(tonumber(ngx.var.request_length), {&amp;quot;request&amp;quot;, &amp;quot;/test/**&amp;quot;})
+            metric_bytes:inc(tonumber(ngx.var.bytes_send), {&amp;quot;response&amp;quot;, &amp;quot;/test/**&amp;quot;})
+            metric_requests:inc(1, {ngx.var.status, &amp;quot;/test/**&amp;quot;})
+            metric_latency:observe(tonumber(ngx.var.request_time), {&amp;quot;/test/**&amp;quot;})
+          }
+        }
+    }
+
+    server {
+      listen 9145;
+      location /metrics {
+        content_by_lua_block {
+          metric_connections:set(ngx.var.connections_reading, {&amp;quot;reading&amp;quot;})
+          metric_connections:set(ngx.var.connections_waiting, {&amp;quot;waiting&amp;quot;})
+          metric_connections:set(ngx.var.connections_writing, {&amp;quot;writing&amp;quot;})
+          prometheus:collect()
+        }
+      }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;In the above example, we exposed the route-level metrics, and you can also choose to expose the host-level metrics according to the monitoring granularity:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http {
+  log_by_lua_block {
+      metric_bytes:inc(tonumber(ngx.var.request_length), {&amp;quot;request&amp;quot;, ngx.var.host})
+      metric_bytes:inc(tonumber(ngx.var.bytes_send), {&amp;quot;response&amp;quot;, ngx.var.host})
+      metric_requests:inc(1, {ngx.var.status, ngx.var.host})
+      metric_latency:observe(tonumber(ngx.var.request_time), {ngx.var.host})
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;or upstream-level metrics：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;upstream backend {
+  server ip:port;
+}
+
+server {
+  
+  location /test_upstream {
+  
+    proxy_pass http://backend;
+  
+    log_by_lua_block {
+      metric_bytes:inc(tonumber(ngx.var.request_length), {&amp;quot;request&amp;quot;, &amp;quot;upstream/backend&amp;quot;})
+      metric_bytes:inc(tonumber(ngx.var.bytes_send), {&amp;quot;response&amp;quot;, &amp;quot;upstream/backend&amp;quot;})
+      metric_requests:inc(1, {ngx.var.status, &amp;quot;upstream/backend&amp;quot;})
+      metric_latency:observe(tonumber(ngx.var.request_time), {&amp;quot;upstream/backend&amp;quot;})
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;After defining the metrics, we start nginx and opentelemetry-collector to collect the metrics and send them to the SkyWalking backend for analysis and storage.&lt;/p&gt;
+&lt;p&gt;Please ensure that &lt;code&gt;job_name: &#39;nginx-monitoring&#39;&lt;/code&gt;, otherwise the reported data will be ignored by SkyWalking.
+If you have multiple Nginx instances, you can distinguish them using the &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;service_instance_id&lt;/code&gt; labels：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: &#39;nginx-monitoring&#39;
+          scrape_interval: 5s
+          metrics_path: &amp;quot;/metrics&amp;quot;
+          static_configs:
+            - targets: [&#39;nginx:9145&#39;]
+              labels:
+                service: nginx
+                service_instance_id: nginx-instance
+processors:
+  batch:
+
+exporters:
+  otlp:
+    endpoint: oap:11800
+    tls:
+      insecure: true
+service:
+  pipelines:
+    metrics:
+      receivers:
+        - prometheus
+      processors:
+        - batch
+      exporters:
+        - otlp
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;If everything goes well, you will see the metric data reported by Nginx under the gateway menu of the skywalking-ui:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;nginx-metric.png&#34; alt=&#34;nginx-metric&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;access--error-log-collection&#34;&gt;Access &amp;amp; Error Log Collection&lt;/h3&gt;
+&lt;p&gt;SkyWalking Nginx monitoring provides log collection and error log analysis. We can use &lt;a href=&#34;https://fluentbit.io/&#34;&gt;fluent-bit&lt;/a&gt; to collect and report access logs and error logs to SkyWalking for analysis and storage.&lt;/p&gt;
+&lt;p&gt;Fluent-bit configuration below defines the log collection directory as &lt;code&gt;/var/log/nginx/&lt;/code&gt;.
+The access and error logs will be reported through rest port 12800 of oap after being processed by &lt;code&gt;rewrite_access_log&lt;/code&gt; and &lt;code&gt;rewrite_error_log&lt;/code&gt; functions:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;[SERVICE]
+    Flush          5
+    Daemon         Off
+    Log_Level      warn
+[INPUT]
+    Name           tail
+    Tag            access
+    Path           /var/log/nginx/access.log
+[INPUT]
+    Name           tail
+    Tag            error
+    Path           /var/log/nginx/error.log
+[FILTER]
+    Name           lua
+    Match          access
+    Script         fluent-bit-script.lua
+    Call           rewrite_access_log
+[FILTER]
+    Name           lua
+    Match          error
+    Script         fluent-bit-script.lua
+    Call           rewrite_error_log
+[OUTPUT]
+    Name            stdout
+    Match           *
+    Format          json
+[OUTPUT]
+    Name            http
+    Match           *
+    Host            oap
+    Port            12800
+    URI             /v3/logs
+    Format          json
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;In the &lt;code&gt;fluent-bit-script.lua&lt;/code&gt;, we use &lt;code&gt;LOG_KIND&lt;/code&gt; tag to distinguish between access logs and error logs.&lt;/p&gt;
+&lt;p&gt;To associate with the metrics, please ensure that the values of &lt;code&gt;service&lt;/code&gt; and &lt;code&gt;serviceInstance&lt;/code&gt; are consistent with the metric collection definition in the previous section.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;function rewrite_access_log(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;layer&amp;quot;] = &amp;quot;NGINX&amp;quot;
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;nginx-instance&amp;quot;
+    newRecord[&amp;quot;body&amp;quot;] = { text = { text = record.log } }
+    newRecord[&amp;quot;tags&amp;quot;] = { data = {{ key = &amp;quot;LOG_KIND&amp;quot;, value = &amp;quot;NGINX_ACCESS_LOG&amp;quot;}}}
+    return 1, timestamp, newRecord
+end
+
+function rewrite_error_log(tag, timestamp, record)
+    local newRecord = {}
+    newRecord[&amp;quot;layer&amp;quot;] = &amp;quot;NGINX&amp;quot;
+    newRecord[&amp;quot;service&amp;quot;] = &amp;quot;nginx::nginx&amp;quot;
+    newRecord[&amp;quot;serviceInstance&amp;quot;] = &amp;quot;nginx-instance&amp;quot;
+    newRecord[&amp;quot;body&amp;quot;] = { text = { text = record.log } }
+    newRecord[&amp;quot;tags&amp;quot;] = { data = {{ key = &amp;quot;LOG_KIND&amp;quot;, value = &amp;quot;NGINX_ERROR_LOG&amp;quot; }}}
+    return 1, timestamp, newRecord
+end
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;After starting fluent-it, we can see the collected log information in the Log tab of the monitoring panel：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;nginx-log.png&#34; alt=&#34;nginx-log&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;meaning-of-metrics&#34;&gt;Meaning of Metrics&lt;/h2&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Metric Name&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;th&gt;Data Source&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Request Trend&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;td&gt;The increment rate of HTTP requests&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Latency&lt;/td&gt;
+&lt;td&gt;ms&lt;/td&gt;
+&lt;td&gt;The increment rate of the latency of HTTP requests&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Bandwidth&lt;/td&gt;
+&lt;td&gt;KB&lt;/td&gt;
+&lt;td&gt;The increment rate of the bandwidth of HTTP requests&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Connections&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;td&gt;The avg number of the connections&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Status Trend&lt;/td&gt;
+&lt;td&gt;%&lt;/td&gt;
+&lt;td&gt;The increment rate of the status of HTTP requests&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Status 4xx Percent&lt;/td&gt;
+&lt;td&gt;%&lt;/td&gt;
+&lt;td&gt;The percentage of 4xx status of HTTP requests&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HTTP Status 5xx Percent&lt;/td&gt;
+&lt;td&gt;%&lt;/td&gt;
+&lt;td&gt;The percentage of 4xx status of HTTP requests&lt;/td&gt;
+&lt;td&gt;nginx-lua-prometheus&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Error Log Count&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;td&gt;The count of log level of nginx error.log&lt;/td&gt;
+&lt;td&gt;fluent-bit&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;references&#34;&gt;References&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/knyar/nginx-lua-prometheus&#34;&gt;nginx-lua-prometheus&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.fluentbit.io/manual/pipeline/filters/lua&#34;&gt;fluent-bit-lua-filter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-apisix-monitoring&#34;&gt;skywalking-apisix-monitoring&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: [Video] Coffee &#43; Software with Josh Long - Apache SkyWalking with Sheng Wu and Apache ShardingSphere with Trista Pan</title>
       <link>/blog/2023-12-04-coffee&#43;software-with-josh-long/</link>
       <pubDate>Mon, 04 Dec 2023 00:00:00 +0000</pubDate>
@@ -8304,26 +8572,6 @@ If you want to  have commercial support for the ALS solution or hybrid mesh obse
 
 &lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
   &lt;iframe src=&#34;https://www.youtube.com/embed/DleVJwPs4i4&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: [Video] SourceMarker - Continuous Feedback for Developers</title>
-      <link>/blog/2020-11-21-apachecon-obs-sourcemarker/</link>
-      <pubDate>Sat, 21 Nov 2020 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2020-11-21-apachecon-obs-sourcemarker/</guid>
-      <description>
-        
-        
-        &lt;p&gt;Today&amp;rsquo;s monitoring solutions are geared towards operational tasks, displaying behavior as time-series graphs inside dashboards and other abstractions. These abstractions are immensely useful but are largely designed for software operators, whose responsibilities require them to think in systems, rather than the underlying source code. This is problematic given that an ongoing trend of software development is the blurring boundaries between building and operating software. This trend makes it increasingly necessary for programming environments to not just support development-centric activities, but operation-centric activities as well. Such is the goal of the feedback-driven development approach. By combining IDE and APM technology, software developers can intuitively explore multiple dimensions of their software simultaneously with continuous feedback about their software from inception to production.&lt;/p&gt;
-&lt;p&gt;Brandon Fergerson is an open-source software developer who does not regard himself as a specialist in the field of programming, but rather as someone who is a devoted admirer. He discovered the beauty of programming at a young age and views programming as an art and those who do it well to be artists. He has an affinity towards getting meta and combining that with admiration of programming, has found source code analysis to be exceptionally interesting. Lately, his primary focus involves researching and building AI-based pair programming technology.&lt;/p&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/IWounkxhfi0&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
 &lt;/div&gt;
 
 
