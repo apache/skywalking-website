@@ -6,9 +6,9 @@ This is the repository including all source codes of `https://skywalking.apache.
 
 This site was compiled using [Hugo](https://gohugo.io).
 
-1. Install hugo
-2. Run `npm install` to install the required libraries.
-3. Pull this repo into your local environment, and run `hugo server` at the root folder, you can see the site preview from http://localhost:1313
+1. Install [Hugo](https://gohugo.io/installation/) 
+2. Pull this repo into your local environment, and run `npm install` to install the required libraries (without pulling the project documentation).
+3. Run `hugo server` at the root folder, you can see the site preview from http://localhost:1313
 4. To generate the static website, run `npm run build` for the whole website. Run `npm run build-with-docs` if you want to build the project documentations.
 
 ## Contributing
@@ -111,8 +111,8 @@ Configure in the `config.toml` file.
 
 ### Website Configuration
 
-The website configuration file located at `config.toml`.
+The website configuration file is located at `config.toml`.
 
 ### Images
 
-The images within the blogs, events and 中文博客 should keep at the same folder as the blog file, and you should reference that with the relative path.
+The images within the blogs, events and 中文博客 should be kept at the same folder as the blog file, and you should reference them with the relative path.
