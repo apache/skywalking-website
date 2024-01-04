@@ -133,7 +133,7 @@ object Blocking {
 当我们完成了对 ZIO Fiber 的上下文传播处理后，任意基于 ZIO 的应用层框架都可以按照普通的 Java 插件思路去开发。
 我们只需要找到一个全局切入点，这个切入点应该是每个请求都会调用的方法，然后对这个方法进行增强。
 
-在 Release Notes 下载[插件](https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1)，放到您的 `skywalking-agent/plugins` 目录，重新启动服务即可即可。
+要想激活插件，只需要在 Release Notes 下载[插件](https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1)，放到您的 `skywalking-agent/plugins` 目录，重新启动服务即可。
 
 如果你的项目使用 sbt assembly 打包，您可以参考这个[示例](https://github.com/bitlap/skywalking-scala/tree/master/scenarios)。该项目使用了下列技术栈：
 ```scala
