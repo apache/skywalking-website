@@ -15,13 +15,10 @@ tags:
 
 我们以 ZIO 为切入点， 演示 SkyWalking Scala 如何支持 Effect 生态。
 
-## ZIO
+## ZIO Trace
 
 首先，我们想要实现 Fiber 上下文传递，而不是监控 Fiber 本身。对于一个大型应用来说，可能存在成千上万个 Fiber，监控 Fiber 本身的意义不大。
 
-## 使用
-
-在 Release Notes 下载[插件](https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1)，放到您的 `skywalking-agent/plugins` 目录即可。
 虽然 Fiber 的 Span 是在活跃时才会创建，但难免会有目前遗漏的场景，所以提供了一个配置 `plugin.ziov2.ignore_fiber_regexes`。
 它将使用正则去匹配 Fiber location，匹配上的 Fiber 将不会创建 Span。
 
@@ -135,3 +132,23 @@ object Blocking {
 
 当我们完成了对 ZIO Fiber 的上下文传播处理后，任意基于 ZIO 的应用层框架都可以按照普通的 Java 插件思路去开发。
 我们只需要找到一个全局切入点，这个切入点应该是每个请求都会调用的方法，然后对这个方法进行增强。
+
+在 Release Notes 下载[插件](https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1)，放到您的 `skywalking-agent/plugins` 目录，重新启动服务即可即可。
+
+如果你的项目使用 sbt assembly 打包，您可以参考这个[示例](https://github.com/bitlap/skywalking-scala/tree/master/scenarios)。该项目使用了下列技术栈：
+```scala
+    libraryDependencies ++= Seq(
+      "io.d11"               %% "zhttp"                % zioHttp2Version,
+      "dev.zio"              %% "zio"                  % zioVersion,
+      "io.grpc"               % "grpc-netty"           % "1.50.1",
+      "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion
+    ) ++ Seq(
+      "dev.profunktor" %% "redis4cats-effects"  % "1.3.0",
+      "dev.profunktor" %% "redis4cats-log4cats" % "1.3.0",
+      "dev.profunktor" %% "redis4cats-streams"  % "1.3.0",
+      "org.typelevel"  %% "log4cats-slf4j"      % "2.5.0",
+      "dev.zio"        %% "zio-interop-cats"    % "23.0.03",
+      "ch.qos.logback"  % "logback-classic"     % "1.2.11",
+      "dev.zio"        %% "zio-cache"           % zioCacheVersion
+    )
+```
