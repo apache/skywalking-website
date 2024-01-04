@@ -4,7 +4,7 @@
     <link>/tags/nginx/</link>
     <description>Recent content in Nginx on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
-    <lastBuildDate>Sat, 23 Dec 2023 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 04 Jan 2024 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/nginx/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -13,6 +13,121 @@
         
       
     
+    
+    <item>
+      <title>Zh: SkyWalking 如何支持 ZIO 等 Scala Effect Runtime</title>
+      <link>/zh/2024-01-04-skywalking-for-scala-effect-runtime/</link>
+      <pubDate>Thu, 04 Jan 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2024-01-04-skywalking-for-scala-effect-runtime/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;在 Scala 中，纯函数式中主要使用 Fiber，而不是线程，诸如 &lt;a href=&#34;https://github.com/typelevel/cats-effect&#34;&gt;Cats-Effect&lt;/a&gt;、&lt;a href=&#34;https://github.com/zio/zio&#34;&gt;ZIO&lt;/a&gt; 等 Effect 框架。
+您可以将 Fiber 视为轻量级线程，它是一种并发模型，由框架本身掌控控制权，从而消除了上下文切换的开销。
+基于这些 Effect 框架开发的 HTTP、gRCP、GraphQL 库而开发的应用，我们一般称为 &lt;strong&gt;纯函数式应用程序&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;我们以 ZIO 为切入点， 演示 SkyWalking Scala 如何支持 Effect 生态。&lt;/p&gt;
+&lt;h2 id=&#34;zio-trace&#34;&gt;ZIO Trace&lt;/h2&gt;
+&lt;p&gt;首先，我们想要实现 Fiber 上下文传递，而不是监控 Fiber 本身。对于一个大型应用来说，可能存在成千上万个 Fiber，监控 Fiber 本身的意义不大。&lt;/p&gt;
+&lt;p&gt;虽然 Fiber 的 Span 是在活跃时才会创建，但难免会有目前遗漏的场景，所以提供了一个配置 &lt;code&gt;plugin.ziov2.ignore_fiber_regexes&lt;/code&gt;。
+它将使用正则去匹配 Fiber location，匹配上的 Fiber 将不会创建 Span。&lt;/p&gt;
+&lt;p&gt;Fiber Span的信息如下：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;FiberSpan.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;下面是我们使用本 ZIO 插件，和一些官方插件（hikaricp、jdbc、pulsar）完成的 Trace：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;skywalking-scala-zio.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;分析&#34;&gt;分析&lt;/h2&gt;
+&lt;p&gt;在 ZIO 中，Fiber可以有两种方式被调度，它们都是 &lt;code&gt;zio.Executor&lt;/code&gt; 的子类。当然您也可以使用自己的线程池，这样也需被 ZIO 包装，其实就类似下面的 &lt;code&gt;blockingExecutor&lt;/code&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;abstract&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Executor&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;extends&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ExecutorPlatformSpecific&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+  self &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&amp;gt;&lt;/span&gt;
+  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; submit&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;runnable&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Runnable&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)(&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;implicit&lt;/span&gt; unsafe&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Unsafe&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Boolean&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;一种是系统默认线程池 &lt;code&gt;defaultExecutor&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;private&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;zio&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;trait&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;RuntimePlatformSpecific&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; defaultExecutor&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Executor&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;
+    &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Executor&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;makeDefault&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;()&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;另一种是专用于阻塞 IO 的线程池 &lt;code&gt;blockingExecutor&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;private&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;zio&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;trait&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;RuntimePlatformSpecific&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; defaultBlockingExecutor&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Executor&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;
+    &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Blocking&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;blockingExecutor
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;默认线程池-defaultexecutor&#34;&gt;默认线程池 &lt;code&gt;defaultExecutor&lt;/code&gt;&lt;/h2&gt;
+&lt;p&gt;对于 &lt;code&gt;defaultExecutor&lt;/code&gt;，其本身是很复杂的，但它就是一个 ZIO 的 Fiber 调度（执行）器：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;/**
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt; * A `ZScheduler` is an `Executor` that is optimized for running ZIO
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt; * applications. Inspired by &amp;#34;Making the Tokio Scheduler 10X Faster&amp;#34; by Carl
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt; * Lerche. [[https://tokio.rs/blog/2019-10-scheduler]]
+&lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt; */&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;private&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ZScheduler&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;extends&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Executor&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;由于它们都是 &lt;code&gt;zio.Executor&lt;/code&gt; 的子类，我们只需要对其及其子类进行增强：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;final&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ENHANCE_CLASS&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;LogicalMatchOperation&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;or&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+  &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;HierarchyMatch&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;byHierarchyMatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zio.Executor&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;),&lt;/span&gt;
+  &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;MultiClassNameMatch&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;byMultiClassMatch&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zio.Executor&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;它们都是线程池，我们只需要在 &lt;code&gt;zio.Executor&lt;/code&gt; 的 &lt;code&gt;submit&lt;/code&gt; 方法上进行类似 &lt;code&gt;ThreadPoolExecutor&lt;/code&gt; 上下文捕获的操作，可以参考 &lt;a href=&#34;https://github.com/apache/skywalking-java/blob/main/apm-sniffer/bootstrap-plugins/jdk-threadpool-plugin/src/main/java/org/apache/skywalking/apm/plugin/ThreadPoolSubmitMethodInterceptor.java&#34;&gt;jdk-threadpool-plugin&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;这里需要注意，因为 Fiber 也是一种 &lt;code&gt;Runnable&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;private&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;zio&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;trait&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;FiberRunnable&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;extends&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Runnable&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; location&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Trace&lt;/span&gt;
+  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;def&lt;/span&gt; run&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;depth&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Int&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Unit&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;a href=&#34;https://github.com/bitlap/skywalking-scala/blob/master/plugins/zio-v2x-plugin/src/main/scala/org/bitlap/skywalking/apm/plugin/zio/v2x/define/ZioExecutorInstrumentation.scala&#34;&gt;zio-v2x-plugin&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;阻塞线程池-blockingexecutor&#34;&gt;阻塞线程池 &lt;code&gt;blockingExecutor&lt;/code&gt;&lt;/h2&gt;
+&lt;p&gt;对于 &lt;code&gt;blockingExecutor&lt;/code&gt;，其实它只是对 Java 线程池进行了一个包装：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;object&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Blocking&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+
+  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; blockingExecutor&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;zio.Executor&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;
+    zio&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Executor&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;fromThreadPoolExecutor &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;{&lt;/span&gt;
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; corePoolSize  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; maxPoolSize   &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Int&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;MaxValue&lt;/span&gt;
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; keepAliveTime &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;60000L&lt;/span&gt;
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; timeUnit      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;TimeUnit&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;MILLISECONDS&lt;/span&gt;
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; workQueue     &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;SynchronousQueue&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Runnable&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;]()&lt;/span&gt;
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; threadFactory &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;NamedThreadFactory&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zio-default-blocking&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;val&lt;/span&gt; threadPool &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;new&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;ThreadPoolExecutor&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+        corePoolSize&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        maxPoolSize&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        keepAliveTime&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        timeUnit&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        workQueue&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+        threadFactory
+      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+
+      threadPool
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;由于其本身是对 &lt;code&gt;ThreadPoolExecutor&lt;/code&gt; 的封装，所以，当我们已经实现了 &lt;code&gt;zio.Executor &lt;/code&gt;的增强后，只需要使用官方 &lt;code&gt;jdk-threadpool-plugin&lt;/code&gt; 插件即可。
+这里我们还想要对代码进行定制修改和复用，所以重新使用 Scala 实现了一个 &lt;a href=&#34;https://github.com/bitlap/skywalking-scala/blob/master/plugins/executors-plugin/src/main/scala/org/bitlap/skywalking/apm/plugin/executor/define/ThreadPoolExecutorInstrumentation.scala&#34;&gt;executors-plugin&lt;/a&gt; 插件。&lt;/p&gt;
+&lt;h2 id=&#34;串连-fiber-上下文&#34;&gt;串连 Fiber 上下文&lt;/h2&gt;
+&lt;p&gt;最后，上面谈到过，Fiber 也是一种 &lt;code&gt;Runnable&lt;/code&gt;，因此还需要对 &lt;code&gt;zio.internal.FiberRunnable&lt;/code&gt; 进行增强。大致分为两点，其实与 &lt;code&gt;jdk-threading-plugin&lt;/code&gt; 是一样的。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;每次创建 &lt;code&gt;zio.internal.FiberRunnable&lt;/code&gt; 实例时，都需要保存 &lt;strong&gt;现场&lt;/strong&gt;，即构造函数增强。&lt;/li&gt;
+&lt;li&gt;每次运行时创建一个过渡的 Span，将当前线程上下文与之前保存在构造函数中的上下文进行关联。Fiber 可能被不同线程执行，所以这是必须的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/bitlap/skywalking-scala/blob/master/plugins/zio-v2x-plugin/src/main/scala/org/bitlap/skywalking/apm/plugin/zio/v2x/define/ZioFiberRuntimeInstrumentation.scala&#34;&gt;zio-v2x-plugin&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;说明&#34;&gt;说明&lt;/h2&gt;
+&lt;p&gt;当我们完成了对 ZIO Fiber 的上下文传播处理后，任意基于 ZIO 的应用层框架都可以按照普通的 Java 插件思路去开发。
+我们只需要找到一个全局切入点，这个切入点应该是每个请求都会调用的方法，然后对这个方法进行增强。&lt;/p&gt;
+&lt;p&gt;要想激活插件，只需要在 Release Notes 下载&lt;a href=&#34;https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1&#34;&gt;插件&lt;/a&gt;，放到您的 &lt;code&gt;skywalking-agent/plugins&lt;/code&gt; 目录，重新启动服务即可。&lt;/p&gt;
+&lt;p&gt;如果您的项目使用 sbt assembly 打包，您可以参考这个 &lt;a href=&#34;https://github.com/bitlap/skywalking-scala/tree/master/scenarios&#34;&gt;示例&lt;/a&gt;。该项目使用了下列技术栈：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-scala&#34; data-lang=&#34;scala&#34;&gt;    libraryDependencies &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;++=&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Seq&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;io.d11&amp;#34;&lt;/span&gt;               &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zhttp&amp;#34;&lt;/span&gt;                &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; zioHttp2Version&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dev.zio&amp;#34;&lt;/span&gt;              &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zio&amp;#34;&lt;/span&gt;                  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; zioVersion&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;io.grpc&amp;#34;&lt;/span&gt;               &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;grpc-netty&amp;#34;&lt;/span&gt;           &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;1.50.1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;com.thesamet.scalapb&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;scalapb-runtime-grpc&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; scalapb&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;compiler&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Version&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;.&lt;/span&gt;scalapbVersion
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;++&lt;/span&gt; &lt;span style=&#34;color:#458;font-weight:bold&#34;&gt;Seq&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;(&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dev.profunktor&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;redis4cats-effects&amp;#34;&lt;/span&gt;  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;1.3.0&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dev.profunktor&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;redis4cats-log4cats&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;1.3.0&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dev.profunktor&amp;#34;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;redis4cats-streams&amp;#34;&lt;/span&gt;  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;1.3.0&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;org.typelevel&amp;#34;&lt;/span&gt;  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;log4cats-slf4j&amp;#34;&lt;/span&gt;      &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;2.5.0&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dev.zio&amp;#34;&lt;/span&gt;        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zio-interop-cats&amp;#34;&lt;/span&gt;    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;23.0.03&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;ch.qos.logback&amp;#34;&lt;/span&gt;  &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;logback-classic&amp;#34;&lt;/span&gt;     &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;1.2.11&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;,&lt;/span&gt;
+      &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;dev.zio&amp;#34;&lt;/span&gt;        &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%%&lt;/span&gt; &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;zio-cache&amp;#34;&lt;/span&gt;           &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;%&lt;/span&gt; zioCacheVersion
+    &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
     
     <item>
       <title>Blog: Monitoring Nginx with SkyWalking</title>
