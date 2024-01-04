@@ -135,7 +135,7 @@ object Blocking {
 
 要想激活插件，只需要在 Release Notes 下载[插件](https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1)，放到您的 `skywalking-agent/plugins` 目录，重新启动服务即可。
 
-如果你的项目使用 sbt assembly 打包，您可以参考这个[示例](https://github.com/bitlap/skywalking-scala/tree/master/scenarios)。该项目使用了下列技术栈：
+如果您的项目使用 sbt assembly 打包，您可以参考这个 [示例](https://github.com/bitlap/skywalking-scala/tree/master/scenarios)。该项目使用了下列技术栈：
 ```scala
     libraryDependencies ++= Seq(
       "io.d11"               %% "zhttp"                % zioHttp2Version,
