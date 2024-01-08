@@ -91,13 +91,13 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Ming Wen          | wenming     |                                                  |
 | Puguang Yang      | ypg         |                                                  |
 | Qiang Li          | liqiang     |                                                  |
+| Qiang Xu          | xuqiang     |                                                  |
 
 </div>
 <div class="table-box">
 
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
-| Qiang Xu          | xuqiang     |                                                  |
 | Ruixian Wang      | ax1an       | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
 | Sheng Wang        | wangsheng   |                                                  |
 | Tomasz Pytel      | tompytel    |                                                  |
@@ -105,6 +105,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Wei Jin           | kvn         |                                                  |
 | Weijie Zou        | kdump       | <i class="iconfont icon-twitter"></i> [RootShellExp](https://twitter.com/RootShellExp) |
 | Weiyi Liu         | wayilau     |                                                  |
+| Xiang Wei         | weixiang1862|                                                  |
 | Yueqin Zhang      | yswdqz      |                                                  |
 | Yuntao Li         | liyuntao    |                                                  |
 | Zhusheng Xu       | aderm       |                                                  |
