@@ -38,7 +38,7 @@ SkyWalking Satellite Project SkyWalking Satellite is recommended to be used as a
 <meta itemprop="description" content="Backend Load Balancer When setting the Agent or Envoy to connect to the OAP server directly by default, the OAP server cluster would face the problem of load imbalance. This issue becomes severe in high-traffic load scenarios. In this doc, we will introduce two means to solve the problem.
 SkyWalking Satellite Project SkyWalking Satellite is recommended to be used as a native gateway proxy to provide load balancing capabilities for data content before the data from Agent/ Envoy reaches the OAP.">
 
-<meta itemprop="wordCount" content="317">
+<meta itemprop="wordCount" content="530">
 
 
 
@@ -2346,7 +2346,7 @@ SkyWalking Satellite Project SkyWalking Satellite is recommended to be used as a
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b900fd0</div>
+                  <div class="commit-id">Commit Id: e6f1e3b</div>
                 
 
 
@@ -2417,14 +2417,14 @@ kubectl -n <span style="color:#008080">$SKYWALKING_NAMESPACE</span> rollout rest
 each of the OAP instance can have similar amount of gRPC connections.</p>
 <p>Before that, you need to calculate the number of connections for each OAP
 instance as follows:</p>
-<pre><code>NUMBER_OF_SERVICE_PODS=&lt;the-number-of-service-pods-that-are-monitored-by-skywalking&gt;
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#008080">NUMBER_OF_SERVICE_PODS</span><span style="color:#000;font-weight:bold">=</span>&lt;the-number-of-service-pods-that-are-monitored-by-skywalking&gt;
 
-# Each service Pod has 2 connections to OAP
-NUMBER_OF_TOTAL_CONNECTIONS=$((NUMBER_OF_SERVICE_PODS * 2))
+<span style="color:#998;font-style:italic"># Each service Pod has 2 connections to OAP</span>
+<span style="color:#008080">NUMBER_OF_TOTAL_CONNECTIONS</span><span style="color:#000;font-weight:bold">=</span><span style="color:#000;font-weight:bold">$((</span>NUMBER_OF_SERVICE_PODS <span style="color:#000;font-weight:bold">*</span> <span style="color:#099">2</span><span style="color:#000;font-weight:bold">))</span>
 
-# Divide the total connections by the replicas of OAP
-NUMBER_OF_CONNECTIONS_PER_OAP=$((NUMBER_OF_TOTAL_CONNECTIONS / $NUMBER_OF_OAP_REPLICAS))
-</code></pre><p>And you can apply an EnvoyFilter to limit connections:</p>
+<span style="color:#998;font-style:italic"># Divide the total connections by the replicas of OAP</span>
+<span style="color:#008080">NUMBER_OF_CONNECTIONS_PER_OAP</span><span style="color:#000;font-weight:bold">=</span><span style="color:#000;font-weight:bold">$((</span>NUMBER_OF_TOTAL_CONNECTIONS <span style="color:#000;font-weight:bold">/</span> <span style="color:#008080">$NUMBER_OF_OAP_REPLICAS</span><span style="color:#000;font-weight:bold">))</span>
+</code></pre></div><p>And you can apply an EnvoyFilter to limit connections:</p>
 <div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">kubectl -n <span style="color:#008080">$SKYWALKING_NAMESPACE</span> apply -f - <span style="color:#d14">&lt;&lt;EOF
 </span><span style="color:#d14">apiVersion: networking.istio.io/v1alpha3
 </span><span style="color:#d14">kind: EnvoyFilter
@@ -2441,6 +2441,47 @@ NUMBER_OF_CONNECTIONS_PER_OAP=$((NUMBER_OF_TOTAL_CONNECTIONS / $NUMBER_OF_OAP_RE
 </span><span style="color:#d14">          filter:
 </span><span style="color:#d14">            name: envoy.filters.network.http_connection_manager
 </span><span style="color:#d14">        portNumber: 11800
+</span><span style="color:#d14">    patch:
+</span><span style="color:#d14">      operation: INSERT_BEFORE
+</span><span style="color:#d14">      value:
+</span><span style="color:#d14">        name: envoy.filters.network.ConnectionLimit
+</span><span style="color:#d14">        typed_config:
+</span><span style="color:#d14">          &#39;@type&#39;: type.googleapis.com/envoy.extensions.filters.network.connection_limit.v3.ConnectionLimit
+</span><span style="color:#d14">          max_connections: $NUMBER_OF_CONNECTIONS_PER_OAP
+</span><span style="color:#d14">          stat_prefix: envoy_filters_network_connection_limit
+</span><span style="color:#d14">  workloadSelector:
+</span><span style="color:#d14">    labels:
+</span><span style="color:#d14">      app: oap
+</span><span style="color:#d14">EOF</span>
+</code></pre></div><p>By this approach, we can limit the connections to port 11800 per OAP instance, but there
+is another corner case when the amount of service Pods are huge. Because the limiting is
+on connection level, and each service Pod has 2 connections to OAP port 11800, one for
+Envoy ALS to send access log, the other one for Envoy metrics, and because the traffic
+of the 2 connections can vary very much, if the number of service Pods is large enough,
+an extreme case might happen that one OAP instance is serving all Envoy metrics connections
+and the other OAP instance is serving all Envoy ALS connections, which in turn might be
+unbalanced again, to solve this, we can split the ALS connections to a dedicated port,
+and limit the connections to that port only.</p>
+<p>You can set the environment variable <code>SW_ALS_GRPC_PORT</code> to a port number other than <code>0</code>
+when deploying skywalking, and limit connections to that port only in the <code>EnvoyFilter</code>:</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#0086b3">export</span> <span style="color:#008080">SW_ALS_GRPC_PORT</span><span style="color:#000;font-weight:bold">=</span><span style="color:#099">11802</span>
+
+kubectl -n <span style="color:#008080">$SKYWALKING_NAMESPACE</span> apply -f - <span style="color:#d14">&lt;&lt;EOF
+</span><span style="color:#d14">apiVersion: networking.istio.io/v1alpha3
+</span><span style="color:#d14">kind: EnvoyFilter
+</span><span style="color:#d14">metadata:
+</span><span style="color:#d14">  name: oap-limit-connections
+</span><span style="color:#d14">  namespace: istio-system
+</span><span style="color:#d14">spec:
+</span><span style="color:#d14">  configPatches:
+</span><span style="color:#d14">  - applyTo: NETWORK_FILTER
+</span><span style="color:#d14">    match:
+</span><span style="color:#d14">      context: ANY
+</span><span style="color:#d14">      listener:
+</span><span style="color:#d14">        filterChain:
+</span><span style="color:#d14">          filter:
+</span><span style="color:#d14">            name: envoy.filters.network.http_connection_manager
+</span><span style="color:#d14">        portNumber: $SW_ALS_GRPC_PORT
 </span><span style="color:#d14">    patch:
 </span><span style="color:#d14">      operation: INSERT_BEFORE
 </span><span style="color:#d14">      value:
