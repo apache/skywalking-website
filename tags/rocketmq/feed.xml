@@ -1,0 +1,121 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – RocketMQ</title>
+    <link>/tags/rocketmq/</link>
+    <description>Recent content in RocketMQ on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Thu, 29 Feb 2024 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/rocketmq/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Zh: 使用 SkyWalking 监控 RocketMQ Server</title>
+      <link>/zh/2024-02-29-rocketmq-monitoring-by-skywalking/</link>
+      <pubDate>Thu, 29 Feb 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2024-02-29-rocketmq-monitoring-by-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h1&gt;
+&lt;p&gt;Apache RocketMQ 是一个开源的低延迟、高并发、高可用、高可靠的分布式消息中间件, 从SkyWalking OAP 10.0 版本开始, 新增了 对 RocketMQ Server的监控面板。本文将展示并介绍如何使用 Skywalking来监控RocketMQ&lt;/p&gt;
+&lt;h1 id=&#34;部署&#34;&gt;部署&lt;/h1&gt;
+&lt;h2 id=&#34;流程&#34;&gt;流程&lt;/h2&gt;
+&lt;p&gt;通过&lt;code&gt;RocketMQ&lt;/code&gt;官方提供的&lt;code&gt;RocketMQ exporter&lt;/code&gt;来采集&lt;code&gt;RocketMQ Server&lt;/code&gt;数据,再通过&lt;code&gt;opentelmetry-collector&lt;/code&gt;来拉取&lt;code&gt;RocketMQ exporter&lt;/code&gt;并传输到&lt;code&gt;skywalking oap&lt;/code&gt;服务来处理&lt;/p&gt;
+&lt;p&gt;DataFlow:
+&lt;img src=&#34;dataflow.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;准备&#34;&gt;准备&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Skywalking oap服务,v10.0 +&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/rocketmq&#34;&gt;RocketMQ v4.3.2 +&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/rocketmq-exporter&#34;&gt;RocketMQ exporter v0.0.2+&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/open-telemetry/opentelemetry-collector-contrib&#34;&gt;Opentelmetry-collector v0.87+&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;启动顺序&#34;&gt;启动顺序&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;启动 &lt;code&gt;RocketMQ namesrv&lt;/code&gt; 和 &lt;code&gt;broker&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动 &lt;code&gt;skywalking oap&lt;/code&gt; 和 &lt;code&gt;ui&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动 &lt;code&gt;RocketMQ exporter&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动 &lt;code&gt;opentelmetry-collector&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;具体如何启动和配置请参考以上链接中官方教程.&lt;/p&gt;
+&lt;p&gt;需要注意下的是 &lt;code&gt;opentelmetry-collector&lt;/code&gt; 的配置文件.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;job_name: &amp;quot;rocketmq-monitoring&amp;quot;&lt;/code&gt; 请不要修改,否则 skywalking 不会处理这部分数据.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;rocketmq-exporter&lt;/code&gt; 替换成RocketMQ exporter 的地址.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;replacement: rocketmq-cluster&lt;/code&gt; 中的&lt;code&gt;rocketmq-cluster&lt;/code&gt;如果想要使用下文介绍的服务分层功能,请自行定义为其他服务层级相匹配的名称.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;oap&lt;/code&gt; 为 &lt;code&gt;skywalking oap&lt;/code&gt; 地址,请自行替换.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: &amp;quot;rocketmq-monitoring&amp;quot;
+          scrape_interval: 30s
+          static_configs:
+            - targets: [&#39;rocketmq-exporter:5557&#39;]
+          relabel_configs:
+            - source_labels: [ ]
+              target_label: cluster
+              replacement: rocketmq-cluster
+
+exporters:
+  otlp:
+    endpoint: oap:11800
+    tls:
+      insecure: true
+
+processors:
+  batch:
+service:
+  pipelines:
+    metrics:
+      receivers:
+        - prometheus
+      processors:
+        - batch
+      exporters:
+        - otlp
+
+&lt;/code&gt;&lt;/pre&gt;&lt;h1 id=&#34;监控指标&#34;&gt;监控指标&lt;/h1&gt;
+&lt;p&gt;指标分为 三个维度, cluster,broker,topic&lt;/p&gt;
+&lt;h2 id=&#34;cluster监控&#34;&gt;cluster监控&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;cluster-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;cluster-dashboard-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;cluster 主要是站在集群的角度来统计展示,比如&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Messages Produced Today&lt;/code&gt; 今日集群产生的消息数&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Max CommitLog Disk Ratio&lt;/code&gt; 展示集群中磁盘使用率最高的broker&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Total Producer Tps&lt;/code&gt; 集群生产者tps&lt;/p&gt;
+&lt;h2 id=&#34;broker-监控&#34;&gt;broker 监控&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;broker-dashboard.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;broker 主要是站在节点的角度来统计展示,比如&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Produce Tps&lt;/code&gt; 节点生产者tps&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Producer Message Size(MB)&lt;/code&gt;节点生产消息大小&lt;/p&gt;
+&lt;h2 id=&#34;topic-监控&#34;&gt;topic 监控&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;topic-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;topic-dashboard-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;topic 主要是站在主题的角度来统计展示,比如&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Consumer Group Count&lt;/code&gt; 消费该主题的消费者组个数&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Consumer Latency(s)&lt;/code&gt; 消费者组的消费延时时间&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Backlogged Messages &lt;/code&gt;消费者组消费消息堆积&lt;/p&gt;
+&lt;p&gt;注意:topic 维度是整个 topic 来聚合,并不是在一个 broker 上的 topic 聚合,在 dashboard 上你也可以看到 broker 跟 topic 是平级的。&lt;/p&gt;
+&lt;p&gt;各个指标的含义可以在图标的 tip 上找到解释&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;tip.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;更多指标可以参考&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-rocketmq-monitoring/#rocketmq-monitoring&#34;&gt;文档&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;demo 已经在 &lt;a href=&#34;http://demo.skywalking.apache.org/dashboard/ROCKETMQ/Service/cm9ja2V0bXE6OnJvY2tldG1xLnNreXdhbGtpbmctc2hvd2Nhc2U=.1/RocketMQ-Cluster&#34;&gt;skywalking showcase&lt;/a&gt; 上线,可以在上面看到展示效果&lt;/p&gt;
+&lt;h1 id=&#34;服务分层&#34;&gt;服务分层&lt;/h1&gt;
+&lt;p&gt;skywalking 10 新增了重要功能&lt;code&gt;Service Hierarchy&lt;/code&gt;,接收来自不同层级的服务数据,比如 java agent 上报,k8s 监控数据或者 otel 的监控数据. 根据设置规则如果发现这些服务名称符合匹配规则,则可以将这些不同层级的服务联系起来。&lt;/p&gt;
+&lt;p&gt;如下图所示：&lt;/p&gt;
+&lt;p&gt;skywalking 采集部署在 k8s 的 RocketMQ 服务端的k8s 数据,并接收来自 otel 的 RocketMQ 服务端监控数据,根据匹配规则这些服务具有相同的服务名称,则可以在 ui 上观察到它们的联系&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;service-hierarchy-1.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;service-hierarchy-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>
