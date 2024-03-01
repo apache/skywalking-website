@@ -39,7 +39,7 @@ DataFlow:
 
 `rocketmq-exporter` 替换成RocketMQ exporter 的地址.
 
-`replacement: rocketmq-cluster` 如果想要使用下文介绍的服务分层功能，请自行定义为其他服务层级相匹配的名称。
+`replacement: rocketmq-cluster` 中的`rocketmq-cluster`如果想要使用下文介绍的服务分层功能，请自行定义为其他服务层级相匹配的名称。
 
 `oap` 为 `skywalking oap` 地址，请自行替换
 
@@ -83,6 +83,7 @@ service:
 ## cluster监控
 ![](cluster-dashboard-1.png)
 ![](cluster-dashboard-2.png)
+
 cluster 主要是站在集群的角度来统计展示,比如 
 
 `Messages Produced Today` 今日集群产生的消息数
@@ -94,6 +95,7 @@ cluster 主要是站在集群的角度来统计展示,比如
 
 ## broker 监控
 ![](broker-dashboard.png)
+
 broker 主要是站在节点的角度来统计展示,比如 
 
 `Produce Tps` 节点生产者tps
@@ -103,6 +105,7 @@ broker 主要是站在节点的角度来统计展示,比如
 ## topic 监控
 ![](topic-dashboard-1.png)
 ![](topic-dashboard-2.png)
+
 topic 主要是站在主题的角度来统计展示,比如 
 
 `Consumer Group Count` 消费该主题的消费者组个数
@@ -111,10 +114,11 @@ topic 主要是站在主题的角度来统计展示,比如
 
 `Backlogged Messages `消费者组消费消息堆积
 
-注意 topic 维度是整个 topic 来聚合，并不是在一个 broker 上的 topic 聚合，在 dashboard 上你也可以看到 broker 跟 topic 是平级的。
+注意:topic 维度是整个 topic 来聚合，并不是在一个 broker 上的 topic 聚合，在 dashboard 上你也可以看到 broker 跟 topic 是平级的。
 
 
 各个指标的含义可以在图标的 tip 上找到解释
+
 ![](tip.png)
 
 更多指标可以参考[文档](https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-rocketmq-monitoring/#rocketmq-monitoring)
@@ -128,5 +132,7 @@ skywalking 10 新增了重要功能`Service Hierarchy`，接收来自多种层�
 如下图所示：
 
 skywalking 采集部署在 k8s 的 RocketMQ 服务端的k8s 数据，并接收来自 otel 的 RocketMQ 服务端监控数据，根据匹配规则这些服务具有相同的服务名称，则可以在 ui 上观察到它们的联系
+
 ![](service-hierarchy-1.png)
+
 ![](service-hierarchy-2.png)
