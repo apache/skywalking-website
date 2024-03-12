@@ -13,6 +13,228 @@
     
     
     <item>
+      <title>Blog: Monitoring Clickhouse Server through Skywalking</title>
+      <link>/blog/2024-03-12-monitoring-clickhouse-through-skywalking/</link>
+      <pubDate>Tue, 12 Mar 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2024-03-12-monitoring-clickhouse-through-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://clickhouse.com/&#34;&gt;ClickHouse&lt;/a&gt; is an open-source column-oriented database management system that allows generating analytical data reports in real-time, so it is widely used for online analytical processing (OLAP).&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; is an open-source APM system that provides monitoring, tracing and diagnosing capabilities for distributed systems in Cloud Native architectures. Increasingly, App Service architectures incorporate Skywalking as an essential monitoring component of a service or instance.&lt;/p&gt;
+&lt;p&gt;Both ClickHouse and Skywalking are popular frameworks, and it would be great to monitor your ClickHouse database through Skywalking. Next, let&amp;rsquo;s share how to monitor ClickHouse database with Skywalking.&lt;/p&gt;
+&lt;h2 id=&#34;prerequisites-and-configurations&#34;&gt;Prerequisites and configurations&lt;/h2&gt;
+&lt;p&gt;Make sure you&amp;rsquo;ve met the following prerequisites before you start onboarding your monitor.&lt;/p&gt;
+&lt;p&gt;Config steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Exposing &lt;a href=&#34;https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#prometheus&#34;&gt;prometheus endpoint&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Fetching ClickHouse metrics by &lt;a href=&#34;https://opentelemetry.io/&#34;&gt;OpenTelemetry&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;Exporting metrics to Skywalking OAP server.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;prerequisites-for-setup&#34;&gt;Prerequisites for setup&lt;/h3&gt;
+&lt;p&gt;The monitoring for ClickHouse relies on the embedded prometheus endpoint of ClickHouse and will not be supported in previous versions starting from v20.1.2.4.&lt;/p&gt;
+&lt;p&gt;You can check the version of your server:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;:) &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;select&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;version&lt;/span&gt;();
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;version&lt;/span&gt;()
+
+Query id: &lt;span style=&#34;color:#099&#34;&gt;2&lt;/span&gt;d3773ca&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;c320&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;41&lt;/span&gt;f6&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;b2ac&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;7&lt;/span&gt;ebe37eddc58
+
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;┌─&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;version&lt;/span&gt;()&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;───┐&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;24&lt;/span&gt;.&lt;span style=&#34;color:#099&#34;&gt;2&lt;/span&gt;.&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;.&lt;span style=&#34;color:#099&#34;&gt;2248&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;└─────────────┘&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;If your ClickHouse version is earlier than v20.1.2.4, you need to set up &lt;a href=&#34;https://github.com/ClickHouse/clickhouse_exporter&#34;&gt;ClickHouse-exporter&lt;/a&gt; to access data.&lt;/p&gt;
+&lt;h3 id=&#34;expose-prometheus-endpoint&#34;&gt;Expose prometheus Endpoint&lt;/h3&gt;
+&lt;p&gt;The &lt;a href=&#34;https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#prometheus&#34;&gt;embedded prometheus endpoint&lt;/a&gt; will make it easy for data collection, you just need to open the required configuration in the core configuration file config.xml of ClickHouse. In addition to your original configuration, you only need to modify the configuration of Prometheus.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;/etc/clickhouse-server/config.xml&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;clickhouse&amp;gt;&lt;/span&gt; 
+    ......
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;prometheus&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;endpoint&amp;gt;&lt;/span&gt;/metrics&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/endpoint&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;port&amp;gt;&lt;/span&gt;9363&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/port&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;metrics&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/metrics&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;events&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/events&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;asynchronous_metrics&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/asynchronous_metrics&amp;gt;&lt;/span&gt;
+        &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;errors&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/errors&amp;gt;&lt;/span&gt;
+    &lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/prometheus&amp;gt;&lt;/span&gt;
+&lt;span style=&#34;color:#000080&#34;&gt;&amp;lt;/clickhouse&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Settings:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;endpoint – HTTP endpoint for scraping metrics by prometheus server. Start from ‘/’.&lt;/li&gt;
+&lt;li&gt;port – Port for endpoint.&lt;/li&gt;
+&lt;li&gt;metrics – Expose metrics from the &lt;code&gt;system.metrics&lt;/code&gt; table.&lt;/li&gt;
+&lt;li&gt;events – Expose metrics from the &lt;code&gt;system.events&lt;/code&gt; table.&lt;/li&gt;
+&lt;li&gt;asynchronous_metrics – Expose current metrics values from the &lt;code&gt;system.asynchronous_metrics&lt;/code&gt; table.&lt;/li&gt;
+&lt;li&gt;errors - Expose the number of errors by error codes occurred since the last server restart. This information could be obtained from the &lt;code&gt;system.errors&lt;/code&gt; as well.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Save the config and restart the ClickHouse server.&lt;/p&gt;
+&lt;p&gt;It contains more than 1,000 metrics, covering services、networks、disk、MergeTree、errors and so on. For more details, after restarting the server, you can call &lt;code&gt;curl 127.0.0.1:9363/metrics&lt;/code&gt; to know about the metrics.&lt;/p&gt;
+&lt;p&gt;You also can check the metrics by tables to make a contrast.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;:) &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;select&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;system&lt;/span&gt;.metrics &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;limit&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;10&lt;/span&gt;
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;system&lt;/span&gt;.metrics
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;10&lt;/span&gt;
+
+Query id: af677622&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;960&lt;/span&gt;e&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;4589&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;b2ca&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;b6a40c443aa
+
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;┌─&lt;/span&gt;metric&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;───────────────────────────────┬─&lt;/span&gt;value&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;─┬─&lt;/span&gt;description&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;─────────────────────────────────────────────────────────────────────┐&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Query                                &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; executing queries                                                     &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Merge                                &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; executing background merges                                           &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;Move&lt;/span&gt;                                 &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; currently executing moves                                             &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; PartMutation                         &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; mutations (&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;ALTER&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;DELETE&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;UPDATE&lt;/span&gt;)                                       &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; ReplicatedFetch                      &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;data&lt;/span&gt; parts being fetched &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;from&lt;/span&gt; replica                                 &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; ReplicatedSend                       &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;data&lt;/span&gt; parts being sent &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;to&lt;/span&gt; replicas                                     &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; ReplicatedChecks                     &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;data&lt;/span&gt; parts checking &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; consistency                                   &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; BackgroundMergesAndMutationsPoolTask &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; active merges &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;and&lt;/span&gt; mutations &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; an associated background pool          &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; BackgroundMergesAndMutationsPoolSize &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;    &lt;span style=&#34;color:#099&#34;&gt;64&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;Limit&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;on&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; active merges &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;and&lt;/span&gt; mutations &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; an associated background pool &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; BackgroundFetchesPoolTask            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; active fetches &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;in&lt;/span&gt; an associated background pool                       &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;└──────────────────────────────────────┴───────┴─────────────────────────────────────────────────────────────────────────────────┘&lt;/span&gt;
+
+:) &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;select&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;system&lt;/span&gt;.events &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;limit&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;10&lt;/span&gt;;
+
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;*&lt;/span&gt;
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;FROM&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;system&lt;/span&gt;.events
+&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;LIMIT&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;10&lt;/span&gt;
+
+Query id: &lt;span style=&#34;color:#099&#34;&gt;32&lt;/span&gt;c618d0&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;037&lt;/span&gt;a&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;400&lt;/span&gt;a&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;92&lt;/span&gt;a4&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;59&lt;/span&gt;fde832e4e2
+
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;┌─&lt;/span&gt;event&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;────────────────────────────┬──&lt;/span&gt;value&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;─┬─&lt;/span&gt;description&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Query                            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;      &lt;span style=&#34;color:#099&#34;&gt;7&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; queries &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;to&lt;/span&gt; be interpreted &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;and&lt;/span&gt; potentially executed. Does &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; include queries that failed &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;to&lt;/span&gt; parse &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;or&lt;/span&gt; were rejected due &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;to&lt;/span&gt; AST &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;size&lt;/span&gt; limits, quota limits &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;or&lt;/span&gt; limits &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;on&lt;/span&gt; the &lt;span style=&#34;color:#0086b3&#34;&gt;number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; simultaneously running queries. May include internal queries initiated &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;by&lt;/span&gt; ClickHouse itself. Does &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;count&lt;/span&gt; subqueries. &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; SelectQuery                      &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;      &lt;span style=&#34;color:#099&#34;&gt;7&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Same &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;as&lt;/span&gt; Query, but &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;only&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;for&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; queries.                                                                                                                                                                                                                &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; InitialQuery                     &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;      &lt;span style=&#34;color:#099&#34;&gt;7&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Same &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;as&lt;/span&gt; Query, but &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;only&lt;/span&gt; counts initial queries (see is_initial_query).                                                                                                                                                                                     &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; QueriesWithSubqueries            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;40&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;Count&lt;/span&gt; queries &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;with&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;all&lt;/span&gt; subqueries                                                                                                                                                                                                                          &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; SelectQueriesWithSubqueries      &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;     &lt;span style=&#34;color:#099&#34;&gt;40&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;Count&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; queries &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;with&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;all&lt;/span&gt; subqueries                                                                                                                                                                                                                   &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; QueryTimeMicroseconds            &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;202862&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Total time &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;all&lt;/span&gt; queries.                                                                                                                                                                                                                                 &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; SelectQueryTimeMicroseconds      &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#099&#34;&gt;202862&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Total time &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;SELECT&lt;/span&gt; queries.                                                                                                                                                                                                                              &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; FileOpen                         &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;  &lt;span style=&#34;color:#099&#34;&gt;40473&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; files opened.                                                                                                                                                                                                                                    &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; Seek                             &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;    &lt;span style=&#34;color:#099&#34;&gt;100&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; times the &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;lseek&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;function&lt;/span&gt; was &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;called&lt;/span&gt;.                                                                                                                                                                                                           &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; ReadBufferFromFileDescriptorRead &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;  &lt;span style=&#34;color:#099&#34;&gt;67995&lt;/span&gt; &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;Number&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;of&lt;/span&gt; &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;reads&lt;/span&gt; (&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;read&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;/&lt;/span&gt;pread) &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;from&lt;/span&gt; a file &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;descriptor&lt;/span&gt;. Does &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;not&lt;/span&gt; include sockets.                                                                                                                                                                             &lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;│&lt;/span&gt;
+&lt;span style=&#34;color:#a61717;background-color:#e3d2d2&#34;&gt;└──────────────────────────────────┴────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;start-up-opentelemetry-collector&#34;&gt;Start up Opentelemetry-Collector&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://opentelemetry.io/docs/collector/quick-start/&#34;&gt;Configure OpenTelemetry&lt;/a&gt; based on your own requirements. Following the example below:&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;otel-collector-config.yaml&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;receivers:
+  prometheus:
+    config:
+     scrape_configs:
+       - job_name: &amp;#39;clickhouse-monitoring&amp;#39;
+         scrape_interval: 15s
+         static_configs:
+           - targets: [&amp;#39;127.0.0.1:9363&amp;#39;,&amp;#39;127.0.0.1:9364&amp;#39;,&amp;#39;127.0.0.1:9365&amp;#39;]
+             labels:
+               host_name: prometheus-clickhouse
+
+processors:
+  batch:
+ 
+exporters:
+  otlp:
+    endpoint: 127.0.0.1:11800
+    tls:
+      insecure: true
+service:
+  pipelines:
+    metrics:
+      receivers:
+      - prometheus
+      processors:
+      - batch
+      exporters:
+      - otlp
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Please ensure:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;job_name: &#39;clickhouse-monitoring&#39;&lt;/code&gt; that marked the data from ClickHouse, If modified, it will be ignored.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;host_name&lt;/code&gt; defines the service name, you have to make one.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;endpoint&lt;/code&gt; point to the oap server address.&lt;/li&gt;
+&lt;li&gt;the network between ClickHouse, OpenTelemetry Collector, and Skywalking OAP Server must be accessible.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;If goes well, refresh the Skywalking-ui home page in a few seconds and you can see ClickHouse under the database menu.&lt;/p&gt;
+&lt;p&gt;success log:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-log&#34; data-lang=&#34;log&#34;&gt;2024-03-12T03:57:39.407Z	info	service@v0.93.0/telemetry.go:76	Setting up own telemetry...
+2024-03-12T03:57:39.412Z	info	service@v0.93.0/telemetry.go:146	Serving metrics	{&amp;quot;address&amp;quot;: &amp;quot;:8888&amp;quot;, &amp;quot;level&amp;quot;: &amp;quot;Basic&amp;quot;}
+2024-03-12T03:57:39.416Z	info	service@v0.93.0/service.go:139	Starting otelcol...	{&amp;quot;Version&amp;quot;: &amp;quot;0.93.0&amp;quot;, &amp;quot;NumCPU&amp;quot;: 4}
+2024-03-12T03:57:39.416Z	info	extensions/extensions.go:34	Starting extensions...
+2024-03-12T03:57:39.423Z	info	prometheusreceiver@v0.93.0/metrics_receiver.go:240	Starting discovery manager	{&amp;quot;kind&amp;quot;: &amp;quot;receiver&amp;quot;, &amp;quot;name&amp;quot;: &amp;quot;prometheus&amp;quot;, &amp;quot;data_type&amp;quot;: &amp;quot;metrics&amp;quot;}
+2024-03-12T03:57:59.431Z	info	prometheusreceiver@v0.93.0/metrics_receiver.go:231	Scrape job added	{&amp;quot;kind&amp;quot;: &amp;quot;receiver&amp;quot;, &amp;quot;name&amp;quot;: &amp;quot;prometheus&amp;quot;, &amp;quot;data_type&amp;quot;: &amp;quot;metrics&amp;quot;, &amp;quot;jobName&amp;quot;: &amp;quot;clickhouse-monitoring&amp;quot;}
+2024-03-12T03:57:59.431Z	info	service@v0.93.0/service.go:165	Everything is ready. Begin running and processing data.
+2024-03-12T03:57:59.432Z	info	prometheusreceiver@v0.93.0/metrics_receiver.go:282	Starting scrape manager	{&amp;quot;kind&amp;quot;: &amp;quot;receiver&amp;quot;, &amp;quot;name&amp;quot;: &amp;quot;prometheus&amp;quot;, &amp;quot;data_type&amp;quot;: &amp;quot;metrics&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;clickhouse-monitoring-dashboard&#34;&gt;ClickHouse monitoring dashboard&lt;/h2&gt;
+&lt;h3 id=&#34;about-the-dashboard&#34;&gt;About the dashboard&lt;/h3&gt;
+&lt;p&gt;The dashboard includes the service dashboard and the instance dashboard.&lt;/p&gt;
+&lt;p&gt;Metrics include servers, queries, networks, insertions, replicas, MergeTree, ZooKeeper and embedded ClickHouse Keeper.&lt;/p&gt;
+&lt;p&gt;The service dashboard displays the metrics of the entire cluster.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;clickhouse-service-monitoring.png&#34; alt=&#34;clickhouse-service-monitoring&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The instance dashboard displays the metrics of an instance.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;clickhouse-instance-monitoring.png&#34; alt=&#34;clickhouse-instance-monitoring&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;about-the-metrics&#34;&gt;About the metrics&lt;/h3&gt;
+&lt;p&gt;Here are some meanings of ClickHouse Instance metrics, &lt;a href=&#34;https://github.com/apache/skywalking/blob/master/docs/en/swip/SWIP-5.md&#34;&gt;more here&lt;/a&gt;.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Monitoring Panel&lt;/th&gt;
+&lt;th&gt;Unit&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;th&gt;Data Source&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;CpuUsage&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;CPU time spent seen by OS per second(according to ClickHouse.system.dashboard.CPU Usage (cores)).&lt;/td&gt;
+&lt;td&gt;ClickHouse&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;MemoryUsage&lt;/td&gt;
+&lt;td&gt;percentage&lt;/td&gt;
+&lt;td&gt;Total amount of memory (bytes) allocated by the server/ total amount of OS memory.&lt;/td&gt;
+&lt;td&gt;ClickHouse&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;MemoryAvailable&lt;/td&gt;
+&lt;td&gt;percentage&lt;/td&gt;
+&lt;td&gt;Total amount of memory (bytes) available for program / total amount of OS memory.&lt;/td&gt;
+&lt;td&gt;ClickHouse&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Uptime&lt;/td&gt;
+&lt;td&gt;sec&lt;/td&gt;
+&lt;td&gt;The server uptime in seconds. It includes the time spent for server initialization before accepting connections.&lt;/td&gt;
+&lt;td&gt;ClickHouse&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Version&lt;/td&gt;
+&lt;td&gt;string&lt;/td&gt;
+&lt;td&gt;Version of the server in a single integer number in base-1000.&lt;/td&gt;
+&lt;td&gt;ClickHouse&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;FileOpen&lt;/td&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;Number of files opened.&lt;/td&gt;
+&lt;td&gt;ClickHouse&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;metrics about ZooKeeper are valid when managing cluster by ZooKeeper&lt;/li&gt;
+&lt;li&gt;metrics about embedded &lt;a href=&#34;https://clickhouse.com/docs/en/guides/sre/keeper/clickhouse-keeper&#34;&gt;ClickHouse Keeper&lt;/a&gt; are valid when ClickHouse Keeper is enabled&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;references&#34;&gt;References&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#prometheus&#34;&gt;ClickHouse prometheus endpoint&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://clickhouse.com/docs/en/operations/monitoring#built-in-observability-dashboard&#34;&gt;ClickHouse built-in observability dashboard&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://clickhouse.com/docs/en/guides/sre/keeper/clickhouse-keeper&#34;&gt;ClickHouse Keeper&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Monitoring Nginx with SkyWalking</title>
       <link>/blog/2023-12-23-monitoring-nginx-by-skywalking/</link>
       <pubDate>Sat, 23 Dec 2023 00:00:00 +0000</pubDate>
@@ -8553,25 +8775,6 @@ If you want to  have commercial support for the ALS solution or hybrid mesh obse
 
 &lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
   &lt;iframe src=&#34;https://www.youtube.com/embed/OazS_3r3NM4&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
-&lt;/div&gt;
-
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: [Video] Improve Apache APISIX observability with Apache SkyWalking</title>
-      <link>/blog/2020-11-21-apachecon-obs-apisix/</link>
-      <pubDate>Sat, 21 Nov 2020 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2020-11-21-apachecon-obs-apisix/</guid>
-      <description>
-        
-        
-        &lt;p&gt;Apache APISIX is a cloud-native microservices API gateway, delivering the ultimate performance, security, open-source and scalable platform for all your APIs and microservices. Apache SkyWalking: an APM(application performance monitor) system, especially designed for microservices, cloud-native and container-based (Docker, Kubernetes, Mesos) architectures. Through the powerful plug-in mechanism of Apache APISIX, Apache Skywalking is quickly supported, so that we can see the complete life cycle of requests from the edge to the internal service. Monitor and manage each request in a visual way, and improve the observability of the service.&lt;/p&gt;
-
-&lt;div style=&#34;position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;&#34;&gt;
-  &lt;iframe src=&#34;https://www.youtube.com/embed/DleVJwPs4i4&#34; style=&#34;position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;&#34; allowfullscreen title=&#34;YouTube Video&#34;&gt;&lt;/iframe&gt;
 &lt;/div&gt;
 
 
