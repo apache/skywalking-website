@@ -89,4 +89,8 @@ docker compose -f "$temp_dir/docker-compose.yml" \
   --detach=${DETACHED:-true} \
   --wait
 
-echo "SkyWalking is now running. You can send telemetry data at localhost:11800 and access the UI at http://localhost:8080"
+echo "SkyWalking is now running. You can send telemetry data at localhost:11800 and access the UI at http://localhost:8080."
+if [ "$SW_STORAGE" = "banyandb" ]; then
+  echo "You can access BanyanDB web UI at http://localhost:17913."
+fi
+echo "To stop SkyWalking, run 'docker compose --project-name=skywalking-quickstart down'."
