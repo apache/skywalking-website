@@ -80,7 +80,7 @@ export BANYANDB_IMAGE=apache/skywalking-banyandb:${SW_BANYANDB_VERSION}
 export OAP_IMAGE=apache/skywalking-oap-server:${SW_VERSION}
 export UI_IMAGE=apache/skywalking-ui:${SW_VERSION}
 
-echo "Instaing SkyWalking ${SW_VERSION} with ${SW_STORAGE} storage..."
+echo "Installing SkyWalking ${SW_VERSION} with ${SW_STORAGE} storage..."
 
 docker compose -f "$temp_dir/docker-compose.yml" \
   --project-name=skywalking-quickstart \
