@@ -28,9 +28,9 @@ Remove-Item Env:\SW_STORAGE -ErrorAction Ignore
 # Ensuring script stops on error
 $ErrorActionPreference = "Stop"
 
-# Function to display usage information
 $storageOptionProvided = $false
 $detachOptionProvided = $false
+
 # Function to display usage information
 function Show-Usage {
     Write-Host "Usage: quickstart-docker.ps1 [-h/--help] [-f] [--storage <storage_option>]"
@@ -42,7 +42,7 @@ function Show-Usage {
     exit
 }
 
-# Processing arguments
+# Process command-line arguments
 for ($i = 0; $i -lt $args.Length; $i++) {
     switch ($args[$i]) {
         "-h" { Show-Usage; exit }
@@ -80,7 +80,7 @@ Write-Host "Docker is installed, continue...`n"
 
 # In place download
 Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml" -OutFile ".\docker-compose.yml"
-Write-Host "Downloaded SkyWalking Docker Compose Manifest...`n"
+Write-Host "Downloaded SkyWalking Docker Compose Manifest to the current directory...`n"
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
 if (-not $storageOptionProvided) {
