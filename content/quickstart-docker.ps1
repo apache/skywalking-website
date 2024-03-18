@@ -18,6 +18,7 @@
 $SW_VERSION = "9.7.0"
 $SW_BANYANDB_VERSION = "0.5.0"
 
+$COMPOSE_FILE_PATH = ".\docker-compose.yml"
 $env:BANYANDB_IMAGE = "apache/skywalking-banyandb:$SW_BANYANDB_VERSION"
 $env:OAP_IMAGE = "apache/skywalking-oap-server:$SW_VERSION"
 $env:UI_IMAGE = "apache/skywalking-ui:$SW_VERSION"
@@ -29,14 +30,12 @@ Remove-Item Env:\SW_STORAGE -ErrorAction Ignore
 $ErrorActionPreference = "Stop"
 
 $storageOptionProvided = $false
-$detachOptionProvided = $false
-
+$foregroundOptionProvided = $false
 # Function to display usage information
 function Show-Usage {
     Write-Host "Usage: quickstart-docker.ps1 [-h/--help] [-f] [--storage <storage_option>]"
     Write-Host "Options:"
     Write-Host "  -h/--help           About running the quickstart script without interaction"
-    Write-Host "  -d                  Run in background mode (docker compose up -d)"
     Write-Host "  -f                  Run in foreground mode (docker compose up)"
     Write-Host "  --storage <option>  Set the storage option (elasticsearch or banyandb)"
     exit
@@ -47,8 +46,7 @@ for ($i = 0; $i -lt $args.Length; $i++) {
     switch ($args[$i]) {
         "-h" { Show-Usage; exit }
         "--help" { Show-Usage; exit }
-        "-d" { $DETACHED = $true; $detachOptionProvided = $true; }
-        "-f" { $DETACHED = $false; $detachOptionProvided = $true; }
+        "-f" { $DETACHED = $false; $foregroundOptionProvided = $true; }
         "--storage" {
             if ($i -lt $args.Length - 1) {
                 $env:SW_STORAGE = $args[++$i]
@@ -78,9 +76,23 @@ if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
 }
 Write-Host "Docker is installed, continue...`n"
 
-# In place download
-Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml" -OutFile ".\docker-compose.yml"
-Write-Host "Downloaded SkyWalking Docker Compose Manifest to the current directory...`n"
+# In place download, prompt user before overriding
+if (Test-Path -Path $COMPOSE_FILE_PATH) { 
+    Write-Host "A docker-compose.yml already exists in the current directory.`n"
+    $reuseFlag = Read-Host "Would you like to override the existing manifest (default: False)? [Y/n]: "
+    $DOWNLOAD = $false
+    if ($reuseFlag -eq 'y' -or $reuseFlag -eq 'Y') {
+        $DOWNLOAD = $true
+    }
+}
+
+if ($DOWNLOAD) {
+    Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml" -OutFile $COMPOSE_FILE_PATH
+    Write-Host "`nDownloaded SkyWalking Docker Compose manifest to the current directory...`n"
+}
+else {
+    Write-Host "`nAttempting to reuse the existing SkyWalking Docker Compose manifest from the current directory.`n"
+}
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
 if (-not $storageOptionProvided) {
@@ -104,7 +116,7 @@ if (-not $storageOptionProvided) {
     }
 }
 
-if (-not $detachOptionProvided) {
+if (-not $foregroundOptionProvided) {
     $detachedFlag = Read-Host "Do you want to run Docker in detached mode (default: True)? [Y/n]: "
 
     $DETACHED = $true
@@ -114,7 +126,7 @@ if (-not $detachOptionProvided) {
 }
 
 # Concatenate detached flag here
-$composeCommand = "docker compose -f .\docker-compose.yml --project-name=skywalking-quickstart --profile=$env:SW_STORAGE up"
+$composeCommand = "docker compose -f $COMPOSE_FILE_PATH --project-name=skywalking-quickstart --profile=$env:SW_STORAGE up"
 
 # Note the leading blank " --"
 if ($DETACHED) {
