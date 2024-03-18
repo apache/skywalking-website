@@ -47,7 +47,7 @@ done
 
 echo "Checking if Docker is installed..."
 if ! [ -x "$(command -v docker)" ]; then
-  echo "Docker is not installed. Please install Docker and try again."
+  echo "Docker is not found. Please make sure Docker is installed and the docker command is available in PATH."
   exit 1
 fi
 
@@ -59,7 +59,7 @@ curl -fsSL https://github.com/apache/skywalking/raw/master/docker/docker-compose
 if [ -z "$SW_STORAGE" ]; then
   echo "Please select a storage option:"
   echo "1. Elasticsearch"
-  echo "2. BanyanDB"
+  echo "2. BanyanDB ($SW_BANYANDB_VERSION)"
   read -p "Enter the number of your choice: " storage_option
 fi
 
@@ -89,8 +89,10 @@ docker compose -f "$temp_dir/docker-compose.yml" \
   --detach=${DETACHED:-true} \
   --wait
 
-echo "SkyWalking is now running. You can send telemetry data at localhost:11800 and access the UI at http://localhost:8080."
+echo "SkyWalking is now running. You can send telemetry data to localhost:11800 and access the UI at http://localhost:8080."
 if [ "$SW_STORAGE" = "banyandb" ]; then
   echo "You can access BanyanDB web UI at http://localhost:17913."
 fi
+echo "To find SkyWalking Docs, follow the link to our documentation site https://skywalking.apache.org/docs/."
+
 echo "To stop SkyWalking, run 'docker compose --project-name=skywalking-quickstart down'."
