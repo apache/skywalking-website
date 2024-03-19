@@ -38,14 +38,13 @@ function Show-Usage {
     Write-Host "  -h/--help           About running the quickstart script without interaction"
     Write-Host "  -f                  Run in foreground mode (docker compose up)"
     Write-Host "  --storage <option>  Set the storage option (elasticsearch or banyandb)"
-    exit
 }
 
 # Process command-line arguments
 for ($i = 0; $i -lt $args.Length; $i++) {
     switch ($args[$i]) {
-        "-h" { Show-Usage; exit }
-        "--help" { Show-Usage; exit }
+        "-h" { Show-Usage; return; }
+        "--help" { Show-Usage; return; }
         "-f" { $DETACHED = $false; $foregroundOptionProvided = $true; }
         "--storage" {
             if ($i -lt $args.Length - 1) {
@@ -53,26 +52,22 @@ for ($i = 0; $i -lt $args.Length; $i++) {
                 $storageOptionProvided = $true
                 # Validate storage option if provided
                 if ($storageOptionProvided -and -not ($env:SW_STORAGE -eq "elasticsearch" -or $env:SW_STORAGE -eq "banyandb")) {
-                    Write-Host "Invalid storage option: $env:SW_STORAGE. Valid options are 'elasticsearch' or 'banyandb'."
-                    exit 1
+                    throw "Invalid storage option: $env:SW_STORAGE. Valid options are 'elasticsearch' or 'banyandb'."
                 }
             }
             else {
-                Write-Host "Error: --storage option requires an argument."
-                exit 1
+                throw "Error: --storage option requires an argument."
             }
         }
         default {
-            Write-Host "Invalid option: $($args[$i]), try -h or --help"
-            exit 1
+            throw "Invalid option: $($args[$i]), try -h or --help"
         }
     }
 }
 
 
 if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
-    Write-Host "Docker is not found. Please make sure Docker is installed and the docker command is available in PATH.`n"
-    exit 1
+    throw "Docker is not found. Please make sure Docker is installed and the docker command is available in PATH.`n"
 }
 Write-Host "Docker is installed, continue...`n"
 
@@ -84,14 +79,17 @@ if (Test-Path -Path $COMPOSE_FILE_PATH) {
     if ($reuseFlag -eq 'y' -or $reuseFlag -eq 'Y') {
         $DOWNLOAD = $true
     }
+} else {
+    $DOWNLOAD = $true
 }
+
 
 if ($DOWNLOAD) {
     Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml" -OutFile $COMPOSE_FILE_PATH
-    Write-Host "`nDownloaded SkyWalking Docker Compose manifest to the current directory...`n"
+    Write-Host "Downloaded SkyWalking Docker Compose manifest to the current directory...`n"
 }
 else {
-    Write-Host "`nAttempting to reuse the existing SkyWalking Docker Compose manifest from the current directory.`n"
+    Write-Host "Attempting to reuse the existing SkyWalking Docker Compose manifest from the current directory.`n"
 }
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
@@ -111,8 +109,7 @@ if (-not $storageOptionProvided) {
         Write-Host "You have selected: BanyanDB as the storage option.`n"
     }
     else {
-        Write-Host "Invalid choice. Please enter 1 or 2.`n"
-        exit 1
+        throw "Invalid choice. Please enter 1 or 2.`n"
     }
 }
 
@@ -140,8 +137,7 @@ Invoke-Expression $composeCommand
 
 # Check if the command was successful, try catch won't work here
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nFailed to start SkyWalking. Please check the Docker compose logs for more information.`n"
-    exit $LASTEXITCODE
+    throw "`nFailed to start SkyWalking. Please check the Docker compose logs for more information.`n"
 }
 else {
     Write-Host "`nSkyWalking is now running. You can send telemetry data to localhost:11800 and access the UI at http://localhost:8080.`n"
