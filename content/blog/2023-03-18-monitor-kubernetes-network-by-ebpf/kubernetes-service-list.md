@@ -39,7 +39,7 @@ This discrepancy necessitates a mapping relationship that SkyWalking Rover can u
 
 Let's dive into the details of how data is monitored in both sending and receiving modes.
 
-#### Sending traffic
+#### Observe Sending
 
 When sending data, tracking the status and timing of each packet is crucial for understanding the state of each transmission.
 Within the kernel, operations progress from Layer 4 (L4) down to Layer 2 (L2), maintaining the same thread ID as during the syscalls layer, which simplifies data correlation.
@@ -66,7 +66,7 @@ SkyWalking Rover monitors several key kernel functions to observe packet transmi
 According to the interception of the above method, Apache SkyWalking Rover can provide key execution time and metrics for each level when sending network data,
 from the application layer (Layer 7) to the transport layer (Layer 4), and finally to the data link layer (Layer 2).
 
-#### Receiving traffic
+#### Observe Receiving
 
 When receiving data, the focus is often on the time it takes for packets to travel from the network interface card (NIC) to the user space.
 Unlike the process of sending data, data receiving in the kernel proceeds from the data link layer (Layer 2) up to the transport layer (Layer 4), until the application layer (Layer 7) retrieves the packet's content.
@@ -140,12 +140,6 @@ SkyWalking Showcase contains a complete set of example services and can be monit
 In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.
 
 ```shell
-export SW_OAP_IMAGE=ghcr.io/apache/skywalking/oap
-export SW_OAP_IMAGE_TAG=f4836327a65efe76cbbc12f013cc9cbc63a82b2c
-export SW_UI_IMAGE=ghcr.io/apache/skywalking/ui
-export SW_UI_IMAGE_TAG=f4836327a65efe76cbbc12f013cc9cbc63a82b2c
-export SW_ROVER_IMAGE=ghcr.io/apache/skywalking-rover/skywalking-rover:d3a0f874642cf00a5e252440ee3b76a1cea3aac4
-
 export FEATURE_FLAGS=java-agent-injector,single-node,elasticsearch, rover
 make deploy.kubernetes
 ```
