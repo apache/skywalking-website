@@ -158,7 +158,7 @@ Then, reports this traffic data to SkyWalking OAP, where it is ultimately stored
 In the Service Dashboard within Kubernetes, you can view a list of monitored Kubernetes services.
 If any of these services have HTTP traffic, this information would be displayed alongside them in the dashboard.
 
-[Kubernetes Service List](kubernetes-service-list.md)
+[Kubernetes Service List](kubernetes-service-list.png)
 
 *Figure 1: Kubernetes Service List*
 
