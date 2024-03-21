@@ -9,7 +9,7 @@ description: This article demonstrates how SkyWalking uses eBPF technology to mo
 
 
 [Apache SkyWalking](https://skywalking.apache.org/) is an open-source Application Performance Management system that helps users gather logs, traces, metrics, and events from various platforms and display them on the UI.
-With version 9.7.0, SkyWalking can collect access logs from probes in multiple languages and from Kubernetes, generating corresponding topologies, links, and other data. However, it could not initially collect and map access logs from applications in Kubernetes environments. This article explores how the 10.0.0 version of Apache SkyWalking employs eBPF technology to collect and store application access logs, addressing this limitation.
+With version 9.7.0, SkyWalking can collect access logs from probes in multiple languages and from Service Mesh, generating corresponding topologies, tracing, and other data. However, it could not initially collect and map access logs from applications in Kubernetes environments. This article explores how the 10.0.0 version of Apache SkyWalking employs eBPF technology to collect and store application access logs, addressing this limitation.
 
 ## Why eBPF?
 
@@ -140,7 +140,7 @@ SkyWalking Showcase contains a complete set of example services and can be monit
 In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.
 
 ```shell
-export FEATURE_FLAGS=java-agent-injector,single-node,elasticsearch, rover
+export FEATURE_FLAGS=java-agent-injector,single-node,elasticsearch,rover
 make deploy.kubernetes
 ```
 
