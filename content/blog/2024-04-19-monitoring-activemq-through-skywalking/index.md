@@ -1,5 +1,5 @@
 ---
-title: "Monitoring ActiveMQ through Skywalking"
+title: "Monitoring ActiveMQ through SkyWalking"
 date: 2024-04-19
 author: Ziyan Chen
 description: "This article will demonstrate the usage of the new ActiveMQ monitoring dashboard."

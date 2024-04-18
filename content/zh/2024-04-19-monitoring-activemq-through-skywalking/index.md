@@ -1,5 +1,5 @@
 ---
-title: "使用 Skywalking 监控 ActiveMQ"
+title: "使用 SkyWalking 监控 ActiveMQ"
 date: 2024-04-19
 author: "陈子妍"
 description: "本文将演示 ActiveMQ 监控面板的使用。"
