@@ -13,6 +13,213 @@
     
     
     <item>
+      <title>Blog: Monitoring ActiveMQ through SkyWalking</title>
+      <link>/blog/2024-04-19-monitoring-activemq-through-skywalking/</link>
+      <pubDate>Fri, 19 Apr 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2024-04-19-monitoring-activemq-through-skywalking/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;activemq_logo.png&#34; alt=&#34;icon&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;introduction&#34;&gt;Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://activemq.apache.org/components/classic/&#34;&gt;Apache ActiveMQ Classic&lt;/a&gt; is a popular and powerful open-source messaging and integration pattern server. Founded in 2004, it has evolved into a mature and widely used open-source messaging middleware that complies with the &lt;code&gt;Java Message Service (JMS)&lt;/code&gt;.
+Today, with its stability and wide range of feature support, it still has a certain number of users of &lt;code&gt;small and medium-sized&lt;/code&gt; enterprises. It‘s high-performance version &lt;a href=&#34;https://activemq.apache.org/components/artemis/&#34;&gt;Apache Artemis&lt;/a&gt; is developing rapidly and is also attracting attention from users of ActiveMQ.&lt;/p&gt;
+&lt;p&gt;ActiveMQ has broad support for &lt;a href=&#34;https://docs.oracle.com/javase/tutorial/jmx/overview/index.html&#34;&gt;JMX (Java Management Extensions)&lt;/a&gt;, allowing to be monitored through &lt;code&gt;JMX MBean&lt;/code&gt;.
+After enabling JMX, you can use JAVA&amp;rsquo;s built-in &lt;code&gt;jconsole&lt;/code&gt; or &lt;code&gt;VisualVM&lt;/code&gt; to view the metrics. In addition, some Collector components can also be used to convert &lt;code&gt;JMX-style&lt;/code&gt; data into &lt;code&gt;Prometheus-style&lt;/code&gt; data, which is suitable for more tools.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://opentelemetry.io/&#34;&gt;OpenTelemetry&lt;/a&gt; as an industry-recognized, standardized solution that provides consistent and interoperable telemetry data collection, transmission, and analysis capabilities for distributed systems, and is also used here for data collection and transmission.
+Although it can directly accept &lt;code&gt;JMX&lt;/code&gt; type data, the JMX indicators for collecting ActiveMQ are not in the standard library, and some versions are incompatible, so this article adopts two steps: convert &lt;code&gt;JMX data&lt;/code&gt; into &lt;code&gt;Prometheus-style&lt;/code&gt; indicator data, and then use OpenTelemetry to scrape &lt;code&gt;HTTP&lt;/code&gt; endpoint data.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking&lt;/a&gt; as a one-stop distributed system monitoring solution, it accepts metrics from &lt;code&gt;ActiveMQ&lt;/code&gt; and provides a basic monitoring dashboard.&lt;/p&gt;
+&lt;h2 id=&#34;deployment&#34;&gt;Deployment&lt;/h2&gt;
+&lt;p&gt;Please set up the following services:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking OAP, v10.0+&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://activemq.apache.org/components/classic/download/&#34;&gt;ActiveMQ v6.0.X+&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/prometheus/jmx_exporter/releases&#34;&gt;JMX Exporter v0.20.0&lt;/a&gt;. If using docker, refer &lt;a href=&#34;https://github.com/bitnami/containers/tree/main/bitnami/jmx-exporter&#34;&gt;bitnami/jmx-exporter&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/open-telemetry/opentelemetry-collector-contrib&#34;&gt;OpenTelmetry-Collector v0.92.0&lt;/a&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;preparation&#34;&gt;Preparation&lt;/h3&gt;
+&lt;p&gt;The following describes how to deploy ActiveMQ with 2 single-node brokers and SkyWalking OAP with one single node. JMX Exporter runs in agent mode (recommended).&lt;/p&gt;
+&lt;h3 id=&#34;configuration&#34;&gt;Configuration&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://activemq.apache.org/components/classic/documentation/jmx&#34;&gt;Enable JMX&lt;/a&gt; in ActiveMQ, the JMX remote port defaults to &lt;code&gt;1616&lt;/code&gt;, you can change it through &lt;code&gt;ACTIVEMQ_SUNJMX_START&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Set up the exporter:
+&lt;ol&gt;
+&lt;li&gt;[Recommended] If run exporter in &lt;code&gt;agent mode&lt;/code&gt;, need to append the startup parameter &lt;code&gt;-DACTIVEMQ_OPTS=-javaagent:{activemqPath}/bin/jmx_prometheus_javaagent-0.20.0.jar=2345:{activemqPath}/conf/config.yaml&lt;/code&gt; in ActiveMQ env, then exporter server starts at the same time.&lt;/li&gt;
+&lt;li&gt;If run exporter in &lt;code&gt;single server&lt;/code&gt;, &lt;a href=&#34;https://github.com/prometheus/jmx_exporter/tree/release-0.20.0?tab=readme-ov-file#running-the-standalone-http-server&#34;&gt;refer here&lt;/a&gt; to deploy the server alone.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;2345&lt;/code&gt; is open HTTP port that can be customized. JMX&amp;rsquo;s metrics can be queried through &lt;code&gt;http://localhost:2345/metrics&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;example of &lt;code&gt;docker-compose.yml&lt;/code&gt; with agent exporter for ActiveMQ:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yml&#34; data-lang=&#34;yml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;version&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;3.8&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;services&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; 
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;amq1&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;apache/activemq-classic:latest&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;container_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;amq1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;hostname&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;amq1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;volumes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ~/activemq1/conf/activemq.xml:/opt/apache-activemq/conf/activemq.xml&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ~/activemq1/bin/jmx_prometheus_javaagent-0.20.0.jar:/opt/apache-activemq/bin/jmx_prometheus_javaagent-0.20.0.jar&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ~/activemq1/conf/config.yaml:/opt/apache-activemq/conf/config.yaml&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;61616:61616&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;8161:8161&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;2345:2345&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;environment&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ACTIVEMQ_OPTS&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;-javaagent:/opt/apache-activemq/bin/jmx_prometheus_javaagent-0.20.0.jar=2345:/opt/apache-activemq/conf/config.yaml&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ACTIVEMQ_BROKER_NAME&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;broker-1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;networks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- amqtest    &lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;amq2&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;apache/activemq-classic:latest&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;container_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;amq2&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;hostname&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;amq2&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;volumes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ~/activemq2/conf/activemq.xml:/opt/apache-activemq/conf/activemq.xml&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ~/activemq2/bin/jmx_prometheus_javaagent-0.20.0.jar:/opt/apache-activemq/bin/jmx_prometheus_javaagent-0.20.0.jar&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ~/activemq2/conf/config.yaml:/opt/apache-activemq/conf/config.yaml      &lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ports&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;61617:61616&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; 
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;8162:8161&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;2346:2346&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;environment&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ACTIVEMQ_OPTS&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;-javaagent:/opt/apache-activemq/bin/jmx_prometheus_javaagent-0.20.0.jar=2346:/opt/apache-activemq/conf/config.yaml&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ACTIVEMQ_BROKER_NAME&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;broker-2 &lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;networks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- amqtest&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;otel-collector1&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;otel/opentelemetry-collector:latest&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;container_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;otel-collector1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;--config=/etc/otel-collector-config.yaml&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;volumes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ./otel-collector-config1.yaml:/etc/otel-collector-config.yaml&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;depends_on&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- amq1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;networks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- amqtest &lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;otel-collector2&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;image&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;otel/opentelemetry-collector:latest&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;container_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;otel-collector2&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;command&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;--config=/etc/otel-collector-config.yaml&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;volumes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- ./otel-collector-config2.yaml:/etc/otel-collector-config.yaml&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;depends_on&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- amq2&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;networks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- amqtest            &lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;networks&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;amqtest&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;example of &lt;code&gt;otel-collector-config.yaml&lt;/code&gt; for OpenTelemetry:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;receivers&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;prometheus&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;config&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;scrape_configs&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;       &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;job_name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;activemq-monitoring&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;         &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;scrape_interval&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;30s&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;         &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;static_configs&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;           &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;targets&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;amq1:2345&amp;#39;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;             &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;labels&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;               &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;cluster&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;activemq-broker1&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;processors&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;batch&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt; 
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exporters&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;otlp&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;endpoint&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;oap:11800&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;tls&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;insecure&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;service&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;pipelines&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;receivers&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- prometheus&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;processors&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- batch&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;exporters&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- otlp&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;example of &lt;code&gt;config.yaml&lt;/code&gt; for ActiveMQ Exporter:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#555&#34;&gt;---&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;startDelaySeconds&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;username&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;admin&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;password&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;activemq&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;ssl&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;lowercaseOutputName&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;lowercaseOutputLabelNames&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;includeObjectNames&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;org.apache.activemq:*&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=OperatingSystem&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=GarbageCollector,*&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=Threading&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=Runtime&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=Memory&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:name=*&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;excludeObjectNames&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;[&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;org.apache.activemq:type=ColumnFamily,*&amp;#34;&lt;/span&gt;]&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;autoExcludeObjectNameAttributes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;excludeObjectNameAttributes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=OperatingSystem&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;ObjectName&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;java.lang:type=Runtime&amp;#34;&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;ClassPath&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;SystemProperties&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;rules&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
+&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;pattern&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;.*&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;steps&#34;&gt;Steps&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;Start &lt;code&gt;ActiveMQ&lt;/code&gt;, and the Exporter(agent) and the service start at the same time.&lt;/li&gt;
+&lt;li&gt;Start &lt;code&gt;SkyWalking OAP&lt;/code&gt; and &lt;code&gt;SkyWalking UI&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Start &lt;code&gt;OpenTelmetry-Collector&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;After completed, node metrics will be captured and pushed to SkyWalking.&lt;/p&gt;
+&lt;h2 id=&#34;metrics&#34;&gt;Metrics&lt;/h2&gt;
+&lt;p&gt;Monitoring metrics involve in &lt;code&gt;Cluster Metrics&lt;/code&gt;, &lt;code&gt;Broker Metrics&lt;/code&gt;, and &lt;code&gt;Destination Metrics&lt;/code&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Cluster Metrics: including memory usage, rates of write/read, and average/max duration of write.&lt;/li&gt;
+&lt;li&gt;Broker Metrics: including node state, number of connections, number of producers/consumers, and rate of write/read under the broker. Depending on the cluster mode, one cluster may include one or more brokers.&lt;/li&gt;
+&lt;li&gt;Destination Metrics: including number of producers/consumers, messages in different states, queues, and enqueue duration in a queue/topic.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;cluster-metrics&#34;&gt;Cluster Metrics&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;./activemq_cluster_panel.png&#34; alt=&#34;activemq_cluster_panel&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;System Load: range in [0, 100].&lt;/li&gt;
+&lt;li&gt;Thread Count: the number of threads currently used by the JVM.&lt;/li&gt;
+&lt;li&gt;Heap Memory: capacity of heap memory.&lt;/li&gt;
+&lt;li&gt;GC: memory of ActiveMQ is managed by Java&amp;rsquo;s garbage collection (GC) process.&lt;/li&gt;
+&lt;li&gt;Enqueue/Dequeue/Dispatch/Expired Rate: growth rate of messages in different states.&lt;/li&gt;
+&lt;li&gt;Average/Max Enqueue Time: time taken to join the queue.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;broker-metrics&#34;&gt;Broker Metrics&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;./activemq_broker_panel.png&#34; alt=&#34;activemq_broker_panel&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Uptime: duration of the node.&lt;/li&gt;
+&lt;li&gt;State: 1 = slave node, 0 = master node.&lt;/li&gt;
+&lt;li&gt;Current Connentions: number of connections.&lt;/li&gt;
+&lt;li&gt;Current Producer/Consumer Count: number of current producers/consumers.&lt;/li&gt;
+&lt;li&gt;Increased Producer/Consumer Count: number of increased producers/consumers.&lt;/li&gt;
+&lt;li&gt;Enqueue/Dequeue Count: number of enqueue and dequeue.&lt;/li&gt;
+&lt;li&gt;Enqueue/Dequeue Rate: rate of enqueue and dequeue.&lt;/li&gt;
+&lt;li&gt;Memory Percent Usage: amount of memory space used by undelivered messages.&lt;/li&gt;
+&lt;li&gt;Store Percent Usage: space used by pending persistent messages.&lt;/li&gt;
+&lt;li&gt;Temp Percent Usage: space used by non-persistent messages.&lt;/li&gt;
+&lt;li&gt;Average/Max Message Size: number of messages.&lt;/li&gt;
+&lt;li&gt;Queue Size: number of messages in the queue.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;destination-metrics&#34;&gt;Destination Metrics&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;./activemq_destination_panel.png&#34; alt=&#34;activemq_destination_panel&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Produser/Consumer Count: number of producers/Consumers.&lt;/li&gt;
+&lt;li&gt;Queue Size: unacknowledged messages of the queue.&lt;/li&gt;
+&lt;li&gt;Memory usage: usage of memory.&lt;/li&gt;
+&lt;li&gt;Enqueue/Dequeue/Dispatch/Expired/Inflight Count: number of messages in different states.&lt;/li&gt;
+&lt;li&gt;Average/Max Message Size: number of messages.&lt;/li&gt;
+&lt;li&gt;Average/Max Enqueue Time: time taken to join the queue.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;reference&#34;&gt;Reference&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://activemq.apache.org/components/classic/documentation/clustering&#34;&gt;ActiveMQ Classic clustering&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/prometheus/jmx_exporter/tree/release-0.20.0#Configuration&#34;&gt;JMX Exporter Configuration&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/prometheus/jmx_exporter/tree/release-0.20.0&#34;&gt;JMX Exporter-Running the Standalone HTTP Server&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver&#34;&gt;OpenTelemetry Collector Contrib Jmxreceiver&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Monitoring Kubernetes network traffic by using eBPF</title>
       <link>/blog/2024-03-18-monitor-kubernetes-network-by-ebpf/</link>
       <pubDate>Mon, 18 Mar 2024 00:00:00 +0000</pubDate>
@@ -8677,233 +8884,6 @@ If you want to  have commercial support for the ALS solution or hybrid mesh obse
 &lt;li&gt;Get more SkyWalking updates on &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;the official website&lt;/a&gt;.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;&lt;em&gt;Apache SkyWalking founder Sheng Wu, SkyWalking core maintainer Zhenxu Ke are Tetrate engineers, and Tevah Platt is a content writer for Tetrate. Tetrate helps organizations adopt open source service mesh tools, including Istio, Envoy, and Apache SkyWalking, so they can manage microservices, run service mesh on any infrastructure, and modernize their applications.&lt;/em&gt;&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: The first design of Satellite 0.1.0</title>
-      <link>/blog/2020-11-25-skywalking-satellite-0.1.0-design/</link>
-      <pubDate>Wed, 25 Nov 2020 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2020-11-25-skywalking-satellite-0.1.0-design/</guid>
-      <description>
-        
-        
-        &lt;p&gt;&lt;img src=&#34;Satellite.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Author: &lt;a href=&#34;https://github.com/evanljp&#34;&gt;Jiapeng Liu&lt;/a&gt;. Baidu.&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-satellite&#34;&gt;skywalking-satellite&lt;/a&gt;: The Sidecar Project of Apache SkyWalking&lt;/li&gt;
-&lt;li&gt;Nov. 25th, 2020&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;A lightweight collector/sidecar which can be deployed close to the target monitored system, to collect metrics, traces, and logs. It also provides advanced features, such as local cache, format transformation, and sampling.&lt;/p&gt;
-&lt;h2 id=&#34;design-thinking&#34;&gt;Design Thinking&lt;/h2&gt;
-&lt;p&gt;Satellite is a 2 level system to collect observability data from other core systems. So, the core element of the design is to guarantee data stability during Pod startup all the way to Pod shutdown avoiding alarm loss. All modules are designed as plugins, and if you have other ideas, you can add them yourself.&lt;/p&gt;
-&lt;h2 id=&#34;slo&#34;&gt;SLO&lt;/h2&gt;
-&lt;ul&gt;
-&lt;li&gt;Single gatherer supports &amp;gt; 1000 ops (Based 0.5 Core,50M)&lt;/li&gt;
-&lt;li&gt;At least once delivery.(Optional)&lt;/li&gt;
-&lt;li&gt;Data stability: 99.999%.(Optional)&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;em&gt;Because they are influenced by the choice of plugins, some items in SLO are optional.&lt;/em&gt;&lt;/p&gt;
-&lt;h2 id=&#34;role&#34;&gt;Role&lt;/h2&gt;
-&lt;p&gt;Satellite would be running as a &lt;strong&gt;Sidecar&lt;/strong&gt;. Although Daemonset mode would take up fewer resources, it will cause more troubles to the forwarding of agents. So we also want to use Sidecar mode by reducing the costs. But Daemonset mode would be also supported in the future plan.&lt;/p&gt;
-&lt;h2 id=&#34;core-modules&#34;&gt;Core Modules&lt;/h2&gt;
-&lt;p&gt;The Satellite has 3 core modules which are Gatherer, Processor, and Sender.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;The Gatherer module is responsible for fetching or receiving data and pushing the data to Queue.&lt;/li&gt;
-&lt;li&gt;The Processor module is responsible for reading data from the queue and processing data by a series of filter chains.&lt;/li&gt;
-&lt;li&gt;The Sender module is responsible for async processing and forwarding the data to the external services in the batch mode. After sending success, Sender would also acknowledge the offset of Queue in Gatherer.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img src=&#34;core-modules.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;detailed-structure&#34;&gt;Detailed Structure&lt;/h2&gt;
-&lt;p&gt;The overall design is shown in detail in the figure below. We will explain the specific components one by one.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;detail-modules.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;gatherer&#34;&gt;Gatherer&lt;/h3&gt;
-&lt;h4 id=&#34;concepts&#34;&gt;Concepts&lt;/h4&gt;
-&lt;p&gt;The Gatherer has 4 components to support the data collection, which are Input, Collector, Worker, and Queue. There are 2 roles in the Worker, which are Fetcher and Receiver.&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;The Input is an abstraction of the input source, which is usually mapped to a configuration file.&lt;/li&gt;
-&lt;li&gt;The Collector is created by the Source, but many collectors could be created by the same Source. For example, when a log path has been configured as the /var/*.log in an Input, the number of collectors is the same as the file number in this path.&lt;/li&gt;
-&lt;li&gt;The Fetcher and Receiver is the real worker to collect data. The receiver interface is an abstraction, which has multiple implementations, such as gRPC receiver  and HTTP receiver.Here are some specific use cases:
-&lt;ul&gt;
-&lt;li&gt;Trace Receiver is a gRPC server for receiving trace data created by Skywalking agents.&lt;/li&gt;
-&lt;li&gt;Log Receiver is also a gRPC server for receiving log data which is collected by Skywalking agents. (In the future we want Skywalking Agent to support log sending, and RPC-based log sending is more efficient and needs fewer resources than file reading. For example, the way of file reading will bring IO pressure and performance cost under multi-line splicing.)&lt;/li&gt;
-&lt;li&gt;Log Fetcher is like Filebeat, which fits the common log collection scenario. This fetcher will have more responsibility than any other workers because it needs to record the offset and process the multi-line splicing. This feature will be implemented in the future.&lt;/li&gt;
-&lt;li&gt;Prometheus Fetcher supports a new way to fetch Prometheus data and push the data to the upstream.&lt;/li&gt;
-&lt;li&gt;&amp;hellip;&amp;hellip;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;The Queue is a buffer module to decouple collection and transmission. In the 1st release version, we will use persistent storage to ensure data stability. But the implementation is a plug-in design that can support pure memory queues later.
-&lt;img src=&#34;gatherer.jpg&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h4 id=&#34;the-data-flow&#34;&gt;The data flow&lt;/h4&gt;
-&lt;p&gt;We use the Trace Receiver as an example to introduce the data flow.
-&lt;img src=&#34;DataFlow.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h4 id=&#34;queue&#34;&gt;Queue&lt;/h4&gt;
-&lt;h5 id=&#34;mmapqueue&#34;&gt;MmapQueue&lt;/h5&gt;
-&lt;p&gt;We have simplified the design of MmapQueue to reduce the resources cost on the memory and disk.&lt;/p&gt;
-&lt;h6 id=&#34;concepts-1&#34;&gt;Concepts&lt;/h6&gt;
-&lt;p&gt;There are 2 core concepts in MmapQueue.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Segment: Segment is the real data store center, that provides large-space storage and does not reduce read and write performance as much as possible by using mmap. And we will avoid deleting files by reusing them.&lt;/li&gt;
-&lt;li&gt;Meta: The purpose of meta is to find the data that the consumer needs.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h6 id=&#34;segment&#34;&gt;Segment&lt;/h6&gt;
-&lt;p&gt;One MmapQueue has a directory to store the whole data. The Queue directory is made up with many segments and 1 meta file. The number of the segments would be computed by 2 params, which are the max cost of the Queue and the cost of each segment. For example, If the max cost is 512M and each segment cost is 256K, the directory can hold up to 2000 files. Once capacity is exceeded, an coverage policy is adopted that means the 2000th would override the first file.&lt;/p&gt;
-&lt;p&gt;Each segment in Queue will be N times the size of the page cache and will be read and written in an appended sequence rather than randomly. These would improve the performance of Queue. For example, each Segment is a 128k file, as shown in the figure below.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;segments.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h6 id=&#34;meta&#34;&gt;Meta&lt;/h6&gt;
-&lt;p&gt;The Meta is a mmap file that only contains 56Bit. There are 5 concepts in the Meta.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Version: A version flag.&lt;/li&gt;
-&lt;li&gt;Watermark Offset: Point to the current writing space.
-&lt;ul&gt;
-&lt;li&gt;ID: SegmentID&lt;/li&gt;
-&lt;li&gt;Offset: The offset in Segment.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Writed Offset: Point to the latest refreshed data, that would be overridden by the write offset after period refresh.
-&lt;ul&gt;
-&lt;li&gt;ID: SegmentID&lt;/li&gt;
-&lt;li&gt;Offset: The offset in Segment.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Reading Offset: Point to the current reading space.
-&lt;ul&gt;
-&lt;li&gt;ID: SegmentID&lt;/li&gt;
-&lt;li&gt;Offset: The offset in Segment.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Committed Offset: Point to the latest committed offset , that is equal to the latest acked offset plus one.
-&lt;ul&gt;
-&lt;li&gt;ID: SegmentID&lt;/li&gt;
-&lt;li&gt;Offset: The offset in Segment.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img src=&#34;meta.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;The following diagram illustrates the transformation process.&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;The publisher receives data and wants to write to Queue.
-&lt;ul&gt;
-&lt;li&gt;The publisher would read Writing Offset to find a space and do plus one.&lt;/li&gt;
-&lt;li&gt;After this, the publisher will write the data to the space.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;The consumer wants to read the data from Queue.
-&lt;ul&gt;
-&lt;li&gt;The consumer would read Reading Offset to find the current read offset and do plus one.&lt;/li&gt;
-&lt;li&gt;After this, the consumer will read the data from the space.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;On period flush, the flusher would override Watermark Offset by using Writing Offset.&lt;/li&gt;
-&lt;li&gt;When the ack operation is triggered, Committed Offset would plus the batch size in the ack batch.&lt;/li&gt;
-&lt;li&gt;When facing crash, Writing Offset and Reading Offset would be overridden by Watermark Offset and Committed Offset. That is because the Reading Offset and Writing Offset cannot guarantee at least once delivery.&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;&lt;img src=&#34;offset-convert.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h6 id=&#34;mmap-performance-test&#34;&gt;Mmap Performance Test&lt;/h6&gt;
-&lt;p&gt;The test is to verify the efficiency of mmap in low memory cost.&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;The rate of data generation: 7.5K/item 1043 item/s (Based on Aifanfan online pod.)&lt;/li&gt;
-&lt;li&gt;The test structure is based on &lt;a href=&#34;https://github.com/grandecola/bigqueue&#34;&gt;Bigqueue&lt;/a&gt; because of similar structure.&lt;/li&gt;
-&lt;li&gt;Test tool: Go Benchmark Test&lt;/li&gt;
-&lt;li&gt;Command: go test -bench BenchmarkEnqueue  -run=none -cpu=1&lt;/li&gt;
-&lt;li&gt;Result On Mac(15-inch, 2018,16 GB 2400 MHz DDR4, 2.2 GHz Intel Core i7 SSD):
-&lt;ul&gt;
-&lt;li&gt;BenchmarkEnqueue/ArenaSize-128KB/MessageSize-8KB/MaxMem-384KB              66501             21606 ns/op              68 B/op          1 allocs/op&lt;/li&gt;
-&lt;li&gt;BenchmarkEnqueue/ArenaSize-128KB/MessageSize-8KB/MaxMem-1.25MB             72348             16649 ns/op              67 B/op          1 allocs/op&lt;/li&gt;
-&lt;li&gt;BenchmarkEnqueue/ArenaSize-128KB/MessageSize-16KB/MaxMem-1.25MB            39996             33199 ns/op             103 B/op          1 allocs/op&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Result On Linux(INTEL Xeon E5-2450 V2 8C 2.5GHZ&lt;em&gt;2,INVENTEC PC3L-10600 16G&lt;/em&gt;8,INVENTEC SATA 4T 7.2K*8):
-&lt;ul&gt;
-&lt;li&gt;BenchmarkEnqueue/ArenaSize-128KB/MessageSize-8KB/MaxMem-384KB         	  126662	     12070 ns/op	      62 B/op	       1 allocs/op&lt;/li&gt;
-&lt;li&gt;BenchmarkEnqueue/ArenaSize-128KB/MessageSize-8KB/MaxMem-1.25MB        	  127393	     12097 ns/op	      62 B/op	       1 allocs/op&lt;/li&gt;
-&lt;li&gt;BenchmarkEnqueue/ArenaSize-128KB/MessageSize-16KB/MaxMem-1.25MB       	   63292	     23806 ns/op	      92 B/op	       1 allocs/op&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Conclusion: Based on the above tests, mmap is both satisfied at the write speed and at little memory with very low consumption when running as a sidecar.&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h3 id=&#34;processor&#34;&gt;Processor&lt;/h3&gt;
-&lt;p&gt;The Processor has 3 core components, which are Consumer, Filter, and Context.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;The Consumer is created by the downstream Queue. The consumer has its own read offset and committed offset, which is similar to the offset concept of Spark Streaming.&lt;/li&gt;
-&lt;li&gt;Due to the particularity of APM data preprocessing, Context is a unique concept in the Satellite filter chain, which supports storing the intermediate event because the intermediate state event also needs to be sent in sometimes.&lt;/li&gt;
-&lt;li&gt;The Filter is the core data processing part, which is similar to the processor of &lt;a href=&#34;https://github.com/elastic/beats&#34;&gt;beats&lt;/a&gt;. Due to the context, the upstream/downstream filters would be logically coupling.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img src=&#34;Processor.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;sender&#34;&gt;Sender&lt;/h3&gt;
-&lt;ol&gt;
-&lt;li&gt;BatchConverter decouples the Processor and Sender by staging the Buffer structure, providing parallelization. But if BatchBuffer is full, the downstream processors would be blocked.&lt;/li&gt;
-&lt;li&gt;Follower is a real send worker that has a client, such as a gRPC client or Kafka client, and a fallback strategy. Fallback strategy is an interface, we can add more strategies to resolve the abnormal conditions, such as Instability in the network, upgrade the oap cluster.&lt;/li&gt;
-&lt;li&gt;When sent success, Committed Offset in Queue would plus the number of this batch.&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;&lt;img src=&#34;Sender.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;high-performance&#34;&gt;High Performance&lt;/h3&gt;
-&lt;p&gt;The scenario using Satellite is to collect a lot of APM data collection. We guarantee high performance by the following ways.&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;Shorten transmission path, that means only join 2 components,which are Queue and Processor, between receiving and forwarding.&lt;/li&gt;
-&lt;li&gt;High Performance Queue. MmapQueue provides a big, fast and persistent queue based on memory mapped file and ring structure.&lt;/li&gt;
-&lt;li&gt;Processor maintains a linear design, that could be functional processed in one go-routine to avoid too much goroutines switching.&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;stability&#34;&gt;Stability&lt;/h2&gt;
-&lt;p&gt;Stability is a core point in Satellite. Stability can be considered in many ways, such as stable resources cost, stable running and crash recovery.&lt;/p&gt;
-&lt;h3 id=&#34;stable-resource-cost&#34;&gt;Stable resource cost&lt;/h3&gt;
-&lt;p&gt;In terms of resource cost,  Memory and CPU should be a concern.&lt;/p&gt;
-&lt;p&gt;In the aspect of the CPU, we keep a sequence structure to avoid a large number of retries occurring when facing network congestion. And Satellite avoids keep pulling when the Queue is empty based on the offset design of Queue.&lt;/p&gt;
-&lt;p&gt;In the aspect of the Memory, we have guaranteed only one data caching in Satellite, that is Queue. For the queue structure, we also keep the size fixed based on the ring structure to maintain stable Memory cost. Also, MmapQueue is designed for minimizing memory consumption and providing persistence while keeping speed as fast as possible. Maybe supports some strategy to dynamically control the size of MmapQueue to process more extreme conditions in the future.&lt;/p&gt;
-&lt;h3 id=&#34;stable-running&#34;&gt;Stable running&lt;/h3&gt;
-&lt;p&gt;There are many cases of network congestion, such as the network problem on the host node, OAP cluster is under upgrating, and Kafka cluster is unstable. When facing the above cases, Follower would process fallback strategy and block the downstream processes. Once the failure strategy is finished, such that send success or give up this batch, the Follower would process the next batch.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;Sender.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;crash-recovery&#34;&gt;Crash Recovery&lt;/h3&gt;
-&lt;p&gt;The crash recovery only works when the user selects MmapQueue in Gatherer because of persistent file system design. When facing a crash, Reading Offset would be overridden by Committed Offset that ensure the at least once delivery. And Writed Offset would override Writing Offset that ensures the consumer always works properly and avoid encountering uncrossable defective data blocks.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;offset-convert.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;buffer-pool&#34;&gt;Buffer pool&lt;/h2&gt;
-&lt;p&gt;The Queue is to store fixed structure objects, object buffer pool would be efficient to reuse memory to avoid GC.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;ackChan&lt;/li&gt;
-&lt;li&gt;batch convertor&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2 id=&#34;some-metrics&#34;&gt;Some metrics&lt;/h2&gt;
-&lt;p&gt;In Satellite, we should also collect its own monitoring metrics. The following metrics are necessary for Satellite.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;cpu&lt;/li&gt;
-&lt;li&gt;memory&lt;/li&gt;
-&lt;li&gt;go routine number&lt;/li&gt;
-&lt;li&gt;gatherer_writing_offset&lt;/li&gt;
-&lt;li&gt;gatherer_watermark_offset&lt;/li&gt;
-&lt;li&gt;processor_reading_count&lt;/li&gt;
-&lt;li&gt;sender_committed_offset&lt;/li&gt;
-&lt;li&gt;sender_abandoned_count&lt;/li&gt;
-&lt;li&gt;sender_retry_count&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2 id=&#34;input-and-output&#34;&gt;Input and Output&lt;/h2&gt;
-&lt;p&gt;We will reuse this diagram to explain the input and output.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Input
-&lt;ul&gt;
-&lt;li&gt;Because the push-pull mode is both supported, Queue is a core component.&lt;/li&gt;
-&lt;li&gt;Queue is designed to be a ring-shaped fixed capacity, that means the oldest data would be overridden by the latest data. If users find data loss, users should raise the ceiling of memory Queue. MmapQueue generally doesn&amp;rsquo;t face this problem unless the Sender transport is congested.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Ouput
-&lt;ul&gt;
-&lt;li&gt;If the BatchBuffer is full, the processor would be blocked.&lt;/li&gt;
-&lt;li&gt;If the Channel is full, the downstream components would be blocked, such as BatchConvertor and Processor.&lt;/li&gt;
-&lt;li&gt;When SenderWorker sends failure, the batch data would do a failure strategy that would block pulling data from the Channel. The strategy is a part of Sender,the operation mode is synchronous.&lt;/li&gt;
-&lt;li&gt;Once the failure strategy is finished, such that send success or give up this batch, the Sendworker would keep pulling data from the Channel.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img src=&#34;detail-modules.jpg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;questions&#34;&gt;Questions&lt;/h2&gt;
-&lt;h3 id=&#34;how-to-avoid-keep-pulling-when-the-queue-is-empty&#34;&gt;How to avoid keep pulling when the Queue is empty?&lt;/h3&gt;
-&lt;p&gt;If Watermark Offset is less than or equal to Reading Offset, a signal would be sent to the consumer to avoid keep pulling.&lt;/p&gt;
-&lt;h3 id=&#34;why-reusing-files-in-queue&#34;&gt;Why reusing files in Queue?&lt;/h3&gt;
-&lt;p&gt;The unified model  is a ring in Queue, that limits fixed resources cost  in memory or disk.In Mmap Queue, reusing files turns the delete operations into an overwrite operations, effectively reducing the creation and deletion behavior in files.&lt;/p&gt;
-&lt;h3 id=&#34;what-are-the-strategies-for-file-creation-and-deletion-in-mmapqueue&#34;&gt;What are the strategies for file creation and deletion in MmapQueue?&lt;/h3&gt;
-&lt;p&gt;As Satellite running, the number of the files in MmapQueue would keep growing until up to the maximum capacity. After this, the old files will be overridden by the new data to avoid file deletion. When the Pod died, all resources were recycled.&lt;/p&gt;
 
       </description>
     </item>
