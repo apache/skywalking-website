@@ -14,7 +14,7 @@ Apache SkyWalking从2015年开源到2024年，已经走过了9个年头，项目
 - SkyWalking文档使用，以及如何使用AI助手
 - Q&A
 
-{{< bilibili BV1Wz42167rb >}}
+[B站视频地址](https://www.bilibili.com/video/BV1Wz42167rb)
 
 想参与直播的小伙伴，可以关注后续的直播安排和我们的B站直播预约
 
