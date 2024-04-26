@@ -14,4 +14,4 @@ zh_tags:
 - 第四节：基金会原则（For public good）
 - 第五节：一些不太好的事情
 
-{{< bilibili BV125411E7GK >}}
+[B站视频地址](https://www.bilibili.com/video/BV125411E7GK)

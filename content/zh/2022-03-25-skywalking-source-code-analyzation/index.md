@@ -53,4 +53,4 @@ zh_tags:
 - 35-DataCarrier-全解
 - 36-链路数据发送到 OAP
 
-{{< bilibili BV1dy4y1V7ck >}}
+[B站视频地址](https://www.bilibili.com/video/BV1dy4y1V7ck)

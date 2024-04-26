@@ -14,7 +14,7 @@ zh_tags:
 
 ## 圆桌讨论：云原生应用可观测性现状及趋势
 
-{{< bilibili BV1is4y1d7gd >}}
+[B站视频地址](https://www.bilibili.com/video/BV1is4y1d7gd)
 
 嘉宾
 - 罗广明，主持人
@@ -25,7 +25,7 @@ zh_tags:
 
 ## 为 Apache SkyWalking 构建 Grafana dashboards -- 基于对原生 PromQL 的支持
 
-{{< bilibili BV1ms4y1d7NF >}}
+[B站视频地址](https://www.bilibili.com/video/BV1ms4y1d7NF)
 
 万凯，Tetrate
 
