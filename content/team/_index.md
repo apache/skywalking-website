@@ -96,20 +96,21 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 </div>
 <div class="table-box">
 
-| Name         | Apache ID    |                                                                                          |
-|--------------|--------------|------------------------------------------------------------------------------------------|
-| Ruixian Wang | ax1an        | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)         |
-| Sheng Wang   | wangsheng    |                                                                                          |
-| Tomasz Pytel | tompytel     |                                                                                          |
-| Wei Hua      | alonelaval   |                                                                                          |
-| Wei Jin      | kvn          |                                                                                          |
-| Weijie Zou   | kdump        | <i class="iconfont icon-twitter"></i> [RootShellExp](https://twitter.com/RootShellExp)   |
-| Weiyi Liu    | wayilau      |                                                                                          |
-| Xiang Wei    | weixiang1862 |                                                                                          |
-| Yueqin Zhang | yswdqz       |                                                                                          |
-| Yuntao Li    | liyuntao     |                                                                                          |
-| Zhusheng Xu  | aderm        |                                                                                          |
-| Zixin Zhou   | zhouzixin    | <i class="iconfont icon-twitter"></i> [starry_loveee](https://twitter.com/starry_loveee) |
+| Name           | Apache ID    | Twitter Handle                                                                      |
+|----------------|--------------|-------------------------------------------------------------------------------------|
+| Ruixian Wang   | ax1an        | [Ax1anRISE](https://twitter.com/Ax1anRISE)                                          |
+| Sheng Wang     | wangsheng    |                                                                                     |
+| Tomasz Pytel   | tompytel     |                                                                                     |
+| Wei Hua        | alonelaval   |                                                                                     |
+| Wei Jin        | kvn          |                                                                                     |
+| Weijie Zou     | kdump        | [RootShellExp](https://twitter.com/RootShellExp)                                    |
+| Weiyi Liu      | wayilau      |                                                                                     |
+| Xiang Wei      | weixiang1862 |                                                                                     |
+| Youliang Huang | butterbright |                                                                                     |
+| Yueqin Zhang   | yswdqz       |                                                                                     |
+| Yuntao Li      | liyuntao     |                                                                                     |
+| Zhusheng Xu    | aderm        |                                                                                     |
+| Zixin Zhou     | zhouzixin    | [starry_loveee](https://twitter.com/starry_loveee)                                  |
 
 </div>
 </div>
