@@ -18,6 +18,8 @@ BanyanDB emerges as a high-performance native storage solution, while expanded m
 and Apache ActiveMQ Classic. Support for Multiple Labels Names enhances flexibility in metrics analysis, 
 while enhanced exporting and querying capabilities streamline data dissemination and processing.
 
+This release blog briefly introduces these new features and Enhancements as well as some other notable changes.
+
 ## Layer and Service Hierarchy
 `Layer` concept was introduced in SkyWalking 9.0.0, it represents an abstract framework in computer science, 
 such as Operating System(OS_LINUX layer), Kubernetes(k8s layer). It organizes services and metrics into different layers based on their roles
