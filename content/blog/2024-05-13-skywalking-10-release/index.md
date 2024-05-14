@@ -11,6 +11,13 @@ tags:
 - BanyanDB
 ---
 
+The Apache SkyWalking team today announced the 10 release. SkyWalking 10 provides a host of groundbreaking features and enhancements. 
+The introduction of Layer and Service Hierarchy streamlines monitoring by organizing services and metrics into distinct layers and providing seamless navigation across them.
+Leveraging eBPF technology, Kubernetes Network Monitoring delivers granular insights into network traffic, topology, and TCP/HTTP metrics. 
+BanyanDB emerges as a high-performance native storage solution, while expanded monitoring support encompasses Apache RocketMQ, ClickHouse, 
+and Apache ActiveMQ Classic. Support for Multiple Labels Names enhances flexibility in metrics analysis, 
+while enhanced exporting and querying capabilities streamline data dissemination and processing.
+
 ## Layer and Service Hierarchy
 `Layer` concept was introduced in SkyWalking 9.0.0, it represents an abstract framework in computer science, 
 such as Operating System(OS_LINUX layer), Kubernetes(k8s layer). It organizes services and metrics into different layers based on their roles
@@ -56,7 +63,7 @@ Figure 5: Service Hierarchy Agent(Virtual Database) With Real Database And K8s S
 For more supported layers and how to detect the relationships between services in different layers please refer to the [Service Hierarchy](https://skywalking.apache.org/docs/main/latest/en/concepts-and-designs/service-hierarchy/#service-hierarchy).
 how to configure the `Service Hierarchy` in SkyWalking, please refer to the [Service Hierarchy Configuration](https://skywalking.apache.org/docs/main/latest/en/concepts-and-designs/service-hierarchy-configuration/) section.
 
-## [Monitoring Kubernetes Network Traffic by using eBPF](https://skywalking.apache.org/blog/2024-03-18-monitor-kubernetes-network-by-ebpf/)
+## Monitoring Kubernetes Network Traffic by using eBPF
 
 In the previous version, skyWalking provides [Kubernetes (K8s) monitoring from kube-state-metrics and cAdvisor](https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-k8s-monitoring-metrics-cadvisor/), 
 which can monitor the Kubernetes cluster status and the metrics of the Kubernetes resources.
