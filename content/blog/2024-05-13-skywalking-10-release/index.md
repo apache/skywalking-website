@@ -1,6 +1,6 @@
 ---
 title: "SkyWalking 10 Release: Service Hierarchy, Kubernetes Network Monitoring by eBPF, BanyanDB, and More"
-date: 2024-5-13
+date: 2024-05-13
 author: Kai Wan, Sheng Wu. tetrate.io
 description: "Introduce what's new in SkyWalking 10, including Service Hierarchy, Kubernetes Network Monitoring by eBPF, BanyanDB, and more."
 tags:
