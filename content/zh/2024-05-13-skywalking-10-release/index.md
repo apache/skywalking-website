@@ -139,7 +139,7 @@ SkyWalking 原生 UI 指标查询弃用 V2 API，全部迁移到 [V3 API](https:
 ## 其他值得注意的增强功能
 
 1. 支持 Java 21 运行时和 oap-java21 镜像用于 Java 21 运行时。
-2. 从镜像中删除 CLI(`swctl`)。
-3. 支持更多的 MQE 函数和操作符。
+2. 从镜像中删除 CLI（`swctl`）。
+3. 支持更多的 MQE 函数和操作。
 4. 增强原生 UI 并改善用户体验。
-5. 修复了几个漏洞和 CVE。
+5. 修复了一些 Bug 和 CVE。
