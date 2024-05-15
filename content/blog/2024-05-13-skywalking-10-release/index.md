@@ -97,7 +97,7 @@ SkyWalking provides a basic monitoring dashboard for RocketMQ, which includes th
 - Topic Metrics: including max producer/consumer message size, consumer latency, producer/consumer TPS, producer/consumer offset, producer/consumer message size, consumer group count, and broker count.
 
 The following figure shows the RocketMQ Cluster Metrics dashboard:
-![Figure 8: Apache RocketMQ Server Monitoring](active_mq.jpg)
+![Figure 8: Apache RocketMQ Server Monitoring](rocket_mq.jpg)
 Figure 8: Apache RocketMQ Server Monitoring</br>
 
 For more metrics and details about the RocketMQ monitoring, please refer to the [Apache RocketMQ Server Monitoring](https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-rocketmq-monitoring/),
