@@ -76,7 +76,7 @@ Apache RocketMQ 是一个开源的分布式消息和流平台，广泛应用于�
 
 下图显示了 RocketMQ Cluster Metrics 仪表板： 
 
-![图 8: Apache RocketMQ 服务器监控](active_mq.jpg) 
+![图 8: Apache RocketMQ 服务器监控](rocket_mq.jpg) 
 
 有关 RocketMQ 监控的更多指标和详细信息，请参阅 [Apache RocketMQ 服务器监控](https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-rocketmq-monitoring/)。
 
