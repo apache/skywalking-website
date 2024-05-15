@@ -18,7 +18,7 @@ BanyanDB emerges as a high-performance native storage solution, while expanded m
 and Apache ActiveMQ Classic. Support for Multiple Labels Names enhances flexibility in metrics analysis, 
 while enhanced exporting and querying capabilities streamline data dissemination and processing.
 
-This release blog briefly introduces these new features and Enhancements as well as some other notable changes.
+This release blog briefly introduces these new features and enhancements as well as some other notable changes.
 
 ## Layer and Service Hierarchy
 `Layer` concept was introduced in SkyWalking 9.0.0, it represents an abstract framework in computer science, 
@@ -42,12 +42,12 @@ SkyWalking 10 introduces a new concept called `Service Hierarchy`, which defines
 OAP will detect the services from different layers, and try to build the connections. 
 Users can click the `Hierarchy Services` in any layer's service topology node or service dashboard to get the `Hierarchy Topology`.
 In this topology graph, users can see the relationships between the services in different layers and the summary of the metrics and also can jump to the service dashboard in the layer.
-When a service occurrs performance issue, users can easily analyze the metrics from different layers and track down the root cause:
+When a service occurs performance issue, users can easily analyze the metrics from different layers and track down the root cause:
 
 The examples of the `Service Hierarchy` relationships:
 
 1. The application `song` deployed in the Kubernetes cluster with SkyWalking agent and Service Mesh at the same time.
-So the application `song` across the `GENERAL`, `MESH`, `MESH_DP` and `K8S_SERVICE` layers which could be monitoring by SkyWalking, 
+So the application `song` across the `GENERAL`, `MESH`, `MESH_DP` and `K8S_SERVICE` layers which could be monitored by SkyWalking, 
 the `Service Hierarchy` topology as below:
 ![Figure 3: Service Hierarchy Agent With K8s Service And Mesh With K8s Service](song.jpg)
 Figure 3: Service Hierarchy Agent With K8s Service And Mesh With K8s Service.</br>
@@ -57,7 +57,7 @@ And can also have the `Service Instance Hierarchy` topology to get the single in
 Figure 4: Instance Hierarchy Agent With K8s Service(Pod)</br>
 </br>
 2. The PostgreSQL database `psql` deployed in the Kubernetes cluster and used by the application `song`.
-So the database `psql` across the `VIRTUAL_DATABASE`, `POSTGRESQL` and `K8S_SERVICE` layers which could be monitoring by SkyWalking, 
+So the database `psql` across the `VIRTUAL_DATABASE`, `POSTGRESQL` and `K8S_SERVICE` layers which could be monitored by SkyWalking, 
 the `Service Hierarchy` topology as below:
 ![Figure 5: Service Hierarchy Agent(Virtual Database) With Real Database And K8s Service](postgre.jpg)
 Figure 5: Service Hierarchy Agent(Virtual Database) With Real Database And K8s Service
@@ -143,7 +143,7 @@ it can't query the metrics data with multiple labels names.
 SkyWalking 10 supports storing the labels names in the metrics data, and MQE can query or calculate the metrics data with multiple labels names.
 For example:
 The `k8s_cluster_deployment_status` metric has labels `namespace`, `deployment` and `status`.
-If we want to query all deployment metric value with `namespace=skywalking-showcase` and `status=true`, we can use the following expression:
+If we want to query all deployment metric values with `namespace=skywalking-showcase` and `status=true`, we can use the following expression:
 ```text
 k8s_cluster_deployment_status{namespace='skywalking-showcase', status='true'}
 ```
@@ -154,7 +154,7 @@ related enhancement:
 
 ## Metrics gRPC exporter
 SkyWalking 10 enhanced the [metrics gPRC exporter](https://skywalking.apache.org/docs/main/latest/en/setup/backend/exporter/#grpc-exporter),
-it supports exporting all type metrics data to the gRPC server.
+it supports exporting all types of metrics data to the gRPC server.
 
 ## SkyWalking Native UI Metrics Query Switch to V3 APIs
 SkyWalking Native UI metrics query deprecate the V2 APIs, and all migrated to [V3 APIs](https://skywalking.apache.org/docs/main/latest/en/api/query-protocol/#v3-apis) 
