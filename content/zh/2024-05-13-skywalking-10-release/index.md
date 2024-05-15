@@ -70,30 +70,30 @@ SkyWalking 10 引入了一个新概念，称为 Service Hierarchy，它定义了
 
 Apache RocketMQ 是一个开源的分布式消息和流平台，广泛应用于互联网、大数据、移动互联网、物联网等领域。SkyWalking 为 RocketMQ 提供了一个基本的监控仪表板，包括以下指标：
 
-- 集群指标：包括当天产生/消费的消息数、总生产者/消费者 TPS、生产者/消费者消息大小、截至昨天产生/消费的消息数、最大消费者延迟、最大 commitLog 磁盘比、commitLog 磁盘比、拉取/发送线程池队列头等待时间、主题数（Topic count）和代理数（Broker count）。
-- 代理指标：包括生产/消费 TPS、生产者/消费者消息大小。
-- 主题指标：包括最大生产者/消费者消息大小、消费者延迟、生产/消费 TPS、生产/消费偏移、生产/消费消息大小、消费者组数和代理数。
+- Cluster Metrics：包括当天产生/消费的消息数、总生产者/消费者 TPS、生产者/消费者消息大小、截至昨天产生/消费的消息数、最大消费者延迟、最大 commitLog 磁盘比、commitLog 磁盘比、拉取/发送线程池队列头等待时间、topic count 和 broker count。
+- Broker Metrics：包括生产/消费 TPS、生产者/消费者消息大小。
+- Topic Metrics：包括最大生产者/消费者消息大小、消费者延迟、生产/消费 TPS、生产/消费偏移、生产/消费消息大小、消费者组数和代理数。
 
-下图显示了 RocketMQ 集群指标仪表板： 
+下图显示了 RocketMQ Cluster Metrics 仪表板： 
 
 ![图 8: Apache RocketMQ 服务器监控](active_mq.jpg) 
 
 有关 RocketMQ 监控的更多指标和详细信息，请参阅 [Apache RocketMQ 服务器监控](https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-rocketmq-monitoring/)。
 
-## ClickHouse 服务器监控
+## ClickHouse Server 监控
 
 ClickHouse 是一个开源的列式数据库管理系统，可以实时生成分析数据报告，广泛用于在线分析处理 (OLAP)。ClickHouse 监控提供了 ClickHouse 服务器的指标、事件和异步指标的监控，包括以下部分的指标：
 
-- 服务器指标
-- 查询指标
-- 网络指标
-- 插入指标
-- 副本指标
-- MergeTree 指标
-- ZooKeeper 指标
-- 嵌入式 ClickHouse Keeper 指标
+- Server Metrics
+- Query Metrics
+- Network Metrics
+- Insert Metrics
+- Replica Metrics
+- MergeTree Metrics
+- ZooKeeper Metrics
+- Embedded ClickHouse Keeper Metrics
 
-下图显示了 ClickHouse 集群指标仪表板：
+下图显示了 ClickHouse Cluster Metrics 仪表板：
 
 ![图 9: ClickHouse 服务器监控](clickhouse.jpg) 
 
@@ -103,11 +103,11 @@ ClickHouse 是一个开源的列式数据库管理系统，可以实时生成分
 
 Apache ActiveMQ Classic 是一个流行且强大的开源消息和集成模式服务器。SkyWalking 为 ActiveMQ 提供了一个基本的监控仪表板，包括以下指标：
 
-- 集群指标：包括内存使用率、写入/读取速率和平均/最大写入持续时间。
-- 代理指标：包括节点状态、连接数、生产者/消费者数和代理下的写入/读取速率。根据集群模式，一个集群可以包含一个或多个代理。
-- 目标指标：包括生产者/消费者数、不同状态的消息、队列和队列/主题中的入队持续时间。
+- Cluster Metrics：包括内存使用率、写入/读取速率和平均/最大写入持续时间。
+- Broker Metrics：包括节点状态、连接数、生产者/消费者数和代理下的写入/读取速率。根据集群模式，一个集群可以包含一个或多个代理。
+- Destination Metrics：包括生产者/消费者数、不同状态的消息、队列和队列/主题中的入队持续时间。
 
-下图显示了 ActiveMQ 集群指标仪表板： 
+下图显示了 ActiveMQ Cluster Metrics 仪表板： 
 
 ![图 10: Apache ActiveMQ 服务器监控](active_mq.jpg) 
 
@@ -130,7 +130,7 @@ k8s_cluster_deployment_status{namespace='skywalking-showcase', status='true'}
 
 ## Metrics gRPC 导出器
 
-SkyWalking 10 增强了 [metrics gPRC 导出器](https://skywalking.apache.org/docs/main/latest/en/setup/backend/exporter/#grpc-exporter)，支持将所有类型的指标数据导出到 gRPC 服务器。
+SkyWalking 10 增强了 [metrics gPRC exporter](https://skywalking.apache.org/docs/main/latest/en/setup/backend/exporter/#grpc-exporter)，支持将所有类型的指标数据导出到 gRPC 服务器。
 
 ## SkyWalking 原生 UI 指标查询切换到 V3 API
 
