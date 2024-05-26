@@ -81,6 +81,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
 | Brandon Fergerson | bfergerson  |                                                  |
+|Ziyan Chen         |clairechen   |                                                  |
 | Gong Dewei        | kylixs      |                                                  |
 | Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
@@ -92,13 +93,13 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Puguang Yang      | ypg         |                                                  |
 | Qiang Li          | liqiang     |                                                  |
 | Qiang Xu          | xuqiang     |                                                  |
-| Ruixian Wang   | ax1an        | [Ax1anRISE](https://twitter.com/Ax1anRISE)                                          |
 
 </div>
 <div class="table-box">
 
 | Name           | Apache ID    | Twitter Handle                                                                      |
 |----------------|--------------|-------------------------------------------------------------------------------------|
+| Ruixian Wang   | ax1an        | [Ax1anRISE](https://twitter.com/Ax1anRISE)                                          |
 | Sheng Wang     | wangsheng    |                                                                                     |
 | Tomasz Pytel   | tompytel     |                                                                                     |
 | Wei Hua        | alonelaval   |                                                                                     |
