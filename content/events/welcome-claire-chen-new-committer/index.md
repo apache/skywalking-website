@@ -64,9 +64,9 @@ ActiveMQ.(https://github.com/apache/skywalking-booster-ui/pull/388)
 port.(https://github.com/apache/skywalking-booster-ui/pull/375)
 
 ## skywalking-website
--ActiveMQ monitoring bilingual
+- ActiveMQ monitoring bilingual
 blog.(https://github.com/apache/skywalking-website/pull/700)
--ClickHouse monitoring bilingual
+- ClickHouse monitoring bilingual
 blog.(https://github.com/apache/skywalking-website/pull/685)
 
 ## skywalking-showcase
