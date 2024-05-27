@@ -81,7 +81,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
 | Brandon Fergerson | bfergerson  |                                                  |
-|Ziyan Chen         | clairechen  |                                                  |
+| Ziyan Chen        | clairechen  |                                                  |
 | Gong Dewei        | kylixs      |                                                  |
 | Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
