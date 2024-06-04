@@ -46,7 +46,3 @@ docker run -d \
 
 配置文件，请参考：[OTEL Collector 配置](https://github.com/apache/skywalking/blob/master/test/e2e-v2/cases/mysql/prometheus-mysql-exporter/otel-collector-config.yaml)。
 
----
-*附：想参与直播的小伙伴，可以关注后续的直播安排和我们的B站直播预约*
-
-![schedule](../2024-04-26-skywalking-in-practice-s01e01/schedule.png)
