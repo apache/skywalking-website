@@ -16,4 +16,4 @@ MQE是SkyWalking的核心metrics查询服务引擎，自从SkyWalking v9.5.0开�
 - MQE在查询中的应用
 - MQE在告警规则中的应用
 
-[B站视频地址](https://www.bilibili.com/video/BV1XM4m1z784/)
+[B站视频地址](https://www.bilibili.com/video/BV1XM4m1z784)
