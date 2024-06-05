@@ -135,7 +135,7 @@ helm install "${SKYWALKING_RELEASE_NAME}" \
 
 This command will deploy the SkyWalking OAP cluster and BanyanDB cluster to your Kubernetes environment.
 
-## Step 5: Verify the Installation
+## Step 4: Verify the Installation
 
 Check the status of the pods to ensure they are running properly:
 
@@ -149,7 +149,7 @@ You should see the following pods in a `Running` or `Completed` state if every
 
 Pods in BanyanDB Cluster
 
-## Step 6: Access SkyWalking UI
+## Step 5: Access SkyWalking UI
 
 To access the SkyWalking UI, you can check the service by :
 
