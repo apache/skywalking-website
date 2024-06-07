@@ -13,4 +13,4 @@ SkyWalking Go自动增强探针可以自动探测Go应用的运行状态，包�
 - 了解 SkyWalking Go 探针如何利用 Go ToolChain 进行自动增强
 - 了解 SkyWalking Go 如何与 SkyWalking 后端进行交互
 
-[B站视频地址](https://www.bilibili.com/video/BV1L4421X7je/)
+[B站视频地址](https://www.bilibili.com/video/BV1L4421X7je)
