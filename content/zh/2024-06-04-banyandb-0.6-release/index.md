@@ -1,6 +1,6 @@
 ---
 title: "BanyanDB 0.6 版本发布：性能和效率的提升"
-date: 2024-06-04
+date: 2024-06-12
 author: 高洪涛、吴晟（tetrate.io）
 description: "介绍 BanyanDB v0.6 的新功能以及与 Elasticsearch 的基准测试。"
 tags:
