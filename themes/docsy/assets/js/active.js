@@ -7,11 +7,13 @@ $(function () {
   }
 
   function bindClick() {
-    $('.title-box a').on('click', function () {
+    $('.container a').not('.link-type').on('click', function () {
       var hash = $(this).attr('href')
-      scrollTop(hash);
-      $('.card-wrapper .card').removeClass('active');
-      $(hash).parents('.card').addClass('active');
+      if (hash && /^#/.test(hash)) {
+        scrollTop(hash);
+        $('.card-wrapper .card').removeClass('active');
+        $(hash).parents('.card').addClass('active');
+      }
     });
     $('.link-type').on('click', function () {
       var hash = $(this).attr('href')
