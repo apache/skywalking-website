@@ -14,7 +14,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 <div class="appreciate"> 
 <h4>All contributions to SkyWalking are appreciated</h4>
 <p>The number of contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards.</p>
-<a href="https://github.com/apache/skywalking/blob/master/docs/en/guides/README.md">Get started</a>
+<a href="https://skywalking.apache.org/docs/main/latest/en/guides/community/">CONNECT WITH US.</a>
 <img class="deco-img" data-nolightbox="true" src="/images/team/team.svg" >
 </div>
 
@@ -81,6 +81,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Name              | Apache ID   |                                                  |
 | ----------------- | ----------- | ------------------------------------------------ |
 | Brandon Fergerson | bfergerson  |                                                  |
+| Ziyan Chen        | clairechen  |                                                  |
 | Gong Dewei        | kylixs      |                                                  |
 | Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://twitter.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
@@ -96,19 +97,21 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 </div>
 <div class="table-box">
 
-| Name              | Apache ID   |                                                  |
-| ----------------- | ----------- | ------------------------------------------------ |
-| Ruixian Wang      | ax1an       | <i class="iconfont icon-twitter"></i> [Ax1anRISE](https://twitter.com/Ax1anRISE)       |
-| Sheng Wang        | wangsheng   |                                                  |
-| Tomasz Pytel      | tompytel    |                                                  |
-| Wei Hua           | alonelaval  |                                                  |
-| Wei Jin           | kvn         |                                                  |
-| Weijie Zou        | kdump       | <i class="iconfont icon-twitter"></i> [RootShellExp](https://twitter.com/RootShellExp) |
-| Weiyi Liu         | wayilau     |                                                  |
-| Xiang Wei         | weixiang1862|                                                  |
-| Yueqin Zhang      | yswdqz      |                                                  |
-| Yuntao Li         | liyuntao    |                                                  |
-| Zhusheng Xu       | aderm       |                                                  |
+| Name           | Apache ID    | Twitter Handle                                                                      |
+|----------------|--------------|-------------------------------------------------------------------------------------|
+| Ruixian Wang   | ax1an        | [Ax1anRISE](https://twitter.com/Ax1anRISE)                                          |
+| Sheng Wang     | wangsheng    |                                                                                     |
+| Tomasz Pytel   | tompytel     |                                                                                     |
+| Wei Hua        | alonelaval   |                                                                                     |
+| Wei Jin        | kvn          |                                                                                     |
+| Weijie Zou     | kdump        | [RootShellExp](https://twitter.com/RootShellExp)                                    |
+| Weiyi Liu      | wayilau      |                                                                                     |
+| Xiang Wei      | weixiang1862 |                                                                                     |
+| Youliang Huang | butterbright |                                                                                     |
+| Yueqin Zhang   | yswdqz       |                                                                                     |
+| Yuntao Li      | liyuntao     |                                                                                     |
+| Zhusheng Xu    | aderm        |                                                                                     |
+| Zixin Zhou     | zhouzixin    | [starry_loveee](https://twitter.com/starry_loveee)                                  |
 
 </div>
 </div>

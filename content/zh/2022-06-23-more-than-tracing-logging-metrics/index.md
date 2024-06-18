@@ -5,4 +5,4 @@ author: 吴晟
 description: SkyWalking v9 简短介绍。在新的大版本中，SkyWalking社区带来哪些新特性，以及相应的运用场景。
 ---
 
-{{< bilibili BV1Cg411X71x >}}
+[B站视频地址](https://www.bilibili.com/video/BV1Cg411X71x)

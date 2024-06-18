@@ -7,4 +7,4 @@ zh_tags:
 - Video
 ---
 
-{{< bilibili BV1BQ4y1o7rA >}}
+[B站视频地址](https://www.bilibili.com/video/BV1BQ4y1o7rA)

@@ -32,4 +32,4 @@ SkyWalking峰会在解读SkyWalking v9新特性的同时，还将首发解密APM
 
 ## 峰会视频
 
-{{< bilibili BV1Qu411z7wh >}}
+[B站视频地址](https://www.bilibili.com/video/BV1Qu411z7wh)

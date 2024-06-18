@@ -18,4 +18,4 @@ zh_tags:
 3. 观测ServiceMesh，包含于Istio的自动集成。
 4. 目前的工作进展和对未来的规划。
 
-{{< bilibili BV1ia411c7Hc >}}
+[B站视频地址](https://www.bilibili.com/video/BV1ia411c7Hc)

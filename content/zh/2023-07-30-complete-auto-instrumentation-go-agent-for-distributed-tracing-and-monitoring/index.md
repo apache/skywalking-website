@@ -13,7 +13,7 @@ COSCUP 是由台湾开放原始码社群联合推动的年度研讨会，起源�
 
 ## 在Go语言中使用自动增强探针完成链路追踪以及监控
 
-{{< bilibili BV1FV4y1B7p1 >}}
+[B站视频地址](https://www.bilibili.com/video/BV1FV4y1B7p1)
 
 刘晗，Tetrate
 

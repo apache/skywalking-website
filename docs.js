@@ -162,11 +162,11 @@ async function traverseDocsList(result) {
                     </h5>
                     <p>${description}</p>
                   </div>
-                  {{ $currentVersion := .Site.Data.docSidebar.${menuFileName}.version }}
+                  {{ $currentVersion := lower .Site.Data.docSidebar.${menuFileName}.version }}
                   <div class="version-wrapper">Version: 
                   <select class="version-select">
                   {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
-                    {{$version := .version}}
+                    {{$version := lower .version}}
                     {{$versionName := .versionName}}
                     <option {{ cond (eq $currentVersion $version) "selected" "" }} value="{{$version}}">
                     {{if $versionName}}

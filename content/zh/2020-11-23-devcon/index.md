@@ -18,7 +18,7 @@ Apache SkyWalking 2020 开发者线下活动，社区创始人，PMC成员和Com
 
 吴晟，Tetrate.io创始工程师，Apache SkyWalking创始人
 
-{{< bilibili BV1ay4y16755 >}}
+[B站视频地址](https://www.bilibili.com/video/BV1ay4y16755)
 
 ___
 
@@ -41,7 +41,7 @@ ___
 适兕，开源布道师，ALC Beijing member，开源之道主创，开源社教育组成员。
 
 
-{{< bilibili BV12v411t7yt >}}
+[B站视频地址](https://www.bilibili.com/video/BV12v411t7yt)
 ___
 ## 下午
 
@@ -74,4 +74,4 @@ ___
 
 王院生 深圳支流科技创始人兼 CTO，Apache APISIX 创始人 & PMC成员
 
-{{< bilibili BV1xZ4y1G7D7 >}}
+[B站视频地址](https://www.bilibili.com/video/BV1xZ4y1G7D7)
