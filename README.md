@@ -23,9 +23,8 @@ Located at `content/_index.html`。
 
 ### Projects and Document
 
-The data of documentation link is located in `data/docs.yml` and formated as `YAML`.
+The data of documentation link is located in `data/docs.yml` and formatted as `YAML`.
 
-Update the [config file](https://github.com/algolia/docsearch-configs/blob/master/configs/skywalking.json) everytime in order that a new documentation version will be available searched by [algolia](https://www.algolia.com/).
 
 ### Event
 
