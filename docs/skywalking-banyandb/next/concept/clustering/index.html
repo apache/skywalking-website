@@ -34,7 +34,7 @@
 1. Architectural Overview A BanyanDB installation includes three distinct types of nodes: Data Nodes, Meta Nodes, and Liaison Nodes.
 1.1 Data Nodes Data Nodes hold all the raw time series data, metadata, and indexed data. They handle the storage and management of data, including streams and measures, tag keys and values, as well as field keys and values.">
 
-<meta itemprop="wordCount" content="2189">
+<meta itemprop="wordCount" content="2391">
 
 
 
@@ -772,7 +772,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 0145fba</div>
+                  <div class="commit-id">Commit Id: d48a810</div>
                 
 
 
@@ -840,9 +840,30 @@
 <p><strong>Complexity</strong>: With the storage system handling replication, the complexity is abstracted away from the user. The user need not concern themselves with the details of how replication is handled. Managing replication at the application level can be complex. It requires careful configuration, monitoring, and potentially significant engineering effort to maintain.</p>
 <p>Futhermore, the storage system might be cheaper. For instance, S3 can be more cost-effective because it eliminates the need for additional resources required for application-level replication.  Application-level replication also requires ongoing maintenance, potentially increasing operational costs.</p>
 <h3 id="52-data-sharding">5.2 Data Sharding</h3>
-<p>Data distribution across the cluster is determined based on the <code>shard_num</code> setting for a group and the specified <code>entity</code> in each resource, be it a stream or measure. The resource’s <code>name</code> with its <code>entity</code> is the sharding key, guiding data distribution to the appropriate Data Node during write operations.</p>
-<p>Liaison Nodes retrieve shard mapping information from Meta Nodes to achieve efficient data routing. This information is used to route data to the appropriate Data Nodes based on the sharding key of the data.</p>
-<p>This sharding strategy ensures the write load is evenly distributed across the cluster, enhancing write performance and overall system efficiency. BanyanDB uses a hash algorithm for sharding. The hash function maps the sharding key (resource name and entity) to a node in the cluster. Each shard is assigned to the node returned by the hash function.</p>
+<p>Data distribution across the cluster is determined by the <code>shard_num</code> setting for a group and the specified <code>entity</code> in each resource, whether it is a stream or a measure. The combination of the resource’s <code>name</code> and its <code>entity</code> forms the sharding key, which guides data distribution to the appropriate Data Node during write operations.</p>
+<p>For example, if a group has 5 shards, the data is distributed across these shards based on the sharding key:</p>
+<ul>
+<li>Group <code>measure-minute</code> Shard 0</li>
+<li>Group <code>measure-minute</code> Shard 1</li>
+<li>Group <code>stream-log</code> Shard 0</li>
+<li>Group <code>stream-log</code> Shard 1</li>
+<li>Group <code>stream-log</code> Shard 2</li>
+</ul>
+<p>A measure named <code>service_cpm</code> belonging to <code>measure-minute</code> with an entity of <code>service_id</code> &ldquo;frontend&rdquo; will be written to a specific shard based on the hashed value of the sharding key <code>service_cpm:frontend</code>.</p>
+<p>Similarly, a stream named <code>system_log</code> belonging to <code>stream-log</code> with an entity combination of <code>service_id</code> &ldquo;frontend&rdquo; and <code>instance_id</code> &ldquo;10.0.0.1&rdquo; will be written to a specific shard based on the hashed value of the sharding key <code>system_log:frontend|10.0.0.1</code>.</p>
+<blockquote>
+<p>Note: If there are &ldquo;:&rdquo; or &ldquo;|&rdquo; in the entity, they will be prefixed with a backslash &ldquo;&quot;.</p>
+</blockquote>
+<p>Liaison Nodes play a crucial role in this process by retrieving the <code>Group</code> list from Meta Nodes. This information is essential for efficient data routing, as it allows Liaison Nodes to direct data to the appropriate Data Nodes based on the sharding key.</p>
+<p>This sharding strategy ensures that the write load is evenly distributed across the cluster, thereby enhancing write performance and overall system efficiency. BanyanDB sorts the shards by the <code>Group</code> name and the shard ID, then assigns the shards to the Data Nodes in a round-robin fashion. This method guarantees an even distribution of data across the cluster, preventing any single node from becoming a bottleneck.</p>
+<p>For example, consider a group with 5 shards and a cluster with 3 Data Nodes. The shards are distributed as follows:</p>
+<ul>
+<li>Group <code>measure-minute</code> Shard 0: Data Node 1</li>
+<li>Group <code>measure-minute</code> Shard 1: Data Node 2</li>
+<li>Group <code>stream-log</code> Shard 0: Data Node 3</li>
+<li>Group <code>stream-log</code> Shard 1: Data Node 1</li>
+<li>Group <code>stream-log</code> Shard 2: Data Node 2</li>
+</ul>
 <h3 id="53-data-write-path">5.3 Data Write Path</h3>
 <p>Here&rsquo;s a text-based diagram illustrating the data write path in BanyanDB:</p>
 <pre><code>User
@@ -1147,6 +1168,8 @@
 
     </div>
     
+
+
 
 
 
