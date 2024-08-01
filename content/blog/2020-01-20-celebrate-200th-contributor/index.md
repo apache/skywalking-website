@@ -6,7 +6,7 @@ description: " SkyWalking community joins the 200+ contributors open source club
 ---
 
 - Author: Wu Sheng, tetrate.io, SkyWalking original creator, SkyWalking V.P.
-- [GitHub](https://github.com/wu-sheng), [Twitter](https://twitter.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
+- [GitHub](https://github.com/wu-sheng), [X](https://x.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
 
 ![](200th-celebration.png)
 

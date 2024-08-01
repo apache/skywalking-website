@@ -85,6 +85,6 @@ Here, the slowest spans are less than 500ms, which are not too slow for a 2000ms
 Distributed tracing and APM tools help users identify root causes, allowing development and operation teams to optimize accordingly. We hope you enjoyed this, and love Apache SkyWalking and our new trace visualization. If so, [give us a star on GitHub](https://github.com/apache/incubator-skywalking) to encourage us.
 
 SkyWalking 6 is scheduled to release at the end of January 2019. You can contact the project team through the following channels:
-- Follow [SkyWalking twitter](https://twitter.com/ASFSkyWalking)
+- Follow [SkyWalking X](https://X.com/ASFSkyWalking)
 - Subscribe mailing list: dev@skywalking.apache.org . Send to dev-subscribe@kywalking.apache.org to subscribe the mail list.
 - Join [Gitter](https://gitter.im/OpenSkywalking/Lobby) room.

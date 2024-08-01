@@ -203,4 +203,4 @@ Note: Clear the browser local cache if you used it to access deployments of  pre
 
 ## Additional Resources
 - Read more about the [SkyWalking 8.4 release highlights](https://github.com/apache/skywalking/blob/v8.4.0/changes/changes-8.4.0.md).
-- Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
+- Get more SkyWalking updates on [X](https://x.com/ASFSkyWalking).

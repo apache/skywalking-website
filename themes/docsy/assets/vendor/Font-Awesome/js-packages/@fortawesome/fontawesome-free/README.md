@@ -35,4 +35,4 @@ Or go straight to the [API documentation](https://fontawesome.com/how-to-use/wit
 
 ## Issues and support
 
-Start with [GitHub issues](https://github.com/FortAwesome/Font-Awesome/issues) and ping us on [Twitter](https://twitter.com/fontawesome) if you need to.
+Start with [GitHub issues](https://github.com/FortAwesome/Font-Awesome/issues) and ping us on [Twitter](https://x.com/fontawesome) if you need to.

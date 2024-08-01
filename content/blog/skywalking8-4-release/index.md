@@ -77,4 +77,4 @@ Figure 5: Grouped Service Topology
 
 ## Additional Resources
 - Read more about the [SkyWalking 8.4 release highlights](https://github.com/apache/skywalking/blob/v8.4.0/changes/changes-8.4.0.md).
-- Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
+- Get more SkyWalking updates on [Twitter](https://x.com/ASFSkyWalking).

@@ -102,7 +102,7 @@ Please follow this space for updates!
 {{%/* blocks/feature icon="fab fa-github" title="Contributions welcome!" url="https://github.com/gohugoio/hugo" */%}}
 We do a [Pull Request](https://github.com/gohugoio/hugo/pulls) contributions workflow on **GitHub**. New users are always welcome!
 {{%/* /blocks/feature */%}}
-{{%/* blocks/feature icon="fab fa-twitter" title="Follow us on Twitter!" url="https://twitter.com/GoHugoIO" */%}}
+{{%/* blocks/feature icon="fab fa-twitter" title="Follow us on Twitter!" url="https://x.com/GoHugoIO" */%}}
 For announcement of latest features etc.
 {{%/* /blocks/feature */%}}
 {{</* /blocks/section */>}}

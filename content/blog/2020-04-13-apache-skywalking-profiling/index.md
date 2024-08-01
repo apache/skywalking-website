@@ -97,7 +97,7 @@ Everything we discussed, including the Apache SkyWalking Java Agent, profile ana
 
 SkyWalking 7 has just been released. You can contact the project team through the following channels:
 
-- Follow [SkyWalking twitter](https://twitter.com/ASFSkyWalking).
+- Follow [SkyWalking X](https://x.com/ASFSkyWalking).
 - Subscribe mailing list: [dev@skywalking.apache.org](mailto:dev@skywalking.apache.org). Send to [dev-subscribe@kywalking.apache.org](mailto:dev-subscribe@kywalking.apache.org) to subscribe to the mail list.
 
 *Co-author Sheng Wu is a Tetrate founding engineer and the founder and VP of Apache SkyWalking. He is solving the problem of observability for large-scale service meshes in hybrid and multi-cloud environments.*

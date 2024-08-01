@@ -9,7 +9,7 @@ tags:
 ---
 
 - Author: Hongtao Gao, Apache SkyWalking & ShardingShpere PMC
-- [GitHub](https://github.com/hanahmily), [Twitter](https://twitter.com/hanahmily), [Linkedin](https://www.linkedin.com/in/gao-hongtao-47b835168/)
+- [GitHub](https://github.com/hanahmily), [X](https://X.com/hanahmily), [Linkedin](https://www.linkedin.com/in/gao-hongtao-47b835168/)
 
 Service mesh receiver was first introduced in Apache SkyWalking 6.0.0-beta. It is designed to provide a common entrance for receiving telemetry data from service mesh framework, for instance, Istio, Linkerd, Envoy etc. What’s the service mesh? According to Istio’s explain:
 

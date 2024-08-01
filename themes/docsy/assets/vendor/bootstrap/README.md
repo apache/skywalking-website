@@ -144,7 +144,7 @@ Editor preferences are available in the [editor config](https://github.com/twbs/
 
 Get updates on Bootstrap's development and chat with the project maintainers and community members.
 
-- Follow [@getbootstrap on Twitter](https://twitter.com/getbootstrap).
+- Follow [@getbootstrap on Twitter](https://x.com/getbootstrap).
 - Read and subscribe to [The Official Bootstrap Blog](https://blog.getbootstrap.com/).
 - Join [the official Slack room](https://bootstrap-slack.herokuapp.com/).
 - Chat with fellow Bootstrappers in IRC. On the `irc.freenode.net` server, in the `##bootstrap` channel.
@@ -163,12 +163,12 @@ See [the Releases section of our GitHub project](https://github.com/twbs/bootstr
 
 **Mark Otto**
 
-- <https://twitter.com/mdo>
+- <https://x.com/mdo>
 - <https://github.com/mdo>
 
 **Jacob Thornton**
 
-- <https://twitter.com/fat>
+- <https://x.com/fat>
 - <https://github.com/fat>
 
 

@@ -38,5 +38,5 @@ SkyWalking 现在不再只是监控服务或平台，而是监控整个网格。
 
 ### 额外资源
 
-- 追踪 [Twitter](https://twitter.com/ASFSkyWalking) 获取更多 SkyWalking 最新资讯
+- 追踪 [Twitter](https://x.com/ASFSkyWalking) 获取更多 SkyWalking 最新资讯
 - SkyWalking 未来的发布会加入原生指标 API 和融合 Micrometer (Sleuth) 指标集合。

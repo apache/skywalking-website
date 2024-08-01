@@ -88,5 +88,5 @@ SkyWalking's approach to observability follows these principles:
 ### Resources
 
 *   Read about the [SkyWalking 8.1 release highlights](https://github.com/apache/skywalking/blob/master/CHANGES.md).
-*   Get more SkyWalking updates on [Twitter](https://twitter.com/asfskywalking?lang=en).
+*   Get more SkyWalking updates on [X](https://x.com/asfskywalking?lang=en).
 *   Sign up to hear more about SkyWalking and observability from [Tetrate](https://www.tetrate.io/contact-us/).

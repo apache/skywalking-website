@@ -158,5 +158,5 @@ Trace 是一个非常实用的功能，用户可以根据精确的 TraceId 去�
 
 ## 参考资料 
 
-- https://twitter.com/AsfSkyWalking/status/1013616673218179072
-- https://twitter.com/AsfSkyWalking/status/1013617100143800320
+- https://x.com/AsfSkyWalking/status/1013616673218179072
+- https://x.com/AsfSkyWalking/status/1013617100143800320

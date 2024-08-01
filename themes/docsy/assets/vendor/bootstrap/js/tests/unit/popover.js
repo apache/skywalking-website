@@ -48,7 +48,7 @@ $(function () {
   QUnit.test('should render popover element', function (assert) {
     assert.expect(2)
     var done = assert.async()
-    $('<a href="#" title="mdo" data-content="https://twitter.com/mdo">@mdo</a>')
+    $('<a href="#" title="mdo" data-content="https://x.com/mdo">@mdo</a>')
       .appendTo('#qunit-fixture')
       .on('shown.bs.popover', function () {
         assert.notEqual($('.popover').length, 0, 'popover was inserted')
@@ -63,7 +63,7 @@ $(function () {
 
   QUnit.test('should store popover instance in popover data object', function (assert) {
     assert.expect(1)
-    var $popover = $('<a href="#" title="mdo" data-content="https://twitter.com/mdo">@mdo</a>').bootstrapPopover()
+    var $popover = $('<a href="#" title="mdo" data-content="https://x.com/mdo">@mdo</a>').bootstrapPopover()
 
     assert.ok($popover.data('bs.popover'), 'popover instance exists')
   })
@@ -275,7 +275,7 @@ $(function () {
   QUnit.test('should render popover element using delegated selector', function (assert) {
     assert.expect(2)
     var done = assert.async()
-    var $div = $('<div><a href="#" title="mdo" data-content="https://twitter.com/mdo">@mdo</a></div>')
+    var $div = $('<div><a href="#" title="mdo" data-content="https://x.com/mdo">@mdo</a></div>')
       .appendTo('#qunit-fixture')
       .bootstrapPopover({
         selector: 'a',

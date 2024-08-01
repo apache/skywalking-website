@@ -60,7 +60,7 @@ PV（page views，页面浏览量）， UV（unique visitors，独立访客数�
 
 * 阅读更多关于[SkyWalkng 8.2 发行版重点](https://github.com/apache/skywalking/blob/v8.2.0/CHANGES.md).
 
-* 在[推特](https://twitter.com/ASFSkyWalking)上获取更多关于 SkyWalking 的更新。
+* 在[推特](https://x.com/ASFSkyWalking)上获取更多关于 SkyWalking 的更新。
 
 ### Apache SkyWalking DevCon 报名信息
 

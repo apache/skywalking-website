@@ -206,6 +206,6 @@ kubectl port-forward svc/ui 8080:8080 --namespace default
 
 在未来，我们将提供更多功能。敬请期待！
 
-- Twitter：[ASFSkyWalking](https://twitter.com/AsfSkyWalking)
+- Twitter：[ASFSkyWalking](https://x.com/AsfSkyWalking)
 - Slack：向邮件列表 (`dev@skywalking.apache.org`) 发送“Request to join SkyWalking Slack”，我们会邀请你加入。
 - 订阅我们的 [Medium 列表](https://medium.com/@AsfSkyWalking)。

@@ -52,5 +52,5 @@ The Java agent core is enhanced in this release. It could work better in the con
 
 - Read more about the [SkyWalking 8.1 release highlights](https://github.com/apache/skywalking/blob/v8.1.0/CHANGES.md).
 - Read more about SkyWalking from Tetrate on our [blog](https://www.tetrate.io/blog/category/open-source/apache-skywalking/).
-- Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
+- Get more SkyWalking updates on [X](https://x.com/ASFSkyWalking).
 - Sign up to hear more about SkyWalking and observability from [Tetrate](https://www.tetrate.io/contact-us/).

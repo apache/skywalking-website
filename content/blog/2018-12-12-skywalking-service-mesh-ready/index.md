@@ -114,6 +114,6 @@ We would love everyone to try to test our new version. You can find everything y
 * Submit an issue on [GitHub repository](https://github.com/apache/incubator-skywalking/issues/new)
 * Mailing list: dev@skywalking.apache.org . Send to dev-subscribe@kywalking.apache.org to subscribe the mail list.
 * [Gitter](https://gitter.im/OpenSkywalking/Lobby)
-* [Project twitter](https://twitter.com/ASFSkyWalking)
+* [Project X](https://X.com/ASFSkyWalking)
 
 Oh, and one last thing! If you like our project, don't forget to [give us a star on GitHub](https://github.com/apache/incubator-skywalking).

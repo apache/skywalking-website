@@ -60,5 +60,5 @@ Common scenarios like `successful rate < 90% but there are only 1~2 requests` ca
 ## Additional Resources
 
 - Read more about the [SkyWalking 8.2 release highlights](https://github.com/apache/skywalking/blob/v8.2.0/CHANGES.md).
-- Get more SkyWalking updates on [Twitter](https://twitter.com/ASFSkyWalking).
+- Get more SkyWalking updates on [X](https://x.com/ASFSkyWalking).
 

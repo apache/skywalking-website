@@ -9,7 +9,7 @@ zh_tags:
 ---
 
 - 作者: Wu Sheng, tetrate, SkyWalking original creator
-- [GitHub](https://github.com/wu-sheng), [Twitter](https://twitter.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
+- [GitHub](https://github.com/wu-sheng), [Twitter](https://x.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
 - 翻译: jjlu521016
 
 # 背景
@@ -92,6 +92,6 @@ Skywalking v6包含两种追踪视图:
 
 Skywakling 6计划在2019年的1月底完成release。您可以通过以下渠道联系项目团队成员
 
-+ 关注 [skywalking推特](https://twitter.com/ASFSkyWalking)
++ 关注 [skywalking推特](https://x.com/ASFSkyWalking)
 + 订阅邮件:dev@skywalking.apache.org。发送邮件到 dev-subscribe@kywalking.apache.org 来订阅.
 + 加入[Gitter](https://gitter.im/OpenSkywalking/Lobby)聊天室
