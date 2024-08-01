@@ -1,7 +1,7 @@
 ---
 title: "[Community win] SkyWalking achieved 500 contributors milestone."
 date: 2021-07-10
-author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github.com/wu-sheng) [Twitter](https://x.com/wusheng1108) [Linkedin](https://www.linkedin.com/in/wusheng1108)
+author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github.com/wu-sheng) [X](https://x.com/wusheng1108) [Linkedin](https://www.linkedin.com/in/wusheng1108)
 description: "SkyWalking has over 500 contributors based on GitHub repository statistics. This is a remarkable achievement for the whole diverse community."
 startTime: 2021-07-01T00:00:00Z
 endTime: 2021-08-01T10:00:00Z

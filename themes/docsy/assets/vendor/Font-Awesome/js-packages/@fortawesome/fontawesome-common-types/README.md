@@ -24,4 +24,4 @@ const myIcon: IconName = "..."
 
 ## Issues and support
 
-Start with [GitHub issues](https://github.com/FortAwesome/Font-Awesome/issues) and ping us on [Twitter](https://x.com/fontawesome) if you need to.
+Start with [GitHub issues](https://github.com/FortAwesome/Font-Awesome/issues) and ping us on [X](https://x.com/fontawesome) if you need to.

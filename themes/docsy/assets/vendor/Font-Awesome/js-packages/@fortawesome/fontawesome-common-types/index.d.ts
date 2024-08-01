@@ -394,8 +394,8 @@ export type IconName = '500px' |
   'tumblr' | 
   'tumblr-square' | 
   'twitch' | 
-  'twitter' | 
-  'twitter-square' | 
+  'X' | 
+  'X-square' | 
   'typo3' | 
   'uber' | 
   'ubuntu' | 

@@ -39,7 +39,7 @@ Using the most basic table markup, here's how `.table`-based tables look in Boot
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -75,7 +75,7 @@ You can also invert the colors—with light text on dark backgrounds—with `.ta
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -113,7 +113,7 @@ Similar to tables and dark tables, use the modifier classes `.thead-light` or `.
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -144,7 +144,7 @@ Similar to tables and dark tables, use the modifier classes `.thead-light` or `.
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -182,7 +182,7 @@ Use `.table-striped` to add zebra-striping to any table row within the `<tbody>`
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -216,7 +216,7 @@ Use `.table-striped` to add zebra-striping to any table row within the `<tbody>`
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -253,7 +253,7 @@ Add `.table-bordered` for borders on all sides of the table and cells.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -286,7 +286,7 @@ Add `.table-bordered` for borders on all sides of the table and cells.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -323,7 +323,7 @@ Add `.table-borderless` for a table without borders.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -358,7 +358,7 @@ Add `.table-borderless` for a table without borders.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -395,7 +395,7 @@ Add `.table-hover` to enable a hover state on table rows within a `<tbody>`.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -428,7 +428,7 @@ Add `.table-hover` to enable a hover state on table rows within a `<tbody>`.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -465,7 +465,7 @@ Add `.table-sm` to make tables more compact by cutting cell padding in half.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -498,7 +498,7 @@ Add `.table-sm` to make tables more compact by cutting cell padding in half.
     <tr>
       <th scope="row">3</th>
       <td colspan="2">Larry the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>
@@ -671,7 +671,7 @@ A `<caption>` functions like a heading for a table. It helps users with screen r
       <th scope="row">3</th>
       <td>Larry</td>
       <td>the Bird</td>
-      <td>@twitter</td>
+      <td>@X</td>
     </tr>
   </tbody>
 </table>

@@ -1,7 +1,7 @@
 'use strict';
 Object.defineProperty(exports, '__esModule', { value: true });
 var prefix = 'fab';
-var iconName = 'twitter';
+var iconName = 'X';
 var width = 512;
 var height = 512;
 var ligatures = [];
@@ -19,7 +19,7 @@ exports.definition = {
     svgPathData
   ]};
 
-exports.faTwitter = exports.definition;
+exports.faX = exports.definition;
 exports.prefix = prefix;
 exports.iconName = iconName;
 exports.width = width;

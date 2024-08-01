@@ -59,7 +59,7 @@ Docsy gives you a theme for the [Hugo](https://gohugo.io/) static site generator
   <tr>
    <td><strong>Feedback, contribution, and contact links</strong>
    </td>
-   <td>Let your users file issues and edit docs with a single click, or follow contact links to join you on Slack, Twitter, or mailing lists.
+   <td>Let your users file issues and edit docs with a single click, or follow contact links to join you on Slack, X, or mailing lists.
    </td>
   </tr>
   <tr>

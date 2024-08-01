@@ -202,12 +202,12 @@ Use `@extend %fa-icon` to correctly maintain CSS order in output files.
 ~~Old way:~~
 
 ```
-.twitter {
+.X {
   @include fa-icon; /* incorrect */
   @extend .fab;
 
   &:before {
-    content: fa-content($fa-var-twitter);
+    content: fa-content($fa-var-X);
   }
 }
 ```
@@ -215,12 +215,12 @@ Use `@extend %fa-icon` to correctly maintain CSS order in output files.
 New way:
 
 ```
-.twitter {
+.X {
   @extend %fa-icon; /* correct */
   @extend .fab;
 
   &:before {
-    content: fa-content($fa-var-twitter);
+    content: fa-content($fa-var-X);
   }
 }
 ```
@@ -312,10 +312,10 @@ What does that mean?
 ```javascript
 import fontawesome from '@fortawesome/fontawesome'
 import solid from '@fortawesome/fontawesome-free-solid'
-import faTwitter from '@fortawesome/fontawesome-free-brands/faTwitter'
+import faX from '@fortawesome/fontawesome-free-brands/faX'
 import FontAwesomeIcon from '@fortawesome/vue-fontawesome'
 
-library.add(solid, faTwitter)
+library.add(solid, faX)
 ```
 
 New way:
@@ -323,10 +323,10 @@ New way:
 ```javascript
 import { library, dom } from '@fortawesome/fontawesome-svg-core'
 import { fas } from '@fortawesome/free-solid-svg-icons'
-import { faTwitter } from '@fortawesome/free-brands-svg-icons'
+import { faX } from '@fortawesome/free-brands-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
-library.add(fas, faTwitter)
+library.add(fas, faX)
 
 // Kicks off the process of finding <i> tags and replacing with <svg>
 dom.watch()
@@ -335,7 +335,7 @@ dom.watch()
 This is also a valid way to import icons that works if your tool does not support tree shaking:
 
 ```javascript
-import { faTwitter } from '@fortawesome/free-brands-svg-icons/faTwitter'
+import { faX } from '@fortawesome/free-brands-svg-icons/faX'
 ```
 
 ### Improved support for tree shaking

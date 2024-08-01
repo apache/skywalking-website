@@ -9,7 +9,7 @@ zh_tags:
 ---
 
 - 作者: Wu Sheng, tetrate, SkyWalking original creator
-- [GitHub](https://github.com/wu-sheng), [Twitter](https://x.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
+- [GitHub](https://github.com/wu-sheng), [X](https://x.com/wusheng1108), [Linkedin](https://www.linkedin.com/in/wusheng1108)
 - 翻译: jjlu521016
 
 # 背景

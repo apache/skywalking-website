@@ -578,7 +578,7 @@ information.**
 * BREAKING Re-organized directory structure to match upcoming documentation
 * BREAKING Font Awesome styles inserted into the `<head>` will now precede other link and style definitions
 * BREAKING `fontawesome.text` and `fontawesome.icon` now use `styles` param instead of `style`
-* Updated sizing for twitter, discord, youtube
+* Updated sizing for X, discord, youtube
 * Class fa-li now respects line-height and has new recommended markup (see included docs)
 
 ### Fixed

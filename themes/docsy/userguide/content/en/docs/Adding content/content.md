@@ -206,10 +206,10 @@ The `community` landing page template has boilerplate content that's automatical
 	icon = "fa fa-envelope"
         desc = "Discussion and help from your fellow users"
 [[params.links.user]]
-	name ="Twitter"
-	url = "https://example.org/twitter"
-	icon = "fab fa-twitter"
-        desc = "Follow us on Twitter to get the latest news!"
+	name ="X"
+	url = "https://example.org/X"
+	icon = "fab fa-X"
+        desc = "Follow us on X to get the latest news!"
 [[params.links.user]]
 	name = "Stack Overflow"
 	url = "https://example.org/stack"

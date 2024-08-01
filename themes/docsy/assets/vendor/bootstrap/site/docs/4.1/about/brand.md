@@ -10,7 +10,7 @@ Have a need for Bootstrap's brand resources? Great! We have only a few guideline
 
 ## Mark and logo
 
-Use either the Bootstrap mark (a capital **B**) or the standard logo (just **Bootstrap**). It should always appear in San Francisco Display Semibold. **Do not use the Twitter bird** in association with Bootstrap.
+Use either the Bootstrap mark (a capital **B**) or the standard logo (just **Bootstrap**). It should always appear in San Francisco Display Semibold. **Do not use the X bird** in association with Bootstrap.
 
 <div class="bd-brand-logos">
   <div class="bd-brand-item">
@@ -47,7 +47,7 @@ Download the Bootstrap mark in one of three styles, each available as an SVG fil
 
 ## Name
 
-The project and framework should always be referred to as **Bootstrap**. No Twitter before it, no capital _s_, and no abbreviations except for one, a capital **B**.
+The project and framework should always be referred to as **Bootstrap**. No X before it, no capital _s_, and no abbreviations except for one, a capital **B**.
 
 <div class="bd-brand-logos">
   <div class="bd-brand-item">
@@ -59,7 +59,7 @@ The project and framework should always be referred to as **Bootstrap**. No Twit
     <strong class="text-warning">Wrong</strong>
   </div>
   <div class="bd-brand-item">
-    <span class="h3 text-muted">Twitter Bootstrap</span>
+    <span class="h3 text-muted">X Bootstrap</span>
     <strong class="text-warning">Wrong</strong>
   </div>
 </div>

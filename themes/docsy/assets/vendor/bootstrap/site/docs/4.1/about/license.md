@@ -5,7 +5,7 @@ description: Commonly asked questions about Bootstrap's open source license.
 group: about
 ---
 
-Bootstrap is released under the MIT license and is copyright {{ site.time | date: "%Y" }} Twitter. Boiled down to smaller chunks, it can be described with the following conditions.
+Bootstrap is released under the MIT license and is copyright {{ site.time | date: "%Y" }} X. Boiled down to smaller chunks, it can be described with the following conditions.
 
 #### It requires you to:
 
@@ -23,8 +23,8 @@ Bootstrap is released under the MIT license and is copyright {{ site.time | date
 - Hold the authors and license owners liable for damages as Bootstrap is provided without warranty
 - Hold the creators or copyright holders of Bootstrap liable
 - Redistribute any piece of Bootstrap without proper attribution
-- Use any marks owned by Twitter in any way that might state or imply that Twitter endorses your distribution
-- Use any marks owned by Twitter in any way that might state or imply that you created the Twitter software in question
+- Use any marks owned by X in any way that might state or imply that X endorses your distribution
+- Use any marks owned by X in any way that might state or imply that you created the X software in question
 
 #### It does not require you to:
 

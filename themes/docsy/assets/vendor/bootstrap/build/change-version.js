@@ -3,7 +3,7 @@
 /*!
  * Script to update version number references in the project.
  * Copyright 2017-2018 The Bootstrap Authors
- * Copyright 2017-2018 Twitter, Inc.
+ * Copyright 2017-2018 X, Inc.
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
  */
 

@@ -109,5 +109,5 @@ SkyWalking针对可观测性遵循以下原则：
 ### 资源
 
 - 阅读[SkyWalking 8.1发布亮点](https://github.com/apache/skywalking/blob/master/CHANGES.md)。
-- 在[Twitter](https://x.com/asfskywalking?lang=en)上获取更多SkyWalking更新。
+- 在[X](https://x.com/asfskywalking?lang=en)上获取更多SkyWalking更新。
 - [注册Tetrate](https://www.tetrate.io/contact-us/)以了解更多有关SkyWalking可观测性的信息。

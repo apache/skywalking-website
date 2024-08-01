@@ -242,7 +242,7 @@ and monitoring the target process with low resource consumption. When it meets t
 it would initiate more complex CPU Profiling and Network Profiling tasks.
 
 In the future, we will offer even more features. Stay tuned!
-* Twitter, [ASFSkyWalking](https://x.com/AsfSkyWalking)
+* X, [ASFSkyWalking](https://x.com/AsfSkyWalking)
 * Slack. Send `Request to join SkyWalking slack` mail to the mail list(`dev@skywalking.apache.org`), we will invite you in.
 * Subscribe to our [medium list](https://medium.com/@AsfSkyWalking).
 

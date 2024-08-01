@@ -64,7 +64,7 @@ Note that the relevant shortcode parameters above will have sensible defaults, b
 To set the background image, place an image with the word "background" in the name in the page's [Page Bundle](/docs/adding-content/content/#page-bundles). For example, in our the example site the background image in the home page's cover block is [`featured-background.jpg`](https://github.com/google/docsy-example/tree/master/content/en), in the same directory.
 
 {{% alert title="Tip" %}}
-If you also include the word **featured** in the image name, e.g. `my-featured-background.jpg`, it will also be used as the Twitter Card image when shared.
+If you also include the word **featured** in the image name, e.g. `my-featured-background.jpg`, it will also be used as the X Card image when shared.
 {{% /alert %}}
 
 For available icons, see [Font Awesome](https://fontawesome.com/icons?d=gallery&m=free).
@@ -102,7 +102,7 @@ Please follow this space for updates!
 {{%/* blocks/feature icon="fab fa-github" title="Contributions welcome!" url="https://github.com/gohugoio/hugo" */%}}
 We do a [Pull Request](https://github.com/gohugoio/hugo/pulls) contributions workflow on **GitHub**. New users are always welcome!
 {{%/* /blocks/feature */%}}
-{{%/* blocks/feature icon="fab fa-twitter" title="Follow us on Twitter!" url="https://x.com/GoHugoIO" */%}}
+{{%/* blocks/feature icon="fab fa-X" title="Follow us on X!" url="https://x.com/GoHugoIO" */%}}
 For announcement of latest features etc.
 {{%/* /blocks/feature */%}}
 {{</* /blocks/section */>}}

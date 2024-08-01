@@ -29,9 +29,9 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 
 | Name                             | Apache ID    |                                                |
 | -------------------------------- | ------------ | ---------------------------------------------- |
-| Can Li                           | lican        | <i class="iconfont icon-twitter"></i> [Candy198088](https://x.com/Candy198088) |
+| Can Li                           | lican        | <i class="iconfont icon-X"></i> [Candy198088](https://x.com/Candy198088) |
 | DongXue Si                       | ilucky       |                                                |
-| Han Liu                          | liuhan       | <i class="iconfont icon-twitter"></i> [dalek_zero](https://x.com/dalek_zero)   |
+| Han Liu                          | liuhan       | <i class="iconfont icon-X"></i> [dalek_zero](https://x.com/dalek_zero)   |
 | Haochao Zhuang                   | daming       |                                                |
 | Haoyang Liu                      | liuhaoyangzz |                                                |
 | Hongtao Gao                      | hanahmily    |                                                |
@@ -43,7 +43,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Jiemin Xia                       | jmjoy        |                                                |
 | Jinlin Fu                        | withlin      |                                                |
 | Juntao Zhang                     | zhangjuntao  |                                                |
-| Kai Wan                          | wankai       | <i class="iconfont icon-twitter"></i> [wankai123](https://x.com/wankai123)     |
+| Kai Wan                          | wankai       | <i class="iconfont icon-X"></i> [wankai123](https://x.com/wankai123)     |
 | Kai Wang                         | wangkai      |                                                |
 | Lang Li                          | lilang       |                                                |
 
@@ -54,21 +54,21 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | -------------------------------- | ------------ | ---------------------------------------------- |
 | Michael Semb Wever               | mck          |                                                |
 | Qiuxia Fan                       | qiuxiafan    |                                                |
-| Sheng Wu (Project V.P.)         | wusheng      | <i class="iconfont icon-twitter"></i> [wusheng1108](https://x.com/wusheng1108) |
-| Shinn Zhang                      | zhangxin     | <i class="iconfont icon-twitter"></i> [ascrutae](https://x.com/ascrutae)       |
+| Sheng Wu (Project V.P.)         | wusheng      | <i class="iconfont icon-X"></i> [wusheng1108](https://x.com/wusheng1108) |
+| Shinn Zhang                      | zhangxin     | <i class="iconfont icon-X"></i> [ascrutae](https://x.com/ascrutae)       |
 | Wei Zhang                        | zhangwei24   |                                                |
 | Wenbing Wang                     | wangwenbin   |                                                |
 | Willem Ning Jiang                | ningjiang    |                                                |
 | Yang Bai                         | baiyang      |                                                |
-| Yanlong He                       | heyanlong    | <i class="iconfont icon-twitter"></i> [YanlongHe](https://x.com/YanlongHe)       |
+| Yanlong He                       | heyanlong    | <i class="iconfont icon-X"></i> [YanlongHe](https://x.com/YanlongHe)       |
 | Yao Wang                         | ywang        |                                                |
 | Ye Cao                           | dashanji     |                                                |
-| Yihao Chen                       | yihaochen    | <i class="iconfont icon-twitter"></i> [Superskyyy](https://x.com/Superskyyyyy)   |
+| Yihao Chen                       | yihaochen    | <i class="iconfont icon-X"></i> [Superskyyy](https://x.com/Superskyyyyy)   |
 | Yixiong Cao                      | caoyixiong   |                                                |
 | Yongsheng Peng                   | pengys       |                                                |
 | Yuguang Zhao                     | zhaoyuguang  |                                                |
 | Zhang Kewei                      | zhangkewei   |                                                |
-| Zhenxu Ke                        | kezhenxu94   | <i class="iconfont icon-twitter"></i> [kezhenxu94](https://x.com/kezhenxu94)   |
+| Zhenxu Ke                        | kezhenxu94   | <i class="iconfont icon-X"></i> [kezhenxu94](https://x.com/kezhenxu94)   |
 
 </div>
 </div>
@@ -83,12 +83,12 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Brandon Fergerson | bfergerson  |                                                  |
 | Ziyan Chen        | clairechen  |                                                  |
 | Gong Dewei        | kylixs      |                                                  |
-| Gui Cao           | zifeihan    | <i class="iconfont icon-twitter"></i> [zifeihan007](https://x.com/zifeihan007)   |
+| Gui Cao           | zifeihan    | <i class="iconfont icon-X"></i> [zifeihan007](https://x.com/zifeihan007)   |
 | Hailin Wang       | wanghailin  |                                                  |
-| Huaxi Jiang       | hoshea      | <i class="iconfont icon-twitter"></i> [Zerone___01](https://x.com/Zerone___01)   |
+| Huaxi Jiang       | hoshea      | <i class="iconfont icon-X"></i> [Zerone___01](https://x.com/Zerone___01)   |
 | Jiapeng Liu       | liujiapeng  |                                                  |
 | JunXu Chen        | chenjunxu   |                                                  |
-| Ke Zhang          | zhangke     | <i class="iconfont icon-twitter"></i> [Humbertttttt](https://x.com/Humbertttttt) |
+| Ke Zhang          | zhangke     | <i class="iconfont icon-X"></i> [Humbertttttt](https://x.com/Humbertttttt) |
 | Ming Wen          | wenming     |                                                  |
 | Puguang Yang      | ypg         |                                                  |
 | Qiang Li          | liqiang     |                                                  |
@@ -97,7 +97,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 </div>
 <div class="table-box">
 
-| Name           | Apache ID    | Twitter Handle                                                                      |
+| Name           | Apache ID    | X Handle                                                                      |
 |----------------|--------------|-------------------------------------------------------------------------------------|
 | Ruixian Wang   | ax1an        | [Ax1anRISE](https://x.com/Ax1anRISE)                                          |
 | Sheng Wang     | wangsheng    |                                                                                     |
