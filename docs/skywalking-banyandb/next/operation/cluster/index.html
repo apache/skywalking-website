@@ -34,7 +34,7 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
 Cluster Setup Before deploying or maintaining a cluster, it is recommended to familiarize oneself with the basic clustering concepts by reviewing the clustering documentation.
 To set up a cluster, one can refer to the cluster installation guide, which describes the process in detail.">
 
-<meta itemprop="wordCount" content="882">
+<meta itemprop="wordCount" content="1485">
 
 
 
@@ -906,7 +906,7 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c27d562</div>
+                  <div class="commit-id">Commit Id: c3e4029</div>
                 
 
 
@@ -957,6 +957,28 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
 <p>The new added data nodes can be automatically discovered by the existing liaison nodes. It is recommended to add data nodes one by one to avoid overloading the liaison nodes with the new data nodes' metadata.</p>
 <p>The cluster&rsquo;s availability is also improved by increasing the number of data nodes, as active data nodes need to handle a lower additional workload when some data nodes become unavailable. For example, if one node out of 2 nodes is unavailable, then 50% of the load is re-distributed across the remaining node, resulting in a 100% per-node workload increase. If one node out of 10 nodes is unavailable, then 10% of the load is re-distributed across the 9 remaining nodes, resulting in only an 11% per-node workload increase.</p>
 <p>Increasing the number of etcd nodes can increase the cluster&rsquo;s metadata capacity and improve the cluster&rsquo;s metadata query performance. It can also improve the cluster&rsquo;s metadata availability, as the metadata is replicated across all the etcd nodes. However, the cluster size should be odd to avoid split-brain situations.</p>
+<p>The steps of adding more data nodes:</p>
+<ol>
+<li>Boot up the new data node. They will register themselves to the etcd cluster. The liaison nodes will discover the new data node automatically.</li>
+<li>If the shards are not balanced, the new data node will receive the shards from the existing data nodes. The shards are balanced automatically.</li>
+<li>Or if the shards are too few to balance, more shards should be created by increasing <code>shard_num</code> of the <code>group</code>. Seeing the <a href="../../interacting/bydbctl/schema/group">CRUD Groups</a> for more details.</li>
+<li>The new data node will start to ingest data and serve queries.</li>
+</ol>
+<h2 id="availability">Availability</h2>
+<p>The BanyanDB cluster remains available for data ingestion and data querying even if some of its components are temporarily unavailable.</p>
+<h3 id="liaison-node-failure">Liaison Node Failure</h3>
+<p>In the event of a liaison node failure, the cluster remains available when the gRPC load balancer can stop sending requests to the failed liaison node and start sending requests to the remaining liaison nodes. The failed liaison node is replaced by the remaining liaison nodes, and the cluster continues to ingest data and serve queries. However, if the remaining liaison nodes are overloaded, the cluster might face performance degradation.</p>
+<p>It is recommended to monitor the cluster&rsquo;s performance and add more liaison nodes in case of performance degradation. A workload management platform, such as Kubernetes, can be used to automatically scale the liaison nodes based on the cluster&rsquo;s performance metrics.</p>
+<h3 id="data-node-failure">Data Node Failure</h3>
+<p>If a data node fails, the cluster remains available. The failed data node is replaced by the remaining data nodes, and the cluster continues to ingest new data and serve queries. If the remaining data nodes are overloaded, the cluster might face performance degradation.</p>
+<p>The liaison nodes automatically discover the failed data node through the etcd cluster. They will perform a health check on the failed data node. If the failed data node is not healthy, the liaison nodes will stop sending requests to the failed data node and start sending requests to the remaining data nodes. Otherwise, the liaison nodes will continue sending requests to the failed data node in case of a temporary failure between the etcd cluster and the data node.</p>
+<p>Liaison nodes continue serving queries if at least one data node is available. However, the responses might lose some data points that are stored in the failed data node. The lost data points are automatically recovered when the failed data node is back online.</p>
+<p>The client might face a &ldquo;grpc: the client connection is closing&rdquo; error temporarily when the liaison nodes are switching the requests from the failed data node to the remaining data nodes. The client should retry the request in case of this error.</p>
+<p>A workload management platform, such as Kubernetes, can be used to automatically scale the data nodes based on the cluster&rsquo;s performance metrics. But the shard number of the group should be increased manually. A proper practice is to set a expected maximum shard number for the group when creating the group. The shard number should match the maximum number of data nodes that the group can have.</p>
+<h3 id="etcd-node-failure">etcd Node Failure</h3>
+<p>If an etcd node fails, the cluster can still ingest new data and serve queries of <code>Stream</code> and <code>Measure</code>. <code>Property</code> operations are not available during the etcd node failure.</p>
+<p>When the etcd node is back online, the cluster automatically recovers without any manual intervention. If the etcd cluster lost the data, the client should rerun the metadata initialization process to recover the metadata.</p>
+<p>You might see some etcd-related errors in the logs of the liaison nodes and data nodes. These errors are automatically recovered when the failed etcd node is back online.</p>
 
 </div>
 <div>
@@ -1048,6 +1070,13 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
           <ul>
             <li><a href="#vertical-scalability">Vertical Scalability</a></li>
             <li><a href="#horizontal-scalability">Horizontal Scalability</a></li>
+          </ul>
+        </li>
+        <li><a href="#availability">Availability</a>
+          <ul>
+            <li><a href="#liaison-node-failure">Liaison Node Failure</a></li>
+            <li><a href="#data-node-failure">Data Node Failure</a></li>
+            <li><a href="#etcd-node-failure">etcd Node Failure</a></li>
           </ul>
         </li>
       </ul>
