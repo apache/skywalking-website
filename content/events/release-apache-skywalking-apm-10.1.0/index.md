@@ -1,5 +1,5 @@
 ---
-title: Release Apache SkyWalking APM 10.1
+title: Release Apache SkyWalking APM 10.1.0
 date: 2024-09-29
 author: SkyWalking Team
 description: "Release Apache SkyWalking 10.1.0 - A Version of PERFORMANCE"
