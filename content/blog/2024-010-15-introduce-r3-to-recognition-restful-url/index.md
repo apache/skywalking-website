@@ -1,5 +1,5 @@
 ---
-title: "Introduce R3 to recognition RESTFul URL"
+title: "Introduce R3 to recognition RESTFul URI"
 date: 2024-10-17
 author: Han Liu
 description: "This article will introduce how to use R3 to identify RESTFul URLs and integrate them into SkyWalking."
@@ -14,7 +14,7 @@ In modern applications, services are typically provided through RESTFul HTTP URL
 Using RESTFul HTTP URLs (as unique resource identifiers) offers high readability, making it easier for both clients and servers to understand.
 However, in the observability field, this approach poses several challenges:
 
-1. **A large number of endpoints (HTTP URL)**: Browsing through all externally provided endpoints becomes more difficult, making it hard to identify problematic endpoints.
+1. **A large number of endpoints (HTTP URI)**: Browsing through all externally provided endpoints becomes more difficult, making it hard to identify problematic endpoints.
 2. **Metrics are difficult to collect**: It becomes particularly challenging to categorize similar endpoints and generate observability metrics.
 
 In existing solutions, this issue can be resolved following these application-level resolutions:
@@ -29,21 +29,21 @@ merge metrics generated from similar URLs for better representation.
 
 ## R3
 
-R3(RESTFul Pattern Recognition) is a high-performance RESTFul URL recognition tool inspired by [Drain3](https://github.com/logpai/Drain3).
+R3(RESTFul Pattern Recognition) is a high-performance RESTFul URI recognition tool inspired by [Drain3](https://github.com/logpai/Drain3).
 It can be deployed as a standalone application on the observability server and communicate with the SkyWalking OAP.
 
-R3 can accept a URL list via the gRPC protocol and aggregate similar URLs into a specific format.
-The aggregated (formatted) URL list can also be queried using the gRPC protocol.
+R3 can accept a URI list via the gRPC protocol and aggregate similar URLs into a specific format.
+The aggregated (formatted) URI list can also be queried using the gRPC protocol.
 
 ### Data Interaction Flow
 
 ![Data Interaction Flow between OAP, R3](data_interaction_flow.png)
 
-1. **OAP receives and caches unformatted URL list**: OAP receives observability data through different protocols and identifies all unformatted URLs. These URLs are stored in a temporary list categorized by the service they belong to.
+1. **OAP receives and caches unformatted URI list**: OAP receives observability data through different protocols and identifies all unformatted URLs. These URLs are stored in a temporary list categorized by the service they belong to.
 2. **OAP sends URLs to be formatted to R3**: OAP periodically batches the URLs that need formatting and sends them to the R3 service.
-3. **R3 receives and parses the URL list**: R3 asynchronously analyzes the similarity of the received URLs and stores (persists) the results on the local disk to allow features like recovery after a restart.
-4. **OAP queries formatted URL list from R3**: OAP periodically queries R3 for the detected formatted URLs and saves the results in memory.
-5. **OAP formats URLs**: When OAP receives new observability data, it matches the URLs against the formatted URLs retrieved from R3. If a match is found, the formatted URL is used for subsequent metric calculations.
+3. **R3 receives and parses the URI list**: R3 asynchronously analyzes the similarity of the received URLs and stores (persists) the results on the local disk to allow features like recovery after a restart.
+4. **OAP queries formatted URI list from R3**: OAP periodically queries R3 for the detected formatted URLs and saves the results in memory.
+5. **OAP formats URLs**: When OAP receives new observability data, it matches the URLs against the formatted URLs retrieved from R3. If a match is found, the formatted URI is used for subsequent metric calculations.
 
 ### Scenarios
 
@@ -51,8 +51,8 @@ In R3, the following scenarios are primarily addressed. For URLs identified as d
 
 #### ID Matching
 
-A common practice in RESTFul APIs is to include various IDs in the URL paths,
-which leads to a large number of unique URL endpoints.
+A common practice in RESTFul APIs is to include various IDs in the URI paths,
+which leads to a large number of unique URI endpoints.
 For example, paths like the following will be aggregated by R3 into a standardized format: `/api/users/{var}`.
 
 * /api/users/cbf11b02ea464447b507e8852c32190a
@@ -75,16 +75,16 @@ For example, URLs like the following would not be considered similar and therefo
 #### Low Sample
 
 To prevent incorrect judgments due to insufficient sample sizes, R3 allows the configuration of a
-[combine min url count](https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini#L38) parameter in the
+[combine min URI count](https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini#L38) parameter in the
 [configuration file](https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini).
 This parameter sets the minimum number of similar paths required before proceeding with the analysis.
 
-Such as the threshold is `3`, the following URL would keep the original URL, not parameterized.
+Such as the threshold is `3`, the following URI would keep the original URI, not parameterized.
 
 * /api/fetch1
 * /api/fetch2
 
-But the following URL would be parametrized to `/api/{var}`, since the sample count is bigger than the threshold.
+But the following URI would be parametrized to `/api/{var}`, since the sample count is bigger than the threshold.
 
 * /api/fetch1
 * /api/fetch2
