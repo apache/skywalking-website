@@ -2,7 +2,7 @@
 title: "Introduce R3 to recognition RESTFul URI"
 date: 2024-10-17
 author: Han Liu
-description: "This article will introduce how to use R3 to identify RESTFul URLs and integrate them into SkyWalking."
+description: "This article will introduce how to use R3 to identify RESTFul URIs and integrate them into SkyWalking."
 tags:
 - RESTFul
 - R3
@@ -10,8 +10,8 @@ tags:
 
 ## Background
 
-In modern applications, services are typically provided through RESTFul HTTP URLs.
-Using RESTFul HTTP URLs (as unique resource identifiers) offers high readability, making it easier for both clients and servers to understand.
+In modern applications, services are typically provided through RESTFul HTTP URIs.
+Using RESTFul HTTP URIs (as unique resource identifiers) offers high readability, making it easier for both clients and servers to understand.
 However, in the observability field, this approach poses several challenges:
 
 1. **A large number of endpoints (HTTP URI)**: Browsing through all externally provided endpoints becomes more difficult, making it hard to identify problematic endpoints.
@@ -21,33 +21,33 @@ In existing solutions, this issue can be resolved following these application-le
 
 1. **Agent Detection**: In certain frameworks, rules are often declared to handle RESTFul requests. For example, in Java's Spring Web, annotations like `@GET` can be used,
    which can then be linked to current requests using a Java Agent.
-2. **OpenAPI**: Predefined files can be associated with the application, allowing the observability system to be aware of the URLs that may be used.
+2. **OpenAPI**: Predefined files can be associated with the application, allowing the observability system to be aware of the URIs that may be used.
 
 Both resolutions are tightly coupled with application settings, which can be limiting for unknown applications or applications
-where the agent cannot be monitored. Therefore, we need to consider whether there is a more general solution to identify URLs and
-merge metrics generated from similar URLs for better representation.
+where the agent cannot be monitored. Therefore, we need to consider whether there is a more general solution to identify URIs and
+merge metrics generated from similar URIs for better representation.
 
 ## R3
 
 R3(RESTFul Pattern Recognition) is a high-performance RESTFul URI recognition tool inspired by [Drain3](https://github.com/logpai/Drain3).
 It can be deployed as a standalone application on the observability server and communicate with the SkyWalking OAP.
 
-R3 can accept a URI list via the gRPC protocol and aggregate similar URLs into a specific format.
+R3 can accept a URI list via the gRPC protocol and aggregate similar URIs into a specific format.
 The aggregated (formatted) URI list can also be queried using the gRPC protocol.
 
 ### Data Interaction Flow
 
 ![Data Interaction Flow between OAP, R3](data_interaction_flow.png)
 
-1. **OAP receives and caches unformatted URI list**: OAP receives observability data through different protocols and identifies all unformatted URLs. These URLs are stored in a temporary list categorized by the service they belong to.
-2. **OAP sends URLs to be formatted to R3**: OAP periodically batches the URLs that need formatting and sends them to the R3 service.
-3. **R3 receives and parses the URI list**: R3 asynchronously analyzes the similarity of the received URLs and stores (persists) the results on the local disk to allow features like recovery after a restart.
-4. **OAP queries formatted URI list from R3**: OAP periodically queries R3 for the detected formatted URLs and saves the results in memory.
-5. **OAP formats URLs**: When OAP receives new observability data, it matches the URLs against the formatted URLs retrieved from R3. If a match is found, the formatted URI is used for subsequent metric calculations.
+1. **OAP receives and caches unformatted URI list**: OAP receives observability data through different protocols and identifies all unformatted URIs. These URIs are stored in a temporary list categorized by the service they belong to.
+2. **OAP sends URIs to be formatted to R3**: OAP periodically batches the URIs that need formatting and sends them to the R3 service.
+3. **R3 receives and parses the URI list**: R3 asynchronously analyzes the similarity of the received URIs and stores (persists) the results on the local disk to allow features like recovery after a restart.
+4. **OAP queries formatted URI list from R3**: OAP periodically queries R3 for the detected formatted URIs and saves the results in memory.
+5. **OAP formats URIs**: When OAP receives new observability data, it matches the URIs against the formatted URIs retrieved from R3. If a match is found, the formatted URI is used for subsequent metric calculations.
 
 ### Scenarios
 
-In R3, the following scenarios are primarily addressed. For URLs identified as duplicates, R3 would replace the variable parts with `{var}` to standardize them.
+In R3, the following scenarios are primarily addressed. For URIs identified as duplicates, R3 would replace the variable parts with `{var}` to standardize them.
 
 #### ID Matching
 
@@ -63,10 +63,10 @@ For example, paths like the following will be aggregated by R3 into a standardiz
 
 #### Word Detection
 
-In RESTFul URLs, operations on an entity are usually specified using HTTP methods,
+In RESTFul URIs, operations on an entity are usually specified using HTTP methods,
 but often additional types are needed. This is addressed by including specific nouns in the path.
 To handle this, R3 implements word parsing: when R3 detects specific words in the path, it will not format that part.
-For example, URLs like the following would not be considered similar and therefore will not be merged:
+For example, URIs like the following would not be considered similar and therefore will not be merged:
 
 * /api/sale
 * /api/product_sale
@@ -92,10 +92,10 @@ But the following URI would be parametrized to `/api/{var}`, since the sample co
 
 #### Version API
 
-In real-world scenarios, we often encounter URLs with multiple versions.
+In real-world scenarios, we often encounter URIs with multiple versions.
 R3 addresses this by ensuring that if a specified path contains a `v\\d+` parameter (indicating version information),
 that part would not be parameterized.
-For example, the following URLs will be separately parsed into `/test/v1/{var}` and `/test/v999/{var}`.
+For example, the following URIs will be separately parsed into `/test/v1/{var}` and `/test/v999/{var}`.
 
 * /test/v1/cbf11b02ea464447b507e8852c32190a
 * /test/v1/5e363a4a18b7464b8cbff1a7ee4c91ca
@@ -137,7 +137,7 @@ kubectl exec -n sample-services $(kubectl get pod -n sample-services --selector=
 In the above command, R3 would automatically locate the gateway node and send requests in RESTFul format to the rating service within that node.
 This allows R3 to generate and test traffic patterns that simulate real RESTFul requests to the target service.
 
-### Check Formatted URLs
+### Check Formatted URIs
 
 Once the RESTFul requests are triggered, you can view the aggregated endpoints in the UI.
 
@@ -147,5 +147,5 @@ Once the RESTFul requests are triggered, you can view the aggregated endpoints i
 
 ## Conclusion
 
-In this article, we discussed in detail how SkyWalking utilizes the R3 service to format RESTFul URLs and aggregate related metrics upon receiving them.
+In this article, we discussed in detail how SkyWalking utilizes the R3 service to format RESTFul URIs and aggregate related metrics upon receiving them.
 Currently, it applies to most RESTFul scenarios, and if more cases need to be supported, we can extend it further as needed.
