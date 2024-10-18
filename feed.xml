@@ -13,6 +13,124 @@
     
     
     <item>
+      <title>Blog: Introduce R3 to recognition RESTFul URI</title>
+      <link>/blog/2024-010-15-introduce-r3-to-recognition-restful-url/</link>
+      <pubDate>Thu, 17 Oct 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2024-010-15-introduce-r3-to-recognition-restful-url/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;In modern applications, services are typically provided through RESTFul HTTP URLs.
+Using RESTFul HTTP URLs (as unique resource identifiers) offers high readability, making it easier for both clients and servers to understand.
+However, in the observability field, this approach poses several challenges:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;A large number of endpoints (HTTP URI)&lt;/strong&gt;: Browsing through all externally provided endpoints becomes more difficult, making it hard to identify problematic endpoints.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics are difficult to collect&lt;/strong&gt;: It becomes particularly challenging to categorize similar endpoints and generate observability metrics.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In existing solutions, this issue can be resolved following these application-level resolutions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Agent Detection&lt;/strong&gt;: In certain frameworks, rules are often declared to handle RESTFul requests. For example, in Java&amp;rsquo;s Spring Web, annotations like &lt;code&gt;@GET&lt;/code&gt; can be used,
+which can then be linked to current requests using a Java Agent.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OpenAPI&lt;/strong&gt;: Predefined files can be associated with the application, allowing the observability system to be aware of the URLs that may be used.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Both resolutions are tightly coupled with application settings, which can be limiting for unknown applications or applications
+where the agent cannot be monitored. Therefore, we need to consider whether there is a more general solution to identify URLs and
+merge metrics generated from similar URLs for better representation.&lt;/p&gt;
+&lt;h2 id=&#34;r3&#34;&gt;R3&lt;/h2&gt;
+&lt;p&gt;R3(RESTFul Pattern Recognition) is a high-performance RESTFul URI recognition tool inspired by &lt;a href=&#34;https://github.com/logpai/Drain3&#34;&gt;Drain3&lt;/a&gt;.
+It can be deployed as a standalone application on the observability server and communicate with the SkyWalking OAP.&lt;/p&gt;
+&lt;p&gt;R3 can accept a URI list via the gRPC protocol and aggregate similar URLs into a specific format.
+The aggregated (formatted) URI list can also be queried using the gRPC protocol.&lt;/p&gt;
+&lt;h3 id=&#34;data-interaction-flow&#34;&gt;Data Interaction Flow&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;data_interaction_flow.png&#34; alt=&#34;Data Interaction Flow between OAP, R3&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;OAP receives and caches unformatted URI list&lt;/strong&gt;: OAP receives observability data through different protocols and identifies all unformatted URLs. These URLs are stored in a temporary list categorized by the service they belong to.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP sends URLs to be formatted to R3&lt;/strong&gt;: OAP periodically batches the URLs that need formatting and sends them to the R3 service.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;R3 receives and parses the URI list&lt;/strong&gt;: R3 asynchronously analyzes the similarity of the received URLs and stores (persists) the results on the local disk to allow features like recovery after a restart.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP queries formatted URI list from R3&lt;/strong&gt;: OAP periodically queries R3 for the detected formatted URLs and saves the results in memory.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP formats URLs&lt;/strong&gt;: When OAP receives new observability data, it matches the URLs against the formatted URLs retrieved from R3. If a match is found, the formatted URI is used for subsequent metric calculations.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;scenarios&#34;&gt;Scenarios&lt;/h3&gt;
+&lt;p&gt;In R3, the following scenarios are primarily addressed. For URLs identified as duplicates, R3 would replace the variable parts with &lt;code&gt;{var}&lt;/code&gt; to standardize them.&lt;/p&gt;
+&lt;h4 id=&#34;id-matching&#34;&gt;ID Matching&lt;/h4&gt;
+&lt;p&gt;A common practice in RESTFul APIs is to include various IDs in the URI paths,
+which leads to a large number of unique URI endpoints.
+For example, paths like the following will be aggregated by R3 into a standardized format: &lt;code&gt;/api/users/{var}&lt;/code&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/users/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/api/users/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/api/users/44cf77fc351f4c6c9c4f1448f2f12800&lt;/li&gt;
+&lt;li&gt;/api/users/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/api/users/5ad14302e7924f4aa1d60e58d65b3dd2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;word-detection&#34;&gt;Word Detection&lt;/h4&gt;
+&lt;p&gt;In RESTFul URLs, operations on an entity are usually specified using HTTP methods,
+but often additional types are needed. This is addressed by including specific nouns in the path.
+To handle this, R3 implements word parsing: when R3 detects specific words in the path, it will not format that part.
+For example, URLs like the following would not be considered similar and therefore will not be merged:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/sale&lt;/li&gt;
+&lt;li&gt;/api/product_sale&lt;/li&gt;
+&lt;li&gt;/api/ProductSale&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;low-sample&#34;&gt;Low Sample&lt;/h4&gt;
+&lt;p&gt;To prevent incorrect judgments due to insufficient sample sizes, R3 allows the configuration of a
+&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini#L38&#34;&gt;combine min URI count&lt;/a&gt; parameter in the
+&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini&#34;&gt;configuration file&lt;/a&gt;.
+This parameter sets the minimum number of similar paths required before proceeding with the analysis.&lt;/p&gt;
+&lt;p&gt;Such as the threshold is &lt;code&gt;3&lt;/code&gt;, the following URI would keep the original URI, not parameterized.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;But the following URI would be parametrized to &lt;code&gt;/api/{var}&lt;/code&gt;, since the sample count is bigger than the threshold.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;li&gt;/api/fetch3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;version-api&#34;&gt;Version API&lt;/h4&gt;
+&lt;p&gt;In real-world scenarios, we often encounter URLs with multiple versions.
+R3 addresses this by ensuring that if a specified path contains a &lt;code&gt;v\\d+&lt;/code&gt; parameter (indicating version information),
+that part would not be parameterized.
+For example, the following URLs will be separately parsed into &lt;code&gt;/test/v1/{var}&lt;/code&gt; and &lt;code&gt;/test/v999/{var}&lt;/code&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/test/v1/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/test/v1/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/test/v1/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/test/v999/1&lt;/li&gt;
+&lt;li&gt;/test/v999/2&lt;/li&gt;
+&lt;li&gt;/test/v999/3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;Next, let’s quickly demonstrate how to use R3 to format observed endpoints, so you can understand more specifically what it accomplishes.&lt;/p&gt;
+&lt;h3 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking. For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, R3 service and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;java-agent-injector,single-node,elasticsearch,r3
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;trigger-restful-requests&#34;&gt;Trigger RESTFul Requests&lt;/h3&gt;
+&lt;p&gt;In R3, a scheduled task is started by default to generate RESTFul traffic at regular intervals.
+However, you can also manually trigger this process using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl &lt;span style=&#34;color:#0086b3&#34;&gt;exec&lt;/span&gt; -n sample-services &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get pod -n sample-services --selector&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;gateway -o &lt;span style=&#34;color:#008080&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{.items[0].metadata.name}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; -- /bin/bash -c &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;for i in $(seq 1 200); do curl http://rating/songs/$i/reviews/$((i+1)); sleep 1; done&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In the above command, R3 would automatically locate the gateway node and send requests in RESTFul format to the rating service within that node.
+This allows R3 to generate and test traffic patterns that simulate real RESTFul requests to the target service.&lt;/p&gt;
+&lt;h3 id=&#34;check-formatted-urls&#34;&gt;Check Formatted URLs&lt;/h3&gt;
+&lt;p&gt;Once the RESTFul requests are triggered, you can view the aggregated endpoints in the UI.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Note&lt;/strong&gt;: Since the formatted endpoints are generated asynchronously, some of the earlier requests may not yet be formatted. You may need to wait for some time before the UI shows only the formatted addresses.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;formated_images.png&#34; alt=&#34;Formated Endpoints&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we discussed in detail how SkyWalking utilizes the R3 service to format RESTFul URLs and aggregate related metrics upon receiving them.
+Currently, it applies to most RESTFul scenarios, and if more cases need to be supported, we can extend it further as needed.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: BanyanDB 0.6 Release: Enhanced Performance and Efficiency</title>
       <link>/blog/2024-06-04-banyandb-0.6-release/</link>
       <pubDate>Tue, 04 Jun 2024 00:00:00 +0000</pubDate>
@@ -8485,424 +8603,6 @@ have any impact on how you license the source code of your application using thi
 &lt;hr&gt;
 &lt;p&gt;Apache SkyWalking will discuss the further actions &lt;a href=&#34;https://github.com/apache/skywalking/issues/6219&#34;&gt;here&lt;/a&gt;. If you have any question, welcome to ask.
 In the later 2021, we will begin to invest the posibility of creating SkyWalking&amp;rsquo;s observability database implementation.&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: Celebrate SkyWalking single repository hits the 300 contributors mark</title>
-      <link>/blog/2021-01-01-300-contributors-mark/</link>
-      <pubDate>Tue, 22 Dec 2020 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2021-01-01-300-contributors-mark/</guid>
-      <description>
-        
-        
-        &lt;p&gt;Apache SkyWalking is an open source APM for distributed system. Provide tracing, service mesh observability, metrics analysis, alarm and visualization.&lt;/p&gt;
-&lt;p&gt;Just 11 months ago, on Jan. 20th, 2020, &lt;a href=&#34;http://skywalking.apache.org/blog/2020-01-20-celebrate-200th-contributor/&#34;&gt;SkyWalking hit the 200 contributors mark&lt;/a&gt;.
-With the growth of the project and the community, SkyWalking now includes over 20 sub(ecosystem) projects covering multiple language agents and service mesh,
-integration with mature open source projects, like Prometheus, Spring(Sleuth), hundreds of libraries to support all tracing/metrics/logs fields.
-In the past year, the number of contributors grows super astoundingly , and all its metrics point to its community vibrancy. Many corporate titans are already using
-SkyWalking in a large-scale production environment, including, Alibaba, Huawei, Baidu, Tencent, etc.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;300-contributors.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;Recently, our &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking main repository&lt;/a&gt; overs 300 contributors.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;website-access.png&#34; alt=&#34;&#34;&gt;
-Our &lt;a href=&#34;https://skywalking.apache.org&#34;&gt;website&lt;/a&gt; has thousands of views from most countries in the world every week.&lt;/p&gt;
-&lt;p&gt;Although we know that, the metrics like GitHub stars and the numbers of open users and contributors, are not a determinant of vibrancy,
-they do show the trend, we are very proud to share the increased numbers here, too.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;community-metrics.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;We double those numbers and are honored with the development of our community.&lt;/p&gt;
-&lt;p&gt;Thank you, all of our contributors. Not just these 300 contributors of the main repository, or nearly 400 contributors in all repositories, counted by GitHub.
-There are countless people contributing codes to SkyWalking&amp;rsquo;s subprojects, ecosystem projects, and private fork versions;
-writing blogs and guidances, translating documents, books, and presentations;
-setting up learning sessions for new users;
-convincing friends to join the community as end-users, contributors, even committers.
-Companies behinds those contributors support their employees to work with the community to provide feedback and
-contribute the improvements and features upstream.
-Conference organizers share the stages with speakers from the SkyWalking community.&lt;/p&gt;
-&lt;p&gt;SkyWalking can’t make this happen without your help. You made this community extraordinary.&lt;/p&gt;
-&lt;p&gt;At this crazy distributed computing and cloud native age, we as a community could make DEV, OPS, and SRE teams&#39; work easier by locating the issue(s) in the haystack
-quicker than before, like why we named the project as SkyWalking, we will have a clear site line  when you stand on the glass bridge Skywalk at Grand Canyon West.&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;376 Contributors counted by GitHub account are following. Dec. 22st, 2020. Generated by a tool deveoped by &lt;a href=&#34;https://github.com/miss-you&#34;&gt;Yousa&lt;/a&gt;&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;1095071913&lt;/li&gt;
-&lt;li&gt;50168383&lt;/li&gt;
-&lt;li&gt;Ahoo-Wang&lt;/li&gt;
-&lt;li&gt;AirTrioa&lt;/li&gt;
-&lt;li&gt;AlexanderWert&lt;/li&gt;
-&lt;li&gt;AlseinX&lt;/li&gt;
-&lt;li&gt;Ax1an&lt;/li&gt;
-&lt;li&gt;BFergerson&lt;/li&gt;
-&lt;li&gt;BZFYS&lt;/li&gt;
-&lt;li&gt;CharlesMaster&lt;/li&gt;
-&lt;li&gt;ChaunceyLin5152&lt;/li&gt;
-&lt;li&gt;CommissarXia&lt;/li&gt;
-&lt;li&gt;Cvimer&lt;/li&gt;
-&lt;li&gt;Doublemine&lt;/li&gt;
-&lt;li&gt;ElderJames&lt;/li&gt;
-&lt;li&gt;EvanLjp&lt;/li&gt;
-&lt;li&gt;FatihErdem&lt;/li&gt;
-&lt;li&gt;FeynmanZhou&lt;/li&gt;
-&lt;li&gt;Fine0830&lt;/li&gt;
-&lt;li&gt;FingerLiu&lt;/li&gt;
-&lt;li&gt;Gallardot&lt;/li&gt;
-&lt;li&gt;GerryYuan&lt;/li&gt;
-&lt;li&gt;HackerRookie&lt;/li&gt;
-&lt;li&gt;Heguoya&lt;/li&gt;
-&lt;li&gt;Hen1ng&lt;/li&gt;
-&lt;li&gt;Humbertzhang&lt;/li&gt;
-&lt;li&gt;IanCao&lt;/li&gt;
-&lt;li&gt;IluckySi&lt;/li&gt;
-&lt;li&gt;Indifer&lt;/li&gt;
-&lt;li&gt;J-Cod3r&lt;/li&gt;
-&lt;li&gt;JaredTan95&lt;/li&gt;
-&lt;li&gt;Jargon96&lt;/li&gt;
-&lt;li&gt;Jijun&lt;/li&gt;
-&lt;li&gt;JohnNiang&lt;/li&gt;
-&lt;li&gt;Jozdortraz&lt;/li&gt;
-&lt;li&gt;Jtrust&lt;/li&gt;
-&lt;li&gt;Just-maple&lt;/li&gt;
-&lt;li&gt;KangZhiDong&lt;/li&gt;
-&lt;li&gt;LazyLei&lt;/li&gt;
-&lt;li&gt;LiWenGu&lt;/li&gt;
-&lt;li&gt;Liu-XinYuan&lt;/li&gt;
-&lt;li&gt;Miss-you&lt;/li&gt;
-&lt;li&gt;O-ll-O&lt;/li&gt;
-&lt;li&gt;Patrick0308&lt;/li&gt;
-&lt;li&gt;QHWG67&lt;/li&gt;
-&lt;li&gt;Qiliang&lt;/li&gt;
-&lt;li&gt;RandyAbernethy&lt;/li&gt;
-&lt;li&gt;RedzRedz&lt;/li&gt;
-&lt;li&gt;Runrioter&lt;/li&gt;
-&lt;li&gt;SataQiu&lt;/li&gt;
-&lt;li&gt;ScienJus&lt;/li&gt;
-&lt;li&gt;SevenPointOld&lt;/li&gt;
-&lt;li&gt;ShaoHans&lt;/li&gt;
-&lt;li&gt;Shikugawa&lt;/li&gt;
-&lt;li&gt;SoberChina&lt;/li&gt;
-&lt;li&gt;SummerOfServenteen&lt;/li&gt;
-&lt;li&gt;TJ666&lt;/li&gt;
-&lt;li&gt;TerrellChen&lt;/li&gt;
-&lt;li&gt;TheRealHaui&lt;/li&gt;
-&lt;li&gt;TinyAllen&lt;/li&gt;
-&lt;li&gt;TomMD&lt;/li&gt;
-&lt;li&gt;ViberW&lt;/li&gt;
-&lt;li&gt;Videl&lt;/li&gt;
-&lt;li&gt;WALL-E&lt;/li&gt;
-&lt;li&gt;WeihanLi&lt;/li&gt;
-&lt;li&gt;WildWolfBang&lt;/li&gt;
-&lt;li&gt;WillemJiang&lt;/li&gt;
-&lt;li&gt;Wooo0&lt;/li&gt;
-&lt;li&gt;XhangUeiJong&lt;/li&gt;
-&lt;li&gt;Xlinlin&lt;/li&gt;
-&lt;li&gt;YczYanchengzhe&lt;/li&gt;
-&lt;li&gt;YoungHu&lt;/li&gt;
-&lt;li&gt;YunaiV&lt;/li&gt;
-&lt;li&gt;ZhHong&lt;/li&gt;
-&lt;li&gt;ZhuoSiChen&lt;/li&gt;
-&lt;li&gt;ZS-Oliver&lt;/li&gt;
-&lt;li&gt;a198720&lt;/li&gt;
-&lt;li&gt;a526672351&lt;/li&gt;
-&lt;li&gt;acurtain&lt;/li&gt;
-&lt;li&gt;adamni135&lt;/li&gt;
-&lt;li&gt;adermxzs&lt;/li&gt;
-&lt;li&gt;adriancole&lt;/li&gt;
-&lt;li&gt;aeolusheath&lt;/li&gt;
-&lt;li&gt;agile6v&lt;/li&gt;
-&lt;li&gt;aix3&lt;/li&gt;
-&lt;li&gt;aiyanbo&lt;/li&gt;
-&lt;li&gt;ajanthan&lt;/li&gt;
-&lt;li&gt;alexkarezin&lt;/li&gt;
-&lt;li&gt;alonelaval&lt;/li&gt;
-&lt;li&gt;amogege&lt;/li&gt;
-&lt;li&gt;amwyyyy&lt;/li&gt;
-&lt;li&gt;arugal&lt;/li&gt;
-&lt;li&gt;ascrutae&lt;/li&gt;
-&lt;li&gt;augustowebd&lt;/li&gt;
-&lt;li&gt;bai-yang&lt;/li&gt;
-&lt;li&gt;beckhampu&lt;/li&gt;
-&lt;li&gt;beckjin&lt;/li&gt;
-&lt;li&gt;beiwangnull&lt;/li&gt;
-&lt;li&gt;bigflybrother&lt;/li&gt;
-&lt;li&gt;bostin&lt;/li&gt;
-&lt;li&gt;brucewu-fly&lt;/li&gt;
-&lt;li&gt;c1ay&lt;/li&gt;
-&lt;li&gt;candyleer&lt;/li&gt;
-&lt;li&gt;carlvine500&lt;/li&gt;
-&lt;li&gt;carrypann&lt;/li&gt;
-&lt;li&gt;cheenursn&lt;/li&gt;
-&lt;li&gt;cheetah012&lt;/li&gt;
-&lt;li&gt;chenpengfei&lt;/li&gt;
-&lt;li&gt;chenvista&lt;/li&gt;
-&lt;li&gt;chess-equality&lt;/li&gt;
-&lt;li&gt;chestarss&lt;/li&gt;
-&lt;li&gt;chidaodezhongsheng&lt;/li&gt;
-&lt;li&gt;chopin-d&lt;/li&gt;
-&lt;li&gt;clevertension&lt;/li&gt;
-&lt;li&gt;clk1st&lt;/li&gt;
-&lt;li&gt;cngdkxw&lt;/li&gt;
-&lt;li&gt;codeglzhang&lt;/li&gt;
-&lt;li&gt;codelipenghui&lt;/li&gt;
-&lt;li&gt;coder-yqj&lt;/li&gt;
-&lt;li&gt;coki230&lt;/li&gt;
-&lt;li&gt;coolbeevip&lt;/li&gt;
-&lt;li&gt;crystaldust&lt;/li&gt;
-&lt;li&gt;cui-liqiang&lt;/li&gt;
-&lt;li&gt;cuiweiwei&lt;/li&gt;
-&lt;li&gt;cyberdak&lt;/li&gt;
-&lt;li&gt;cyejing&lt;/li&gt;
-&lt;li&gt;dagmom&lt;/li&gt;
-&lt;li&gt;dengliming&lt;/li&gt;
-&lt;li&gt;devkanro&lt;/li&gt;
-&lt;li&gt;devon-ye&lt;/li&gt;
-&lt;li&gt;dimaaan&lt;/li&gt;
-&lt;li&gt;dingdongnigetou&lt;/li&gt;
-&lt;li&gt;dio&lt;/li&gt;
-&lt;li&gt;dmsolr&lt;/li&gt;
-&lt;li&gt;dominicqi&lt;/li&gt;
-&lt;li&gt;donbing007&lt;/li&gt;
-&lt;li&gt;dsc6636926&lt;/li&gt;
-&lt;li&gt;duotai&lt;/li&gt;
-&lt;li&gt;dvsv2&lt;/li&gt;
-&lt;li&gt;dzx2018&lt;/li&gt;
-&lt;li&gt;echooymxq&lt;/li&gt;
-&lt;li&gt;efekaptan&lt;/li&gt;
-&lt;li&gt;eoeac&lt;/li&gt;
-&lt;li&gt;evanxuhe&lt;/li&gt;
-&lt;li&gt;feelwing1314&lt;/li&gt;
-&lt;li&gt;fgksgf&lt;/li&gt;
-&lt;li&gt;fuhuo&lt;/li&gt;
-&lt;li&gt;geektcp&lt;/li&gt;
-&lt;li&gt;geomonlin&lt;/li&gt;
-&lt;li&gt;ggndnn&lt;/li&gt;
-&lt;li&gt;gitter-badger&lt;/li&gt;
-&lt;li&gt;glongzh&lt;/li&gt;
-&lt;li&gt;gnr163&lt;/li&gt;
-&lt;li&gt;gonedays&lt;/li&gt;
-&lt;li&gt;grissom-grissom&lt;/li&gt;
-&lt;li&gt;grissomsh&lt;/li&gt;
-&lt;li&gt;guodongq&lt;/li&gt;
-&lt;li&gt;guyukou&lt;/li&gt;
-&lt;li&gt;gxthrj&lt;/li&gt;
-&lt;li&gt;gzshilu&lt;/li&gt;
-&lt;li&gt;hailin0&lt;/li&gt;
-&lt;li&gt;hanahmily&lt;/li&gt;
-&lt;li&gt;haotian2015&lt;/li&gt;
-&lt;li&gt;haoyann&lt;/li&gt;
-&lt;li&gt;hardzhang&lt;/li&gt;
-&lt;li&gt;harvies&lt;/li&gt;
-&lt;li&gt;hepyu&lt;/li&gt;
-&lt;li&gt;heyanlong&lt;/li&gt;
-&lt;li&gt;hi-sb&lt;/li&gt;
-&lt;li&gt;honganan&lt;/li&gt;
-&lt;li&gt;hsoftxl&lt;/li&gt;
-&lt;li&gt;huangyoje&lt;/li&gt;
-&lt;li&gt;huliangdream&lt;/li&gt;
-&lt;li&gt;huohuanhuan&lt;/li&gt;
-&lt;li&gt;innerpeacez&lt;/li&gt;
-&lt;li&gt;itsvse&lt;/li&gt;
-&lt;li&gt;jasonz93&lt;/li&gt;
-&lt;li&gt;jialong121&lt;/li&gt;
-&lt;li&gt;jinlongwang&lt;/li&gt;
-&lt;li&gt;jjlu521016&lt;/li&gt;
-&lt;li&gt;jjtyro&lt;/li&gt;
-&lt;li&gt;jmjoy&lt;/li&gt;
-&lt;li&gt;jsbxyyx&lt;/li&gt;
-&lt;li&gt;justeene&lt;/li&gt;
-&lt;li&gt;juzhiyuan&lt;/li&gt;
-&lt;li&gt;jy00464346&lt;/li&gt;
-&lt;li&gt;kaanid&lt;/li&gt;
-&lt;li&gt;karott&lt;/li&gt;
-&lt;li&gt;kayleyang&lt;/li&gt;
-&lt;li&gt;kevinyyyy&lt;/li&gt;
-&lt;li&gt;kezhenxu94&lt;/li&gt;
-&lt;li&gt;kikupotter&lt;/li&gt;
-&lt;li&gt;kilingzhang&lt;/li&gt;
-&lt;li&gt;killGC&lt;/li&gt;
-&lt;li&gt;klboke&lt;/li&gt;
-&lt;li&gt;ksewen&lt;/li&gt;
-&lt;li&gt;kuaikuai&lt;/li&gt;
-&lt;li&gt;kun-song&lt;/li&gt;
-&lt;li&gt;kylixs&lt;/li&gt;
-&lt;li&gt;landonzeng&lt;/li&gt;
-&lt;li&gt;langke93&lt;/li&gt;
-&lt;li&gt;langyan1022&lt;/li&gt;
-&lt;li&gt;langyizhao&lt;/li&gt;
-&lt;li&gt;lazycathome&lt;/li&gt;
-&lt;li&gt;leemove&lt;/li&gt;
-&lt;li&gt;leizhiyuan&lt;/li&gt;
-&lt;li&gt;libinglong&lt;/li&gt;
-&lt;li&gt;lilien1010&lt;/li&gt;
-&lt;li&gt;limfriend&lt;/li&gt;
-&lt;li&gt;linkinshi&lt;/li&gt;
-&lt;li&gt;linliaoy&lt;/li&gt;
-&lt;li&gt;liuhaoXD&lt;/li&gt;
-&lt;li&gt;liuhaoyang&lt;/li&gt;
-&lt;li&gt;liuyanggithup&lt;/li&gt;
-&lt;li&gt;liuzhengyang&lt;/li&gt;
-&lt;li&gt;liweiv&lt;/li&gt;
-&lt;li&gt;lkxiaolou&lt;/li&gt;
-&lt;li&gt;llissery&lt;/li&gt;
-&lt;li&gt;louis-zhou&lt;/li&gt;
-&lt;li&gt;lpf32&lt;/li&gt;
-&lt;li&gt;lsyf&lt;/li&gt;
-&lt;li&gt;lucperkins&lt;/li&gt;
-&lt;li&gt;lujiajing1126&lt;/li&gt;
-&lt;li&gt;lunamagic1978&lt;/li&gt;
-&lt;li&gt;lunchboxav&lt;/li&gt;
-&lt;li&gt;lxliuxuankb&lt;/li&gt;
-&lt;li&gt;lytscu&lt;/li&gt;
-&lt;li&gt;lyzhang1999&lt;/li&gt;
-&lt;li&gt;magic-akari&lt;/li&gt;
-&lt;li&gt;makingtime&lt;/li&gt;
-&lt;li&gt;maolie&lt;/li&gt;
-&lt;li&gt;masterxxo&lt;/li&gt;
-&lt;li&gt;maxiaoguang64&lt;/li&gt;
-&lt;li&gt;membphis&lt;/li&gt;
-&lt;li&gt;mestarshine&lt;/li&gt;
-&lt;li&gt;mgsheng&lt;/li&gt;
-&lt;li&gt;michaelsembwever&lt;/li&gt;
-&lt;li&gt;mikkeschiren&lt;/li&gt;
-&lt;li&gt;mm23504570&lt;/li&gt;
-&lt;li&gt;momo0313&lt;/li&gt;
-&lt;li&gt;moonming&lt;/li&gt;
-&lt;li&gt;mrproliu&lt;/li&gt;
-&lt;li&gt;muyun12&lt;/li&gt;
-&lt;li&gt;nacx&lt;/li&gt;
-&lt;li&gt;neatlife&lt;/li&gt;
-&lt;li&gt;neeuq&lt;/li&gt;
-&lt;li&gt;nic-chen&lt;/li&gt;
-&lt;li&gt;nikitap492&lt;/li&gt;
-&lt;li&gt;nileblack&lt;/li&gt;
-&lt;li&gt;nisiyong&lt;/li&gt;
-&lt;li&gt;novayoung&lt;/li&gt;
-&lt;li&gt;oatiz&lt;/li&gt;
-&lt;li&gt;oflebbe&lt;/li&gt;
-&lt;li&gt;olzhy&lt;/li&gt;
-&lt;li&gt;onecloud360&lt;/li&gt;
-&lt;li&gt;osiriswd&lt;/li&gt;
-&lt;li&gt;peng-yongsheng&lt;/li&gt;
-&lt;li&gt;pengweiqhca&lt;/li&gt;
-&lt;li&gt;potiuk&lt;/li&gt;
-&lt;li&gt;purgeyao&lt;/li&gt;
-&lt;li&gt;qijianbo010&lt;/li&gt;
-&lt;li&gt;qinhang3&lt;/li&gt;
-&lt;li&gt;qiuyu-d&lt;/li&gt;
-&lt;li&gt;qqeasonchen&lt;/li&gt;
-&lt;li&gt;qxo&lt;/li&gt;
-&lt;li&gt;raybi-asus&lt;/li&gt;
-&lt;li&gt;refactor2&lt;/li&gt;
-&lt;li&gt;remicollet&lt;/li&gt;
-&lt;li&gt;rlenferink&lt;/li&gt;
-&lt;li&gt;rootsongjc&lt;/li&gt;
-&lt;li&gt;rovast&lt;/li&gt;
-&lt;li&gt;scolia&lt;/li&gt;
-&lt;li&gt;sdanzo&lt;/li&gt;
-&lt;li&gt;seifeHu&lt;/li&gt;
-&lt;li&gt;shiluo34&lt;/li&gt;
-&lt;li&gt;sikelangya&lt;/li&gt;
-&lt;li&gt;simonlei&lt;/li&gt;
-&lt;li&gt;sk163&lt;/li&gt;
-&lt;li&gt;snakorse&lt;/li&gt;
-&lt;li&gt;songzhendong&lt;/li&gt;
-&lt;li&gt;songzhian&lt;/li&gt;
-&lt;li&gt;sonxy&lt;/li&gt;
-&lt;li&gt;spacewander&lt;/li&gt;
-&lt;li&gt;stalary&lt;/li&gt;
-&lt;li&gt;stenio2011&lt;/li&gt;
-&lt;li&gt;stevehu&lt;/li&gt;
-&lt;li&gt;stone-wlg&lt;/li&gt;
-&lt;li&gt;sungitly&lt;/li&gt;
-&lt;li&gt;surechen&lt;/li&gt;
-&lt;li&gt;swartz-k&lt;/li&gt;
-&lt;li&gt;sxzaihua&lt;/li&gt;
-&lt;li&gt;tanjunchen&lt;/li&gt;
-&lt;li&gt;tankilo&lt;/li&gt;
-&lt;li&gt;taskmgr&lt;/li&gt;
-&lt;li&gt;tbdpmi&lt;/li&gt;
-&lt;li&gt;terranhu&lt;/li&gt;
-&lt;li&gt;terrymanu&lt;/li&gt;
-&lt;li&gt;tevahp&lt;/li&gt;
-&lt;li&gt;thanq&lt;/li&gt;
-&lt;li&gt;thebouv&lt;/li&gt;
-&lt;li&gt;tianyuak&lt;/li&gt;
-&lt;li&gt;tincopper&lt;/li&gt;
-&lt;li&gt;tinyu0&lt;/li&gt;
-&lt;li&gt;tom-pytel&lt;/li&gt;
-&lt;li&gt;tristaZero&lt;/li&gt;
-&lt;li&gt;tristan-tsl&lt;/li&gt;
-&lt;li&gt;trustin&lt;/li&gt;
-&lt;li&gt;tsuilouis&lt;/li&gt;
-&lt;li&gt;tuohai666&lt;/li&gt;
-&lt;li&gt;tzsword-2020&lt;/li&gt;
-&lt;li&gt;tzy1316106836&lt;/li&gt;
-&lt;li&gt;vcjmhg&lt;/li&gt;
-&lt;li&gt;vision-ken&lt;/li&gt;
-&lt;li&gt;viswaramamoorthy&lt;/li&gt;
-&lt;li&gt;wankai123&lt;/li&gt;
-&lt;li&gt;wbpcode&lt;/li&gt;
-&lt;li&gt;web-xiaxia&lt;/li&gt;
-&lt;li&gt;webb2019&lt;/li&gt;
-&lt;li&gt;weiqiang333&lt;/li&gt;
-&lt;li&gt;wendal&lt;/li&gt;
-&lt;li&gt;wengangJi&lt;/li&gt;
-&lt;li&gt;wenjianzhang&lt;/li&gt;
-&lt;li&gt;whfjam&lt;/li&gt;
-&lt;li&gt;wind2008hxy&lt;/li&gt;
-&lt;li&gt;withlin&lt;/li&gt;
-&lt;li&gt;wqr2016&lt;/li&gt;
-&lt;li&gt;wu-sheng&lt;/li&gt;
-&lt;li&gt;wuguangkuo&lt;/li&gt;
-&lt;li&gt;wujun8&lt;/li&gt;
-&lt;li&gt;wuxingye&lt;/li&gt;
-&lt;li&gt;x22x22&lt;/li&gt;
-&lt;li&gt;xbkaishui&lt;/li&gt;
-&lt;li&gt;xcaspar&lt;/li&gt;
-&lt;li&gt;xiaoxiangmoe&lt;/li&gt;
-&lt;li&gt;xiaoy00&lt;/li&gt;
-&lt;li&gt;xinfeingxia85&lt;/li&gt;
-&lt;li&gt;xinzhuxiansheng&lt;/li&gt;
-&lt;li&gt;xudianyang&lt;/li&gt;
-&lt;li&gt;yanbw&lt;/li&gt;
-&lt;li&gt;yanfch&lt;/li&gt;
-&lt;li&gt;yang-xiaodong&lt;/li&gt;
-&lt;li&gt;yangxb2010000&lt;/li&gt;
-&lt;li&gt;yanickxia&lt;/li&gt;
-&lt;li&gt;yanmaipian&lt;/li&gt;
-&lt;li&gt;yanmingbi&lt;/li&gt;
-&lt;li&gt;yantaowu&lt;/li&gt;
-&lt;li&gt;yaowenqiang&lt;/li&gt;
-&lt;li&gt;yazong&lt;/li&gt;
-&lt;li&gt;ychandu&lt;/li&gt;
-&lt;li&gt;ycoe&lt;/li&gt;
-&lt;li&gt;yimeng&lt;/li&gt;
-&lt;li&gt;yu199195&lt;/li&gt;
-&lt;li&gt;yuqichou&lt;/li&gt;
-&lt;li&gt;yuyujulin&lt;/li&gt;
-&lt;li&gt;yymoth&lt;/li&gt;
-&lt;li&gt;zaunist&lt;/li&gt;
-&lt;li&gt;zaygrzx&lt;/li&gt;
-&lt;li&gt;zcai2&lt;/li&gt;
-&lt;li&gt;zeaposs&lt;/li&gt;
-&lt;li&gt;zhang98722&lt;/li&gt;
-&lt;li&gt;zhanghao001&lt;/li&gt;
-&lt;li&gt;zhangjianweibj&lt;/li&gt;
-&lt;li&gt;zhangkewei&lt;/li&gt;
-&lt;li&gt;zhangsean&lt;/li&gt;
-&lt;li&gt;zhaoyuguang&lt;/li&gt;
-&lt;li&gt;zhentaoJin&lt;/li&gt;
-&lt;li&gt;zhousiliang163&lt;/li&gt;
-&lt;li&gt;zhuCheer&lt;/li&gt;
-&lt;li&gt;zifeihan&lt;/li&gt;
-&lt;li&gt;zkscpqm&lt;/li&gt;
-&lt;li&gt;zoidbergwill&lt;/li&gt;
-&lt;li&gt;zoumingzm&lt;/li&gt;
-&lt;li&gt;zouyx&lt;/li&gt;
-&lt;li&gt;zshit&lt;/li&gt;
-&lt;li&gt;zxbu&lt;/li&gt;
-&lt;li&gt;zygfengyuwuzu&lt;/li&gt;
-&lt;/ul&gt;
 
       </description>
     </item>

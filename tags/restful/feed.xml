@@ -1,0 +1,136 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – RESTFul</title>
+    <link>/tags/restful/</link>
+    <description>Recent content in RESTFul on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Thu, 17 Oct 2024 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/restful/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Introduce R3 to recognition RESTFul URI</title>
+      <link>/blog/2024-010-15-introduce-r3-to-recognition-restful-url/</link>
+      <pubDate>Thu, 17 Oct 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2024-010-15-introduce-r3-to-recognition-restful-url/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;In modern applications, services are typically provided through RESTFul HTTP URLs.
+Using RESTFul HTTP URLs (as unique resource identifiers) offers high readability, making it easier for both clients and servers to understand.
+However, in the observability field, this approach poses several challenges:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;A large number of endpoints (HTTP URI)&lt;/strong&gt;: Browsing through all externally provided endpoints becomes more difficult, making it hard to identify problematic endpoints.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Metrics are difficult to collect&lt;/strong&gt;: It becomes particularly challenging to categorize similar endpoints and generate observability metrics.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;In existing solutions, this issue can be resolved following these application-level resolutions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Agent Detection&lt;/strong&gt;: In certain frameworks, rules are often declared to handle RESTFul requests. For example, in Java&amp;rsquo;s Spring Web, annotations like &lt;code&gt;@GET&lt;/code&gt; can be used,
+which can then be linked to current requests using a Java Agent.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OpenAPI&lt;/strong&gt;: Predefined files can be associated with the application, allowing the observability system to be aware of the URLs that may be used.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Both resolutions are tightly coupled with application settings, which can be limiting for unknown applications or applications
+where the agent cannot be monitored. Therefore, we need to consider whether there is a more general solution to identify URLs and
+merge metrics generated from similar URLs for better representation.&lt;/p&gt;
+&lt;h2 id=&#34;r3&#34;&gt;R3&lt;/h2&gt;
+&lt;p&gt;R3(RESTFul Pattern Recognition) is a high-performance RESTFul URI recognition tool inspired by &lt;a href=&#34;https://github.com/logpai/Drain3&#34;&gt;Drain3&lt;/a&gt;.
+It can be deployed as a standalone application on the observability server and communicate with the SkyWalking OAP.&lt;/p&gt;
+&lt;p&gt;R3 can accept a URI list via the gRPC protocol and aggregate similar URLs into a specific format.
+The aggregated (formatted) URI list can also be queried using the gRPC protocol.&lt;/p&gt;
+&lt;h3 id=&#34;data-interaction-flow&#34;&gt;Data Interaction Flow&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;data_interaction_flow.png&#34; alt=&#34;Data Interaction Flow between OAP, R3&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;OAP receives and caches unformatted URI list&lt;/strong&gt;: OAP receives observability data through different protocols and identifies all unformatted URLs. These URLs are stored in a temporary list categorized by the service they belong to.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP sends URLs to be formatted to R3&lt;/strong&gt;: OAP periodically batches the URLs that need formatting and sends them to the R3 service.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;R3 receives and parses the URI list&lt;/strong&gt;: R3 asynchronously analyzes the similarity of the received URLs and stores (persists) the results on the local disk to allow features like recovery after a restart.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP queries formatted URI list from R3&lt;/strong&gt;: OAP periodically queries R3 for the detected formatted URLs and saves the results in memory.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP formats URLs&lt;/strong&gt;: When OAP receives new observability data, it matches the URLs against the formatted URLs retrieved from R3. If a match is found, the formatted URI is used for subsequent metric calculations.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;scenarios&#34;&gt;Scenarios&lt;/h3&gt;
+&lt;p&gt;In R3, the following scenarios are primarily addressed. For URLs identified as duplicates, R3 would replace the variable parts with &lt;code&gt;{var}&lt;/code&gt; to standardize them.&lt;/p&gt;
+&lt;h4 id=&#34;id-matching&#34;&gt;ID Matching&lt;/h4&gt;
+&lt;p&gt;A common practice in RESTFul APIs is to include various IDs in the URI paths,
+which leads to a large number of unique URI endpoints.
+For example, paths like the following will be aggregated by R3 into a standardized format: &lt;code&gt;/api/users/{var}&lt;/code&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/users/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/api/users/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/api/users/44cf77fc351f4c6c9c4f1448f2f12800&lt;/li&gt;
+&lt;li&gt;/api/users/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/api/users/5ad14302e7924f4aa1d60e58d65b3dd2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;word-detection&#34;&gt;Word Detection&lt;/h4&gt;
+&lt;p&gt;In RESTFul URLs, operations on an entity are usually specified using HTTP methods,
+but often additional types are needed. This is addressed by including specific nouns in the path.
+To handle this, R3 implements word parsing: when R3 detects specific words in the path, it will not format that part.
+For example, URLs like the following would not be considered similar and therefore will not be merged:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/sale&lt;/li&gt;
+&lt;li&gt;/api/product_sale&lt;/li&gt;
+&lt;li&gt;/api/ProductSale&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;low-sample&#34;&gt;Low Sample&lt;/h4&gt;
+&lt;p&gt;To prevent incorrect judgments due to insufficient sample sizes, R3 allows the configuration of a
+&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini#L38&#34;&gt;combine min URI count&lt;/a&gt; parameter in the
+&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini&#34;&gt;configuration file&lt;/a&gt;.
+This parameter sets the minimum number of similar paths required before proceeding with the analysis.&lt;/p&gt;
+&lt;p&gt;Such as the threshold is &lt;code&gt;3&lt;/code&gt;, the following URI would keep the original URI, not parameterized.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;But the following URI would be parametrized to &lt;code&gt;/api/{var}&lt;/code&gt;, since the sample count is bigger than the threshold.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;li&gt;/api/fetch3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;version-api&#34;&gt;Version API&lt;/h4&gt;
+&lt;p&gt;In real-world scenarios, we often encounter URLs with multiple versions.
+R3 addresses this by ensuring that if a specified path contains a &lt;code&gt;v\\d+&lt;/code&gt; parameter (indicating version information),
+that part would not be parameterized.
+For example, the following URLs will be separately parsed into &lt;code&gt;/test/v1/{var}&lt;/code&gt; and &lt;code&gt;/test/v999/{var}&lt;/code&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/test/v1/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/test/v1/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/test/v1/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/test/v999/1&lt;/li&gt;
+&lt;li&gt;/test/v999/2&lt;/li&gt;
+&lt;li&gt;/test/v999/3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;Next, let’s quickly demonstrate how to use R3 to format observed endpoints, so you can understand more specifically what it accomplishes.&lt;/p&gt;
+&lt;h3 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking. For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy service, the latest released SkyWalking OAP, R3 service and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;java-agent-injector,single-node,elasticsearch,r3
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;trigger-restful-requests&#34;&gt;Trigger RESTFul Requests&lt;/h3&gt;
+&lt;p&gt;In R3, a scheduled task is started by default to generate RESTFul traffic at regular intervals.
+However, you can also manually trigger this process using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl &lt;span style=&#34;color:#0086b3&#34;&gt;exec&lt;/span&gt; -n sample-services &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get pod -n sample-services --selector&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#008080&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;gateway -o &lt;span style=&#34;color:#008080&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;{.items[0].metadata.name}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt; -- /bin/bash -c &lt;span style=&#34;color:#d14&#34;&gt;&amp;#39;for i in $(seq 1 200); do curl http://rating/songs/$i/reviews/$((i+1)); sleep 1; done&amp;#39;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In the above command, R3 would automatically locate the gateway node and send requests in RESTFul format to the rating service within that node.
+This allows R3 to generate and test traffic patterns that simulate real RESTFul requests to the target service.&lt;/p&gt;
+&lt;h3 id=&#34;check-formatted-urls&#34;&gt;Check Formatted URLs&lt;/h3&gt;
+&lt;p&gt;Once the RESTFul requests are triggered, you can view the aggregated endpoints in the UI.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Note&lt;/strong&gt;: Since the formatted endpoints are generated asynchronously, some of the earlier requests may not yet be formatted. You may need to wait for some time before the UI shows only the formatted addresses.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;formated_images.png&#34; alt=&#34;Formated Endpoints&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;In this article, we discussed in detail how SkyWalking utilizes the R3 service to format RESTFul URLs and aggregate related metrics upon receiving them.
+Currently, it applies to most RESTFul scenarios, and if more cases need to be supported, we can extend it further as needed.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>
