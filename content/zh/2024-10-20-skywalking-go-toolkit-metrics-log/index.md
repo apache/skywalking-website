@@ -9,7 +9,7 @@ description: "本文展示了 Skywalking Go 中 toolkit Log 和 Metrics 的介�
 ## 引言
 
 Apache SkyWalking Go是一款针对 Golang 应用程序提供可观测的工具, 旨在为单体服务、微服务、云原生架构和容器化应用设计。
-它是 Apache SkyWalking 项目的 Go 语言实现，提供了全面的服务追踪、性能指标分析、应用拓扑分析等功能。
+它是 Apache SkyWalking 探针项目的 Go 语言实现，提供了全面的服务追踪、性能指标分析、应用拓扑分析等功能。
 
 SkyWalking Go利用Go语言的并发特性，实现了高效的数据采集和分析。它通过编译期间使用AST在代码中插入少量的探针代码，可以捕获到服务的请求和响应数据，以及系统的运行状态信息。
 SkyWalking Go通过上报这些收集的数据，能够生成详细的服务调用链路图，帮助开发人员了解服务之间的依赖关系，以及每个服务的性能状况。
@@ -71,6 +71,7 @@ func main() {
 			// 我们可以通过可变参数追加日志Tag
 			logging.Error("拒绝非法用户登陆", "userName", userName)
 			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 
 		w.WriteHeader(http.StatusAccepted)
@@ -83,11 +84,25 @@ func main() {
 
 ```
 
+然后我们使用 SkyWalking `Go Agent` 对其进行增强:
+
+```shell
+go build -toolexec="/path/go-agent" -a -o demo .
+```
+
+![Log Screenshot](./log.png)
+
+
 ## 手动上报 Metrics 指标信息
 
 Metrics在链路追踪中极为重要，它们提供了系统性能的定量分析。
 通过监控请求的延迟、吞吐量和错误率等指标，团队能够识别性能瓶颈和潜在问题，从而优化系统架构和资源分配。
 结合链路追踪，metrics能够揭示请求在各个服务间的流转情况，帮助团队深入了解系统的健康状态和使用模式，确保服务的高可用性和用户体验，最终实现业务目标的有效支持。
+
+当前 toolkit metrics 支持以下指标类型
+* Counter
+* Gauge
+* Histogram
 
 首先我们需要导入 toolkit metric 包:
 
@@ -129,6 +144,15 @@ func main() {
 	}
 }
 ```
+
+然后我们使用 SkyWalking `Go Agent` 对其进行增强:
+
+```shell
+go build -toolexec="/path/go-agent" -a -o demo .
+```
+
+我们可以在 [SkyWalking 自定义仪表盘](https://skywalking.apache.org/docs/main/next/en/ui/readme/#widget) 中展示指标信息。
+
 
 ## 总结
 
