@@ -88,7 +88,7 @@ Then we enhance it using the SkyWalking `Go Agent`:
 go build -toolexec="/path/go-agent" -a -o demo .
 ```
 
-![Log Screenshot](./log.png)
+![Log Screenshot](./log_en.png)
 
 
 ## Manually reporting metrics information
