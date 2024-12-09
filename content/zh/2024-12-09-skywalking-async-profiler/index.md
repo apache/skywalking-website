@@ -22,7 +22,7 @@ async-profiler 是一个用于 Java 的低开销采样分析器，它不会受�
 3. Java agent 执行任务，通过 async-profiler 进行数据采样，将采样的数据写入 JFR 文件中
 4. 采样指定时间后，Java agent 上传 JFR 文件至 OAP Server
 5. OAP Server 对 JFR 文件进行解析，并且记录相关实例已经完成
-6. 任务用户通过UI选择完成任务的实例进行性能分析
+6. 用户通过UI选择完成任务的实例进行性能分析
 
 ## 演示
 
