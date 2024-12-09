@@ -1,5 +1,5 @@
 ---
-title: "使用 async-profiler 对 java 应用进行性能分析"
+title: "使用 async-profiler 对 Java 应用进行性能分析"
 date: 2024-12-09
 author: "zhengziyi0117"
 description: "本文展示了 Skywalking 中 async-profiler 的介绍和用法"
@@ -109,16 +109,12 @@ CPU采样有以下几种: CPU、WALL、CTIMER、ITIMER，本质为 async-profile
 
 ### 任务分析中采样类型与 JFR 事件对照表
 
-| 任务采样类型           | JFR事件                           | 备注                                                         | 单位                                                         |
-| :--------------------- | :-------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
-| CPU                    | EXECUTION\_SAMPLE                 | 多种 **AsyncProfilerEventType** 类型都对应于 **EXECUTION_SAMPLE** 事件，主要原因在于不同类型的采样类型采用了不同的原理，并且采样的范围有所不同。 | 采样次数<br />执行时间可以通过interval计算，例如采样次数为10次，interval为10ms，则可以认为执行了100ms（默认interval为10ms） |
-| WALL                   |                                   |                                                              |                                                              |
-| CTIMER                 |                                   |                                                              |                                                              |
-| ITIMER                 |                                   |                                                              |                                                              |
-| LOCK                   | LOCK                              | 为THREAD\_PARK、JAVA\_MONITOR\_ENTER两种事件的聚合           | ns                                                           |
-| ALLOC                  | OBJECT\_ALLOCATION\_IN\_NEW\_TLAB | 采样分配在TLAB的数据                                         | byte                                                         |
-|                        | OBJECT\_ALLOCATION\_OUTSIDE\_TLAB | 采样分配超出TLAB的数据                                       | byte                                                         |
-| 扩展参数中添加live选项 | PROFILER\_LIVE\_OBJECT            | 因为不在 async-profiler 的 event 参数里面，所以实现时没有单独拿出来在 UI 的任务采样类型中选择，而是作为扩展参数使用 | byte                                                         |
+| 任务采样类型              | JFR事件                                                      | 备注                                                         | 单位                                                         |
+| :------------------------ | :----------------------------------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
+| CPU、WALL、CTIMER、ITIMER | EXECUTION\_SAMPLE                                            | 多种 **AsyncProfilerEventType** 类型都对应于 **EXECUTION_SAMPLE** 事件，主要原因在于不同类型的采样类型采用了不同的原理，并且采样的范围有所不同。 | 采样次数<br />执行时间可以通过interval计算，例如采样次数为10次，interval为10ms，则可以认为执行了100ms（默认interval为10ms） |
+| LOCK                      | THREAD\_PARK、JAVA\_MONITOR\_ENTER                           | 无                                                           | ns                                                           |
+| ALLOC                     | OBJECT\_ALLOCATION\_IN\_NEW\_TLAB、OBJECT\_ALLOCATION\_OUTSIDE\_TLAB | 无                                                           | byte                                                         |
+| 扩展参数中添加live选项    | PROFILER\_LIVE\_OBJECT                                       | 因为不在 async-profiler 的 event 参数里面，所以实现时没有单独拿出来在 UI 的任务采样类型中选择，而是作为扩展参数使用 | byte                                                         |
 
 ### 性能开销
 
