@@ -11,7 +11,7 @@ description: "本文展示了 Skywalking 中 async-profiler 的介绍和用法"
 
 ## 为什么使用 async-profiler？
 
-async-profiler 是一个用于 Java 的低开销采样分析器，它不会受到[安全点偏差问题](http://psy-lob-saw.blogspot.ru/2016/02/why-most-sampling-java-profilers-are.html)的影响。它基于 HotSpot 特定的 API来收集堆栈跟踪并跟踪内存分配。该分析器可与 OpenJDK 和其他基于 HotSpot JVM 的 Java 运行时一起使用。async-profiler 同时支持官方支持 Linux、mac 平台常用的指令集架构，并且采样数据支持使用 JFR 格式存储，相比于 JDK 官方提供提供的 JFR 工具支持更低的 JDK 版本（JDK 6）。
+async-profiler 是一个用于 Java 的低开销采样分析器，它不会受到[安全点偏差问题](http://psy-lob-saw.blogspot.ru/2016/02/why-most-sampling-java-profilers-are.html)的影响。它基于 HotSpot 特定的 API来收集堆栈并跟踪内存分配。该分析器可与 OpenJDK 和其他基于 HotSpot JVM 的 Java 运行时一起使用。async-profiler 同时支持官方支持 Linux、mac 平台常用的指令集架构，并且采样数据支持使用 JFR 格式存储，相比于 JDK 官方提供提供的 JFR 工具支持更低的 JDK 版本（JDK 6）。
 
 ![img](./arch.jpg)
 
