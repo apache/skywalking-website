@@ -1,5 +1,5 @@
 ---
-title: "Profiling with async-profiler"
+title: "Profiling Java application with async-profiler"
 date: 2024-12-09
 author: "zhengziyi0117"
 description: "This document presents an introduction to and usage of the async-profiler in SkyWalking."
@@ -44,7 +44,7 @@ kubectl port-forward svc/ui 8080:8080 --namespace default
 
 ### Run the Async Profiling Task Step by Step
 
-After the deployment is complete, users can navigate to the service page where the Java Agent is configured. Upon entering the service page, users will be able to see the `Async Profiling` component. By clicking on this component, users will gain access to the relevant functionality page, where they can perform some operations.
+After the deployment is complete, users can navigate to the service page where the Java agent is configured. Upon entering the service page, users will be able to see the `Async Profiling` component. By clicking on this component, users will gain access to the relevant functionality page, where they can perform some operations.
 
 ![img](./facade.jpg)
 
@@ -53,12 +53,12 @@ After the deployment is complete, users can navigate to the service page where t
 Clicking **New Task** on the **Async Profiling** page will direct you to the following configuration page. The usage of each parameter is explained as follows:
 
 - **Instance**: This parameter allows you to select the instance of the service that will execute the profiling. It supports selecting multiple instances simultaneously for performance analysis.
-- **Duration**: Specifies the duration for the task. The default duration is conservatively set to a maximum of 20 minutes, but this can be adjusted through the Java agent configuration.
-- **Async Profiling Events**: The profiling events are categorized into three types of sampling, which will be explained in more detail below:
-  - **CPU Sampling**: CPU, WALL, CTIMER, ITIMER.
+- **Duration**: Specifies the duration for the task. The default duration is conservatively set to a maximum of 20 minutes, but this can be adjusted through the [Java agent configuration]((https://github.com/apache/skywalking-java/blob/7e200bbbb052f0e03e5b2db09e1b0a4c6cf1d71c/apm-sniffer/config/agent.config#L170)).
+- **Async Profiling Events**: The profiling events are categorized into three types of sampling, which will be explained below:
+  - **CPU Sampling**: CPU, WALL, CTIMER, ITIMER. [See the differences between these four CPU sampling types](#Differences-in-CPU-sampling-during-task-creation).
   - **Memory Allocation Sampling**: ALLOC.
   - **Lock Occupancy Sampling**: LOCK.
-- **ExecArgs**: Extended parameters for **async-profiler**. Click the question mark icon for detailed usage instructions.
+- **ExecArgs**: Extended parameters for **async-profiler**. Detailed [usage instructions](#ExecArgs-in-task-creation) are available.
 
 ![img](./create_task.jpg)
 
@@ -114,7 +114,7 @@ For other parameters, please refer to [async-profiler](https://github.com/async-
 
 | Task sample type                         | JFR event type                    | Description                                                  | Unit                                                         |
 | :--------------------------------------- | :-------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
-| CPU                                      | EXECUTION\_SAMPLE                 | Multiple **AsyncProfilerEventType** types correspond to the **EXECUTION_SAMPLE** event. This is primarily due to the fact that different sampling types employ distinct underlying mechanisms and have varying sampling scopes. | Sample times. <br />The number of samples can be combined with the interval to calculate the execution time. For instance, if the number of samples is 10 and the interval is set to 10ms, the total execution time can be estimated as 100ms (the default interval is 10ms) |
+| CPU                                      | EXECUTION\_SAMPLE                 | Multiple **AsyncProfilerEventType** types correspond to the **EXECUTION_SAMPLE** event. This is primarily due to the fact that different sampling types employ distinct underlying mechanisms and have varying sampling scopes. | Sample times. <br />The execution time can be calculated based on the sampling interval. For instance, if the number of samples is 10 and the interval is set to 10ms, the total execution time can be estimated as 100ms (the default interval is 10ms) |
 | WALL                                     |                                   |                                                              |                                                              |
 | CTIMER                                   |                                   |                                                              |                                                              |
 | ITIMER                                   |                                   |                                                              |                                                              |

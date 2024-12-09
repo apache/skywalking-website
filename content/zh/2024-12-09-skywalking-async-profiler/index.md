@@ -1,17 +1,17 @@
 ---
-title: "使用 async-profiler 进行性能分析"
-date: 2024-12-29
+title: "使用 async-profiler 对 java 应用进行性能分析"
+date: 2024-12-09
 author: "zhengziyi0117"
 description: "本文展示了 Skywalking 中 async-profiler 的介绍和用法"
 ---
 
 ## 背景
 
-[Apache SkyWalking](https://skywalking.apache.org/) 是一个开源的应用性能管理系统，帮助用户从各种平台收集日志、跟踪、指标和事件，并在用户界面上展示它们。在10.1.0版本中，Apache SkyWalking 可以通过 eBPF 进行 CPU 分析，eBPF 支持多种语言，但并不支持 Java。本文探讨了Apache SkyWalking 10.2.0版本如何采用 async-profiler 来收集 CPU、内存分配、锁并进行分析，解决了这一限制，同时二外提供了内存分配以及占用分析。
+[Apache SkyWalking](https://skywalking.apache.org/) 是一个开源的应用性能管理系统，帮助用户从各种平台收集日志、跟踪、指标和事件，并在用户界面上展示它们。在10.1.0版本中，Apache SkyWalking 可以通过 eBPF 进行 CPU 分析，eBPF 支持多种语言，但并不支持 Java。本文探讨了Apache SkyWalking 10.2.0版本如何采用 async-profiler 来收集 CPU、内存分配、锁并进行分析，解决了这一限制，同时额外提供了内存分配以及占用分析。
 
 ## 为什么使用 async-profiler？
 
-async-profiler 是一个用于 Java 的低开销采样分析器，它不会受到[安全点偏差问题](http://psy-lob-saw.blogspot.ru/2016/02/why-most-sampling-java-profilers-are.html)的影响。它具有特定于 HotSpot 的 API，用于收集堆栈跟踪和跟踪内存分配。该分析器可与 OpenJDK 和其他基于 HotSpot JVM 的 Java 运行时一起使用。async-profiler 同时支持官方支持 Linux、mac 平台常用的指令集架构，并且采样数据支持使用 JFR 格式存储，相比于 JDK 官方提供提供的 JFR 工具支持更低的 JDK 版本（JDK 6）。
+async-profiler 是一个用于 Java 的低开销采样分析器，它不会受到[安全点偏差问题](http://psy-lob-saw.blogspot.ru/2016/02/why-most-sampling-java-profilers-are.html)的影响。它基于 HotSpot 特定的 API，用于收集堆栈跟踪和跟踪内存分配。该分析器可与 OpenJDK 和其他基于 HotSpot JVM 的 Java 运行时一起使用。async-profiler 同时支持官方支持 Linux、mac 平台常用的指令集架构，并且采样数据支持使用 JFR 格式存储，相比于 JDK 官方提供提供的 JFR 工具支持更低的 JDK 版本（JDK 6）。
 
 ![img](./arch.jpg)
 
@@ -20,7 +20,7 @@ async-profiler 是一个用于 Java 的低开销采样分析器，它不会受�
 1. 用户在 UI 中下发 async-profiler 任务
 2. Java agent 从 OAP Server 获取任务
 3. Java agent 执行任务，通过 async-profiler 进行数据采样，将采样的数据写入 JFR 文件中
-4. 采样指定时间后，Java agent上传 JFR 文件至 OAP Server
+4. 采样指定时间后，Java agent 上传 JFR 文件至 OAP Server
 5. OAP Server 对 JFR 文件进行解析，并且记录相关实例已经完成
 6. 任务用户通过UI选择完成任务的实例进行性能分析
 
@@ -41,7 +41,7 @@ kubectl port-forward svc/ui 8080:8080 --namespace default
 
 ### 使用流程
 
-部署完成后，用户可以点进进入配置了 Java Agent 的 Service 页面。进入该服务页面后，用户将能够看到 **Async Profiling** 组件，点击该组件即可访问相关功能页面并进行操作。
+部署完成后，用户可以点击进入配置了 Java agent 的 Service 页面。进入该服务页面后，用户将能够看到 **Async Profiling** 组件，点击该组件即可访问相关功能页面并进行操作。
 
 ![img](./facade.jpg)
 
@@ -50,12 +50,12 @@ kubectl port-forward svc/ui 8080:8080 --namespace default
 在 Async Profiling 页面选择**新建任务**将会显示如下页面，下面是参数的使用说明：
 
 - **实例**：可执行性能剖析的实例，支持选择多个实例同时进行分析。
-- **持续时间**：任务的执行时长（默认设置为最多 20 分钟，参数较为保守，可通过 Java Agent 进行调整）。
-- **分析事件**：分析事件可以大致分为三种类型采样，后续会介绍使用细节CPU采样：
-  - **CPU采样**：包含 CPU、WALL、CTIMER、ITIMER
+- **持续时间**：任务的执行时长（默认设置为最多 20 分钟，参数较为保守，可通过 Java agent 中的 [agent.config](https://github.com/apache/skywalking-java/blob/7e200bbbb052f0e03e5b2db09e1b0a4c6cf1d71c/apm-sniffer/config/agent.config#L170) 进行配置调整）。
+- **分析事件**：分析事件可以大致分为三种类型采样：
+  - **CPU采样**：包含 CPU、WALL、CTIMER、ITIMER。有关四种 CPU 采样类型的区别可以参考[下文](#任务创建中不同CPU采样的区别)
   - **内存分配采样**：ALLOC
   - **锁占用采样**：LOCK
-- 任务扩展参数: async-profiler 的扩展参数，点击小问号图标可以查看如何使用
+- 任务扩展参数: async-profiler 的扩展参数，具体使用说明请参考[下文](#任务创建中的扩展参数)
 
 ![img](./create_task.jpg)
 
@@ -111,7 +111,7 @@ CPU采样有以下几种: CPU、WALL、CTIMER、ITIMER，本质为 async-profile
 
 | 任务采样类型           | JFR事件                           | 备注                                                         | 单位                                                         |
 | :--------------------- | :-------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
-| CPU                    | EXECUTION\_SAMPLE                 | 多种 **AsyncProfilerEventType** 类型都对应于 **EXECUTION_SAMPLE** 事件，主要原因在于不同类型的采样类型采用了不同的原理，并且采样的范围有所不同。 | 采样次数<br />可以结合interval计算执行时间，例如采样次数为10次，interval为10ms，则可以认为执行了100ms（默认interval为10ms） |
+| CPU                    | EXECUTION\_SAMPLE                 | 多种 **AsyncProfilerEventType** 类型都对应于 **EXECUTION_SAMPLE** 事件，主要原因在于不同类型的采样类型采用了不同的原理，并且采样的范围有所不同。 | 采样次数<br />执行时间可以通过interval计算，例如采样次数为10次，interval为10ms，则可以认为执行了100ms（默认interval为10ms） |
 | WALL                   |                                   |                                                              |                                                              |
 | CTIMER                 |                                   |                                                              |                                                              |
 | ITIMER                 |                                   |                                                              |                                                              |
