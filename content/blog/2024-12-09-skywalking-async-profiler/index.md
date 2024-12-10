@@ -119,6 +119,6 @@ For other parameters, please refer to [async-profiler](https://github.com/async-
 | ALLOC                                       | OBJECT\_ALLOCATION\_IN\_NEW\_TLAB<br />OBJECT\_ALLOCATION\_OUTSIDE\_TLAB | Empty                                                        | byte                                                         |
 | Add `live` option to extended parameters    | PROFILER\_LIVE\_OBJECT                                       | Because it is not in the event parameter of async-profiler, it is not selected separately in the task sampling type of the UI during implementation, but is used as an extended parameter | byte                                                         |
 
-### performance expenses
+### Performance expenses
 
 **There is no performance overhead when an instance is not receiving an async-profiler task.** Performance impact is only introduced once the async-profiler performance analysis is initiated. The extent of this overhead depends on the specific configuration parameters. When using the default settings, the performance impact typically ranges from 0.3% to 10%. For more detailed information, please refer to the [issue](https://github.com/async-profiler/async-profiler/issues/14).
