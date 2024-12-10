@@ -1,7 +1,7 @@
 ---
 title: "开源之夏 2024 SkyWalking 社区项目情况公示"
 author: "Apache SkyWalking"
-date: 2024-12-09
+date: 2024-12-10
 description: "开源之夏是由中科院软件所“开源软件供应链点亮计划”发起并长期支持的一项暑期开源活动，旨在鼓励在校学生积极参与开源软件的开发维护，培养和发掘更多优秀的开发者，促进优秀开源软件社区的蓬勃发展，助力开源软件供应链建设。12月9日，官方完成最终审核和官方评优，并发布结果。"
 tags:
 - OSPP
@@ -10,7 +10,7 @@ tags:
 Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2024"活动，作为导师，共获得了5个官方赞助名额。最终对学生开放如下任务
 
 * BanyanDB支持自定义插入/更新触发器
-* 在SkyWalking Go的toolkit中支持完整trace, log和meter API
+* 在SkyWalking Go的toolkit中支持完整trace, log和meter APIs
 * 在SkyWalking Java中集成JFR性能剖析功能
 * SWCK 支持注入 skywalking Python agent
 * BanyanDB支持数据聚合
@@ -21,15 +21,15 @@ Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2024"活动，�
 ## 在SkyWalking Java中集成JFR性能剖析功能
 - 学生：郑子熠
 - 学校：南京邮电大学 本科
-- 官方文档[Profiling - Async Profiler](https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-async-profiler/)详细介绍了此功能。
+- 官方文档[Profiling - Async Profiler](https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-java-app-profiling/)详细介绍了此功能。
 - 此功能将作为SkyWalking 10.2的主要新功能之一发布，预计发布时间 2025年2月（以官方Release为准）。
-- 官网发布了blog - TODO 介绍此功能
+- 官网发布了blog - [使用 SkyWalking中的 async-profiler 对 Java 应用进行性能分析](https://skywalking.apache.org/zh/2024-12-09-skywalking-async-profiler/) 介绍此功能
 
 2024年12月9日，郑子熠因此项目在结项优秀学生评比中，获得[**突出贡献奖**](https://summer-ospp.ac.cn/final/outstanding)。
 
 ![award Screenshot](./award.png)
 
-## 在SkyWalking Go的toolkit中支持完整trace, log和meter API
+## 在SkyWalking Go的toolkit中支持完整trace, log和meter APIs
 - 学生：李天源
 - 学校：广东东软学院 本地
 - 相关Pull Requests
