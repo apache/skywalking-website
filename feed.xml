@@ -13,6 +13,157 @@
     
     
     <item>
+      <title>Blog: Profiling Java application with SkyWalking bundled async-profiler</title>
+      <link>/blog/2024-12-09-skywalking-async-profiler/</link>
+      <pubDate>Mon, 09 Dec 2024 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2024-12-09-skywalking-async-profiler/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; is an open-source Application Performance Management system that helps users gather logs, traces, metrics, and events from various platforms and display them on the UI.
+In version 10.1.0, Apache SkyWalking can perform CPU analysis through eBPF, which supports multiple languages, but not Java. This article discusses how Apache SkyWalking 10.2.0 uses async-profiler to collect CPU, memory allocation, and locks for analysis, solving this limitation, and also provides memory allocation and occupancy analysis.&lt;/p&gt;
+&lt;h2 id=&#34;why-use-async-profiler&#34;&gt;Why use async-profiler&lt;/h2&gt;
+&lt;p&gt;The async-profiler is a low overhead sampling profiler for Java that does not suffer from the &lt;a href=&#34;http://psy-lob-saw.blogspot.ru/2016/02/why-most-sampling-java-profilers-are.html&#34;&gt;Safepoint bias problem&lt;/a&gt;. It features HotSpot-specific API to collect stack traces and to track memory allocations. The profiler works with OpenJDK and other Java runtimes based on the HotSpot JVM. The async-profiler also officially supports the instruction set architectures commonly used on Linux and Mac platforms, and the sampling data can be stored in the JFR format. Compared with the JFR tool officially provided by JDK, it supports lower JDK versions (JDK 6).&lt;/p&gt;
+&lt;h2 id=&#34;architecture-diagram&#34;&gt;Architecture diagram&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;./arch.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;the-processes-of-running-a-profiling-task&#34;&gt;The processes of running a profiling task&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;A user submits a async-profiler task in the UI&lt;/li&gt;
+&lt;li&gt;The Java agent retrieves the task from the OAP Server&lt;/li&gt;
+&lt;li&gt;Java agent excuses the task to collect profiling data sampling through async-profiler&lt;/li&gt;
+&lt;li&gt;After the profiling is completed, the agent uploads the JFR file to the OAP server.&lt;/li&gt;
+&lt;li&gt;The server parses the JFR file to generate profiling results and marks the task as completed status.&lt;/li&gt;
+&lt;li&gt;The user could check the performance analysis result from the UI side.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;You can setup SkyWalking showcase locally to preview this feature. In this demo, we only deploy service, the latest released SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;java-agent-injector,single-node,elasticsearch
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After deployment is complete, please run the following script to open SkyWalking UI: http://localhost:8080/.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-sh&#34; data-lang=&#34;sh&#34;&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;run-the-async-profiling-task-step-by-step&#34;&gt;Run the Async Profiling Task Step by Step&lt;/h3&gt;
+&lt;p&gt;After the deployment is complete, users can navigate to the service page where the Java agent is configured. Upon entering the service page, users will be able to see the &lt;code&gt;Async Profiling&lt;/code&gt; component. By clicking on this component, users will gain access to the relevant functionality page, where they can perform some operations.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./facade.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;create-a-new-task&#34;&gt;Create a New Task&lt;/h3&gt;
+&lt;p&gt;Clicking &lt;strong&gt;New Task&lt;/strong&gt; on the &lt;strong&gt;Async Profiling&lt;/strong&gt; page will direct you to the following configuration page. The usage of each parameter is explained as follows:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Instance&lt;/strong&gt;: This parameter allows you to select the instance of the service that will execute the profiling. It supports selecting multiple instances simultaneously for performance analysis.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Duration&lt;/strong&gt;: Specifies the duration for the task. The default duration is conservatively set to a maximum of 20 minutes, but this can be adjusted through the &lt;a href=&#34;(https://github.com/apache/skywalking-java/blob/7e200bbbb052f0e03e5b2db09e1b0a4c6cf1d71c/apm-sniffer/config/agent.config#L170)&#34;&gt;Java agent configuration&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Async Profiling Events&lt;/strong&gt;: The profiling events are categorized into three types of sampling, which will be explained below:
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;CPU Sampling&lt;/strong&gt;: CPU, WALL, CTIMER, ITIMER. &lt;a href=&#34;#Differences-in-CPU-sampling-during-task-creation&#34;&gt;See the differences between these four CPU sampling types&lt;/a&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Memory Allocation Sampling&lt;/strong&gt;: ALLOC.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Lock Occupancy Sampling&lt;/strong&gt;: LOCK.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ExecArgs&lt;/strong&gt;: Extended parameters for &lt;strong&gt;async-profiler&lt;/strong&gt;. Detailed &lt;a href=&#34;#ExecArgs-in-task-creation&#34;&gt;usage instructions&lt;/a&gt; are available.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;./create_task.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;check-the-progresses-of-the-task&#34;&gt;Check the Progresses Of the Task&lt;/h3&gt;
+&lt;p&gt;By clicking the task details icon, users can view the &lt;strong&gt;task status logs, relevant parameters, as well as instances where data collection has either failed or been successfully completed&lt;/strong&gt;. Instances that have successfully completed data collection will be available for subsequent performance analysis.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;It is important to note that, in containerized deployments where users have not configured volume mounts, there may be cases where JFR files cannot be received. To address this, the OAP Server by default uses memory to receive and parse JFR files. The maximum acceptable size for JFR files is conservatively set to 30MB by default.&lt;/p&gt;
+&lt;p&gt;Users can customize the default JFR file size in the OAP configuration and opt to store the files on the filesystem before parsing them, enabling the platform to handle larger JFR files and ensuring smoother memory allocation.&lt;/p&gt;
+&lt;p&gt;Currently, the JFR parser requires approximately 1GB of memory to process a 200MB JFR file. (Note that this refers only to memory allocation, not the actual memory required for parsing.) Users can use this as a reference when configuring their OAP Server&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;./progress.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;performance-analysis&#34;&gt;Performance Analysis&lt;/h3&gt;
+&lt;p&gt;Users can select a task and choose the instances they wish to analyze for performance (multiple instances can be selected for aggregated flame graph analysis). After selecting the desired JFR event type for analysis, users can click the &lt;strong&gt;Analyze&lt;/strong&gt; button to display the corresponding flame graph.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./performance.jpg&#34; alt=&#34;img&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;some-details&#34;&gt;Some Details&lt;/h2&gt;
+&lt;h3 id=&#34;differences-in-cpu-sampling-during-task-creation&#34;&gt;Differences in CPU sampling during task creation&lt;/h3&gt;
+&lt;p&gt;The CPU sampling mechanism supports several modes, each representing a different sampling engine implemented by async-profiler. These modes include CPU, WALL, CTIMER, and ITIMER, and differ primarily in how they collect and generate sampling signals. The following provides a detailed description of each sampling:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;CPU&lt;/strong&gt;: cpu mode relies on &lt;a href=&#34;https://man7.org/linux/man-pages/man2/perf_event_open.2.html&#34;&gt;perf_events&lt;/a&gt;. The idea is the same - to generate a signal every N nanoseconds of CPU time, which in this case is achieved by configuring PMU to generate an interrupt every K CPU cycles.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;WALL&lt;/strong&gt;: Same as CPU sampling, but also samples threads in non-runnable state, such as threads in sleep&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ITIMER&lt;/strong&gt;:  itimer mode is based on &lt;a href=&#34;https://man7.org/linux/man-pages/man2/setitimer.2.html&#34;&gt;setitimer(ITIMER_PROF)&lt;/a&gt; syscall, which ideally generates a signal every given interval of the CPU time consumed by the process.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CTIMER&lt;/strong&gt;: ctimer aims to address these limitations of &lt;a href=&#34;https://man7.org/linux/man-pages/man2/perf_event_open.2.html&#34;&gt;perf_events&lt;/a&gt; and itimer. ctimer relies on &lt;a href=&#34;https://man7.org/linux/man-pages/man2/timer_create.2.html&#34;&gt;timer_create&lt;/a&gt;. It combines benefits of cpu and itimer, except that it does not allow collecting kernel stacks.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For details, please refer to &lt;a href=&#34;https://github.com/async-profiler/async-profiler/blob/master/docs/CpuSamplingEngines.md&#34;&gt;async-profiler&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id=&#34;execargs-in-task-creation&#34;&gt;ExecArgs in task creation&lt;/h3&gt;
+&lt;p&gt;By default, task parameters are separated by commas. When creating a task, users should refer to the following example format for input: &lt;code&gt;lock=10us,interval=10ms&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Currently, the following parameters are supported by default:&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Option&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;chunksize=N&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;approximate size of JFR chunk in bytes (default: 100 MB)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;chunktime=N&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;duration of JFR chunk in seconds (default: 1 hour)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;lock[=DURATION]&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;profile contended locks overflowing the DURATION ns bucket&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;jstackdepth=N&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;maximum Java stack depth (default: 2048)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;interval=N&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;sampling interval in ns (default: 10&#39;000&#39;000, i.e. 10 ms)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;alloc[=BYTES]&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;profile allocations with BYTES interval&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;For other parameters, please refer to &lt;a href=&#34;https://github.com/async-profiler/async-profiler/blob/master/src/arguments.cpp#L44&#34;&gt;async-profiler&lt;/a&gt; and need to be tested by yourself&lt;/p&gt;
+&lt;h3 id=&#34;comparison-table-between-sampling-types-and-jfr-events-in-task-analysis&#34;&gt;Comparison table between sampling types and JFR events in task analysis&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Task sample type&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;JFR event type&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Description&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;Unit&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;CPU&lt;br /&gt;WALL&lt;br /&gt;&lt;br /&gt;ITIMER&lt;br /&gt;CTIMER&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;EXECUTION_SAMPLE&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Multiple &lt;strong&gt;AsyncProfilerEventType&lt;/strong&gt; types correspond to the &lt;strong&gt;EXECUTION_SAMPLE&lt;/strong&gt; event. This is primarily due to the fact that different sampling types employ distinct underlying mechanisms and have varying sampling scopes.&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Sample times. &lt;br /&gt;The execution time can be calculated based on the sampling interval. For instance, if the number of samples is 10 and the interval is set to 10ms, the total execution time can be estimated as 100ms (the default interval is 10ms)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;LOCK&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;THREAD_PARK&lt;br /&gt;JAVA_MONITOR_ENTER&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Empty&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ns&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;ALLOC&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;OBJECT_ALLOCATION_IN_NEW_TLAB&lt;br /&gt;OBJECT_ALLOCATION_OUTSIDE_TLAB&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Empty&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;byte&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Add &lt;code&gt;live&lt;/code&gt; option to extended parameters&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;PROFILER_LIVE_OBJECT&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;Because it is not in the event parameter of async-profiler, it is not selected separately in the task sampling type of the UI during implementation, but is used as an extended parameter&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;byte&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;performance-expenses&#34;&gt;performance expenses&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;There is no performance overhead when an instance is not receiving an async-profiler task.&lt;/strong&gt; Performance impact is only introduced once the async-profiler performance analysis is initiated. The extent of this overhead depends on the specific configuration parameters. When using the default settings, the performance impact typically ranges from 0.3% to 10%. For more detailed information, please refer to the &lt;a href=&#34;https://github.com/async-profiler/async-profiler/issues/14&#34;&gt;issue&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Use of SkyWalking Go Toolkit Log and Metrics</title>
       <link>/blog/2024-10-20-skywalking-go-toolkit-metrics-log/</link>
       <pubDate>Sun, 20 Oct 2024 00:00:00 +0000</pubDate>
@@ -8616,61 +8767,6 @@ Figure 5: Grouped Service Topology&lt;/p&gt;
 &lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;p95&lt;span style=&#34;color:#bbb&#34;&gt;
 &lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt (index .metrics 1).value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
 &lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;which expects the actual &lt;code&gt;metrics&lt;/code&gt; list to be exactly ordered, with first element named &lt;code&gt;p99&lt;/code&gt; and &lt;code&gt;value&lt;/code&gt; greater 0, second element named &lt;code&gt;p95&lt;/code&gt; and &lt;code&gt;value&lt;/code&gt; greater 0.&lt;/p&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: [Resolved][License Issue] Tencent Cloud TSW service violates the Apache 2.0 License when using SkyWalking.</title>
-      <link>/blog/2021-01-23-tencent-cloud-violates-aplv2/</link>
-      <pubDate>Fri, 22 Jan 2021 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2021-01-23-tencent-cloud-violates-aplv2/</guid>
-      <description>
-        
-        
-        &lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org&#34;&gt;Apache SkyWalking&lt;/a&gt; is an open source APM for distributed system, Apache Software Foundation top-level project.&lt;/p&gt;
-&lt;p&gt;At Jan. 11th, 2021, we noticed the Tencent Cloud Service, &lt;a href=&#34;https://cloud.tencent.com/product/tsw&#34;&gt;Tencent Service Watcher - TSW&lt;/a&gt;, for first time.
-Due to the similar short name, which SkyWalking is also called SW in the community, we connected with the service team of Tencent Cloud, and kindly asked.&lt;/p&gt;
-&lt;p&gt;They used to replay, &lt;strong&gt;TSW is purely developed by Tencent team itself, which doesn&amp;rsquo;t have any code dependency on SkyWalking.&lt;/strong&gt;. We didn&amp;rsquo;t push harder.&lt;/p&gt;
-&lt;p&gt;But one week later, Jan 18th, 2021, our V.P., Sheng got the report again from Haoyang SkyWalking PMC member, through WeChat DM(direct message),.
-He provided complete evidence to prove TSW actually re-distributed the SkyWalking&amp;rsquo;s Java agent.
-We keep one copy of their agent&amp;rsquo;s distribution(at Jan. 18th), you could be downloaded &lt;a href=&#34;https://drive.google.com/file/d/1wCnUW0n-0qIoHuNI2pw8iAaVyRBrSuI7/view&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Some typically evidences are here&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking/blob/v8.3.0/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/boot/ServiceManager.java&#34;&gt;ServiceManager&lt;/a&gt; is copied and package-name changed in the TSW&amp;rsquo;s agent.
-&lt;img src=&#34;copy1.jpeg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/apache/skywalking/blob/v8.3.0/apm-sniffer/apm-agent-core/src/main/java/org/apache/skywalking/apm/agent/core/context/ContextManager.java&#34;&gt;ContextManager&lt;/a&gt; is copied and ackage-name changed in the TSW&amp;rsquo;s agent.
-&lt;img src=&#34;copy2.jpeg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;At the same time, we checked their tsw-client-package.zip, it didn&amp;rsquo;t include the SkyWalking&amp;rsquo;s LICENSE and NOTICE. Also, they didn&amp;rsquo;t mention TSW agent is the re-ditribution SkyWalking on their website.&lt;/p&gt;
-&lt;p&gt;With all above information, we had enough reason to believe, from the tech perspective, &lt;strong&gt;they were violating the Apache 2.0 License.&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;From the 18th Jan., 2021, we sent mail &lt;code&gt;[Apache 2.0 License Violation] Tencent Cloud TSW service doesn&#39;t follow the Apache 2.0 License&lt;/code&gt; to brief the SkyWalking PMC, and
-took the following actions to connect with Tencent.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Made direct call to Tencent Open Source Office.&lt;/li&gt;
-&lt;li&gt;Connected with Tencent Cloud TVP program committee, as Sheng Wu(Our VP) is a Tencent Cloud TVP.&lt;/li&gt;
-&lt;li&gt;Talked with the Tencent Cloud team lead.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;strong&gt;In all above channels, we provided the evidences of copy-redistribution hebaviors, requested them to revaluate their statements on the website, and follow the License&amp;rsquo;s requirements.&lt;/strong&gt;&lt;/p&gt;
-&lt;h2 id=&#34;resolution&#34;&gt;Resolution&lt;/h2&gt;
-&lt;p&gt;At Jan. 19th night, UTC+8, 2021. We received response from the Tencent cloud team. They admited their violation behaviors, and did following changes&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;
-&lt;p&gt;Tencent Cloud TSW service page states, the agent is the fork version(re-distribution) of Apache SkyWalking agent.
-&lt;img src=&#34;tencent-cloud.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;li&gt;
-&lt;p&gt;TSW agent distributions include the SkyWalking&amp;rsquo;s License and NOTICE. Below is the screenshot, you could download from their product page. We keep a copy of their Jan. 19th 2021 at &lt;a href=&#34;https://drive.google.com/file/d/1Z9EkOpi-lyFosmvuoqPZ57sY-gLdwNLq/view&#34;&gt;here&lt;/a&gt;.
-&lt;img src=&#34;agent.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;We have updated the status to the PMC mail list. This license violation issue has been resolved for now.&lt;/p&gt;
-&lt;h5 id=&#34;the-skywalking-community-and-program-management-committee-will-keep-our-eyes-on-tencent-tsw&#34;&gt;The SkyWalking community and program management committee will keep our eyes on Tencent TSW.&lt;/h5&gt;
 
       </description>
     </item>
