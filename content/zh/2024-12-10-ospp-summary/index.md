@@ -31,7 +31,7 @@ Aapche SkyWalking PMC 和 committer团队参加了"开源之夏 2024"活动，�
 
 ## 在SkyWalking Go的toolkit中支持完整trace, log和meter APIs
 - 学生：李天源
-- 学校：广东东软学院 本地
+- 学校：广东东软学院 本科
 - 相关Pull Requests
   - [api: add log,metric,span feat to api](https://github.com/apache/skywalking-go/pull/198)
   - [feat: toolkit span add event impl](https://github.com/apache/skywalking-go/pull/200)
