@@ -1,5 +1,5 @@
 ---
-title: SkyWalking OAP server 2025 new release policy
+title: Announcement - Changes in SkyWalking OAP’s Release Policy
 date: 2024-12-27
 author: SkyWalking Team
 description: "Starting in 2025, the Apache SkyWalking community will no longer publish OAP server and UI JARs to Maven Central. Instead, releases will be available via source tarballs, binary tarballs on the SkyWalking download page, and Docker images on Docker Hub, ensuring a more efficient release process without impacting most users."
