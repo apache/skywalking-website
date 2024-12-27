@@ -5,7 +5,6 @@ author: SkyWalking Team
 description: "Starting in 2025, the Apache SkyWalking community will no longer publish OAP server and UI JARs to Maven Central. Instead, releases will be available via source tarballs, binary tarballs on the SkyWalking download page, and Docker images on Docker Hub, ensuring a more efficient release process without impacting most users."
 ---
 
-# Announcement: Changes in SkyWalking OAP’s Release Policy
 Since joining the Apache Software Foundation (ASF) incubator in 2017, the SkyWalking project has maintained a consistent release policy. Over the years, we have continuously uploaded all OAP Server and UI component libraries to Maven Central, starting from version 6.0.0 up to the latest 10.1.0 release. You can find these releases at Maven Central: org.apache.skywalking.
 
 Initially, releasing all component JARs to Maven Central was necessary due to the early architecture of SkyWalking, where OAP Server, UI, and Java Agent all shared the same monorepo. The Java Agent included a toolkit library that many users accessed via the central repository. However, in 2021, we split the Java Agent into its own repository [skywalking-java GitHub repository](https://github.com/apache/skywalking-java), simplifying code management and release workflows.
