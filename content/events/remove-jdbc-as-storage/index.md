@@ -5,8 +5,6 @@ author: SkyWalking Team
 description: "Apache SkyWalking has removed H2 as a storage option in 2025, replacing it with the production-ready BanyanDB. BanyanDB offers better performance, cloud-native compatibility, and scalability, ensuring a consistent and reliable storage experience. Users are encouraged to migrate to BanyanDB for modern observability needs."
 ---
 
-# First Announcement of 2025: H2 Storage Option Permanently Removed
-
 As we step into 2025, we are thrilled to share some major updates regarding Apache SkyWalking's storage architecture. Starting from this year, **H2** will no longer be supported as a storage option. This decision marks a significant milestone in our journey to enhance SkyWalking’s scalability, reliability, and adaptability for both local and cloud-native environments.
 
 Back in **2015**, we introduced **H2** as the default storage option for SkyWalking to simplify the first-time installation experience. Its in-memory mode provided an easy way for users to get started locally without additional setup. While it served its purpose for an initial learning curve, over the years, we’ve observed several challenges that have made H2 unsuitable for production and cloud-based environments. 
