@@ -8,7 +8,7 @@ description: "Release Apache SkyWalking Java Agent 9.4.0."
 SkyWalking Java Agent 9.4.0 is released. Go to [downloads](/downloads) page to find release tars.
 Changes by Version
 
-9.3.0
+9.4.0
 ------------------
 
 * Upgrade nats plugin to support 2.16.5
