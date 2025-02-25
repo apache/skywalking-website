@@ -20,11 +20,16 @@ This makes it challenging to rely solely on static threshold values for accurate
 
 Therefore, dynamically generating thresholds for each time period based on historical data becomes crucial.
 
-## Skywalking Predictor with Alarm system
+## Introduce SkyAPM SkyPredictor
 
-Based on the above scenario, we developed the [SkyWalking Predictor](https://github.com/SkyAPM/SkyPredictor/) project to fix this issue.
-SkyWalking Predictor periodically collects data from SkyWalking and generate dynamic baselines.
-SkyWalking can then query the Predictor system to obtain predicted metric values for the recent period, enabling more precise and adaptive alerting.
+Based on the above scenario, we developed the [SkyAPM SkyPredictor](https://github.com/SkyAPM/SkyPredictor/) project to fix this issue.
+SkyAPM SkyPredictor periodically collects data from SkyWalking and generates dynamic baselines.
+Meanwhile, SkyWalking queries from SkyPredictor to obtain predicted metric values for the recent period, enabling more precise and adaptive alerting.
+
+NOTE: SkyWalking does not have a hard dependency on the SkyWalking Predictor service. 
+If SkyPredictor is not configured, no predicted values would be retrieved, and not cause any failures in SkyWalking.
+Additionally, you can use your own AI engine to build a custom prediction system. Simply implement the required protocol as outlined in the official documentation:
+https://skywalking.apache.org/docs/main/next/en/setup/ai-pipeline/metrics-baseline-integration/
 
 ### Architecture diagram
 
@@ -97,6 +102,19 @@ For metrics with high volatility, minute-level collection provides better accura
 For stable metrics, hourly aggregation is sufficient and allows for efficient predictions using current-value comparisons.
 
 Predict use Hourly level by default.
+
+### OAP and Predictor Scheduling & Caching
+
+Both SkyWalking OAP and SkyAPM Predictor implement caching strategies to prevent excessive execution and optimize resource usage.
+
+By default, Predictor runs at 00:10, 08:10, and 16:10 every day. It forecasts the next 24 hours and stores the results locally.
+Updating predictions every 8 hours balances resource efficiency and real-time accuracy. The 10-minute delay 
+(instead of running at exactly 00:00, 08:00, etc.) ensures historical data is fully written to the database before querying.
+
+OAP queries Predictor for all required predicted metrics of a single service. The query covers a ±24-hour time range from the current moment.
+Results are cached for one hour to reduce redundant queries and improve efficiency.
+
+These mechanisms ensure that predictions remain up-to-date, while minimizing unnecessary processing and system load.
 
 ## Demo
 
@@ -191,7 +209,7 @@ Now, you should see the predicted response times visualized alongside actual val
 
 ## Conclusion
 
-SkyWalking Predictor enhances alert accuracy by using dynamic baselines instead of static thresholds.
+SkyAPM SkyPredictor enhances alert accuracy by using dynamic baselines instead of static thresholds.
 It collects history metrics data, forecasts future values with Prophet, and supports minute or hour-level collection for better precision.
 By integrating predictions into SkyWalking UI, users can optimize alerting and improve system observability.
 
