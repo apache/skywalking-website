@@ -13,6 +13,189 @@
     
     
     <item>
+      <title>Blog: Improving Alert Accuracy with Dynamic Baselines</title>
+      <link>/blog/2025-02-24-improving-alert-accuracy-with-dynamic-baselines/</link>
+      <pubDate>Mon, 24 Feb 2025 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2025-02-24-improving-alert-accuracy-with-dynamic-baselines/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; is an open-source application performance monitoring (APM) system
+that collects various data from business applications, including metrics, logs, and distributed tracing information,
+and visualizes them through its UI.
+It also allows users to configure alerting rules by setting threshold values for specific metrics in the configuration file.
+When a metric associated with a particular service exceeds the predefined threshold within a given period, an alert is triggered.&lt;/p&gt;
+&lt;p&gt;However, in real-world scenarios, traffic patterns and invocation behaviors vary across different time periods.
+For example, in a shopping system, the number of purchases is significantly lower during late-night hours compared to daytime.
+As a result, system metrics fluctuate within different ranges depending on the time of day.
+This makes it challenging to rely solely on static threshold values for accurate alerting.&lt;/p&gt;
+&lt;p&gt;Therefore, dynamically generating thresholds for each time period based on historical data becomes crucial.&lt;/p&gt;
+&lt;h2 id=&#34;introduce-skyapm-skypredictor&#34;&gt;Introduce SkyAPM SkyPredictor&lt;/h2&gt;
+&lt;p&gt;Based on the above scenario, we developed the &lt;a href=&#34;https://github.com/SkyAPM/SkyPredictor/&#34;&gt;SkyAPM SkyPredictor&lt;/a&gt; project to fix this issue.
+SkyAPM SkyPredictor periodically collects data from SkyWalking and generates dynamic baselines.
+Meanwhile, SkyWalking queries from SkyPredictor to obtain predicted metric values for the recent period, enabling more precise and adaptive alerting.&lt;/p&gt;
+&lt;p&gt;NOTE: SkyWalking does not have a hard dependency on the SkyPredictor service.
+If SkyPredictor is not configured, no predicted values would be retrieved, and not cause any failures in SkyWalking.
+Additionally, you can use your own AI engine to build a custom prediction system. Simply implement the required protocol as outlined in the official documentation:
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/ai-pipeline/metrics-baseline-integration/&#34;&gt;https://skywalking.apache.org/docs/main/next/en/setup/ai-pipeline/metrics-baseline-integration/&lt;/a&gt;&lt;/p&gt;
+&lt;h3 id=&#34;architecture-diagram&#34;&gt;Architecture diagram&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;./architecture.png&#34; alt=&#34;Architecture&#34;&gt;&lt;/p&gt;
+&lt;p&gt;As shown in the diagram, the process consists of two steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Data Collection &amp;amp; Prediction&lt;/strong&gt;: The Predictor queries history metrics from SkyWalking&amp;rsquo;s OAP via its HTTP service.
+Then processes this data to generate dynamic predicted values for a future time period.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Baseline Query &amp;amp; Alerting&lt;/strong&gt;: The OAP periodically sends queries to the Predictor to fetch the predicted dynamic baseline.
+Then evaluates the current metric values with prediction result using &lt;strong&gt;MQE&lt;/strong&gt;. If the deviation exceeds a certain threshold, an alert is triggered.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;data-collection&#34;&gt;Data Collection&lt;/h3&gt;
+&lt;p&gt;The Predictor utilizes the following three APIs to query data:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/status/query_ttl_setup/&#34;&gt;&lt;strong&gt;Status API&lt;/strong&gt;&lt;/a&gt;: Retrieves the TTL (Time-to-Live) of history data stored in OAP, helping to determine the available time range for exporting all history metrics.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/#v2-apis&#34;&gt;&lt;strong&gt;Metadata API&lt;/strong&gt;&lt;/a&gt;: Fetches the list of services within a specified Layer from OAP, providing insights into which services are generating data.&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/metrics-query-expression/&#34;&gt;&lt;strong&gt;MQE API&lt;/strong&gt;&lt;/a&gt;: Iterates through the required metrics and the list of services to fetch all history metrics values for each metric associated with each service.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;These APIs collectively enable the Predictor to gather history metrics data, which is then used to compute dynamic baselines for future alerting.&lt;/p&gt;
+&lt;h3 id=&#34;prediction&#34;&gt;Prediction&lt;/h3&gt;
+&lt;p&gt;Once the Prediction service collects data from OAP, it proceeds with forecasting using the &lt;a href=&#34;https://github.com/facebook/prophet&#34;&gt;open-source Prophet library&lt;/a&gt;.
+The prediction process consists of the following steps:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Data Preparation&lt;/strong&gt;: The collected metric data is split into multiple &lt;a href=&#34;https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html&#34;&gt;DataFrames&lt;/a&gt;, each corresponding to a unique combination of service + metric name.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Data Sufficiency Check&lt;/strong&gt;: If a DataFrame contains less than &lt;strong&gt;two days&lt;/strong&gt; (configurable) of data, the prediction is skipped. This is to ensure accuracy, as an insufficient data volume may lead to unreliable forecasts.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Forecasting&lt;/strong&gt;: Using Prophet, the Predictor estimates the metric values for &lt;strong&gt;each hour over the next day&lt;/strong&gt; (configurable).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Result Storage&lt;/strong&gt;: The generated predictions are stored in local files, enabling querying from external services.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;predicted-value&#34;&gt;Predicted Value&lt;/h4&gt;
+&lt;p&gt;The Prediction service supports calculating the following two types of values:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Predicted Value&lt;/strong&gt;: Computes the expected metric value for the next hour based on history metrics data.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Prediction Range&lt;/strong&gt;: Determines the possible &lt;strong&gt;upper and lower bounds&lt;/strong&gt; for the metric in the next hour, representing its expected fluctuation range.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;These values help establish a dynamic baseline, allowing the alerting system to account for natural variations while accurately detecting anomalies.&lt;/p&gt;
+&lt;h3 id=&#34;baseline-mqe-with-alarm&#34;&gt;Baseline MQE with Alarm&lt;/h3&gt;
+&lt;p&gt;In OAP, predicted values can be queried directly using an MQE within MQE operation. This operation enables retrieving forecasted values for a future time period.&lt;/p&gt;
+&lt;p&gt;Since SkyWalking&amp;rsquo;s alerting system already supports query through MQE expressions, users can configure alerts directly in the alerting configuration file using MQE.&lt;/p&gt;
+&lt;p&gt;For more details, please refer to the &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/metrics-query-expression/#baseline-operation&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;impact-of-data-collection-on-prediction-accuracy&#34;&gt;Impact of Data Collection on Prediction Accuracy&lt;/h3&gt;
+&lt;p&gt;The Predictor service supports two different data collection and prediction granularity, each with its own trade-offs in accuracy and resource consumption.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Minute Level: Collects minutes level metrics data.
+&lt;ol&gt;
+&lt;li&gt;More effective for metrics with high fluctuations, as it captures finer details.&lt;/li&gt;
+&lt;li&gt;Consumes more resources (OAP, DB CPU and System Load resources, Predictor CPU and Memory resources).&lt;/li&gt;
+&lt;li&gt;Alerts are configured based on current value comparisons.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;Hour Level: Collects hourly metrics data.
+&lt;ol&gt;
+&lt;li&gt;Less resource-intensive compared to minute-level collection.&lt;/li&gt;
+&lt;li&gt;Less data volume, resource, and processing cost.&lt;/li&gt;
+&lt;li&gt;Alerts are configured based on predicted range values.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Granularity&lt;/th&gt;
+&lt;th&gt;Data Fluctuation&lt;/th&gt;
+&lt;th&gt;Data Volume&lt;/th&gt;
+&lt;th&gt;Current Value Prediction Accuracy&lt;/th&gt;
+&lt;th&gt;Range Prediction Accuracy&lt;/th&gt;
+&lt;th&gt;Best Use Case&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Minute&lt;/td&gt;
+&lt;td&gt;Higher fluctuation&lt;/td&gt;
+&lt;td&gt;Large&lt;/td&gt;
+&lt;td&gt;Less accurate&lt;/td&gt;
+&lt;td&gt;More accurate&lt;/td&gt;
+&lt;td&gt;Ideal for highly fluctuating metrics, using range-based alerting rules&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Hour&lt;/td&gt;
+&lt;td&gt;Lower fluctuation&lt;/td&gt;
+&lt;td&gt;Small&lt;/td&gt;
+&lt;td&gt;More accurate&lt;/td&gt;
+&lt;td&gt;Relatively accurate&lt;/td&gt;
+&lt;td&gt;Suitable for stable metrics, using current value-based predictions&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Choosing the appropriate granularity depends on the nature of the metric and the desired alerting method.
+For metrics with high volatility, minute-level collection provides better accuracy when using range-based alerts.
+For stable metrics, hourly aggregation is sufficient and allows for efficient predictions using current-value comparisons.&lt;/p&gt;
+&lt;p&gt;Predict use Hourly level by default.&lt;/p&gt;
+&lt;h3 id=&#34;oap-and-predictor-scheduling--caching&#34;&gt;OAP and Predictor Scheduling &amp;amp; Caching&lt;/h3&gt;
+&lt;p&gt;Both SkyWalking OAP and SkyAPM Predictor implement caching strategies to prevent excessive execution and optimize resource usage.&lt;/p&gt;
+&lt;p&gt;By default, Predictor runs at 00:10, 08:10, and 16:10 every day. It forecasts the next 24 hours and stores the results locally.
+Updating predictions every 8 hours balances resource efficiency and real-time accuracy. The 10-minute delay
+(instead of running at exactly 00:00, 08:00, etc.) ensures historical data is fully written to the database before querying.&lt;/p&gt;
+&lt;p&gt;OAP queries Predictor for all required predicted metrics of a single service. The query covers a ±24-hour time range from the current moment.
+Results are cached for one hour to reduce redundant queries and improve efficiency.&lt;/p&gt;
+&lt;p&gt;These mechanisms ensure that predictions remain up-to-date, while minimizing unnecessary processing and system load.&lt;/p&gt;
+&lt;h2 id=&#34;demo&#34;&gt;Demo&lt;/h2&gt;
+&lt;p&gt;In this section, I will demonstrate how to preview the predicted values of a metric by deploying a SkyWalking cluster along with the Predictor service
+in a Kubernetes cluster. This hands-on example will help you understand how to use these components effectively.&lt;/p&gt;
+&lt;h3 id=&#34;deploy-skywalking-showcase&#34;&gt;Deploy SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase contains a complete set of example services and can be monitored using SkyWalking.
+For more information, please check the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;official documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;In this demo, we only deploy the predictor service, SkyWalking OAP, and UI.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#0086b3&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#008080&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;single-node,banyandb,baseline
+make deploy.kubernetes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;import-history-data&#34;&gt;Import History Data&lt;/h3&gt;
+&lt;p&gt;Since a newly deployed cluster does not contain history data,
+I have created a Python script to simulate data. This allows the Predictor service to import data and generate baseline predictions for a future period.&lt;/p&gt;
+&lt;p&gt;Before importing data, you must expose the &lt;code&gt;11800&lt;/code&gt; port of the OAP service in your Kubernetes cluster.
+You can achieve this using kubectl by running the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward -n skywalking-showcase   service/demo-oap 11800:11800
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then, you can download and run the demo script using the following command:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# clone and get into the demo repository&lt;/span&gt;
+git clone https://github.com/mrproliu/SkyPredictorDemo &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#0086b3&#34;&gt;cd&lt;/span&gt; SkyPredictorDemo
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# installing dependencies&lt;/span&gt;
+make install
+&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# import data(7 days)&lt;/span&gt;
+python3 -m client.generate localhost:11800 &lt;span style=&#34;color:#099&#34;&gt;7&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Finally, you can see the output in the console: &lt;strong&gt;Metrics send success!&lt;/strong&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;prediction-metrics&#34;&gt;Prediction metrics&lt;/h3&gt;
+&lt;p&gt;Since the Predictor service runs based on a &lt;strong&gt;cron schedule&lt;/strong&gt;, it does not automatically execute immediately after data import.
+To force it to collect data and perform a prediction, you can manually delete the Predictor pod, prompting Kubernetes to restart it:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl delete pod -n skywalking-showcase &lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;$(&lt;/span&gt;kubectl get pods -n skywalking-showcase --no-headers -o custom-columns&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;:metadata.name&amp;#34;&lt;/span&gt; | grep &lt;span style=&#34;color:#d14&#34;&gt;&amp;#34;skywalking-predictor&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Once the Predictor pod restarts, you can check its logs to confirm that the prediction process has been completed.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Predicted for e2e-test-dest-service of service_xxx to xxxx-xx-xx xx:xx:xx.
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;view-in-skywalking-ui&#34;&gt;View in SkyWalking UI&lt;/h3&gt;
+&lt;p&gt;Once the prediction process is complete, you can visualize the predicted values in the SkyWalking UI by configuring the appropriate metric widgets.&lt;/p&gt;
+&lt;p&gt;First, Run the following command to forward the UI service port to your local machine:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;kubectl port-forward svc/demo-ui 8080:80 --namespace skywalking-showcase
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Then, you can access this page to view the service traffic that was generated using the Python script earlier:
+http://localhost:8080/dashboard/MESH/Service/ZTJlLXRlc3QtZGVzdC1zZXJ2aWNl.1/Mesh-Service&lt;/p&gt;
+&lt;p&gt;To display predicted values, edit the Service Avg Resp Time Widget and add the following MQE:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# The maximum predicted response time.
+baseline(service_resp_time, upper)
+# The predicted response time.
+baseline(service_resp_time, value)
+# The minimum predicted response time.
+baseline(service_resp_time, lower)
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Finally, you can see the predicted values displayed in the widget.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;predicted_widget.png&#34; alt=&#34;Predicted Widget&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Since the default data collection is hourly and the metric has significant fluctuations,
+the predicted values are derived from hourly averages rather than minute-level granularity.
+This approach smooths out fluctuations and provides a more stable baseline for monitoring.&lt;/p&gt;
+&lt;p&gt;Now, you should see the predicted response times visualized alongside actual values, helping you analyze trends and configure dynamic alerting thresholds effectively.&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;SkyAPM SkyPredictor enhances alert accuracy by using dynamic baselines instead of static thresholds.
+It collects history metrics data, forecasts future values with Prophet, and supports minute or hour-level collection for better precision.
+By integrating predictions into SkyWalking UI, users can optimize alerting and improve system observability.&lt;/p&gt;
+&lt;p&gt;By integrating dynamic thresholds, SkyWalking can adapt to traffic patterns and detect anomalies more effectively,
+reducing false positives and improving system observability.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Profiling Java application with SkyWalking bundled async-profiler</title>
       <link>/blog/2024-12-09-skywalking-async-profiler/</link>
       <pubDate>Mon, 09 Dec 2024 00:00:00 +0000</pubDate>
@@ -8622,151 +8805,6 @@ Figure 5: Grouped Service Topology&lt;/p&gt;
 &lt;li&gt;Read more about the &lt;a href=&#34;https://github.com/apache/skywalking/blob/v8.4.0/changes/changes-8.4.0.md&#34;&gt;SkyWalking 8.4 release highlights&lt;/a&gt;.&lt;/li&gt;
 &lt;li&gt;Get more SkyWalking updates on &lt;a href=&#34;https://twitter.com/ASFSkyWalking&#34;&gt;Twitter&lt;/a&gt;.&lt;/li&gt;
 &lt;/ul&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: [Design] The Verifier of NGE2E</title>
-      <link>/blog/2021-02-01-e2e-verifier-design/</link>
-      <pubDate>Mon, 01 Feb 2021 00:00:00 +0000</pubDate>
-      
-      <guid>/blog/2021-02-01-e2e-verifier-design/</guid>
-      <description>
-        
-        
-        &lt;h2 id=&#34;background&#34;&gt;Background&lt;/h2&gt;
-&lt;p&gt;The verifier is an important part of the next generation End-to-End Testing framework (NGE2E), which is responsible for verifying whether the actual output satisfies the expected template.&lt;/p&gt;
-&lt;h2 id=&#34;design-thinking&#34;&gt;Design Thinking&lt;/h2&gt;
-&lt;p&gt;We will implement the verifier with &lt;a href=&#34;https://golang.org/pkg/text/template/&#34;&gt;Go template&lt;/a&gt;, plus some enhancements. Firstly, users need to write a Go template file with provided functions and actions to describe how the expected data looks like. Then the verifer renders the template with the actual data object. Finally, the verifier compares the rendered output with the actual data. If the rendered output is not the same with the actual output, it means the actual data is inconsist with the expected data. Otherwise, it means the actual data match the expected data. On failure, the verifier will also print out what are different between expected and actual data.&lt;/p&gt;
-&lt;h2 id=&#34;branches--actions&#34;&gt;Branches / Actions&lt;/h2&gt;
-&lt;p&gt;The verifier inherits all the actions from the standard Go template, such as &lt;code&gt;if&lt;/code&gt;, &lt;code&gt;with&lt;/code&gt;, &lt;code&gt;range&lt;/code&gt;, etc. In addition, we also provide some custom actions to satisfy our own needs.&lt;/p&gt;
-&lt;h3 id=&#34;list-elements-match&#34;&gt;List Elements Match&lt;/h3&gt;
-&lt;p&gt;&lt;code&gt;contains&lt;/code&gt; checks if the actual list contains elements that match the given template.&lt;/p&gt;
-&lt;p&gt;Examples:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;{{- contains .metrics }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;notEmpty .name }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;notEmpty .id }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt .value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;{{- end }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;It means that the list &lt;code&gt;metrics&lt;/code&gt; must contain an element whose &lt;code&gt;name&lt;/code&gt; and &lt;code&gt;id&lt;/code&gt; are not empty, and &lt;code&gt;value&lt;/code&gt; is greater than &lt;code&gt;0&lt;/code&gt;.&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;{{- contains .metrics }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;p95&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt .value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;p99&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt .value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;{{- end }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;This means that the list &lt;code&gt;metrics&lt;/code&gt; must contain an element named &lt;code&gt;p95&lt;/code&gt; with a &lt;code&gt;value&lt;/code&gt; greater than 0, and an element named &lt;code&gt;p95&lt;/code&gt; with a &lt;code&gt;value&lt;/code&gt; greater than 0. Besides the two element, the list &lt;code&gt;metrics&lt;/code&gt; may or may not have other random elements.&lt;/p&gt;
-&lt;h2 id=&#34;functions&#34;&gt;Functions&lt;/h2&gt;
-&lt;p&gt;Users can use these provided functions in the template to describe the expected data.&lt;/p&gt;
-&lt;h3 id=&#34;not-empty&#34;&gt;Not Empty&lt;/h3&gt;
-&lt;p&gt;&lt;code&gt;notEmpty&lt;/code&gt; checks if the string &lt;code&gt;s&lt;/code&gt; is empty.&lt;/p&gt;
-&lt;p&gt;Example:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;notEmpty .id }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;regexp-match&#34;&gt;Regexp match&lt;/h3&gt;
-&lt;p&gt;&lt;code&gt;regexp&lt;/code&gt; checks if string &lt;code&gt;s&lt;/code&gt; matches the regular expression pattern.&lt;/p&gt;
-&lt;p&gt;Examples:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;label&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;regexp .label &amp;#34;ratings.*&amp;#34; }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;base64&#34;&gt;Base64&lt;/h3&gt;
-&lt;p&gt;&lt;code&gt;b64enc s&lt;/code&gt; returns the Base64 encoded string of s.&lt;/p&gt;
-&lt;p&gt;Examples:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;User&amp;#34; }}.static-suffix&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# this evalutes the base64 encoded string of &amp;#34;User&amp;#34;, concatenated with a static suffix &amp;#34;.static-suffix&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Result:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;VXNlcg==.static-suffix&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;full-example&#34;&gt;Full Example&lt;/h2&gt;
-&lt;p&gt;Here is an example of expected data:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# expected.data.yaml&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;nodes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;User&amp;#34; }}.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;User&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;USER&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;isReal&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;Your_ApplicationName&amp;#34; }}.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Your_ApplicationName&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Tomcat&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;isReal&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;$h2ID := (index .nodes 2).id }}{{ notEmpty $h2ID }}&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# We assert that nodes[2].id is not empty and save it to variable `h2ID` for later use&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;localhost:-1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;H2&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;isReal&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;calls&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;notEmpty (index .calls 0).id }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;source&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;Your_ApplicationName&amp;#34; }}.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;target&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;$h2ID }}&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# We use the previously assigned variable `h2Id` to asert that the `target` is equal to the `id` of the nodes[2]&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;detectPoints&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- CLIENT&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;User&amp;#34; }}.0-{{ b64enc &amp;#34;Your_ApplicationName&amp;#34; }}.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;source&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;User&amp;#34; }}.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;target&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;b64enc &amp;#34;Your_ApplicationName&amp;#34; }}.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;detectPoints&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- SERVER&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;will validate this data:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# actual.data.yaml&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;nodes&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;VXNlcg==.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;User&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;USER&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;isReal&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;WW91cl9BcHBsaWNhdGlvbk5hbWU=.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Your_ApplicationName&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;Tomcat&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;isReal&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;bG9jYWxob3N0Oi0x.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;localhost:-1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;type&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;H2&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;isReal&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#000;font-weight:bold&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;calls&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;WW91cl9BcHBsaWNhdGlvbk5hbWU=.1-bG9jYWxob3N0Oi0x.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;source&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;WW91cl9BcHBsaWNhdGlvbk5hbWU=.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;detectPoints&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- CLIENT&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;target&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;bG9jYWxob3N0Oi0x.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;VXNlcg==.0-WW91cl9BcHBsaWNhdGlvbk5hbWU=.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;source&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;VXNlcg==.0&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;detectPoints&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;      &lt;/span&gt;- SERVER&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;target&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;WW91cl9BcHBsaWNhdGlvbk5hbWU=.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# expected.data.yaml&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;{{- contains .metrics }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;notEmpty .name }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;notEmpty .id }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt .value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;{{- end }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;will validate this data:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# actual.data.yaml&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;business-zone::projectA&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;YnVzaW5lc3Mtem9uZTo6cHJvamVjdEE=.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;system::load balancer1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;c3lzdGVtOjpsb2FkIGJhbGFuY2VyMQ==.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;system::load balancer2&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;c3lzdGVtOjpsb2FkIGJhbGFuY2VyMg==.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;and will report an error when validating this data, because there is no element with a value greater than 0:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# actual.data.yaml&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;business-zone::projectA&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;YnVzaW5lc3Mtem9uZTo6cHJvamVjdEE=.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;system::load balancer1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;c3lzdGVtOjpsb2FkIGJhbGFuY2VyMQ==.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;system::load balancer2&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;id&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;c3lzdGVtOjpsb2FkIGJhbGFuY2VyMg==.1&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#099&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The &lt;code&gt;contains&lt;/code&gt; does an unordered list verification, in order to do list verifications including orders, you can simply use the basic ruls like this:&lt;/p&gt;
-&lt;div class=&#34;highlight&#34;&gt;&lt;pre style=&#34;background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;color:#998;font-style:italic&#34;&gt;# expected.data.yaml&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;metrics&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;p99&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt (index .metrics 0).value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;  &lt;/span&gt;- &lt;span style=&#34;color:#000080&#34;&gt;name&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;p95&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;span style=&#34;color:#bbb&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#000080&#34;&gt;value&lt;/span&gt;:&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;{{&lt;span style=&#34;color:#bbb&#34;&gt; &lt;/span&gt;gt (index .metrics 1).value 0 }}&lt;span style=&#34;color:#bbb&#34;&gt;
-&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;which expects the actual &lt;code&gt;metrics&lt;/code&gt; list to be exactly ordered, with first element named &lt;code&gt;p99&lt;/code&gt; and &lt;code&gt;value&lt;/code&gt; greater 0, second element named &lt;code&gt;p95&lt;/code&gt; and &lt;code&gt;value&lt;/code&gt; greater 0.&lt;/p&gt;
 
       </description>
     </item>
