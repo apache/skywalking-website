@@ -26,7 +26,7 @@ Based on the above scenario, we developed the [SkyAPM SkyPredictor](https://gith
 SkyAPM SkyPredictor periodically collects data from SkyWalking and generates dynamic baselines.
 Meanwhile, SkyWalking queries from SkyPredictor to obtain predicted metric values for the recent period, enabling more precise and adaptive alerting.
 
-NOTE: SkyWalking does not have a hard dependency on the SkyWalking Predictor service. 
+NOTE: SkyWalking does not have a hard dependency on the SkyPredictor service. 
 If SkyPredictor is not configured, no predicted values would be retrieved, and not cause any failures in SkyWalking.
 Additionally, you can use your own AI engine to build a custom prediction system. Simply implement the required protocol as outlined in the official documentation:
 https://skywalking.apache.org/docs/main/next/en/setup/ai-pipeline/metrics-baseline-integration/
