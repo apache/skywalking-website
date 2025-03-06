@@ -34,15 +34,8 @@ The demonstration includes the following steps:
 
 ## Deploy SkyWalking
 
-Please download the [SkyWalking APM program](https://skywalking.apache.org/downloads/#SkyWalkingAPM) from the official
-SkyWalking website. Then execute the following two commands to start the services:
-
-```bash
-# Start the OAP backend
-> bin/oapService.sh
-# Start the UI
-> bin/webappService.sh
-```
+Please download the SkyWalking APM program from the official SkyWalking website, 
+and then you can start all the required services using the [quick start script](https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-docker/#start-the-storage-oap-and-booster-ui-with-docker-compose).
 
 Next, you can access the address http://localhost:8080/. At this point, since no applications have been deployed, you
 will not see any data.

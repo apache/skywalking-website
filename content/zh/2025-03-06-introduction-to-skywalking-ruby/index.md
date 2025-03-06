@@ -28,15 +28,8 @@ SkyWalking Ruby 对插件自动探针的实现原理。
 
 ## 部署 SkyWalking
 
-请从官方 SkyWalking 网站下载 [SkyWalking APM 程序](https://skywalking.apache.org/downloads/#SkyWalkingAPM)
-。然后执行以下两个命令来启动服务:
-
-```bash
-# 启动 OAP 后端
-> bin/oapService.sh
-# 启动 UI
-> bin/webappService.sh
-```
+请从官方 SkyWalking 网站下载 [SkyWalking APM 程序](https://skywalking.apache.org/downloads/#SkyWalkingAPM)，然后
+可以根据[快速启动脚本](https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-docker/#start-the-storage-oap-and-booster-ui-with-docker-compose)启动所有所需服务。
 
 接下来，你可以访问地址 `http://localhost:8080/` 。此时，由于尚未部署任何应用程序，因此你将看不到任何数据。
 
@@ -83,7 +76,7 @@ end
 ## 应用部署
 
 在开始部署应用程序之前，你可以通过环境变量更改 SkyWalking
-中当前应用程序的服务名称。你还可以更改其配置，例如服务器端的地址。有关详细信息，请[参阅文档](https://skywalking.apache.org/docs/skywalking-ruby/next/en/setup/quick-start/#configuration) 。
+中当前应用程序的服务名称。你还可以更改其配置，例如服务器端的地址。有关详细信息，请[参阅文档](https://skywalking.apache.org/docs/skywalking-ruby/next/en/setup/quick-start/#configuration)。
 
 在这里，我们将当前服务的名称更改为 `sw-ruby`。
 
