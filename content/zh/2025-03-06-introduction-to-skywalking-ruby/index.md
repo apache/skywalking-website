@@ -72,8 +72,8 @@ require 'skywalking'
 
 Skywalking.start
 
-get '/sw/:name' do
-  "Hello #{params['name']}!"
+get '/sw' do
+  "Hello SkyWalking!"
 end
 ```
 
