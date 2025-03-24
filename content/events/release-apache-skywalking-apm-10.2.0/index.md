@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking APM 10.2.0
-date: 2025-03-27
+date: 2025-03-24
 author: SkyWalking Team
 description: "Release Apache SkyWalking 10.2.0 - No H2, More BanyanDB"
 endTime: 2025-05-30T00:00:00Z
