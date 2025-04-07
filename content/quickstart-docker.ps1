@@ -15,8 +15,8 @@
 # limitations under the License.
 
 # Default values for SkyWalking versions
-$SW_VERSION = "9.7.0"
-$SW_BANYANDB_VERSION = "0.5.0"
+$SW_VERSION = "10.2.0"
+$SW_BANYANDB_VERSION = "0.8.0"
 
 $COMPOSE_FILE_PATH = ".\docker-compose.yml"
 $env:BANYANDB_IMAGE = "apache/skywalking-banyandb:$SW_BANYANDB_VERSION"
