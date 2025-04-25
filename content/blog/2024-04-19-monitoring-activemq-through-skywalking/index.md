@@ -29,7 +29,7 @@ Please set up the following services:
 1. [SkyWalking OAP, v10.0+](https://github.com/apache/skywalking).
 2. [ActiveMQ v6.0.X+](https://activemq.apache.org/components/classic/download/).
 3. [JMX Exporter v0.20.0](https://github.com/prometheus/jmx_exporter/releases). If using docker, refer [bitnami/jmx-exporter](https://github.com/bitnami/containers/tree/main/bitnami/jmx-exporter).
-4. [OpenTelmetry-Collector v0.92.0](https://github.com/open-telemetry/opentelemetry-collector-contrib).
+4. [OpenTelemetry-Collector v0.92.0](https://github.com/open-telemetry/opentelemetry-collector-contrib).
 
 ### Preparation
 
