@@ -19,7 +19,7 @@ Since `SkyWalking` 10.3, a new out-of-the-box feature has been introduced that e
 # Development
 
 ## Preparation
-1. [SkyWalking oap,v10.3 +](https://github.com/apache/skywalking)
+1. [SkyWalking OAP,v10.3 +](https://github.com/apache/skywalking)
 2. [Flink v2.0-preview1 +](https://github.com/apache/flink)
 3. [OpenTelemetry-collector v0.87+](https://github.com/open-telemetry/opentelemetry-collector-contrib)
 
