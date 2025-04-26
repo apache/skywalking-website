@@ -1,0 +1,486 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Apache SkyWalking – Flink</title>
+    <link>/tags/flink/</link>
+    <description>Recent content in Flink on Apache SkyWalking</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Fri, 25 Apr 2025 00:00:00 +0000</lastBuildDate>
+    
+	  <atom:link href="/tags/flink/feed.xml" rel="self" type="application/rss+xml" />
+    
+    
+      
+        
+      
+    
+    
+    <item>
+      <title>Blog: Monitoring Flink with SkyWalking</title>
+      <link>/blog/2024-04-19-flink-monitoring-by-skywalking/</link>
+      <pubDate>Fri, 25 Apr 2025 00:00:00 +0000</pubDate>
+      
+      <guid>/blog/2024-04-19-flink-monitoring-by-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;background&#34;&gt;Background&lt;/h1&gt;
+&lt;p&gt;&lt;a href=&#34;https://flink.apache.org/&#34;&gt;Apache Flink&lt;/a&gt; is a framework and distributed processing engine for stateful computations over unbounded and bounded data streams. Flink has been designed to run in all common cluster environments, perform computations at in-memory speed and at any scale.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; is an application performance monitor tool for distributed systems, especially designed for microservices, cloud native and container-based (Kubernetes) architectures.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://opentelemetry.io/&#34;&gt;OpenTelemetry&lt;/a&gt; is a collection of APIs, SDKs, and tools. Use it to instrument, generate, collect, and export telemetry data (metrics, logs, and traces) to help you analyze your software’s performance and behavior.&lt;/p&gt;
+&lt;p&gt;Since &lt;code&gt;SkyWalking&lt;/code&gt; 10.3, a new out-of-the-box feature has been introduced that enables Flink monitoring data to be visualized on the SkyWalking UI via the OpenTelemetry Collector, which gathers metrics from Flink endpoints.&lt;/p&gt;
+&lt;h1 id=&#34;development&#34;&gt;Development&lt;/h1&gt;
+&lt;h2 id=&#34;preparation&#34;&gt;Preparation&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking OAP,v10.3 +&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/flink&#34;&gt;Flink v2.0-preview1 +&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/open-telemetry/opentelemetry-collector-contrib&#34;&gt;OpenTelemetry-collector v0.87+&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;process&#34;&gt;Process&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;Set up &lt;code&gt;SkyWalking&lt;/code&gt; oap and UI.&lt;/li&gt;
+&lt;li&gt;Set up the &lt;code&gt;Flink&lt;/code&gt; cluster By configuring &lt;code&gt;jobmanager&lt;/code&gt; and &lt;code&gt;taskmanager&lt;/code&gt; to expose prometheus http endpoints.&lt;/li&gt;
+&lt;li&gt;Set up &lt;code&gt;OpenTelemetry-collector&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Run your job.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;data-flow&#34;&gt;Data flow&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;data-flow.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;configuration&#34;&gt;Configuration&lt;/h2&gt;
+&lt;h3 id=&#34;docker-compose&#34;&gt;docker-compose&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;version: &amp;quot;3&amp;quot;
+
+services:
+  oap:
+    extends:
+      file: ../../script/docker-compose/base-compose.yml
+      service: oap
+    ports:
+      - &amp;quot;12800:12800&amp;quot;
+    networks:
+      - e2e
+
+  banyandb:
+    extends:
+      file: ../../script/docker-compose/base-compose.yml
+      service: banyandb
+    ports:
+      - 17912
+
+  jobmanager:
+    image: flink:2.0-preview1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9260
+    ports:
+      - &amp;quot;8081:8081&amp;quot;
+      - &amp;quot;9260:9260&amp;quot;
+    command: jobmanager
+    healthcheck:
+      test: [&amp;quot;CMD&amp;quot;, &amp;quot;curl&amp;quot;, &amp;quot;-f&amp;quot;, &amp;quot;http://localhost:8081&amp;quot;]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - e2e
+
+  taskmanager:
+    image: flink:2.0-preview1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9261
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+    ports:
+      - &amp;quot;9261:9261&amp;quot;
+    command: taskmanager
+    healthcheck:
+      test: [&amp;quot;CMD&amp;quot;, &amp;quot;curl&amp;quot;, &amp;quot;-f&amp;quot;, &amp;quot;http://localhost:9261/metrics&amp;quot;]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - e2e
+
+  executeJob:
+    image: flink:2.0-preview1
+    depends_on:
+      taskmanager:
+        condition: service_healthy
+    command: &amp;gt;
+      bash -c &amp;quot;
+      ./bin/flink run -m jobmanager:8081 examples/streaming/WindowJoin.jar&amp;quot;
+    networks:
+      - e2e
+
+  otel-collector:
+    image: otel/opentelemetry-collector:${OTEL_COLLECTOR_VERSION}
+    networks:
+      - e2e
+    command: [ &amp;quot;--config=/etc/otel-collector-config.yaml&amp;quot; ]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    expose:
+      - 55678
+    depends_on:
+      oap:
+        condition: service_healthy
+
+networks:
+  e2e:
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;If you plan to expose metrics data using the pushGateway pattern,
+please refer to the &lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-2.0-preview1/docs/deployment/metric_reporters/#prometheuspushgateway&#34;&gt;documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;h3 id=&#34;opentelemetry-collector&#34;&gt;OpenTelemetry-collector&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: &amp;quot;flink-jobManager-monitoring&amp;quot;
+          scrape_interval: 30s
+          static_configs:
+            - targets: [&#39;jobmanager:9260&#39;]
+              labels:
+                cluster: flink-cluster
+          relabel_configs:
+            - source_labels: [ __address__ ]
+              target_label: jobManager_node
+              replacement: $$1
+          metric_relabel_configs:
+            - source_labels: [ job_name ]
+              action: replace
+              target_label: flink_job_name
+              replacement: $$1
+            - source_labels: [ ]
+              target_label: job_name
+              replacement: flink-jobManager-monitoring
+
+        - job_name: &amp;quot;flink-taskManager-monitoring&amp;quot;
+          scrape_interval: 30s
+          static_configs:
+            - targets: [ &amp;quot;taskmanager:9261&amp;quot; ]
+              labels:
+                cluster: flink-cluster
+          relabel_configs:
+            - source_labels: [ __address__ ]
+              regex: (.+)
+              target_label: taskManager_node
+              replacement: $$1
+          metric_relabel_configs:
+            - source_labels: [ job_name ]
+              action: replace
+              target_label: flink_job_name
+              replacement: $$1
+            - source_labels: [ ]
+              target_label: job_name
+              replacement: flink-taskManager-monitoring
+
+exporters:
+  otlp:
+    endpoint: oap:11800
+    tls:
+      insecure: true
+
+processors:
+  batch:
+service:
+  pipelines:
+    metrics:
+      receivers:
+        - prometheus
+      processors:
+        - batch
+      exporters:
+        - otlp
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Warning:&lt;br&gt;
+Please do not edit the value of the &lt;code&gt;job_name&lt;/code&gt; configuration, otherwise &lt;code&gt;SkyWalking&lt;/code&gt; will not handle these data.&lt;br&gt;
+&lt;code&gt;oap&lt;/code&gt; means the address of your &lt;code&gt;SkyWalking oap&lt;/code&gt; address,please replace it accordingly.&lt;br&gt;
+Since the original &lt;code&gt;Flink metrics&lt;/code&gt; contain the  &lt;code&gt;job_name&lt;/code&gt; labels, and SkyWalking relies on the &lt;code&gt;job_name&lt;/code&gt; label to handle OpenTelemetry data,
+to avoid conflicts, we use &lt;code&gt;metric_relabel_configs&lt;/code&gt; to rename the original &lt;code&gt;job_name&lt;/code&gt; label to &lt;code&gt;flink_job_name&lt;/code&gt;.&lt;/p&gt;
+&lt;h1 id=&#34;metrics-definition&#34;&gt;Metrics Definition&lt;/h1&gt;
+&lt;p&gt;Monitoring metrics involve in &lt;code&gt;Cluster Metrics&lt;/code&gt;, &lt;code&gt;TaskManager Metrics&lt;/code&gt;, and &lt;code&gt;Job Metrics&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;cluster-metrics&#34;&gt;Cluster Metrics&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;cluster-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;cluster-dashboard-2.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;cluster-dashboard-3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Cluster Metrics&lt;/code&gt; mainly focuses on statistics from the perspective of the entire cluster, as well as displaying JVM-related metrics of the JobManager, such as:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Running Jobs&lt;/code&gt;：The number of currently running jobs.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;TaskManagers&lt;/code&gt;：The number of TaskManagers.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Task Managers Slots Total&lt;/code&gt;：The total number of TaskManager slots.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Task Managers Slots Available&lt;/code&gt;：The number of available TaskManager slots.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;JVM CPU Load&lt;/code&gt;：The CPU load of the JobManager&amp;rsquo;s JVM.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;taskmanager-metrics&#34;&gt;TaskManager Metrics&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;broker-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;broker-dashboard-2.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;broker-dashboard-3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;TaskManager Metrics&lt;/code&gt; mainly focuses on statistics from the perspective of individual TaskManager nodes, such as:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;JVM Memory Heap Used&lt;/code&gt;：The amount of JVM heap memory used on the TaskManager node.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;JVM Memory Heap Available&lt;/code&gt;：The amount of JVM heap memory available on the TaskManager node.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NumRecordsIn&lt;/code&gt;：The number of records received per minute by the TaskManager.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NumBytesInPerSecond&lt;/code&gt;：The number of bytes received per second by the TaskManager.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;IsBackPressured&lt;/code&gt;：Indicates whether the TaskManager node is under backpressure.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;IdleTimeMsPerSecond&lt;/code&gt;：The idle time per second of the TaskManager node.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;job-metrics&#34;&gt;Job Metrics&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;topic-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;topic-dashboard-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Job Metrics&lt;/code&gt;mainly focuses on statistics from the perspective of running jobs, such as:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Job RunningTime&lt;/code&gt;：The duration for which the job has been running.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Job Restart Number&lt;/code&gt;：The number of times the job has been restarted.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Checkpoints Failed&lt;/code&gt;：The number of failed checkpoints.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NumBytesInPerSecond&lt;/code&gt;：The number of bytes received per second by the job.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;You can find explanations for each metric in the tip of the corresponding chart.&lt;br&gt;
+&lt;img src=&#34;tip.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;references&#34;&gt;References&lt;/h1&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-2.0-preview1/docs/deployment/metric_reporters/#prometheus&#34;&gt;Flink Prometheus&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-flink-monitoring/&#34;&gt;SkyWalking Flink Monitoring&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 使用 SkyWalking 监控 Flink</title>
+      <link>/zh/2024-04-19-flink-monitoring-by-skywalking/</link>
+      <pubDate>Fri, 25 Apr 2025 00:00:00 +0000</pubDate>
+      
+      <guid>/zh/2024-04-19-flink-monitoring-by-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h1&gt;
+&lt;p&gt;Apache Flink 是一个框架和分布式处理引擎，用于在无边界和有边界数据流上进行有状态的计算。Flink 能在所有常见集群环境中运行，并能以内存速度和任意规模进行计算。
+从SkyWalking OAP 10.3 版本开始，新增了对来自Flink的指标数据监控面板，本文将展示并介绍如何使用 SkyWalking来监控Flink。&lt;/p&gt;
+&lt;h1 id=&#34;部署&#34;&gt;部署&lt;/h1&gt;
+&lt;h2 id=&#34;准备&#34;&gt;准备&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking oap服务,v10.3 +&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/flink&#34;&gt;Flink v2.0-preview1 +&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/open-telemetry/opentelemetry-collector-contrib&#34;&gt;OpenTelemetry-collector v0.87+&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;启动流程&#34;&gt;启动流程&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;启动 &lt;code&gt;jobmanager&lt;/code&gt; 和 &lt;code&gt;taskmanager&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动 &lt;code&gt;skywalking oap&lt;/code&gt; 和 &lt;code&gt;ui&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动 &lt;code&gt;opentelmetry-collector&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动job&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;dataflow&#34;&gt;DataFlow:&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;data-flow.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;配置&#34;&gt;配置&lt;/h2&gt;
+&lt;h3 id=&#34;docker-compose&#34;&gt;docker-compose&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;version: &amp;quot;3&amp;quot;
+
+services:
+  oap:
+    extends:
+      file: ../../script/docker-compose/base-compose.yml
+      service: oap
+    ports:
+      - &amp;quot;12800:12800&amp;quot;
+    networks:
+      - e2e
+
+  banyandb:
+    extends:
+      file: ../../script/docker-compose/base-compose.yml
+      service: banyandb
+    ports:
+      - 17912
+
+  jobmanager:
+    image: flink:2.0-preview1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9260
+    ports:
+      - &amp;quot;8081:8081&amp;quot;
+      - &amp;quot;9260:9260&amp;quot;
+    command: jobmanager
+    healthcheck:
+      test: [&amp;quot;CMD&amp;quot;, &amp;quot;curl&amp;quot;, &amp;quot;-f&amp;quot;, &amp;quot;http://localhost:8081&amp;quot;]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - e2e
+
+  taskmanager:
+    image: flink:2.0-preview1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9261
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+    ports:
+      - &amp;quot;9261:9261&amp;quot;
+    command: taskmanager
+    healthcheck:
+      test: [&amp;quot;CMD&amp;quot;, &amp;quot;curl&amp;quot;, &amp;quot;-f&amp;quot;, &amp;quot;http://localhost:9261/metrics&amp;quot;]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - e2e
+
+  executeJob:
+    image: flink:2.0-preview1
+    depends_on:
+      taskmanager:
+        condition: service_healthy
+    command: &amp;gt;
+      bash -c &amp;quot;
+      ./bin/flink run -m jobmanager:8081 examples/streaming/WindowJoin.jar&amp;quot;
+    networks:
+      - e2e
+
+  otel-collector:
+    image: otel/opentelemetry-collector:${OTEL_COLLECTOR_VERSION}
+    networks:
+      - e2e
+    command: [ &amp;quot;--config=/etc/otel-collector-config.yaml&amp;quot; ]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    expose:
+      - 55678
+    depends_on:
+      oap:
+        condition: service_healthy
+
+networks:
+  e2e:
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;如果是使用&lt;code&gt;pushGateWay&lt;/code&gt;模式来暴露metrics数据请&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-2.0-preview1/docs/deployment/metric_reporters/#prometheuspushgateway&#34;&gt;参考&lt;/a&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;opentelemetry-collector&#34;&gt;OpenTelemetry-collector&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: &amp;quot;flink-jobManager-monitoring&amp;quot;
+          scrape_interval: 30s
+          static_configs:
+            - targets: [&#39;jobmanager:9260&#39;]
+              labels:
+                cluster: flink-cluster
+          relabel_configs:
+            - source_labels: [ __address__ ]
+              target_label: jobManager_node
+              replacement: $$1
+          metric_relabel_configs:
+            - source_labels: [ job_name ]
+              action: replace
+              target_label: flink_job_name
+              replacement: $$1
+            - source_labels: [ ]
+              target_label: job_name
+              replacement: flink-jobManager-monitoring
+
+        - job_name: &amp;quot;flink-taskManager-monitoring&amp;quot;
+          scrape_interval: 30s
+          static_configs:
+            - targets: [ &amp;quot;taskmanager:9261&amp;quot; ]
+              labels:
+                cluster: flink-cluster
+          relabel_configs:
+            - source_labels: [ __address__ ]
+              regex: (.+)
+              target_label: taskManager_node
+              replacement: $$1
+          metric_relabel_configs:
+            - source_labels: [ job_name ]
+              action: replace
+              target_label: flink_job_name
+              replacement: $$1
+            - source_labels: [ ]
+              target_label: job_name
+              replacement: flink-taskManager-monitoring
+
+exporters:
+  otlp:
+    endpoint: oap:11800
+    tls:
+      insecure: true
+
+processors:
+  batch:
+service:
+  pipelines:
+    metrics:
+      receivers:
+        - prometheus
+      processors:
+        - batch
+      exporters:
+        - otlp
+
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;注意:&lt;br&gt;
+&lt;code&gt;job_name&lt;/code&gt;的值请不要修改,否则 skyWalking 不会处理这部分数据。&lt;br&gt;
+&lt;code&gt;oap&lt;/code&gt; 为 &lt;code&gt;skywalking oap&lt;/code&gt; 地址,请自行替换。&lt;br&gt;
+因为原始&lt;code&gt;flink&lt;/code&gt;数据中含有&lt;code&gt;job_name&lt;/code&gt;标签，而skyWalking又根据&lt;code&gt;job_name&lt;/code&gt;标签来处理对应OTEL任务的数据，
+为了避免冲突，使用&lt;code&gt;metric_relabel_configs&lt;/code&gt;替换原始数据中&lt;code&gt;job_name&lt;/code&gt;的标签为&lt;code&gt;flink_job_name&lt;/code&gt;。&lt;/p&gt;
+&lt;h1 id=&#34;监控指标&#34;&gt;监控指标&lt;/h1&gt;
+&lt;p&gt;指标分为三个维度,cluster,taskManager,job&lt;/p&gt;
+&lt;h2 id=&#34;cluster-metrics&#34;&gt;Cluster Metrics&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;cluster-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;cluster-dashboard-2.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;cluster-dashboard-3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Cluster Metrics&lt;/code&gt;主要是站在集群的角度统计以及jobManager的jvm相关指标展示,比如&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Running Jobs&lt;/code&gt;：正在运行的任务数量&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;TaskManagers&lt;/code&gt;：taskManager数量&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Task Managers Slots Total&lt;/code&gt;：taskManager slot数量&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Task Managers Slots Available&lt;/code&gt;：taskManager可用slot数量&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;JVM CPU Load&lt;/code&gt;：jobManager的jvm占用cpu的负载&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;taskmanager-metrics&#34;&gt;TaskManager Metrics&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;broker-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;broker-dashboard-2.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;broker-dashboard-3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;TaskManager Metrics&lt;/code&gt;主要是站在taskManager节点的角度来统计展示,比如&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;JVM Memory Heap Used&lt;/code&gt;：taskManager节点JVM已用内存大小。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;JVM Memory Heap Available&lt;/code&gt;：taskManager节点JVM可用内存大小。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NumRecordsIn&lt;/code&gt;：taskManager每分钟接受的数据数量。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NumBytesInPerSecond&lt;/code&gt;：taskManager每秒接受的Bytes数量。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;IsBackPressured&lt;/code&gt;：该taskManager节点是否处在背压。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;IdleTimeMsPerSecond&lt;/code&gt;：该taskManager节点每秒的闲置时长。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;job-metrics&#34;&gt;Job Metrics&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;topic-dashboard-1.png&#34; alt=&#34;&#34;&gt;
+&lt;img src=&#34;topic-dashboard-2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Job Metrics&lt;/code&gt;主要是站在运行任务的角度来统计展示,比如&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Job RunningTime&lt;/code&gt;：该任务运行的时长。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Job Restart Number&lt;/code&gt;：该任务重启次数。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Checkpoints Failed&lt;/code&gt;：失败的checkpoints数量。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;NumBytesInPerSecond&lt;/code&gt;：该任务每秒接受的Bytes数量。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;各个指标的含义可以在图标的 tip 上找到解释&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;tip.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;参考文档&#34;&gt;参考文档&lt;/h1&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://nightlies.apache.org/flink/flink-docs-release-2.0-preview1/docs/deployment/metric_reporters/#prometheus&#34;&gt;Flink Prometheus&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-flink-monitoring/&#34;&gt;SkyWalking Flink Monitoring&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+  </channel>
+</rss>
