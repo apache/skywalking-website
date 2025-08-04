@@ -32,7 +32,7 @@ This documentation explains how the system automatically synchronizes Property d
 <meta itemprop="description" content="Property Background Repair Strategy In Property, the replicas configuration allows Property data to be stored across multiple data nodes, providing high availability. However, during data updates, some nodes may become temporarily unavailable, which can lead to version inconsistencies of the same data across different machines.
 This documentation explains how the system automatically synchronizes Property data across all data nodes in the background, ensuring that all replicas eventually converge to the same version.">
 
-<meta itemprop="wordCount" content="2654">
+<meta itemprop="wordCount" content="2715">
 
 
 
@@ -1011,7 +1011,7 @@ This documentation explains how the system automatically synchronizes Property d
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: cffa54c</div>
+                  <div class="commit-id">Commit Id: 3267b04</div>
                 
 
 
@@ -1263,11 +1263,10 @@ New trace spans are created in the following scenarios:</p>
 <p>After each synchronization cycle, the receiving node will send its trace data back to the initiating node, allowing the initiator to aggregate and correlate all spans for end-to-end visibility and debugging.</p>
 <h2 id="property-repair">Property Repair</h2>
 <p>Based on the Merkel tree and Gossip concept, the system can proceed with the Property Repair process.
-This process is scheduled to run on each data node daily at 1:00 AM(it&rsquo;s configurable as <code>property-background-repair-cron</code> flag), and follows these steps:</p>
+This process is scheduled to run on each data node daily at 2:00 AM(it&rsquo;s configurable as <code>property-background-repair-cron</code> flag), and follows these steps:</p>
 <ol>
-<li><strong>Select a Group</strong>: The node retrieves a list of Property groups where the number of <strong>replicas is greater than or equal to 2</strong>, and randomly selects one group for repair.</li>
+<li><strong>Select a Group and Select a Shard</strong>: The node retrieves a list of Property groups where the number of <strong>replicas is greater than or equal to 2</strong>, and randomly selects one group for repair, then randomly selects a shard within that group.</li>
 <li><strong>Query Node List</strong>: Then determines the list of nodes that hold replicas for the selected group and sends the gossip propagation message to those nodes to synchronize the Property data for that group.</li>
-<li><strong>Wait for the Result</strong>: The initiating node waits for the final result of the synchronization process before proceeding.</li>
 </ol>
 <h3 id="property-synchronize-between-two-nodes">Property Synchronize between Two Nodes</h3>
 <p>When two nodes engage in Property data synchronization, they follow a specific protocol to ensure data consistency.
@@ -1275,14 +1274,13 @@ Let’s refer to the current node as A and the target node as B. The process is 
 <ol>
 <li><strong>(A)Establish Connection</strong>: Node A initiates a <strong>bidirectional streaming connection</strong> with node B to enable real-time, two-way data transfer.</li>
 <li><strong>(A)Iterate Over Shards</strong>: Node A retrieves the list of all Property-related shards for the selected group and processes them one by one.</li>
-<li><strong>(A)Send Merkle Tree Summary</strong>: For each shard, node A reads its Merkle Tree and sends a summary (including root SHA and slots SHA) to node B.
+<li><strong>(A)Send Merkle Tree Root</strong>: For each shard, node A reads its Merkle Tree and sends root SHA to node B.
 This allows B to quickly identify which slots may contain differences.</li>
-<li><strong>(B)Verify Merkle Tree Summary and Respond</strong>: Node B compares the received summary against its own Merkle Tree for the same shard and group:
-<ul>
-<li>If the root SHA matches, node B returns an empty slot list, indicating no differences.</li>
-<li>If the root SHA differ, node B checks the slot SHA, identifies mismatched slots, and sends back all relevant leaf node details, including the <strong>slot index</strong>, <strong>entity</strong>, and <strong>SHA value</strong>.</li>
-</ul>
-</li>
+<li><strong>(B)Receive Merkle Tree Root</strong>: Node B receives the root SHA from node A and sent the root SHA value is same or not.</li>
+<li><strong>(A)Send Slot Summary</strong>: If the root SHA matches, node A finished the synchronization for that shard and moves to the next one.
+If the root SHA differs, node A sends a summary of the slots, including the <strong>slot index</strong> and <strong>SHA value</strong> for each slot that has differences.</li>
+<li><strong>(B)Verify Merkle Tree Summary and Respond</strong>: Node B compares the received summary against its own Merkle Tree for the same shard and group,
+identifies mismatched slots, and sends back all relevant leaf node details, including the <strong>slot index</strong>, <strong>entity</strong>, and <strong>SHA value</strong>.</li>
 <li><strong>(A)Compare Leaf Data</strong>: Node A processes the received leaf data and takes the following actions:
 <ul>
 <li>For missing entities (present on B but not on A), A requests the full Property data from B.</li>
@@ -1303,7 +1301,12 @@ This allows B to quickly identify which slots may contain differences.</li>
 <h3 id="error-handling">Error Handling</h3>
 <p>During the synchronization process, the system will terminate or skip processing under the following scenarios:</p>
 <ol>
-<li><strong>Merkle Tree Not Built</strong>: If either node A or node B has not yet built the Merkle Tree for the target group, the gossip protocol is immediately terminated.</li>
+<li><strong>Merkle Tree Not Built</strong>:
+<ol>
+<li>If node A(client) has not yet built the Merkel Tree for the target group, the gossip protocol is immediately terminated.</li>
+<li>If node B(server) has not yet built the Merkle Tree for the target group, the client would skip the current server and try to find another next to continue the gossip protocol.</li>
+</ol>
+</li>
 <li><strong>Duplicate Sync Request</strong>: If a new gossip sync request for the same group is received by either node while an existing synchronization is in progress, the new request is terminated to avoid conflicts.</li>
 <li><strong>Target Node Connection Failure Handling</strong>: When the current node fails to connect to the target node, the following fallback logic applies:
 <ol>
