@@ -30,7 +30,7 @@
 <meta itemprop="name" content="10.3.0">
 <meta itemprop="description" content="10.3.0 Project  Bump up BanyanDB dependency version(server and java-client) to 0.9.0. Fix CVE-2025-54057, restrict and validate url for widgets. Fix MetricsPersistentWorker, remove DataCarrier queue from Hour/Day dimensions metrics persistent process. This is important to reduce memory cost and Hour/Day dimensions metrics persistent latency.  OAP Server  BanyanDB: Support hot/warm/cold stages configuration. Fix query continues profiling policies error when the policy is already in the cache. Support hot/warm/cold stages TTL query in the status API and graphQL API.">
 
-<meta itemprop="wordCount" content="839">
+<meta itemprop="wordCount" content="1072">
 
 
 
@@ -2635,7 +2635,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 3934b1d</div>
+                  <div class="commit-id">Commit Id: 61e84e5</div>
                 
 
 
@@ -2789,7 +2789,101 @@ the following table shows the pool size，driven mode and queue size for each wo
 <li>BanyanDB: fix Zipkin query missing tag <code>QUERY</code>.</li>
 <li>Fix <code>IllegalArgumentException: Incorrect number of labels</code>, tags in the <code>LogReportServiceHTTPHandler</code> and <code>LogReportServiceGrpcHandler</code> inconsistent with <code>LogHandler</code>.</li>
 <li>BanyanDB: fix Zipkin query by <code>annotationQuery</code></li>
+<li>HTTP Server: Use the default shared thread pool rather than creating a new event loop thread pool for each server. Remove the <code>MAX_THREADS</code> from each server config.</li>
+<li>Optimize all Armeria HTTP Server(s) to share the <code>CommonPools</code> for the whole JVM.
+In the <code>CommonPools</code>, the max threads for <code>EventLoopGroup</code> is <code>processor * 2</code>, and for <code>BlockingTaskExecutor</code> is <code>200</code> and can be recycled if over the keepAliveTimeMillis (60000L by default).
+Here is a summary of the thread dump without UI query in a simple Kind env deployed by SkyWalking showcase:</li>
 </ul>
+<table>
+<thead>
+<tr>
+<th><strong>Thread Type</strong></th>
+<th><strong>Count</strong></th>
+<th><strong>Main State</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>JVM System Threads</strong></td>
+<td>12</td>
+<td>RUNNABLE/WAITING</td>
+<td>Includes Reference Handler, Finalizer, Signal Dispatcher, Service Thread, C2/C1 CompilerThreads, Sweeper thread, Common-Cleaner, etc.</td>
+</tr>
+<tr>
+<td><strong>Netty I/O Worker Threads</strong></td>
+<td>32</td>
+<td>RUNNABLE</td>
+<td>Threads named &ldquo;armeria-common-worker-epoll-*&rdquo;, handling network I/O operations.</td>
+</tr>
+<tr>
+<td><strong>gRPC Worker Threads</strong></td>
+<td>16</td>
+<td>RUNNABLE</td>
+<td>Threads named &ldquo;grpc-default-worker-*&rdquo;.</td>
+</tr>
+<tr>
+<td><strong>HTTP Client Threads</strong></td>
+<td>4</td>
+<td>RUNNABLE</td>
+<td>Threads named &ldquo;HttpClient-*-SelectorManager&rdquo;.</td>
+</tr>
+<tr>
+<td><strong>Data Consumer Threads</strong></td>
+<td>47</td>
+<td>TIMED_WAITING (sleeping)</td>
+<td>Threads named &ldquo;DataCarrier.*&rdquo;, used for metrics data consumption.</td>
+</tr>
+<tr>
+<td><strong>Scheduled Task Threads</strong></td>
+<td>10</td>
+<td>TIMED_WAITING (parking)</td>
+<td>Threads named &ldquo;pool-<em>-thread-</em>&rdquo;.</td>
+</tr>
+<tr>
+<td><strong>ForkJoinPool Worker Threads</strong></td>
+<td>2</td>
+<td>WAITING (parking)</td>
+<td>Threads named &ldquo;ForkJoinPool-*&rdquo;.</td>
+</tr>
+<tr>
+<td><strong>BanyanDB Processor Threads</strong></td>
+<td>2</td>
+<td>TIMED_WAITING (parking)</td>
+<td>Threads named &ldquo;BanyanDB BulkProcessor&rdquo;.</td>
+</tr>
+<tr>
+<td><strong>gRPC Executor Threads</strong></td>
+<td>3</td>
+<td>TIMED_WAITING (parking)</td>
+<td>Threads named &ldquo;grpc-default-executor-*&rdquo;.</td>
+</tr>
+<tr>
+<td><strong>JVM GC Threads</strong></td>
+<td>13</td>
+<td>RUNNABLE</td>
+<td>Threads named &ldquo;GC Thread#*&rdquo; for garbage collection.</td>
+</tr>
+<tr>
+<td><strong>Other JVM Internal Threads</strong></td>
+<td>3</td>
+<td>RUNNABLE</td>
+<td>Includes VM Thread, G1 Main Marker, VM Periodic Task Thread.</td>
+</tr>
+<tr>
+<td><strong>Attach Listener</strong></td>
+<td>1</td>
+<td>RUNNABLE</td>
+<td>JVM attach listener thread.</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>158</strong></td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
 <h4 id="ui">UI</h4>
 <ul>
 <li>Enhance the trace <code>List/Tree/Table</code> graph to support displaying multiple refs of spans and distinguishing different parents.</li>
