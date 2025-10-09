@@ -32,7 +32,7 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
 <meta itemprop="description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB&rsquo;s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, properties, and Top-N queries.
 This document specifies the language&rsquo;s syntax, its semantics, and the precise mapping from BydbQL statements to the various Request messages.">
 
-<meta itemprop="wordCount" content="4249">
+<meta itemprop="wordCount" content="4132">
 
 
 
@@ -1028,7 +1028,7 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 9e69b53</div>
+                  <div class="commit-id">Commit Id: cf1b1e2</div>
                 
 
 
@@ -1052,6 +1052,7 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
 <li><strong>Streams</strong>: For raw, time-series elements like logs and traces.</li>
 <li><strong>Measures</strong>: For aggregated numerical time-series data (metrics).</li>
 <li><strong>Properties</strong>: For metadata and key-value information.</li>
+<li><strong>Traces</strong>: For distributed tracing data with spans.</li>
 </ul>
 <p>It also provides a specialized syntax for optimized <strong>Top-N</strong> queries against measures.</p>
 <h2 id="2-core-concepts">2. Core Concepts</h2>
@@ -1066,12 +1067,10 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
 Abstract Syntax Tree (AST)
         ↓
    Transformer
-        ↓
-  Protobuf Request
 </code></pre><ul>
 <li><strong>Lexer</strong>: Breaks the query string into a sequence of tokens.</li>
 <li><strong>Parser</strong>: Builds an Abstract Syntax Tree (AST) from the tokens, validating the query&rsquo;s syntax.</li>
-<li><strong>Transformer</strong>: Traverses the AST, performs semantic analysis using a schema, and transforms the AST into the appropriate target protobuf <code>Request</code> message.</li>
+<li><strong>Transformer</strong>: Traverses the AST, performs semantic analysis using a schema, and transforms the AST into the appropriate target protobuf <code>Stream/Measure/Property/Traces/TopN Request</code> message.</li>
 </ul>
 <h3 id="22-distinguishing-query-types">2.2. Distinguishing Query Types</h3>
 <p>BydbQL distinguishes the target data model either explicitly through keywords in the <code>FROM</code> clause or implicitly through the <strong>execution context</strong>. This allows the parser to apply the correct grammar and transformation rules for the query.</p>
@@ -1084,9 +1083,7 @@ Abstract Syntax Tree (AST)
 <li><strong>Top-N</strong>: <code>SHOW TOPN ... FROM MEASURE &lt;measure_name&gt;</code></li>
 </ul>
 <h3 id="23-optional-from-clause">2.3. Optional <code>FROM</code> Clause</h3>
-<p>In BydbQL, the <code>FROM</code> clause is <strong>optional</strong> for <code>SELECT</code> queries. When it is omitted, the target resource (the specific stream, measure, or property) <strong>must</strong> be supplied by the execution context.</p>
-<p>The simplest possible BydbQL query is <code>SELECT *</code>. When executed within the context of a stream named <code>sw</code>, this is equivalent to <code>SELECT * FROM STREAM sw</code>.</p>
-<p>When the <code>FROM</code> clause is present, it overrides any context provided by the environment. This is useful for clients that connect to a generic query endpoint and need to specify the target resource directly within the query text.</p>
+<p>In BydbQL, the <code>FROM</code> clause is <strong>required</strong> for <code>SELECT</code> queries.</p>
 <h3 id="24-case-sensitivity">2.4. Case Sensitivity</h3>
 <p>BydbQL follows SQL-like conventions for case sensitivity:</p>
 <ul>
@@ -1187,12 +1184,9 @@ integer_literal ::= [0-9]+
 <li><strong><code>WITH QUERY_TRACE</code></strong>: Maps to the <code>trace</code> field to enable distributed tracing of query execution.</li>
 </ul>
 <h3 id="43-examples">4.3. Examples</h3>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Simplest query (context must provide the stream name, e.g., &#39;sw&#39;)
-</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> <span style="color:#000;font-weight:bold">*</span>;
-
-<span style="color:#998;font-style:italic">-- Basic selection with filtering and ordering
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Basic selection with filtering and ordering
 </span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> trace_id, service_id
-<span style="color:#000;font-weight:bold">FROM</span> STREAM sw <span style="color:#000;font-weight:bold">IN</span> (<span style="color:#000;font-weight:bold">default</span>, updated)
+<span style="color:#000;font-weight:bold">FROM</span> STREAM sw <span style="color:#000;font-weight:bold">IN</span> (group1, group2)
 <span style="color:#000;font-weight:bold">WHERE</span> service_id <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;webapp&#39;</span> <span style="color:#000;font-weight:bold">AND</span> <span style="color:#000;font-weight:bold">state</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#099">1</span>
 <span style="color:#000;font-weight:bold">ORDER</span> <span style="color:#000;font-weight:bold">BY</span> start_time <span style="color:#000;font-weight:bold">DESC</span>
 <span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">100</span>;
@@ -1205,6 +1199,7 @@ integer_literal ::= [0-9]+
 
 <span style="color:#998;font-style:italic">-- Use more complex conditions with IN and OR
 </span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> trace_id, duration
+<span style="color:#000;font-weight:bold">FROM</span> STREAM sw
 <span style="color:#000;font-weight:bold">WHERE</span> service_id <span style="color:#000;font-weight:bold">IN</span> (<span style="color:#d14">&#39;webapp&#39;</span>, <span style="color:#d14">&#39;api-gateway&#39;</span>) <span style="color:#000;font-weight:bold">OR</span> http.<span style="color:#000;font-weight:bold">method</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;POST&#39;</span>;
 
 <span style="color:#998;font-style:italic">-- Query with time range using TIME clause
@@ -1302,13 +1297,11 @@ integer_literal   ::= [0-9]+
 <li><strong><code>WITH QUERY_TRACE</code></strong>: Maps to the <code>trace</code> field to enable distributed tracing of query execution.</li>
 </ul>
 <h3 id="54-examples">5.4. Examples</h3>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Simplest query (context must provide measure name)
-</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> <span style="color:#000;font-weight:bold">*</span>;
-
-<span style="color:#998;font-style:italic">-- Select a specific tag and a specific field
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Select a specific tag and a specific field
 </span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span>
     instance,
     latency
+<span style="color:#000;font-weight:bold">FROM</span> MEASURE service_cpm
 <span style="color:#000;font-weight:bold">WHERE</span> region <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;us-west-1&#39;</span>
 <span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">10</span>;
 
@@ -1526,17 +1519,15 @@ integer_literal     ::= [0-9]+
 <li><strong><code>WITH QUERY_TRACE</code></strong>: Maps to the <code>trace</code> field to enable distributed tracing of query execution.</li>
 </ul>
 <h3 id="73-examples">7.3. Examples</h3>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Simplest query (context must provide property name)
-</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> <span style="color:#000;font-weight:bold">*</span>;
-
-<span style="color:#998;font-style:italic">-- Find properties by filtering on their tags
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Find properties by filtering on their tags
 </span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> ip, <span style="color:#000;font-weight:bold">owner</span>
 <span style="color:#000;font-weight:bold">FROM</span> PROPERTY server_metadata
 <span style="color:#000;font-weight:bold">WHERE</span> datacenter <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;dc-101&#39;</span> <span style="color:#000;font-weight:bold">AND</span> in_service <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;true&#39;</span>
 <span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">50</span>;
 
 <span style="color:#998;font-style:italic">-- Retrieve a specific property by its unique ID
-</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> <span style="color:#000;font-weight:bold">*</span> 
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> <span style="color:#000;font-weight:bold">*</span>
+<span style="color:#000;font-weight:bold">FROM</span> PROPERTY server_metadata
 <span style="color:#000;font-weight:bold">WHERE</span> ID <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;server-1a2b3c&#39;</span>;
 
 <span style="color:#998;font-style:italic">-- Retrieve a set of properties by their unique IDs
@@ -1619,12 +1610,9 @@ integer_literal       ::= [0-9]+
 </ul>
 <p>The <code>WITH QUERY_TRACE</code> clause enables distributed tracing of the query execution itself, which is separate from querying trace data. When enabled, the query response will include execution trace information in the <code>trace_query_result</code> field.</p>
 <h3 id="84-examples">8.4. Examples</h3>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Simplest query (context must provide the trace name, e.g., &#39;sw_trace&#39;)
-</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> <span style="color:#000;font-weight:bold">*</span>;
-
-<span style="color:#998;font-style:italic">-- Basic selection with filtering and ordering
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#998;font-style:italic">-- Basic selection with filtering and ordering
 </span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> trace_id, service_id, operation_name
-<span style="color:#000;font-weight:bold">FROM</span> TRACE sw_trace <span style="color:#000;font-weight:bold">IN</span> (<span style="color:#000;font-weight:bold">default</span>, updated)
+<span style="color:#000;font-weight:bold">FROM</span> TRACE sw_trace <span style="color:#000;font-weight:bold">IN</span> (group1, group2)
 <span style="color:#000;font-weight:bold">WHERE</span> service_id <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;webapp&#39;</span> <span style="color:#000;font-weight:bold">AND</span> status <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;success&#39;</span>
 <span style="color:#000;font-weight:bold">ORDER</span> <span style="color:#000;font-weight:bold">BY</span> start_time <span style="color:#000;font-weight:bold">DESC</span>
 <span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">100</span>;
