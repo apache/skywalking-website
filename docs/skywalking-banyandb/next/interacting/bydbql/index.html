@@ -32,7 +32,7 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
 <meta itemprop="description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB&rsquo;s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, properties, and Top-N queries.
 This document specifies the language&rsquo;s syntax, its semantics, and the precise mapping from BydbQL statements to the various Request messages.">
 
-<meta itemprop="wordCount" content="5402">
+<meta itemprop="wordCount" content="5543">
 
 
 
@@ -733,7 +733,7 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
 
     <li>
         
-            <a href="/docs/skywalking-banyandb/next/interacting/bydbql">BydbQL(TBD)</a>
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbql">BydbQL</a>
         
     </li>
 
@@ -1028,7 +1028,7 @@ This document specifies the language&rsquo;s syntax, its semantics, and the prec
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: edb55b4</div>
+                  <div class="commit-id">Commit Id: 4925f01</div>
                 
 
 
@@ -1288,10 +1288,11 @@ TIME <span style="color:#000;font-weight:bold">BETWEEN</span> <span style="color
 <p>BydbQL for streams is designed for querying and retrieving raw time-series elements. The syntax maps to the <code>banyandb.stream.v1.QueryRequest</code> message.</p>
 <h3 id="41-grammar">4.1. Grammar</h3>
 <pre><code>query           ::= SELECT projection from_stream_clause TIME time_condition [WHERE criteria] [ORDER BY order_expression] [LIMIT integer] [OFFSET integer] [WITH QUERY_TRACE]
-from_stream_clause ::= &quot;FROM STREAM&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;]
+from_stream_clause ::= &quot;FROM STREAM&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;] [ON [&quot;(&quot;] stage_list [&quot;)&quot;] STAGES]
 projection      ::= &quot;*&quot; | column_list
 column_list     ::= identifier (&quot;,&quot; identifier)*
 group_list      ::= identifier (&quot;,&quot; identifier)+
+stage_list      ::= identifier (&quot;,&quot; identifier)+
 criteria        ::= condition ((&quot;AND&quot; | &quot;OR&quot;) condition)*
 condition       ::= identifier binary_op (value | value_list)
 time_condition  ::= &quot;=&quot; timestamp | &quot;&gt;&quot; timestamp | &quot;&lt;&quot; timestamp | &quot;&gt;=&quot; timestamp | &quot;&lt;=&quot; timestamp | &quot;BETWEEN&quot; timestamp &quot;AND&quot; timestamp
@@ -1407,14 +1408,22 @@ TIME <span style="color:#000;font-weight:bold">&lt;</span> <span style="color:#d
 TIME <span style="color:#000;font-weight:bold">BETWEEN</span> <span style="color:#d14">&#39;-2h&#39;</span> <span style="color:#000;font-weight:bold">AND</span> <span style="color:#d14">&#39;now&#39;</span>
 <span style="color:#000;font-weight:bold">WHERE</span> service_id <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;webapp&#39;</span>
 <span style="color:#000;font-weight:bold">WITH</span> QUERY_TRACE;
+
+<span style="color:#998;font-style:italic">-- Query with lifecycle stages
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> trace_id, service_id
+<span style="color:#000;font-weight:bold">FROM</span> STREAM sw <span style="color:#000;font-weight:bold">IN</span> group1, group2 <span style="color:#000;font-weight:bold">ON</span> warn, cold STAGES
+TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d14">&#39;-30m&#39;</span>
+<span style="color:#000;font-weight:bold">WHERE</span> service_id <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;webapp&#39;</span>
+<span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">100</span>;
 </code></pre></div><h2 id="5-bydbql-for-measures">5. BydbQL for Measures</h2>
 <p>BydbQL for measures is tailored for analytical queries on aggregated numerical data. It supports aggregation, grouping, and mixed selection of tags and fields, mapping to the <code>banyandb.measure.v1.QueryRequest</code> message.</p>
 <h3 id="51-grammar">5.1. Grammar</h3>
 <pre><code>measure_query     ::= SELECT projection from_measure_clause TIME time_condition [WHERE criteria] [GROUP BY column_list] [ORDER BY order_expression] [LIMIT integer] [OFFSET integer] [WITH QUERY_TRACE]
-from_measure_clause ::= &quot;FROM MEASURE&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;]
+from_measure_clause ::= &quot;FROM MEASURE&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;] [ON [&quot;(&quot;] stage_list [&quot;)&quot;] STAGES]
 projection        ::= &quot;*&quot; | (column_list | agg_function &quot;(&quot; identifier &quot;)&quot; | top_clause)
 top_clause        ::= &quot;TOP&quot; integer identifier [&quot;ASC&quot; | &quot;DESC&quot;] [&quot;,&quot; column_list]
 column_list       ::= identifier (&quot;,&quot; identifier)* [&quot;::tag&quot; | &quot;::field&quot;]
+stage_list        ::= identifier (&quot;,&quot; identifier)+
 agg_function      ::= &quot;SUM&quot; | &quot;MEAN&quot; | &quot;COUNT&quot; | &quot;MAX&quot; | &quot;MIN&quot;
 group_list        ::= identifier (&quot;,&quot; identifier)+
 criteria          ::= condition ((&quot;AND&quot; | &quot;OR&quot;) condition)*
@@ -1571,13 +1580,22 @@ TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d
 <span style="color:#000;font-weight:bold">WHERE</span> region <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;us-west&#39;</span>
 <span style="color:#000;font-weight:bold">GROUP</span> <span style="color:#000;font-weight:bold">BY</span> service
 <span style="color:#000;font-weight:bold">WITH</span> QUERY_TRACE;
+
+<span style="color:#998;font-style:italic">-- Query with lifecycle stages
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span>
+    region,
+    <span style="color:#000;font-weight:bold">SUM</span>(latency)
+<span style="color:#000;font-weight:bold">FROM</span> MEASURE service_cpm <span style="color:#000;font-weight:bold">IN</span> us<span style="color:#000;font-weight:bold">-</span>west <span style="color:#000;font-weight:bold">ON</span> (warn, cold) STAGES
+TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d14">&#39;-30m&#39;</span>
+<span style="color:#000;font-weight:bold">GROUP</span> <span style="color:#000;font-weight:bold">BY</span> region;
 </code></pre></div><h2 id="6-bydbql-for-top-n">6. BydbQL for Top-N</h2>
 <p>Top-N queries use a specialized, command-like syntax for clarity and to reflect the optimized nature of the underlying <code>banyandb.measure.v1.TopNRequest</code>. The <code>FROM</code> clause is mandatory.</p>
 <h3 id="61-grammar">6.1. Grammar</h3>
 <pre><code>topn_query         ::= SHOW TOP integer from_measure_clause TIME time_condition [WHERE topn_criteria] [AGGREGATE BY agg_function] [ORDER BY value [&quot;ASC&quot;|&quot;DESC&quot;]] [WITH QUERY_TRACE]
-from_measure_clause ::= &quot;FROM MEASURE&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;]
+from_measure_clause ::= &quot;FROM MEASURE&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;] [ON [&quot;(&quot;] stage_list [&quot;)&quot;] STAGES]
 topn_criteria      ::= condition ((&quot;AND&quot; | &quot;OR&quot;) condition)*
 condition          ::= identifier binary_op (value | value_list)
+stage_list         ::= identifier (&quot;,&quot; identifier)+
 time_condition     ::= &quot;=&quot; timestamp | &quot;&gt;&quot; timestamp | &quot;&lt;&quot; timestamp | &quot;&gt;=&quot; timestamp | &quot;&lt;=&quot; timestamp | &quot;BETWEEN&quot; timestamp &quot;AND&quot; timestamp
 binary_op          ::= &quot;=&quot; | &quot;!=&quot; | &quot;&gt;&quot; | &quot;&lt;&quot; | &quot;&gt;=&quot; | &quot;&lt;=&quot; | &quot;IN&quot; | &quot;NOT IN&quot;
 agg_function       ::= &quot;SUM&quot; | &quot;MEAN&quot; | &quot;COUNT&quot; | &quot;MAX&quot; | &quot;MIN&quot;
@@ -1679,6 +1697,12 @@ TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d
 <span style="color:#000;font-weight:bold">WHERE</span> http_method <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;GET&#39;</span>
 <span style="color:#000;font-weight:bold">ORDER</span> <span style="color:#000;font-weight:bold">BY</span> value <span style="color:#000;font-weight:bold">DESC</span>
 <span style="color:#000;font-weight:bold">WITH</span> QUERY_TRACE;
+
+<span style="color:#998;font-style:italic">-- Top-N query with lifecycle stages
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SHOW</span> TOP <span style="color:#099">10</span>
+<span style="color:#000;font-weight:bold">FROM</span> MEASURE service_latency <span style="color:#000;font-weight:bold">IN</span> production <span style="color:#000;font-weight:bold">ON</span> warn, cold STAGES
+TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d14">&#39;-30m&#39;</span>
+<span style="color:#000;font-weight:bold">ORDER</span> <span style="color:#000;font-weight:bold">BY</span> value <span style="color:#000;font-weight:bold">DESC</span>;
 </code></pre></div><h2 id="7-bydbql-for-properties">7. BydbQL for Properties</h2>
 <p>BydbQL for properties is designed for simple key-value lookups and metadata filtering. It maps to the <code>banyandb.property.v1.QueryRequest</code> message.</p>
 <h3 id="71-grammar">7.1. Grammar</h3>
@@ -1738,10 +1762,11 @@ integer_literal     ::= [0-9]+
 <p>BydbQL for traces is designed for querying and retrieving trace data with spans. The syntax maps to the <code>banyandb.trace.v1.QueryRequest</code> message and is optimized for trace-specific operations.</p>
 <h3 id="81-grammar">8.1. Grammar</h3>
 <pre><code>trace_query           ::= SELECT projection from_trace_clause TIME time_condition [WHERE criteria] [ORDER BY order_expression] [LIMIT integer] [OFFSET integer] [WITH QUERY_TRACE]
-from_trace_clause     ::= &quot;FROM TRACE&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;]
+from_trace_clause     ::= &quot;FROM TRACE&quot; identifier &quot;IN&quot; [&quot;(&quot;] group_list [&quot;)&quot;] [ON [&quot;(&quot;] stage_list [&quot;)&quot;] STAGES]
 projection            ::= &quot;*&quot; | column_list | &quot;()&quot;
 column_list           ::= identifier (&quot;,&quot; identifier)*
 group_list            ::= identifier (&quot;,&quot; identifier)+
+stage_list            ::= identifier (&quot;,&quot; identifier)+
 criteria              ::= condition ((&quot;AND&quot; | &quot;OR&quot;) condition)*
 condition             ::= identifier binary_op (value | value_list)
 time_condition        ::= &quot;=&quot; timestamp | &quot;&gt;&quot; timestamp | &quot;&lt;&quot; timestamp | &quot;&gt;=&quot; timestamp | &quot;&lt;=&quot; timestamp | &quot;BETWEEN&quot; timestamp &quot;AND&quot; timestamp
@@ -1913,6 +1938,13 @@ TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d
 TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d14">&#39;-30m&#39;</span>
 <span style="color:#000;font-weight:bold">WHERE</span> status <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;error&#39;</span>
 <span style="color:#000;font-weight:bold">WITH</span> QUERY_TRACE
+<span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">100</span>;
+
+<span style="color:#998;font-style:italic">-- Query with lifecycle stages
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">SELECT</span> trace_id, service_id
+<span style="color:#000;font-weight:bold">FROM</span> TRACE sw_trace <span style="color:#000;font-weight:bold">IN</span> group1 <span style="color:#000;font-weight:bold">ON</span> (warn, cold) STAGES
+TIME <span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#d14">&#39;-30m&#39;</span>
+<span style="color:#000;font-weight:bold">WHERE</span> status <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#39;error&#39;</span>
 <span style="color:#000;font-weight:bold">LIMIT</span> <span style="color:#099">100</span>;
 </code></pre></div><h2 id="9-summary-of-bydbql-capabilities">9. Summary of BydbQL Capabilities</h2>
 <table>
