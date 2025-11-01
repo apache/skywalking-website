@@ -21,10 +21,17 @@ This site uses [Hugo](https://gohugo.io) to organize and manage content with the
 
 Located at `content/_index.html`。
 
-### Projects and Document
+### Projects and Documentation
 
-The data of documentation link is located in `data/docs.yml` and formatted as `YAML`.
+The data of documentation link is located in `data/docs.yml` and formated as `YAML`.
 
+#### Search Engine
+Update the [config file](https://github.com/algolia/docsearch-configs/blob/master/configs/skywalking.json) everytime, so that a new documentation version will be available searched by [algolia](https://www.algolia.com/).
+
+#### AI Docs Q&A
+Release managers of SkyWalking projects should use the Kapa.ai [dashboard](https://app.kapa.ai/) to sync and ingest new documentation/blogs/FAQs if needed, or set up automatic refresh (crawling) of the Q&A sources.
+
+If you need access to the dashboard, contact @superskyyy for an invitation.
 
 ### Event
 
