@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking Kubernetes Helm Chart 4.8.0
-date: 2025-12-2r
+date: 2025-12-29
 author: SkyWalking Team
 ---
 
