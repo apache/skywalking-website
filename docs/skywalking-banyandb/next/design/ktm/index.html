@@ -30,7 +30,7 @@
 <meta itemprop="name" content="Kernel Telemetry Module (KTM)">
 <meta itemprop="description" content="Kernel Telemetry Module (KTM) Overview Kernel Telemetry Module (KTM) is an optional, modular kernel observability component embedded inside the BanyanDB First Occurrence Data Collection (FODC) sidecar. The first built-in module is an eBPF-based I/O monitor (&ldquo;iomonitor&rdquo;) that focuses on page cache behavior, fadvise() effectiveness, and memory pressure signals and their impact on BanyanDB performance. KTM is not a standalone agent or network-facing service; it runs as a sub-component of the FODC sidecar (&ldquo;black box&rdquo;) and exposes a Go-native interface to the Flight Recorder for ingesting metrics.">
 
-<meta itemprop="wordCount" content="1673">
+<meta itemprop="wordCount" content="1582">
 
 
 
@@ -1146,7 +1146,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: ff1c63e</div>
+                  <div class="commit-id">Commit Id: a9d081b</div>
                 
 
 
@@ -1161,7 +1161,7 @@
 <div class="td-content">
 	<h1 id="kernel-telemetry-module-ktm">Kernel Telemetry Module (KTM)</h1>
 <h2 id="overview">Overview</h2>
-<p>Kernel Telemetry Module (KTM) is an optional, modular kernel observability component embedded inside the BanyanDB First Occurrence Data Collection (FODC) sidecar. The first built-in module is an eBPF-based I/O monitor (&ldquo;iomonitor&rdquo;) that focuses on page cache behavior, fadvise() effectiveness, and memory pressure signals and their impact on BanyanDB performance. KTM is not a standalone agent or network-facing service; it runs as a sub-component of the FODC sidecar (&ldquo;black box&rdquo;) and exposes a Go-native interface to the Flight Recorder for ingesting metrics. Collection scoping defaults to the BanyanDB container’s cgroup v2, with a configurable comm fallback (default <code>banyand</code>).</p>
+<p>Kernel Telemetry Module (KTM) is an optional, modular kernel observability component embedded inside the BanyanDB First Occurrence Data Collection (FODC) sidecar. The first built-in module is an eBPF-based I/O monitor (&ldquo;iomonitor&rdquo;) that focuses on page cache behavior, fadvise() effectiveness, and memory pressure signals and their impact on BanyanDB performance. KTM is not a standalone agent or network-facing service; it runs as a sub-component of the FODC sidecar (&ldquo;black box&rdquo;) and exposes a Go-native interface to the Flight Recorder for ingesting metrics. Collection scoping defaults to the BanyanDB container’s cgroup v2, with a hardcoded comm fallback (<code>banyand</code>) for degraded mode.</p>
 <h2 id="architecture">Architecture</h2>
 <pre><code>┌─────────────────────────────────────────────────────────┐
 │                     User Applications                   │
@@ -1202,7 +1202,7 @@
 <li>Focus: page cache add/delete, fadvise() calls, I/O counters, and memory reclaim signals.</li>
 <li>Attachment points: stable tracepoints where possible; fentry/fexit preferred on newer kernels.</li>
 <li>Data path: kernel events -&gt; BPF maps (monotonic counters) -&gt; userspace collector -&gt; exporters.</li>
-<li>Scoping: Fixed to the single, co-located BanyanDB process within the same container/pod, using cgroup membership first and a configurable comm-prefix fallback (default <code>banyand</code>).</li>
+<li>Scoping: Fixed to the single, co-located BanyanDB process within the same container/pod, using cgroup membership first and a hardcoded comm fallback (<code>banyand</code>).</li>
 </ul>
 <h2 id="metrics-model-and-collection-strategy">Metrics Model and Collection Strategy</h2>
 <ul>
@@ -1216,47 +1216,50 @@
 <p>Configuration surface (current):</p>
 <ul>
 <li><code>collector.interval</code>: Controls the periodic push interval for metrics to Flight Recorder. Defaults to 10s.</li>
-<li><code>collector.ebpf.cgroup_path</code> (optional): absolute or <code>/sys/fs/cgroup</code>-relative path to the BanyanDB cgroup v2; if unset, KTM autodetects by scanning <code>/proc/*/comm</code> for the configured prefix (default <code>banyand</code>).</li>
-<li><code>collector.ebpf.comm_prefix</code> (optional): comm name prefix used for process discovery and fallback filtering; defaults to <code>banyand</code>.</li>
-<li>Target discovery heuristic: match <code>/proc/&lt;pid&gt;/comm</code> against the configured prefix (default <code>banyand</code>) to locate BanyanDB and derive its cgroup; this also serves as the runtime fallback if the cgroup filter is unset.</li>
+<li><code>collector.ebpf.cgroup_path</code> (optional): absolute or <code>/sys/fs/cgroup</code>-relative path to the BanyanDB cgroup v2. If not explicitly configured, KTM attempts to auto-detect the target cgroup. Only when auto-detection fails does it fall back to comm-only filtering (degraded mode with cross-pod risk).</li>
 <li>Cleanup strategy is monotonic counters only; downstream derives rates. KTM does not clear BPF maps during collection.</li>
 <li>Configuration is applied via the FODC sidecar; KTM does not define its own standalone process-level configuration surface.</li>
 </ul>
 <h2 id="scoping-and-filtering">Scoping and Filtering</h2>
 <ul>
 <li>Scoping is not optional; KTM is designed exclusively to monitor the single BanyanDB process it is co-located with in a sidecar deployment.</li>
-<li>The target container is identified at startup; eBPF programs filter events by cgroup membership first. If the cgroup filter is absent or misses, a configurable comm-prefix match (default <code>banyand</code>) is used as a narrow fallback.</li>
+<li><strong>Kernel-side filtering</strong>: eBPF programs always enforce <code>comm=&quot;banyand&quot;</code> in addition to any cgroup filtering. This is hardcoded and not configurable to ensure only BanyanDB processes are monitored.</li>
+<li><strong>Filtering strategy</strong>:
+<ul>
+<li>Preferred mode (strict): cgroup membership + comm=&ldquo;banyand&rdquo; (both enforced)</li>
+<li>Degraded mode (comm-only): comm=&ldquo;banyand&rdquo; only (when cgroup unavailable)</li>
+<li><strong>Warning</strong>: comm-only mode may mix metrics across pods if multiple processes match the comm name.</li>
+</ul>
+</li>
 <li>The design intentionally avoids multi-process or node-level (DaemonSet) monitoring to keep the implementation simple and overhead minimal.</li>
 </ul>
 <h3 id="target-process-discovery-pod--vm">Target Process Discovery (Pod / VM)</h3>
-<p>KTM needs to resolve the single “target” BanyanDB process before enabling filters and attaching eBPF programs. In both Kubernetes pods and VM/bare-metal deployments, KTM uses a <strong>process matcher</strong> based on a configurable comm-prefix match (default <code>banyand</code>).</p>
+<p>KTM resolves the target cgroup before enabling filters and attaching eBPF programs. If <code>cgroup_path</code> is not provided, it derives a Pod-level cgroup from <code>/proc/self/cgroup</code> (and falls back to the self cgroup for non-Kubernetes environments). Kernel-side filtering always uses <code>comm=&quot;banyand&quot;</code> and is not configurable.</p>
 <h4 id="kubernetes-pod-sidecar">Kubernetes Pod (sidecar)</h4>
 <p>Preconditions:</p>
 <ul>
-<li>The pod must be configured with <code>shareProcessNamespace: true</code> so the monitor sidecar can see the target container’s <code>/proc</code> entries.</li>
 <li>cgroup v2 mounted (typically at <code>/sys/fs/cgroup</code>) to enable the primary cgroup filter.</li>
-<li>If the target process cannot be discovered (for example, <code>shareProcessNamespace</code> is off), KTM logs a warning and keeps periodically checking; once the target process appears, KTM enables the module automatically.</li>
+<li>If the cgroup path cannot be resolved at startup, KTM falls back to comm-only filtering (degraded mode).</li>
 </ul>
 <p>Discovery flow (high level):</p>
 <ul>
-<li>Scan <code>/proc</code> for candidate processes.</li>
-<li>For each PID, read <code>/proc/&lt;pid&gt;/comm</code> and match it against the configured comm prefix (default <code>banyand</code>) (or an explicitly provided cgroup path).</li>
-<li>Once matched, derive the target cgroup from <code>/proc/&lt;pid&gt;/cgroup</code> (cgroup v2) and program the eBPF cgroup filter. The comm match remains as runtime fallback if the cgroup check does not fire.</li>
-<li>If no matching process is found at startup, KTM continues periodic probing and activates once it is found.</li>
+<li>If <code>cgroup_path</code> is explicitly configured, use it directly.</li>
+<li>Otherwise, derive a Pod-level cgroup from <code>/proc/self/cgroup</code>.</li>
+<li>Program the eBPF cgroup filter with the resolved cgroup ID.</li>
 </ul>
 <h4 id="vm--bare-metal">VM / bare metal</h4>
 <p>Discovery flow (high level):</p>
 <ul>
-<li>Scan <code>/proc</code> for candidate processes.</li>
-<li>Match <code>/proc/&lt;pid&gt;/comm</code> against the configured prefix (default <code>banyand</code>).</li>
-<li>Use the discovered PID to derive cgroup v2 path and program the filter; keep the comm match as runtime fallback if cgroup filtering is unavailable.</li>
-<li>If no matching process is found at startup, KTM continues periodic probing and activates once it is found.</li>
+<li>If <code>cgroup_path</code> is explicitly configured, use it directly.</li>
+<li>Otherwise, derive a Pod-level cgroup from <code>/proc/self/cgroup</code>.</li>
+<li>Program the eBPF cgroup filter with the resolved cgroup ID.</li>
+<li>If resolution fails, fall back to comm-only filtering (degraded mode).</li>
 </ul>
 <h3 id="scoping-semantics">Scoping Semantics</h3>
 <ul>
 <li>The BPF maps use a single-slot structure (e.g., a BPF array map with a single entry) to store global monotonic counters for the target process.</li>
 <li>This approach eliminates the need for per-pid hash maps, key eviction logic, and complexities related to tracking multiple processes.</li>
-<li>All kernel events are filtered by the target container’s cgroup ID when available; if the cgroup filter misses (for example, map not populated), a comm-prefix match (configurable; default <code>banyand</code>) is used before any counters are updated.</li>
+<li><strong>Kernel-side filtering</strong>: All kernel events are filtered by checking <code>comm=&quot;banyand&quot;</code> (hardcoded, non-configurable). When cgroup filtering is available, both cgroup ID and comm are enforced. When cgroup is unavailable (degraded mode), only comm filtering is used.</li>
 </ul>
 <p>Example (YAML):</p>
 <div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">collector</span>:<span style="color:#bbb">
@@ -1265,9 +1268,9 @@
 </span><span style="color:#bbb">    </span>- iomonitor<span style="color:#bbb">
 </span><span style="color:#bbb">  </span><span style="color:#000080">ebpf</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Optional: absolute or /sys/fs/cgroup-relative path to the BanyanDB cgroup v2.</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># If not set, KTM attempts auto-detection by scanning /proc for comm=&#34;banyand&#34;.</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Falls back to comm-only mode on failure.</span><span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># cgroup_path: /sys/fs/cgroup/&lt;banyandb-cgroup&gt;</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># Optional: comm name prefix used for process discovery and fallback filtering.</span><span style="color:#bbb">
-</span><span style="color:#bbb">    </span><span style="color:#998;font-style:italic"># comm_prefix: banyand</span><span style="color:#bbb">
 </span></code></pre></div><h2 id="api-surface">API Surface</h2>
 <p>KTM does not expose a dedicated HTTP or gRPC API. Instead, it provides an internal Go-native interface that is consumed by the FODC sidecar:</p>
 <ul>
@@ -1287,35 +1290,42 @@
 <ul>
 <li>I/O &amp; Cache
 <ul>
-<li><code>ktm_cache_read_attempts_total</code></li>
-<li><code>ktm_cache_misses_total</code></li>
-<li><code>ktm_page_cache_adds_total</code></li>
+<li><code>ktm_cache_lookups_total</code></li>
+<li><code>ktm_cache_fills_total</code></li>
+<li><code>ktm_cache_deletes_total</code></li>
 </ul>
 </li>
 <li>I/O latency (syscall-level)
 <ul>
 <li><code>ktm_sys_read_latency_seconds</code> (histogram family: exposes <code>_bucket</code>, <code>_count</code>, <code>_sum</code>)</li>
 <li><code>ktm_sys_pread_latency_seconds</code> (histogram family: exposes <code>_bucket</code>, <code>_count</code>, <code>_sum</code>)</li>
+<li><code>ktm_sys_read_bytes_total</code></li>
+<li><code>ktm_sys_pread_bytes_total</code></li>
 </ul>
 </li>
 <li>fadvise()
 <ul>
 <li><code>ktm_fadvise_calls_total</code></li>
-<li><code>ktm_fadvise_advice_total{advice=&quot;...&quot;}</code></li>
-<li><code>ktm_fadvise_success_total</code></li>
+<li><code>ktm_fadvise_dontneed_total</code></li>
 </ul>
 </li>
 <li>Memory
 <ul>
 <li><code>ktm_memory_lru_pages_scanned_total</code></li>
 <li><code>ktm_memory_lru_pages_reclaimed_total</code></li>
-<li><code>ktm_memory_direct_reclaim_processes</code></li>
+<li><code>ktm_memory_lru_shrink_events_total</code></li>
+<li><code>ktm_memory_direct_reclaim_begin_total</code></li>
+</ul>
+</li>
+<li>Status
+<ul>
+<li><code>ktm_degraded</code> (gauge; 1 if KTM is running in comm-only degraded mode, 0 otherwise)</li>
 </ul>
 </li>
 </ul>
 <p>Semantics: all counters are monotonic; latency metrics are exported as Prometheus histograms (<code>_bucket</code>, <code>_count</code>, <code>_sum</code>); use Prometheus functions for rates/derivatives; no map clearing between scrapes. KTM does not emit ratio/percentage metrics; derive them upstream.</p>
 <h2 id="safety--overhead-boundary">Safety &amp; Overhead Boundary</h2>
-<p>KTM is strictly passive: no kernel modifications, no syscall blocking, and only bounded-size monotonic maps. Probes attach to stable tracepoints or fentry/fexit paths with kprobe fallbacks, and expected CPU overhead remains &lt;1% under typical BanyanDB workloads.</p>
+<p>KTM is strictly passive: no kernel modifications, no syscall blocking, and only bounded-size monotonic maps. Probes attach to stable tracepoints, and expected CPU overhead remains &lt;1% under typical BanyanDB workloads.</p>
 <h2 id="security-and-permissions">Security and Permissions</h2>
 <p>Loading and managing eBPF programs requires elevated privileges. The FODC sidecar process, which hosts the KTM, must run with the following Linux capabilities:</p>
 <ul>
@@ -1325,7 +1335,7 @@
 <p>Operational prerequisites and observability: see <code>docs/operation/fodc/ktm_metrics.md</code>.</p>
 <p>The sidecar should be configured with the minimal set of capabilities required for its operation to adhere to the principle of least privilege.</p>
 <h2 id="failure-modes">Failure Modes</h2>
-<p>KTM is designed to fail gracefully. If the eBPF programs fail to load at startup for any reason (e.g., kernel incompatibility, insufficient permissions, BTF information unavailable), the KTM module will be disabled.</p>
+<p>KTM is designed to fail gracefully. If the eBPF programs fail to load at startup for any reason (e.g., kernel incompatibility, missing tracefs/tracepoints, insufficient permissions, BTF information unavailable), the KTM module will be disabled.</p>
 <p>In this state:</p>
 <ul>
 <li>An error will be logged to indicate that KTM could not be initialized and is therefore inactive.</li>
@@ -1336,15 +1346,16 @@
 <h2 id="restart-semantics">Restart Semantics</h2>
 <ul>
 <li>On sidecar restart, BPF maps are recreated and all counters reset to zero. Downstream systems (e.g., Prometheus via FODC integrations) should treat this as a new counter lifecycle and continue deriving rates/derivatives normally.</li>
-<li>If BanyanDB restarts (PID changes), the cgroup filter continues to match as long as the container does not change; the comm fallback still matches the configured prefix (default <code>banyand</code>).</li>
-<li>If the pod/container is recreated (cgroup path changes), KTM re-runs target discovery, re-programs the cgroup filter, and starts counters from zero; metrics from the old container are discarded without reconciliation.</li>
-<li>KTM performs a lightweight health check during collection to ensure the cgroup filter is still populated; if it is missing (for example, container crash/restart), KTM re-detects and re-programs the filter automatically.</li>
+<li>If BanyanDB restarts (PID changes), the cgroup filter continues to match as long as the container does not change; the comm fallback still matches <code>banyand</code>.</li>
+<li>If the pod/container is recreated (cgroup path changes), KTM re-runs target discovery on the next sidecar start, re-programs the cgroup filter, and starts counters from zero; metrics from the old container are discarded without reconciliation.</li>
+<li>KTM does not perform periodic health checks or re-detection. If the cgroup path changes, the sidecar/Pod must be restarted.</li>
 </ul>
 <h2 id="kernel-attachment-points-current">Kernel Attachment Points (Current)</h2>
+<p>All attachment points are tracepoints.</p>
 <ul>
 <li><code>sys_enter_read</code>, <code>sys_exit_read</code>, <code>sys_enter_pread64</code>, <code>sys_exit_pread64</code> (syscall-level I/O latency).</li>
-<li><code>mm_filemap_add_to_page_cache</code>, <code>filemap_get_read_batch</code> (page cache add/churn).</li>
-<li><code>ksys_fadvise64_64</code> (fadvise policy actions; fentry/fexit preferred).</li>
+<li><code>sys_enter_fadvise64</code>, <code>sys_exit_fadvise64</code> (fadvise policy actions).</li>
+<li><code>mm_filemap_get_pages</code>, <code>mm_filemap_add_to_page_cache</code>, <code>mm_filemap_delete_from_page_cache</code> (page cache add/churn).</li>
 <li><code>mm_vmscan_lru_shrink_inactive</code>, <code>mm_vmscan_direct_reclaim_begin</code> (memory reclaim/pressure).</li>
 </ul>
 <h2 id="limitations">Limitations</h2>
@@ -1576,6 +1587,8 @@
 
     </div>
     
+
+
 
 
 
