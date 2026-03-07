@@ -32,7 +32,7 @@ When a runtime error occurs inside these generated classes, the stack trace refe
 <meta itemprop="description" content="Dynamic Code Generation and Debugging SkyWalking OAP server uses four Domain-Specific Languages (DSLs) to define observability logic: OAL (traces/mesh metrics), MAL (meter metrics), LAL (log analysis), and Hierarchy (service matching rules). These DSL scripts are compiled into JVM bytecode when the OAP server starts. The generated classes run in-process — there are no intermediate source files.
 When a runtime error occurs inside these generated classes, the stack trace references class names and source locations that map back to the original DSL configuration files.">
 
-<meta itemprop="wordCount" content="829">
+<meta itemprop="wordCount" content="903">
 
 
 
@@ -2717,7 +2717,7 @@ When a runtime error occurs inside these generated classes, the stack trace refe
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 1f08f95</div>
+                  <div class="commit-id">Commit Id: c626093</div>
                 
 
 
@@ -2836,9 +2836,9 @@ docker run -e <span style="color:#008080">SW_DYNAMIC_CLASS_ENGINE_DEBUG</span><s
 │   ├── metrics/              ←   e.g., ServiceRespTimeMetrics.class
 │   ├── metrics/builder/      ←   e.g., ServiceRespTimeMetricsBuilder.class
 │   └── dispatcher/           ←   e.g., ServiceDispatcher.class
-├── mal-rt/                   ← Generated MAL classes (e.g., meter_vm_cpu_total_percentage.class)
-├── lal-rt/                   ← Generated LAL classes (e.g., default_default.class)
-└── hierarchy-rt/             ← Generated Hierarchy classes (e.g., name.class)
+├── mal-rt/                   ← Generated MAL classes (e.g., vm_L25_cpu_total_percentage.class, vm_L20_filter.class)
+├── lal-rt/                   ← Generated LAL classes (e.g., default_L3_default.class)
+└── hierarchy-rt/             ← Generated Hierarchy classes (e.g., hierarchy_definition_L88_name.class)
 </code></pre><p><strong>Docker</strong> (<code>/skywalking/</code>):</p>
 <pre><code>/skywalking/
 ├── config/
@@ -2881,6 +2881,7 @@ on demand if they don&rsquo;t exist.</p>
 <tr>
 <th>DSL</th>
 <th>SourceFile Example</th>
+<th>Generated Class Name</th>
 <th>How to Read</th>
 </tr>
 </thead>
@@ -2888,48 +2889,59 @@ on demand if they don&rsquo;t exist.</p>
 <tr>
 <td>OAL</td>
 <td><code>(core.oal:20)ServiceRespTimeMetrics.java</code></td>
+<td><code>ServiceRespTimeMetrics</code></td>
 <td>OAL file <code>core.oal</code>, line 20 defines this metric</td>
 </tr>
 <tr>
 <td>MAL</td>
-<td><code>(spring-sleuth.yaml:3)cluster_up_rq_incr.java</code></td>
-<td>YAML file <code>spring-sleuth.yaml</code>, rule index 3 (0-based, the 4th <code>metricsRules</code> entry)</td>
+<td><code>(vm.yaml:25)cpu_total_percentage.java</code></td>
+<td><code>vm_L25_cpu_total_percentage</code></td>
+<td>YAML file <code>vm.yaml</code>, line 25, rule <code>cpu_total_percentage</code></td>
+</tr>
+<tr>
+<td>MAL filter</td>
+<td><code>(vm.yaml:20)filter.java</code></td>
+<td><code>vm_L20_filter</code></td>
+<td>YAML file <code>vm.yaml</code>, line 20, filter expression</td>
 </tr>
 <tr>
 <td>LAL</td>
-<td><code>(default.yaml)default_default.java</code></td>
-<td>YAML file <code>default.yaml</code>, rule named <code>default_default</code></td>
+<td><code>(default.yaml:3)default.java</code></td>
+<td><code>default_L3_default</code></td>
+<td>YAML file <code>default.yaml</code>, line 3, rule <code>default</code></td>
 </tr>
 <tr>
 <td>Hierarchy</td>
-<td><code>(hierarchy-definition.yml)name.java</code></td>
-<td>Rule <code>name</code> in <code>hierarchy-definition.yml</code></td>
+<td><code>(hierarchy-definition.yml:88)name.java</code></td>
+<td><code>hierarchy_definition_L88_name</code></td>
+<td>Rule <code>name</code> at line 88 in <code>hierarchy-definition.yml</code></td>
 </tr>
 </tbody>
 </table>
 <p><strong>Notes:</strong></p>
 <ul>
-<li>The number after <code>:</code> in the MAL source prefix is the 0-based index of the rule within the <code>metricsRules</code> list in that YAML file.</li>
-<li>LAL and Hierarchy rules are standalone entries, so the source prefix contains only the YAML file name without a line number.</li>
-<li>When source information is unavailable, the SourceFile falls back to just <code>ClassName.java</code> without the parenthesized prefix.</li>
+<li>The class name pattern is <code>{yamlFileName}_L{lineNo}_{ruleName}</code> for all DSLs (except OAL).
+The yaml file name and line number from <code>yamlSource</code> are combined with the rule name or <code>filter</code>.</li>
+<li>The number after <code>:</code> in the SourceFile prefix is the line number in the YAML file where the rule is defined (for MAL in production, this may be a 0-based rule index instead of a line number).</li>
+<li>When source information is unavailable, the class name falls back to <code>MalExpr_&lt;N&gt;</code> / <code>LalExpr_&lt;N&gt;</code> / <code>HierarchyRule_&lt;N&gt;</code> and the SourceFile to just <code>ClassName.java</code> without the parenthesized prefix.</li>
 </ul>
 <h3 id="mapping-back-to-dsl-source">Mapping Back to DSL Source</h3>
 <ol>
 <li>
-<p><strong>Identify the DSL type</strong> from the package or class suffix:</p>
+<p><strong>Identify the DSL type</strong> from the package or class name:</p>
 <ul>
 <li><code>...metrics.generated.*Metrics</code> or <code>...Dispatcher</code> → OAL</li>
-<li><code>...meter.analyzer.v2.compiler.rt.MalExpr_*</code> → MAL</li>
-<li><code>...log.analyzer.v2.compiler.rt.LalExpr_*</code> → LAL</li>
-<li><code>...hierarchy.rule.rt.*</code> → Hierarchy</li>
+<li><code>...meter.analyzer.v2.compiler.rt.*</code> → MAL (class name: <code>{yamlName}_L{lineNo}_{ruleName}</code> or <code>MalExpr_&lt;N&gt;</code>)</li>
+<li><code>...log.analyzer.v2.compiler.rt.*</code> → LAL (class name: <code>{yamlName}_L{lineNo}_{ruleName}</code> or <code>LalExpr_&lt;N&gt;</code>)</li>
+<li><code>...hierarchy.rule.rt.*</code> → Hierarchy (class name: <code>{yamlName}_L{lineNo}_{ruleName}</code> or <code>HierarchyRule_&lt;N&gt;</code>)</li>
 </ul>
 </li>
 <li>
-<p><strong>Find the source file</strong> from the parenthesized prefix (e.g., <code>core.oal</code>, <code>spring-sleuth.yaml</code>).
-These files are in the <code>config/</code> directory.</p>
+<p><strong>Find the source file</strong> from the parenthesized prefix in the SourceFile attribute (e.g., <code>core.oal</code>, <code>vm.yaml</code>),
+or from the class name prefix (e.g., <code>vm_L25_...</code> → <code>vm.yaml</code>). These files are in the <code>config/</code> directory.</p>
 </li>
 <li>
-<p><strong>Locate the rule</strong> using the line number (OAL) or rule index (MAL) or rule name (LAL/Hierarchy).</p>
+<p><strong>Locate the rule</strong> using the line number from the class name (<code>_L25_</code>) or the SourceFile prefix (<code>:25</code>).</p>
 </li>
 <li>
 <p><strong>Use the statement number</strong> (after the last <code>:</code>) as a rough indicator of which operation within the
@@ -2946,9 +2958,9 @@ Check the OAL script syntax at the reported metric name.</p>
 <p>MAL and LAL errors during metric processing are caught and logged per-expression:</p>
 <pre><code>ERROR o.a.s.o.m.a.v.MetricConvert - Analyze Analyzer{...} error
 java.lang.NullPointerException
-    at ...MalExpr_5.run((vm.yaml:2)meter_vm_cpu_total_percentage.java:5)
-</code></pre><p>This tells you: the error is in <code>vm.yaml</code>, rule index 2 (the 3rd <code>metricsRules</code> entry),
-metric <code>meter_vm_cpu_total_percentage</code>, at statement 5 of the generated <code>run()</code> method.
+    at ...vm_L25_cpu_total_percentage.run((vm.yaml:25)cpu_total_percentage.java:5)
+</code></pre><p>This tells you: the error is in <code>vm.yaml</code>, line 25, metric <code>cpu_total_percentage</code>,
+at statement 5 of the generated <code>run()</code> method.
 The processing continues for other metrics — a single expression failure does not crash the server.</p>
 <h3 id="hierarchy-compilation-failure">Hierarchy Compilation Failure</h3>
 <p>Hierarchy rule compilation errors are thrown at startup:</p>
