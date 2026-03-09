@@ -32,7 +32,7 @@ The LAL config files are in YAML format, and are located under directory lal." /
 <meta itemprop="description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
 The LAL config files are in YAML format, and are located under directory lal.">
 
-<meta itemprop="wordCount" content="2300">
+<meta itemprop="wordCount" content="2707">
 
 
 
@@ -2717,7 +2717,7 @@ The LAL config files are in YAML format, and are located under directory lal."/>
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c626093</div>
+                  <div class="commit-id">Commit Id: 247583b</div>
                 
 
 
@@ -2828,7 +2828,7 @@ like <code>regexp(&lt;the expression&gt;)</code>, instead of <code>regexp &lt;th
 </code></pre></div><p>And we can use this method to get the value of the tag key <code>TEST_KEY</code>.</p>
 <pre><code>filter {
     if (tag(&quot;TEST_KEY&quot;) == &quot;TEST_VALUE&quot;) {
-         ...   
+         ...
     }
 }
 </code></pre><h3 id="parser">Parser</h3>
@@ -2895,6 +2895,7 @@ all the captured groups can be used later in the extractors or sinks.
 </code></pre><h3 id="extractor">Extractor</h3>
 <p>Extractors aim to extract metadata from the logs. The metadata can be a service name, a service instance name, an
 endpoint name, or even a trace ID, all of which can be associated with the existing traces and metrics.</p>
+<h4 id="standard-fields">Standard fields</h4>
 <ul>
 <li><code>service</code></li>
 </ul>
@@ -2949,7 +2950,7 @@ not dropped) and is used to associate with traces / metrics.</p>
 </code></pre><ul>
 <li><code>layer</code></li>
 </ul>
-<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/c626093b2a29e2b9c52eaa3c83db382061022f9b/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
+<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
 not dropped) and is used to associate with service.</p>
 <ul>
 <li><code>tag</code></li>
@@ -2964,9 +2965,15 @@ not dropped) and is used to associate with service.</p>
         layer 'GENERAL'
     }
 }
-</code></pre><ul>
-<li><code>metrics</code></li>
-</ul>
+</code></pre><h4 id="output-fields">Output fields</h4>
+<p>When a rule declares a custom <code>outputType</code> (see <a href="#output-type">Output Type</a>), the extractor can set fields specific to
+that output type. Any identifier in the extractor that is not a standard field (listed above) is treated as an
+<strong>output field assignment</strong>. The syntax is the same as standard fields:</p>
+<pre><code>fieldName valueExpression as Type
+</code></pre><p>The LAL compiler validates at boot time that a matching setter exists on the output type class (e.g., <code>setStatement(String)</code>
+for field <code>statement</code>). If no setter is found, the OAP server will fail to start, ensuring early error detection.</p>
+<p>See <a href="#slow-sql-database-slow-statement">Slow SQL</a> and <a href="#sampled-trace-network-profiling">Sampled Trace</a> for concrete examples.</p>
+<h4 id="metrics"><code>metrics</code></h4>
 <p><code>metrics</code> extracts / generates metrics from the logs, and sends the generated metrics to the meter system. You may
 configure <a href="../mal">MAL</a> for further analysis of these metrics. The dedicated MAL config files are under
 directory <code>log-mal-rules</code>, and you can set <code>log-analyzer/default/malFiles</code> to enable configured files.</p>
@@ -3014,137 +3021,11 @@ like percentiles.</p>
 </span><span style="color:#bbb"></span><span style="color:#000080">metrics</span>:<span style="color:#bbb">
 </span><span style="color:#bbb">  </span>- <span style="color:#000080">name</span>:<span style="color:#bbb"> </span>response_time_percentile<span style="color:#bbb">
 </span><span style="color:#bbb">    </span><span style="color:#000080">exp</span>:<span style="color:#bbb"> </span>http_response_time.sum([&#39;le&#39;, &#39;service&#39;, &#39;instance&#39;]).increase(&#39;PT5M&#39;).histogram().histogram_percentile([50,75,90,95,99])<span style="color:#bbb">
-</span></code></pre></div><ul>
-<li><code>slowSql</code></li>
-</ul>
-<p><code>slowSql</code> aims to convert LogData to DatabaseSlowStatement. It extracts data from <code>parsed</code> result and save them as DatabaseSlowStatement. SlowSql will not abort or edit logs, you can use other LAL for further processing.
-SlowSql will reuse <code>service</code>, <code>layer</code> and <code>timestamp</code> of extractor, so it is necessary to use <code>SlowSQL</code> after setting these.
-We require a log tag <code>&quot;LOG_KIND&quot; = &quot;SLOW_SQL&quot;</code> to make OAP distinguish slow SQL logs from other log reports.</p>
-<p><strong>Note</strong>, slow SQL sampling would only flag this SQL in the candidate list. The OAP server would run statistic per service
-and only persistent the top 50 every 10(controlled by <code>topNReportPeriod: ${SW_CORE_TOPN_REPORT_PERIOD:10}</code>) minutes by default.</p>
-<p>An example of JSON sent to OAP is as following:</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">[
-   {
-      <span style="color:#000080">&#34;tags&#34;</span>:{
-         <span style="color:#000080">&#34;data&#34;</span>:[
-            {
-               <span style="color:#000080">&#34;key&#34;</span>:<span style="color:#d14">&#34;LOG_KIND&#34;</span>,
-               <span style="color:#000080">&#34;value&#34;</span>:<span style="color:#d14">&#34;SLOW_SQL&#34;</span>
-            }
-         ]
-      },
-      <span style="color:#000080">&#34;layer&#34;</span>:<span style="color:#d14">&#34;MYSQL&#34;</span>,
-      <span style="color:#000080">&#34;body&#34;</span>:{
-         <span style="color:#000080">&#34;json&#34;</span>:{
-            <span style="color:#000080">&#34;json&#34;</span>:<span style="color:#d14">&#34;{\&#34;time\&#34;:\&#34;1663063011\&#34;,\&#34;id\&#34;:\&#34;cb92c1a5b-2691e-fb2f-457a-9c72a392d9ed\&#34;,\&#34;service\&#34;:\&#34;root[root]@[localhost]\&#34;,\&#34;statement\&#34;:\&#34;select sleep(2);\&#34;,\&#34;layer\&#34;:\&#34;MYSQL\&#34;,\&#34;query_time\&#34;:2000}&#34;</span>
-         }
-      },
-      <span style="color:#000080">&#34;service&#34;</span>:<span style="color:#d14">&#34;root[root]@[localhost]&#34;</span>
-   }
-]
-</code></pre></div><ul>
-<li><code>statement</code></li>
-</ul>
-<p><code>statement</code> extracts the SQL statement from the <code>parsed</code> result, and set it into the <code>DatabaseSlowStatement</code>, which will be
-persisted (if not dropped) and is used to associate with TopNDatabaseStatement.</p>
-<ul>
-<li><code>latency</code></li>
-</ul>
-<p><code>latency</code> extracts the latency from the <code>parsed</code> result, and set it into the <code>DatabaseSlowStatement</code>, which will be
-persisted (if not dropped) and is used to associate with TopNDatabaseStatement.</p>
-<ul>
-<li><code>id</code></li>
-</ul>
-<p><code>id</code> extracts the id from the <code>parsed</code> result, and set it into the <code>DatabaseSlowStatement</code>, which will be persisted (if not
-dropped) and is used to associate with TopNDatabaseStatement.</p>
-<p>An example of LAL to distinguish slow logs:</p>
-<pre><code>filter {
-  json{
-  }
-  extractor{
-    layer parsed.layer as String
-    service parsed.service as String
-    timestamp parsed.time as String
-    if (tag(&quot;LOG_KIND&quot;) == &quot;SLOW_SQL&quot;) {
-      slowSql {
-        id parsed.id as String
-        statement parsed.statement as String
-        latency parsed.query_time as Long
-      }
-    }
-  }
-}
-</code></pre><ul>
-<li><code>sampledTrace</code></li>
-</ul>
-<p><code>sampledTrace</code> aims to convert LogData to SampledTrace Records. It extracts data from <code>parsed</code> result and save them as SampledTraceRecord. SampledTrace will not abort or edit logs, you can use other LAL for further processing.
-We require a log tag <code>&quot;LOG_KIND&quot; = &quot;NET_PROFILING_SAMPLED_TRACE&quot;</code> to make OAP distinguish slow trace logs from other log reports.
-An example of JSON sent to OAP is as following:</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">[
-   {
-      <span style="color:#000080">&#34;tags&#34;</span>:{
-         <span style="color:#000080">&#34;data&#34;</span>:[
-            {
-               <span style="color:#000080">&#34;key&#34;</span>:<span style="color:#d14">&#34;LOG_KIND&#34;</span>,
-               <span style="color:#000080">&#34;value&#34;</span>:<span style="color:#d14">&#34;NET_PROFILING_SAMPLED_TRACE&#34;</span>
-            }
-         ]
-      },
-      <span style="color:#000080">&#34;layer&#34;</span>:<span style="color:#d14">&#34;MESH&#34;</span>,
-      <span style="color:#000080">&#34;body&#34;</span>:{
-         <span style="color:#000080">&#34;json&#34;</span>:{
-            <span style="color:#000080">&#34;json&#34;</span>:<span style="color:#d14">&#34;{\&#34;uri\&#34;:\&#34;/provider\&#34;,\&#34;reason\&#34;:\&#34;slow\&#34;,\&#34;latency\&#34;:2048,\&#34;client_process\&#34;:{\&#34;process_id\&#34;:\&#34;c1519f4555ec11eda8df0242ac1d0002\&#34;,\&#34;local\&#34;:false,\&#34;address\&#34;:\&#34;\&#34;},\&#34;server_process\&#34;:{\&#34;process_id\&#34;:\&#34;\&#34;,\&#34;local\&#34;:false,\&#34;address\&#34;:\&#34;172.31.0.3:443\&#34;},\&#34;detect_point\&#34;:\&#34;client\&#34;,\&#34;component\&#34;:\&#34;http\&#34;,\&#34;ssl\&#34;:true}&#34;</span>
-         }
-      },
-      <span style="color:#000080">&#34;service&#34;</span>:<span style="color:#d14">&#34;test-service&#34;</span>,
-      <span style="color:#000080">&#34;serviceInstance&#34;</span>:<span style="color:#d14">&#34;test-service-instance&#34;</span>,
-      <span style="color:#000080">&#34;timestamp&#34;</span>: <span style="color:#099">1666916962406</span>,
-   }
-]
-</code></pre></div><p>Examples are as follows:</p>
-<pre><code>filter {
-    json {
-    }
-    if (tag(&quot;LOG_KIND&quot;) == &quot;NET_PROFILING_SAMPLED_TRACE&quot;) {
-        sampledTrace {
-            latency parsed.latency as Long
-            uri parsed.uri as String
-            reason parsed.reason as String
-
-            if (parsed.client_process.process_id as String != &quot;&quot;) {
-                processId parsed.client_process.process_id as String
-            } else if (parsed.client_process.local as Boolean) {
-                processId ProcessRegistry.generateVirtualLocalProcess(parsed.service as String, parsed.serviceInstance as String) as String
-            } else {
-                processId ProcessRegistry.generateVirtualRemoteProcess(parsed.service as String, parsed.serviceInstance as String, parsed.client_process.address as String) as String
-            }
-
-            if (parsed.server_process.process_id as String != &quot;&quot;) {
-                destProcessId parsed.server_process.process_id as String
-            } else if (parsed.server_process.local as Boolean) {
-                destProcessId ProcessRegistry.generateVirtualLocalProcess(parsed.service as String, parsed.serviceInstance as String) as String
-            } else {
-                destProcessId ProcessRegistry.generateVirtualRemoteProcess(parsed.service as String, parsed.serviceInstance as String, parsed.server_process.address as String) as String
-            }
-
-            detectPoint parsed.detect_point as String
-
-            if (parsed.component as String == &quot;http&quot; &amp;&amp; parsed.ssl as Boolean) {
-                componentId 129
-            } else if (parsed.component as String == &quot;http&quot;) {
-                componentId 49
-            } else if (parsed.ssl as Boolean) {
-                componentId 130
-            } else {
-                componentId 110
-            }
-        }
-    }
-}
-</code></pre><h3 id="sink">Sink</h3>
-<p>Sinks are the persistent layer of the LAL. By default, all the logs of each filter are persisted into the storage.
-However, some mechanisms allow you to selectively save some logs, or even drop all the logs after you&rsquo;ve
-extracted useful information, such as metrics.</p>
+</span></code></pre></div><h3 id="sink">Sink</h3>
+<p>Sinks are the persistent layer of the LAL. An explicit <code>sink {}</code> block is <strong>required</strong> for any data to be persisted.
+Without a <code>sink {}</code> block, no data is saved — this applies to all LAL rules, including those using custom <code>outputType</code>.</p>
+<p>Within the sink, you can use samplers, droppers, and enforcers to control which logs are persisted.
+An empty <code>sink {}</code> block means all logs are saved unconditionally.</p>
 <h4 id="sampler">Sampler</h4>
 <p>Sampler allows you to save the logs in a sampling manner. Currently, the following sampling strategies are supported:</p>
 <ul>
@@ -3242,7 +3123,167 @@ has been configured.</p>
         }
     }
 }
-</code></pre>
+</code></pre><h2 id="output-type">Output Type</h2>
+<p>By default, each LAL rule produces a <code>Log</code> source object that is persisted to storage. However, some use cases require
+transforming log data into a different entity type — for example, converting slow SQL logs into <code>DatabaseSlowStatement</code>
+records or network profiling logs into <code>SampledTraceRecord</code>. The <code>outputType</code> mechanism makes this configurable per rule,
+without requiring any DSL grammar changes.</p>
+<h3 id="configuration">Configuration</h3>
+<p>Set <code>outputType</code> at the rule level in the YAML config. You can use the short name registered by
+the <code>LALOutputBuilder</code> SPI (recommended), or a fully qualified class name:</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">rules</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>- <span style="color:#000080">name</span>:<span style="color:#bbb"> </span>my-rule<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">layer</span>:<span style="color:#bbb"> </span>MYSQL<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">outputType</span>:<span style="color:#bbb"> </span>SlowSQL   <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># short name registered by DatabaseSlowStatementBuilder</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">dsl</span>:<span style="color:#bbb"> </span>|<span style="color:#d14">
+</span><span style="color:#d14">      filter {
+</span><span style="color:#d14">        // ...
+</span><span style="color:#d14">      }</span><span style="color:#bbb">      
+</span></code></pre></div><h3 id="resolution-order">Resolution order</h3>
+<p>The output type is resolved per-rule in the following priority:</p>
+<ol>
+<li><strong>Per-rule YAML config</strong> — the <code>outputType</code> field shown above (highest priority).
+Short names (no <code>.</code>) are resolved via <code>ServiceLoader&lt;LALOutputBuilder&gt;</code>; fully qualified class names
+are resolved via <code>Class.forName()</code> as a fallback.</li>
+<li><strong><code>LALSourceTypeProvider</code> SPI</strong> — a default output type registered by receiver plugins for a specific layer</li>
+<li><strong><code>Log.class</code></strong> — the fallback if not specified anywhere</li>
+</ol>
+<h3 id="two-output-paths">Two output paths</h3>
+<p>LAL supports two kinds of output types:</p>
+<table>
+<thead>
+<tr>
+<th>Output path</th>
+<th>Base type</th>
+<th>How it works</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Log path</strong></td>
+<td>Subclass of <code>AbstractLog</code></td>
+<td>The sink populates standard log fields (service, instance, endpoint, tags, body, etc.) from <code>LogData</code> and persists via <code>SourceReceiver</code></td>
+</tr>
+<tr>
+<td><strong>Builder path</strong></td>
+<td>Implements <code>LALOutputBuilder</code></td>
+<td>The sink creates the builder, calls <code>init(LogData, NamingControl)</code> to pre-populate standard fields, applies output field values via setters, then calls <code>complete(SourceReceiver)</code> to validate and dispatch</td>
+</tr>
+</tbody>
+</table>
+<p>The builder path is used when the output type implements the <code>LALOutputBuilder</code> interface. This is how SkyWalking&rsquo;s
+built-in slow SQL and sampled trace features work.</p>
+<h3 id="built-in-output-types">Built-in output types</h3>
+<h4 id="slow-sql-database-slow-statement">Slow SQL (Database Slow Statement)</h4>
+<p>SkyWalking converts slow SQL logs into <code>DatabaseSlowStatement</code> records for database slow query analysis (MySQL, PostgreSQL, Redis, etc.).</p>
+<p>Use <code>outputType: SlowSQL</code> in your rule config.
+The available output fields are: <code>id</code>, <code>statement</code>, <code>latency</code>. Standard fields (<code>service</code>, <code>layer</code>, <code>timestamp</code>) are handled
+by the extractor as usual and pre-populated via <code>init()</code> from <code>LogData</code>.</p>
+<p>We require a log tag <code>&quot;LOG_KIND&quot; = &quot;SLOW_SQL&quot;</code> to make OAP distinguish slow SQL logs from other log reports.</p>
+<p><strong>Note</strong>, slow SQL sampling would only flag this SQL in the candidate list. The OAP server would run statistic per service
+and only persistent the top 50 every 10(controlled by <code>topNReportPeriod: ${SW_CORE_TOPN_REPORT_PERIOD:10}</code>) minutes by default.</p>
+<p>See bundled LAL scripts for complete examples:
+<a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
+<h4 id="sampled-trace-network-profiling">Sampled Trace (Network Profiling)</h4>
+<p>SkyWalking converts network profiling sampled trace logs into <code>SampledTraceRecord</code> for process-level network analysis.</p>
+<p>Use <code>outputType: SampledTrace</code> in your rule config.
+The available output fields are: <code>latency</code>, <code>uri</code>, <code>reason</code>, <code>processId</code>, <code>destProcessId</code>, <code>detectPoint</code>, <code>componentId</code>.</p>
+<p>We require a log tag <code>&quot;LOG_KIND&quot; = &quot;NET_PROFILING_SAMPLED_TRACE&quot;</code> to make OAP distinguish sampled trace logs from other log reports.</p>
+<p>See bundled LAL scripts for complete examples:
+<a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/247583be0bf1730941c65af5dc7e330a46ad4656/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
+<h3 id="extending-custom-output-types">Extending: custom output types</h3>
+<p>You can create custom output types to transform logs into any entity type for your own use cases. There are two approaches:</p>
+<h4 id="approach-1-implement-laloutputbuilder">Approach 1: Implement <code>LALOutputBuilder</code></h4>
+<p>Use this when you need full control over validation and dispatching, or when the output is not a simple <code>AbstractLog</code> subclass.</p>
+<ol>
+<li>Create a class that implements <code>org.apache.skywalking.oap.server.core.source.LALOutputBuilder</code>:</li>
+</ol>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">MyCustomBuilder</span> <span style="color:#000;font-weight:bold">implements</span> LALOutputBuilder <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> String NAME <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#34;MyCustom&#34;</span><span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Setter</span> <span style="color:#3c5d5d;font-weight:bold">@Getter</span>
+    <span style="color:#000;font-weight:bold">private</span> String myField<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#3c5d5d;font-weight:bold">@Setter</span> <span style="color:#3c5d5d;font-weight:bold">@Getter</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">long</span> myMetric<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">MyCustomBuilder</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{}</span> <span style="color:#998;font-style:italic">// no-arg constructor required
+</span><span style="color:#998;font-style:italic"></span>
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">name</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> NAME<span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">init</span><span style="color:#000;font-weight:bold">(</span>LogData logData<span style="color:#000;font-weight:bold">,</span> NamingControl namingControl<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#998;font-style:italic">// Pre-populate from LogData (service, timestamp, traceId, etc.)
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">complete</span><span style="color:#000;font-weight:bold">(</span>SourceReceiver sourceReceiver<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#998;font-style:italic">// Validate, build final Source/Record, and dispatch
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><ol start="2">
+<li>
+<p>Register it as a <code>ServiceLoader</code> provider so the short name can be used in YAML config.
+Create <code>META-INF/services/org.apache.skywalking.oap.server.core.source.LALOutputBuilder</code> containing:</p>
+<pre><code>com.example.MyCustomBuilder
+</code></pre></li>
+<li>
+<p>Reference it in your LAL YAML config by short name:</p>
+</li>
+</ol>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">rules</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>- <span style="color:#000080">name</span>:<span style="color:#bbb"> </span>my-custom-rule<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">layer</span>:<span style="color:#bbb"> </span>GENERAL<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">outputType</span>:<span style="color:#bbb"> </span>MyCustom   <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># short name from name() method</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">dsl</span>:<span style="color:#bbb"> </span>|<span style="color:#d14">
+</span><span style="color:#d14">      filter {
+</span><span style="color:#d14">        json {}
+</span><span style="color:#d14">        extractor {
+</span><span style="color:#d14">          myField parsed.someField as String
+</span><span style="color:#d14">          myMetric parsed.someValue as Long
+</span><span style="color:#d14">        }
+</span><span style="color:#d14">        sink {}
+</span><span style="color:#d14">      }</span><span style="color:#bbb">      
+</span></code></pre></div><p>The LAL compiler validates at boot time that <code>setMyField(String)</code> and <code>setMyMetric(Long)</code> exist on <code>MyCustomBuilder</code>.
+Fully qualified class names (e.g., <code>outputType: com.example.MyCustomBuilder</code>) are also supported as a fallback.</p>
+<h4 id="approach-2-extend-abstractlog">Approach 2: Extend <code>AbstractLog</code></h4>
+<p>Use this for simpler cases where you want to produce a log-like record with additional fields:</p>
+<ol>
+<li>Create a subclass of <code>AbstractLog</code> with the extra fields.</li>
+<li>Set <code>outputType</code> to your subclass. Standard log fields are populated automatically.</li>
+</ol>
+<h4 id="custom-input-types">Custom input types</h4>
+<p>For rules that receive structured protobuf data (not JSON/YAML log bodies), you can configure the input type
+so that <code>parsed.*</code> generates optimized direct getter calls:</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">rules</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>- <span style="color:#000080">name</span>:<span style="color:#bbb"> </span>my-proto-rule<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">layer</span>:<span style="color:#bbb"> </span>MY_LAYER<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">inputType</span>:<span style="color:#bbb"> </span>com.example.MyProtoMessage<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">dsl</span>:<span style="color:#bbb"> </span>|<span style="color:#d14">
+</span><span style="color:#d14">      filter {
+</span><span style="color:#d14">        extractor {
+</span><span style="color:#d14">          service parsed.serviceName as String
+</span><span style="color:#d14">          endpoint parsed.requestPath as String
+</span><span style="color:#d14">        }
+</span><span style="color:#d14">      }</span><span style="color:#bbb">      
+</span></code></pre></div><p>Alternatively, register a <code>LALSourceTypeProvider</code> SPI implementation to set the default input and output types
+for an entire layer, so individual rules don&rsquo;t need to repeat the configuration:</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">MyLayerSourceTypeProvider</span> <span style="color:#000;font-weight:bold">implements</span> LALSourceTypeProvider <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> Layer <span style="color:#900;font-weight:bold">layer</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> Layer<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">MY_LAYER</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> inputType<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> MyProtoMessage<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> Class<span style="color:#000;font-weight:bold">&lt;?</span> <span style="color:#000;font-weight:bold">extends</span> Source<span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#900;font-weight:bold">outputType</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> MyCustomBuilder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></div><p>Register it in <code>META-INF/services/org.apache.skywalking.oap.log.analyzer.v2.spi.LALSourceTypeProvider</code>.</p>
+
 </div>
 <div>
   
@@ -3333,6 +3374,15 @@ has been configured.</p>
             <li><a href="#parser">Parser</a></li>
             <li><a href="#extractor">Extractor</a></li>
             <li><a href="#sink">Sink</a></li>
+          </ul>
+        </li>
+        <li><a href="#output-type">Output Type</a>
+          <ul>
+            <li><a href="#configuration">Configuration</a></li>
+            <li><a href="#resolution-order">Resolution order</a></li>
+            <li><a href="#two-output-paths">Two output paths</a></li>
+            <li><a href="#built-in-output-types">Built-in output types</a></li>
+            <li><a href="#extending-custom-output-types">Extending: custom output types</a></li>
           </ul>
         </li>
       </ul>
