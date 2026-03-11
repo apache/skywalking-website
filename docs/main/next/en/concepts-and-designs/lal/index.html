@@ -32,7 +32,7 @@ The LAL config files are in YAML format, and are located under directory lal." /
 <meta itemprop="description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
 The LAL config files are in YAML format, and are located under directory lal.">
 
-<meta itemprop="wordCount" content="2707">
+<meta itemprop="wordCount" content="3167">
 
 
 
@@ -2717,7 +2717,7 @@ The LAL config files are in YAML format, and are located under directory lal."/>
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 13a8bf4</div>
+                  <div class="commit-id">Commit Id: 73d422f</div>
                 
 
 
@@ -2895,7 +2895,74 @@ all the captured groups can be used later in the extractors or sinks.
 </code></pre><h3 id="extractor">Extractor</h3>
 <p>Extractors aim to extract metadata from the logs. The metadata can be a service name, a service instance name, an
 endpoint name, or even a trace ID, all of which can be associated with the existing traces and metrics.</p>
-<h4 id="standard-fields">Standard fields</h4>
+<h4 id="local-variables-def">Local variables (<code>def</code>)</h4>
+<p>You can use <code>def</code> to declare local variables in the extractor (or at the filter level). This is useful when an
+expression is reused multiple times, or when you want to break a long chain into readable steps.</p>
+<p>The syntax is:</p>
+<pre><code>def variableName = expression
+def variableName = expression as TypeName
+</code></pre><p>The variable type is inferred from the initializer expression at compile time. <code>def</code> is not limited to JSON — it works
+with any value access expression whose type is resolvable on the classpath, including protobuf getter chains,
+<code>log.*</code> fields, and Gson JSON method chains. Subsequent method calls on the variable are validated at compile time
+against the inferred type.</p>
+<p>You can optionally add an explicit <code>as</code> type cast to narrow the variable type. The cast type can be a built-in
+type (<code>String</code>, <code>Long</code>, <code>Integer</code>, <code>Boolean</code>) or a fully qualified class name:</p>
+<pre><code>def value = someExpression as com.example.MyType
+</code></pre><p>This is useful when the compiler infers a type that is too general (e.g., <code>Object</code> from a generic API return)
+and you know the concrete runtime type. The cast tells the compiler which type to use for subsequent method chain
+validation. Note that <code>as</code> performs a Java cast — it does <strong>not</strong> convert between types. For JSON conversion, use
+<code>toJson()</code> or <code>toJsonArray()</code> instead.</p>
+<p>The FQCN must be resolvable on the classpath at compile time. If the class is not found, the OAP server will fail
+to start.</p>
+<p>Two built-in conversion functions are provided for JSON interoperability:</p>
+<ul>
+<li><code>toJson(expr)</code> — converts a value to a Gson <code>JsonObject</code>. Works with JSON strings, <code>Map</code>, and protobuf <code>Struct</code>.</li>
+<li><code>toJsonArray(expr)</code> — converts a value to a Gson <code>JsonArray</code>. Works with JSON array strings.</li>
+</ul>
+<p>After declaration, the variable can be used in subsequent expressions with full null-safe navigation support (<code>?.</code>).</p>
+<p>Def variables can also be used as method arguments. This is useful when you need to look up a dynamic key:</p>
+<pre><code>filter {
+    json {}
+    extractor {
+        def key = parsed.fieldName as String
+        def config = toJson(parsed.metadata)
+        tag 'val': config?.get(key)?.getAsString()
+    }
+    sink {}
+}
+</code></pre><p>Example — extracting fields from a protobuf input type (no JSON conversion needed):</p>
+<pre><code>filter {
+    extractor {
+        def resp = parsed?.response
+        tag 'status.code': resp?.responseCode?.value
+        tag 'resp.flags': resp?.responseCodeDetails
+    }
+    sink {}
+}
+</code></pre><p>Example — extracting JWT claims from envoy access log filter metadata via <code>toJson()</code>:</p>
+<pre><code>filter {
+    extractor {
+        def jwt = toJson(parsed?.commonProperties?.metadata
+            ?.filterMetadataMap?.get(&quot;envoy.filters.http.jwt_authn&quot;))
+        def payload = jwt?.getAsJsonObject(&quot;payload&quot;)
+        if (payload != null) {
+            tag 'email': payload?.get(&quot;email&quot;)?.getAsString()
+            tag 'group': payload?.get(&quot;group&quot;)?.getAsString()
+        }
+    }
+    sink {}
+}
+</code></pre><p>Example — parsing a JSON log body field into a structured object:</p>
+<pre><code>filter {
+    json {}
+    extractor {
+        def config = toJson(parsed.metadata)
+        tag 'env': config?.get(&quot;env&quot;)?.getAsString()
+        tag 'region': config?.getAsJsonObject(&quot;location&quot;)?.get(&quot;region&quot;)?.getAsString()
+    }
+    sink {}
+}
+</code></pre><h4 id="standard-fields">Standard fields</h4>
 <ul>
 <li><code>service</code></li>
 </ul>
@@ -2950,7 +3017,7 @@ not dropped) and is used to associate with traces / metrics.</p>
 </code></pre><ul>
 <li><code>layer</code></li>
 </ul>
-<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
+<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
 not dropped) and is used to associate with service.</p>
 <ul>
 <li><code>tag</code></li>
@@ -3167,7 +3234,7 @@ are resolved via <code>Class.forName()</code> as a fallback.</li>
 <tr>
 <td><strong>Builder path</strong></td>
 <td>Implements <code>LALOutputBuilder</code></td>
-<td>The sink creates the builder, calls <code>init(LogData, NamingControl)</code> to pre-populate standard fields, applies output field values via setters, then calls <code>complete(SourceReceiver)</code> to validate and dispatch</td>
+<td>The sink creates the builder, calls <code>init(LogData, Optional&lt;Object&gt; extraLog, NamingControl)</code> to pre-populate standard fields, applies output field values via setters, then calls <code>complete(SourceReceiver)</code> to validate and dispatch</td>
 </tr>
 </tbody>
 </table>
@@ -3183,18 +3250,18 @@ by the extractor as usual and pre-populated via <code>init()</code> from <code>L
 <p><strong>Note</strong>, slow SQL sampling would only flag this SQL in the candidate list. The OAP server would run statistic per service
 and only persistent the top 50 every 10(controlled by <code>topNReportPeriod: ${SW_CORE_TOPN_REPORT_PERIOD:10}</code>) minutes by default.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
 <h4 id="sampled-trace-network-profiling">Sampled Trace (Network Profiling)</h4>
 <p>SkyWalking converts network profiling sampled trace logs into <code>SampledTraceRecord</code> for process-level network analysis.</p>
 <p>Use <code>outputType: SampledTrace</code> in your rule config.
 The available output fields are: <code>latency</code>, <code>uri</code>, <code>reason</code>, <code>processId</code>, <code>destProcessId</code>, <code>detectPoint</code>, <code>componentId</code>.</p>
 <p>We require a log tag <code>&quot;LOG_KIND&quot; = &quot;NET_PROFILING_SAMPLED_TRACE&quot;</code> to make OAP distinguish sampled trace logs from other log reports.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/13a8bf482a6905006b53bd9e158d2117693a473a/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/73d422f0d68dbbfa04fe42868b5aee0d35397654/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
 <h3 id="extending-custom-output-types">Extending: custom output types</h3>
 <p>You can create custom output types to transform logs into any entity type for your own use cases. There are two approaches:</p>
 <h4 id="approach-1-implement-laloutputbuilder">Approach 1: Implement <code>LALOutputBuilder</code></h4>
@@ -3216,8 +3283,9 @@ The available output fields are: <code>latency</code>, <code>uri</code>, <code>r
     <span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">name</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> NAME<span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">}</span>
 
     <span style="color:#3c5d5d;font-weight:bold">@Override</span>
-    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">init</span><span style="color:#000;font-weight:bold">(</span>LogData logData<span style="color:#000;font-weight:bold">,</span> NamingControl namingControl<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">init</span><span style="color:#000;font-weight:bold">(</span>LogData logData<span style="color:#000;font-weight:bold">,</span> Optional<span style="color:#000;font-weight:bold">&lt;</span>Object<span style="color:#000;font-weight:bold">&gt;</span> extraLog<span style="color:#000;font-weight:bold">,</span> NamingControl namingControl<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
         <span style="color:#998;font-style:italic">// Pre-populate from LogData (service, timestamp, traceId, etc.)
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// extraLog contains the typed input object (e.g., a protobuf message) if available
 </span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">}</span>
 
     <span style="color:#3c5d5d;font-weight:bold">@Override</span>
