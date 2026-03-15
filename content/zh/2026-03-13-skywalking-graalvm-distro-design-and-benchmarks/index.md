@@ -12,6 +12,8 @@ tags:
 - BanyanDB
 ---
 
+![graph.jpg](./graph.jpg)
+
 *这篇文章会完整介绍我们如何把 Apache SkyWalking OAP 迁移到 GraalVM Native Image。目标不是做一次性移植，而是把这件事做成一套能持续跟上上游演进的流程。*
 
 如果你想看这项工作的更大背景，以及 AI Coding 如何让这个项目真正做得出来，请阅读：[AI Coding 如何重塑软件架构师的工作方式](/zh/2026-03-13-how-ai-changed-the-economics-of-architecture/)。

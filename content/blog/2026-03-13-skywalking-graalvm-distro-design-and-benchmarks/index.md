@@ -12,6 +12,8 @@ tags:
 - BanyanDB
 ---
 
+![graph.jpg](./graph.jpg)
+
 *A technical deep-dive into how we migrated Apache SkyWalking OAP to GraalVM Native Image — not as a one-off port, but as a repeatable pipeline that stays aligned with upstream.*
 
 For the broader story of how AI engineering made this project economically viable, see [How AI Changed the Economics of Architecture](/blog/2026-03-13-how-ai-changed-the-economics-of-architecture/).
