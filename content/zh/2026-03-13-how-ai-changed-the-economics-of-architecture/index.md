@@ -15,6 +15,8 @@ tags:
 
 *以 SkyWalking GraalVM Distro 为例，看 AI Coding 如何把一批探索性 PoC 打磨成一条可重复的迁移流水线。*
 
+![graph.jpg](./graph.jpg)
+
 这个项目给我最大的启发，不是 AI 能写多少代码，而是 AI Coding 改变了架构设计的试错成本。当一个想法可以很快做成 PoC、跑起来验证、不行就推翻重来时，架构师就更有机会逼近自己真正想要的设计，而不是过早停在“团队现在做得出来”的折中方案上。
 
 这种变化在成熟开源系统里尤其重要。Apache SkyWalking OAP 长期以来一直是一个功能强大且经过生产验证的可观测性后端，但大型 Java 平台该有的问题它一个不少：运行时字节码生成、重反射初始化、classpath 扫描、基于 SPI 的模块装配，以及动态 DSL 执行——这些机制方便扩展，但做 GraalVM Native Image 时全是障碍。

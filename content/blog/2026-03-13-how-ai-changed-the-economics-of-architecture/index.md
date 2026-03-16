@@ -15,6 +15,8 @@ tags:
 
 *SkyWalking GraalVM Distro: A case study in turning runnable PoCs into a repeatable migration pipeline.*
 
+![graph.jpg](./graph.jpg)
+
 The most important lesson from this project is not that AI can generate a large amount of code. It is that AI changes the economics of architecture. When runnable PoCs become cheap to build, compare, discard, and rebuild, architects can push further toward the design they actually want instead of stopping early at a compromise they can afford to implement.
 
 That shift matters a lot in mature open source systems. Apache SkyWalking OAP has long been a powerful and production-proven observability backend, but it also carries all the realities of a large Java platform: runtime bytecode generation, reflection-heavy initialization, classpath scanning, SPI-based module wiring, and dynamic DSL execution that are friendly to extensibility but hostile to GraalVM native image.
