@@ -147,12 +147,13 @@ async function traverseDocsList(result) {
       for (const doc of item.docs) {
         const {name, repo, repoUrl, docs, description, icon} = item;
         if (!repoUrl) continue;
-        let {version, commitId} = doc;
+        let {version, commitId, link} = doc;
         version = version.toLowerCase();
-        commitId = commitId || version;
         const docName = repo === 'skywalking' ? 'main' : repo;
-        const localPath = `/content/docs/${docName}/${version}`;
-        const menuFileName = `${docName.replace(/\-|\./g, '_')}${version.replace(/\-|v|\./g, '_')}`;
+        const localPath = `/content${link.replace(/\/readme\/$/, '')}`;
+        const versionSlug = localPath.split('/').pop();
+        commitId = commitId || versionSlug;
+        const menuFileName = `${docName.replace(/\-|\./g, '_')}${versionSlug.replace(/\-|v|\./g, '_')}`;
 
         tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
                   <div class="description-wrapper">
@@ -183,7 +184,7 @@ async function traverseDocsList(result) {
                   <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
                 {{ end }}\n`;
 
-        execSync(`"./doc.sh" ${repo} ${repoUrl} ${commitId} ${localPath} ${menuFileName}`);
+        execSync(`"./doc.sh" "${repo}" "${repoUrl}" "${commitId}" "${localPath}" "${menuFileName}"`);
         const sha = execSync(`git -C ./tmp/${repo} rev-parse HEAD`);
         if(version === NEXT && sha){
           commitId = sha.toString().replace('\n', '');
