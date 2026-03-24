@@ -7,7 +7,7 @@
 <meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
 <meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
 
-<meta name="generator" content="Hugo 0.80.0" />
+<meta name="generator" content="Hugo 0.159.0">
 
 <META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
 <link rel="stylesheet" href="/css/iconfont/iconfont.css">
@@ -22,29 +22,30 @@
 <meta name="msapplication-TileColor" content="#da532c">
 <meta name="theme-color" content="#ffffff">
 
-<title>使用 eBPF 诊断服务网格网络性能 | Apache SkyWalking</title><meta property="og:title" content="使用 eBPF 诊断服务网格网络性能" />
-<meta property="og:description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。" />
-<meta property="og:type" content="article" />
-<meta property="og:url" content="/zh/diagnose-service-mesh-network-performance-with-ebpf/" />
-<meta property="article:published_time" content="2022-09-27T00:00:00+00:00" />
-<meta property="article:modified_time" content="2026-03-24T09:11:06+08:00" />
-<meta itemprop="name" content="使用 eBPF 诊断服务网格网络性能">
-<meta itemprop="description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。">
-<meta itemprop="datePublished" content="2022-09-27T00:00:00+00:00" />
-<meta itemprop="dateModified" content="2026-03-24T09:11:06+08:00" />
-<meta itemprop="wordCount" content="600">
+<title>使用 eBPF 诊断服务网格网络性能 | Apache SkyWalking</title><meta property="og:url" content="/zh/diagnose-service-mesh-network-performance-with-ebpf/">
+  <meta property="og:site_name" content="Apache SkyWalking">
+  <meta property="og:title" content="使用 eBPF 诊断服务网格网络性能">
+  <meta property="og:description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。">
+  <meta property="og:locale" content="en">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="zh">
+    <meta property="article:published_time" content="2022-09-27T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-03-24T16:19:36+08:00">
+
+  <meta itemprop="name" content="使用 eBPF 诊断服务网格网络性能">
+  <meta itemprop="description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。">
+  <meta itemprop="datePublished" content="2022-09-27T00:00:00+00:00">
+  <meta itemprop="dateModified" content="2026-03-24T16:19:36+08:00">
+  <meta itemprop="wordCount" content="600">
+  <meta itemprop="keywords" content="EBPF,Performance">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="使用 eBPF 诊断服务网格网络性能">
+  <meta name="twitter:description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。">
 
 
 
-<meta itemprop="keywords" content="" />
-<meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="使用 eBPF 诊断服务网格网络性能"/>
-<meta name="twitter:description" content="本文将展示如何利用 Apache SkyWalking 与 eBPF，使服务网格下的网络故障排除更加容易。"/>
-
-
-
-<link rel="preload" href="/scss/main.min.87646025889dabea717b27775dce3ff0338fa9fca8fd9c6b316d56f659f4142c.css" as="style">
-<link href="/scss/main.min.87646025889dabea717b27775dce3ff0338fa9fca8fd9c6b316d56f659f4142c.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.9f0f8eb32fe26ee9cbc40dad68e45cb1d84305a59afd2a1202a84c6c48e75527.css" as="style">
+<link href="/scss/main.min.9f0f8eb32fe26ee9cbc40dad68e45cb1d84305a59afd2a1202a84c6c48e75527.css" rel="stylesheet" integrity="">
 
 
 
@@ -251,25 +252,25 @@
 </ol>
 <p>我们的假设是，eBPF 可以监控网络。有两种方法可以实现拦截：<strong>用户空间（uprobe）或内核空间（kprobe）</strong>。下表总结了两者的区别。</p>
 <table>
-<thead>
-<tr>
-<th>方式</th>
-<th>优点</th>
-<th>缺点</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>uprobe</td>
-<td>• 获取更多与应用相关的上下文，例如当前请求是 HTTP 还是 HTTPS。</br> • 请求和响应可以通过一个方法来截获。</td>
-<td>• 数据结构可能是不稳定的，所以更难获得所需的数据。</br> • 不同语言/库版本的实现可能不同。</br> • 在没有<a href="https://en.wikipedia.org/wiki/Symbol_table">符号表</a>的应用程序中不起作用。</td>
-</tr>
-<tr>
-<td>kprobe</td>
-<td>• 可用于所有语言。</br> • 数据结构和方法很稳定，不需要太多调整。</br> • 更容易与底层数据相关联，如获得 TCP 的目标地址、OSI 第四层协议指标等。</td>
-<td>• 一个单一的请求和响应可能被分割成多个 probe。</br> • 对于有状态的请求，上下文信息不容易得到。例如 HTTP/2 中的头压缩。</td>
-</tr>
-</tbody>
+  <thead>
+      <tr>
+          <th>方式</th>
+          <th>优点</th>
+          <th>缺点</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>uprobe</td>
+          <td>• 获取更多与应用相关的上下文，例如当前请求是 HTTP 还是 HTTPS。</br> • 请求和响应可以通过一个方法来截获。</td>
+          <td>• 数据结构可能是不稳定的，所以更难获得所需的数据。</br> • 不同语言/库版本的实现可能不同。</br> • 在没有<a href="https://en.wikipedia.org/wiki/Symbol_table">符号表</a>的应用程序中不起作用。</td>
+      </tr>
+      <tr>
+          <td>kprobe</td>
+          <td>• 可用于所有语言。</br> • 数据结构和方法很稳定，不需要太多调整。</br> • 更容易与底层数据相关联，如获得 TCP 的目标地址、OSI 第四层协议指标等。</td>
+          <td>• 一个单一的请求和响应可能被分割成多个 probe。</br> • 对于有状态的请求，上下文信息不容易得到。例如 HTTP/2 中的头压缩。</td>
+      </tr>
+  </tbody>
 </table>
 <p>对于一般的网络性能监控，我们选择使用 kprobe（拦截系统调用），原因如下：</p>
 <ol>
@@ -345,58 +346,58 @@
 </ol>
 <p>基于上述数据类型，暴露了以下指标：</p>
 <table>
-<thead>
-<tr>
-<th>名称</th>
-<th>类型</th>
-<th>单位</th>
-<th>描述</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Write</td>
-<td>计数器和柱状图</td>
-<td>毫秒</td>
-<td>套接字写计数器。</td>
-</tr>
-<tr>
-<td>Read</td>
-<td>计数器和柱状图</td>
-<td>毫秒</td>
-<td>套接字读计数器。</td>
-</tr>
-<tr>
-<td>Write RTT</td>
-<td>计数器和柱状图</td>
-<td>微秒</td>
-<td>套接字写入往返时间（RTT）计数器。</td>
-</tr>
-<tr>
-<td>Connect</td>
-<td>计数器和柱状图</td>
-<td>毫秒</td>
-<td>套接字连接/接受另一个服务器/客户端的计数器。</td>
-</tr>
-<tr>
-<td>Close</td>
-<td>计数器和柱状图</td>
-<td>毫秒</td>
-<td>有其他套接字的计数器。</td>
-</tr>
-<tr>
-<td>Retransmit</td>
-<td>计数器</td>
-<td>毫秒</td>
-<td>套接字重发包计数器</td>
-</tr>
-<tr>
-<td>Drop</td>
-<td>计数器</td>
-<td>毫秒</td>
-<td>套接字掉包计数器。</td>
-</tr>
-</tbody>
+  <thead>
+      <tr>
+          <th>名称</th>
+          <th>类型</th>
+          <th>单位</th>
+          <th>描述</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Write</td>
+          <td>计数器和柱状图</td>
+          <td>毫秒</td>
+          <td>套接字写计数器。</td>
+      </tr>
+      <tr>
+          <td>Read</td>
+          <td>计数器和柱状图</td>
+          <td>毫秒</td>
+          <td>套接字读计数器。</td>
+      </tr>
+      <tr>
+          <td>Write RTT</td>
+          <td>计数器和柱状图</td>
+          <td>微秒</td>
+          <td>套接字写入往返时间（RTT）计数器。</td>
+      </tr>
+      <tr>
+          <td>Connect</td>
+          <td>计数器和柱状图</td>
+          <td>毫秒</td>
+          <td>套接字连接/接受另一个服务器/客户端的计数器。</td>
+      </tr>
+      <tr>
+          <td>Close</td>
+          <td>计数器和柱状图</td>
+          <td>毫秒</td>
+          <td>有其他套接字的计数器。</td>
+      </tr>
+      <tr>
+          <td>Retransmit</td>
+          <td>计数器</td>
+          <td>毫秒</td>
+          <td>套接字重发包计数器</td>
+      </tr>
+      <tr>
+          <td>Drop</td>
+          <td>计数器</td>
+          <td>毫秒</td>
+          <td>套接字掉包计数器。</td>
+      </tr>
+  </tbody>
 </table>
 <h2 id="演示">演示</h2>
 <p>在本节中，我们将演示如何在服务网格中执行网络分析。要跟上进度，你需要一个正在运行的 Kubernetes 环境。</p>
@@ -409,46 +410,46 @@
 <li>将 bookinfo 应用程序部署到集群上。</li>
 <li>部署流量生成器，为应用程序生成一些流量。</li>
 </ol>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#0086b3">export</span> <span style="color:#008080">ISTIO_VERSION</span><span style="color:#000;font-weight:bold">=</span>1.13.1
-
-<span style="color:#998;font-style:italic"># 安装 istio</span>
-istioctl install -y --set <span style="color:#008080">profile</span><span style="color:#000;font-weight:bold">=</span>demo
-kubectl label namespace default istio-injection<span style="color:#000;font-weight:bold">=</span>enabled
-
-<span style="color:#998;font-style:italic"># 部署 bookinfo 应用程序</span>
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/bookinfo-gateway.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/destination-rule-all.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#008080">$ISTIO_VERSION</span>/samples/bookinfo/networking/virtual-service-all-v1.yaml
-
-<span style="color:#998;font-style:italic"># 产生流量</span>
-kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/traffic-generator.yaml
-</code></pre></div><h3 id="安装-skywalking">安装 SkyWalking</h3>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#6639ba">export</span> <span style="color:#953800">ISTIO_VERSION</span><span style="color:#0550ae">=</span>1.13.1
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># 安装 istio</span>
+</span></span><span style="display:flex;"><span>istioctl install -y --set <span style="color:#953800">profile</span><span style="color:#0550ae">=</span>demo
+</span></span><span style="display:flex;"><span>kubectl label namespace default istio-injection<span style="color:#0550ae">=</span>enabled
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># 部署 bookinfo 应用程序</span>
+</span></span><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#953800">$ISTIO_VERSION</span>/samples/bookinfo/platform/kube/bookinfo.yaml
+</span></span><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#953800">$ISTIO_VERSION</span>/samples/bookinfo/networking/bookinfo-gateway.yaml
+</span></span><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#953800">$ISTIO_VERSION</span>/samples/bookinfo/networking/destination-rule-all.yaml
+</span></span><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/istio/istio/<span style="color:#953800">$ISTIO_VERSION</span>/samples/bookinfo/networking/virtual-service-all-v1.yaml
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># 产生流量</span>
+</span></span><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/traffic-generator.yaml
+</span></span></code></pre></div><h3 id="安装-skywalking">安装 SkyWalking</h3>
 <p>下面将安装 SkyWalking 所需的存储、后台和用户界面。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">git clone https://github.com/apache/skywalking-kubernetes.git
-<span style="color:#0086b3">cd</span> skywalking-kubernetes
-<span style="color:#0086b3">cd</span> chart
-helm dep up skywalking
-helm -n istio-system install skywalking skywalking <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set <span style="color:#008080">fullnameOverride</span><span style="color:#000;font-weight:bold">=</span>skywalking <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set elasticsearch.minimumMasterNodes<span style="color:#000;font-weight:bold">=</span><span style="color:#099">1</span> <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set elasticsearch.imageTag<span style="color:#000;font-weight:bold">=</span>7.5.1 <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set oap.replicas<span style="color:#000;font-weight:bold">=</span><span style="color:#099">1</span> <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set ui.image.repository<span style="color:#000;font-weight:bold">=</span>apache/skywalking-ui <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set ui.image.tag<span style="color:#000;font-weight:bold">=</span>9.2.0 <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set oap.image.tag<span style="color:#000;font-weight:bold">=</span>9.2.0 <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set oap.envoy.als.enabled<span style="color:#000;font-weight:bold">=</span><span style="color:#0086b3">true</span> <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set oap.image.repository<span style="color:#000;font-weight:bold">=</span>apache/skywalking-oap-server <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set oap.storageType<span style="color:#000;font-weight:bold">=</span>elasticsearch <span style="color:#d14">\
-</span><span style="color:#d14"></span> --set oap.env.SW_METER_ANALYZER_ACTIVE_FILES<span style="color:#000;font-weight:bold">=</span><span style="color:#d14">&#39;network-profiling&#39;</span>
-</code></pre></div><h3 id="安装-skywalking-rover">安装 SkyWalking Rover</h3>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>git clone https://github.com/apache/skywalking-kubernetes.git
+</span></span><span style="display:flex;"><span><span style="color:#6639ba">cd</span> skywalking-kubernetes
+</span></span><span style="display:flex;"><span><span style="color:#6639ba">cd</span> chart
+</span></span><span style="display:flex;"><span>helm dep up skywalking
+</span></span><span style="display:flex;"><span>helm -n istio-system install skywalking skywalking <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set <span style="color:#953800">fullnameOverride</span><span style="color:#0550ae">=</span>skywalking <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set elasticsearch.minimumMasterNodes<span style="color:#0550ae">=</span><span style="color:#0550ae">1</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set elasticsearch.imageTag<span style="color:#0550ae">=</span>7.5.1 <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set oap.replicas<span style="color:#0550ae">=</span><span style="color:#0550ae">1</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set ui.image.repository<span style="color:#0550ae">=</span>apache/skywalking-ui <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set ui.image.tag<span style="color:#0550ae">=</span>9.2.0 <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set oap.image.tag<span style="color:#0550ae">=</span>9.2.0 <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set oap.envoy.als.enabled<span style="color:#0550ae">=</span><span style="color:#6639ba">true</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set oap.image.repository<span style="color:#0550ae">=</span>apache/skywalking-oap-server <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set oap.storageType<span style="color:#0550ae">=</span>elasticsearch <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span> --set oap.env.SW_METER_ANALYZER_ACTIVE_FILES<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;network-profiling&#39;</span>
+</span></span></code></pre></div><h3 id="安装-skywalking-rover">安装 SkyWalking Rover</h3>
 <p>SkyWalking Rover 部署在 Kubernetes 的每个节点上，它自动检测 Kubernetes 集群中的服务。网络剖析功能已经在 SkyWalking Rover 的 0.3.0 版本中发布。当网络监控任务被创建时，SkyWalking Rover 会将数据发送到 SkyWalking 后台。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/skywalking-rover.yaml
-</code></pre></div><h3 id="启动网络分析任务">启动网络分析任务</h3>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/mrproliu/skywalking-network-profiling-demo/main/resources/skywalking-rover.yaml
+</span></span></code></pre></div><h3 id="启动网络分析任务">启动网络分析任务</h3>
 <p>一旦所有部署完成，我们必须在 SkyWalking UI 中为服务的特定实例创建一个网络分析任务。</p>
 <p>要打开 SkyWalking UI，请运行：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl port-forward svc/skywalking-ui 8080:80 --namespace istio-system
-</code></pre></div><p>目前，我们可以通过点击服务网格面板中的<strong>数据平面</strong>项目和 <strong>Kubernetes</strong> 面板中的服务项目来选择我们想要监控的特定实例。</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>kubectl port-forward svc/skywalking-ui 8080:80 --namespace istio-system
+</span></span></code></pre></div><p>目前，我们可以通过点击服务网格面板中的<strong>数据平面</strong>项目和 <strong>Kubernetes</strong> 面板中的服务项目来选择我们想要监控的特定实例。</p>
 <p>在下图中，我们选择了一个实例，在网络剖析标签里有一个任务列表。当我们点击启动按钮时，SkyWalking Rover 开始监测这个实例的网络。</p>
 <p><img src="f5.jpg" alt="图 5"></p>
 <p><em><strong>图 5</strong></em></p>
@@ -504,7 +505,7 @@ helm -n istio-system install skywalking skywalking <span style="color:#d14">\
         </li>
         
         <li>
-            <a href="/zh_tags/apache-shenyu-incubating/" class="tag-link">Apache ShenYu (incubating)</a>
+            <a href="/zh_tags/apache-shenyu-incubating/" class="tag-link">Apache ShenYu (Incubating)</a>
             <span class="count">1</span>
         </li>
         
@@ -529,7 +530,7 @@ helm -n istio-system install skywalking skywalking <span style="color:#d14">\
         </li>
         
         <li>
-            <a href="/zh_tags/ebpf/" class="tag-link">eBPF</a>
+            <a href="/zh_tags/ebpf/" class="tag-link">EBPF</a>
             <span class="count">1</span>
         </li>
         
@@ -594,7 +595,7 @@ helm -n istio-system install skywalking skywalking <span style="color:#d14">\
         </li>
         
         <li>
-            <a href="/zh_tags/shardingsphere-proxy/" class="tag-link">ShardingSphere-proxy</a>
+            <a href="/zh_tags/shardingsphere-proxy/" class="tag-link">ShardingSphere-Proxy</a>
             <span class="count">1</span>
         </li>
         
@@ -9081,7 +9082,7 @@ helm -n istio-system install skywalking skywalking <span style="color:#d14">\
 
 
 
-<script src="/js/main.min.d00d7a99f9e61382b1db35fac38e0e7bdd97f8d3c663a4c4b8d02c3f1d78d894.js" integrity="sha256-0A16mfnmE4Kx2zX6w44Oe92X&#43;NPGY6TEuNAsPx142JQ=" crossorigin="anonymous"></script>
+<script src="/js/main.min.9be14eed0a0e24711261c334305209aa2e5ae3fb624f6a1731e064d5ffb11f3d.js" integrity="sha256-m&#43;FO7QoOJHESYcM0MFIJqi5a4/tiT2oXMeBk1f&#43;xHz0=" crossorigin="anonymous"></script>
 
 
 <script src="/js/highlight.min.js"></script>

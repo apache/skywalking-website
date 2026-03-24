@@ -7,7 +7,7 @@
 <meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
 <meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
 
-<meta name="generator" content="Hugo 0.80.0" />
+<meta name="generator" content="Hugo 0.159.0">
 
 <META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
 <link rel="stylesheet" href="/css/iconfont/iconfont.css">
@@ -22,29 +22,31 @@
 <meta name="msapplication-TileColor" content="#da532c">
 <meta name="theme-color" content="#ffffff">
 
-<title>SkyWalking 如何支持 ZIO 等 Scala Effect Runtime | Apache SkyWalking</title><meta property="og:title" content="SkyWalking 如何支持 ZIO 等 Scala Effect Runtime" />
-<meta property="og:description" content="本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。" />
-<meta property="og:type" content="article" />
-<meta property="og:url" content="/zh/2024-01-04-skywalking-for-scala-effect-runtime/" />
-<meta property="article:published_time" content="2024-01-04T00:00:00+00:00" />
-<meta property="article:modified_time" content="2026-03-24T09:11:06+08:00" />
-<meta itemprop="name" content="SkyWalking 如何支持 ZIO 等 Scala Effect Runtime">
-<meta itemprop="description" content="本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。">
-<meta itemprop="datePublished" content="2024-01-04T00:00:00+00:00" />
-<meta itemprop="dateModified" content="2026-03-24T09:11:06+08:00" />
-<meta itemprop="wordCount" content="358">
+<title>SkyWalking 如何支持 ZIO 等 Scala Effect Runtime | Apache SkyWalking</title><meta property="og:url" content="/zh/2024-01-04-skywalking-for-scala-effect-runtime/">
+  <meta property="og:site_name" content="Apache SkyWalking">
+  <meta property="og:title" content="SkyWalking 如何支持 ZIO 等 Scala Effect Runtime">
+  <meta property="og:description" content="本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。">
+  <meta property="og:locale" content="en">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="zh">
+    <meta property="article:published_time" content="2024-01-04T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-03-24T16:19:36+08:00">
+    <meta property="article:tag" content="Nginx">
+
+  <meta itemprop="name" content="SkyWalking 如何支持 ZIO 等 Scala Effect Runtime">
+  <meta itemprop="description" content="本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。">
+  <meta itemprop="datePublished" content="2024-01-04T00:00:00+00:00">
+  <meta itemprop="dateModified" content="2026-03-24T16:19:36+08:00">
+  <meta itemprop="wordCount" content="358">
+  <meta itemprop="keywords" content="Nginx">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="SkyWalking 如何支持 ZIO 等 Scala Effect Runtime">
+  <meta name="twitter:description" content="本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。">
 
 
 
-<meta itemprop="keywords" content="Nginx," />
-<meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="SkyWalking 如何支持 ZIO 等 Scala Effect Runtime"/>
-<meta name="twitter:description" content="本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。"/>
-
-
-
-<link rel="preload" href="/scss/main.min.87646025889dabea717b27775dce3ff0338fa9fca8fd9c6b316d56f659f4142c.css" as="style">
-<link href="/scss/main.min.87646025889dabea717b27775dce3ff0338fa9fca8fd9c6b316d56f659f4142c.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.9f0f8eb32fe26ee9cbc40dad68e45cb1d84305a59afd2a1202a84c6c48e75527.css" as="style">
+<link href="/scss/main.min.9f0f8eb32fe26ee9cbc40dad68e45cb1d84305a59afd2a1202a84c6c48e75527.css" rel="stylesheet" integrity="">
 
 
 
@@ -235,66 +237,66 @@
 <p><img src="skywalking-scala-zio.jpg" alt=""></p>
 <h2 id="分析">分析</h2>
 <p>在 ZIO 中，Fiber可以有两种方式被调度，它们都是 <code>zio.Executor</code> 的子类。当然您也可以使用自己的线程池，这样也需被 ZIO 包装，其实就类似下面的 <code>blockingExecutor</code>。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#000;font-weight:bold">abstract</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">Executor</span> <span style="color:#000;font-weight:bold">extends</span> <span style="color:#458;font-weight:bold">ExecutorPlatformSpecific</span> <span style="color:#000;font-weight:bold">{</span>
-  self <span style="color:#000;font-weight:bold">=&gt;</span>
-  <span style="color:#000;font-weight:bold">def</span> submit<span style="color:#000;font-weight:bold">(</span>runnable<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Runnable</span><span style="color:#000;font-weight:bold">)(</span><span style="color:#000;font-weight:bold">implicit</span> unsafe<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Unsafe</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Boolean</span>
-<span style="color:#000;font-weight:bold">}</span>
-</code></pre></div><p>一种是系统默认线程池 <code>defaultExecutor</code>：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#000;font-weight:bold">private</span><span style="color:#000;font-weight:bold">[</span><span style="color:#458;font-weight:bold">zio</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">trait</span> <span style="color:#458;font-weight:bold">RuntimePlatformSpecific</span> <span style="color:#000;font-weight:bold">{</span>
-  <span style="color:#000;font-weight:bold">final</span> <span style="color:#000;font-weight:bold">val</span> defaultExecutor<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Executor</span> <span style="color:#000;font-weight:bold">=</span>
-    <span style="color:#458;font-weight:bold">Executor</span><span style="color:#000;font-weight:bold">.</span>makeDefault<span style="color:#000;font-weight:bold">()</span>
-<span style="color:#000;font-weight:bold">}</span>
-</code></pre></div><p>另一种是专用于阻塞 IO 的线程池 <code>blockingExecutor</code>：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#000;font-weight:bold">private</span><span style="color:#000;font-weight:bold">[</span><span style="color:#458;font-weight:bold">zio</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">trait</span> <span style="color:#458;font-weight:bold">RuntimePlatformSpecific</span> <span style="color:#000;font-weight:bold">{</span>
-  <span style="color:#000;font-weight:bold">final</span> <span style="color:#000;font-weight:bold">val</span> defaultBlockingExecutor<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Executor</span> <span style="color:#000;font-weight:bold">=</span>
-    <span style="color:#458;font-weight:bold">Blocking</span><span style="color:#000;font-weight:bold">.</span>blockingExecutor
-<span style="color:#000;font-weight:bold">}</span>
-</code></pre></div><h2 id="默认线程池-defaultexecutor">默认线程池 <code>defaultExecutor</code></h2>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#cf222e">abstract</span> <span style="color:#cf222e">class</span> <span style="color:#1f2328">Executor</span> <span style="color:#cf222e">extends</span> <span style="color:#1f2328">ExecutorPlatformSpecific</span> <span style="color:#0550ae">{</span>
+</span></span><span style="display:flex;"><span>  self <span style="color:#cf222e">=&gt;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#cf222e">def</span> submit<span style="color:#0550ae">(</span>runnable<span style="color:#cf222e">:</span> <span style="color:#cf222e">Runnable</span><span style="color:#0550ae">)(</span><span style="color:#cf222e">implicit</span> unsafe<span style="color:#cf222e">:</span> <span style="color:#cf222e">Unsafe</span><span style="color:#0550ae">)</span><span style="color:#cf222e">:</span> <span style="color:#cf222e">Boolean</span>
+</span></span><span style="display:flex;"><span><span style="color:#0550ae">}</span>
+</span></span></code></pre></div><p>一种是系统默认线程池 <code>defaultExecutor</code>：</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#cf222e">private</span><span style="color:#0550ae">[</span><span style="color:#cf222e">zio</span><span style="color:#0550ae">]</span> <span style="color:#cf222e">trait</span> <span style="color:#1f2328">RuntimePlatformSpecific</span> <span style="color:#0550ae">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#cf222e">final</span> <span style="color:#cf222e">val</span> defaultExecutor<span style="color:#cf222e">:</span> <span style="color:#cf222e">Executor</span> <span style="color:#0550ae">=</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#1f2328">Executor</span><span style="color:#0550ae">.</span>makeDefault<span style="color:#0550ae">()</span>
+</span></span><span style="display:flex;"><span><span style="color:#0550ae">}</span>
+</span></span></code></pre></div><p>另一种是专用于阻塞 IO 的线程池 <code>blockingExecutor</code>：</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#cf222e">private</span><span style="color:#0550ae">[</span><span style="color:#cf222e">zio</span><span style="color:#0550ae">]</span> <span style="color:#cf222e">trait</span> <span style="color:#1f2328">RuntimePlatformSpecific</span> <span style="color:#0550ae">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#cf222e">final</span> <span style="color:#cf222e">val</span> defaultBlockingExecutor<span style="color:#cf222e">:</span> <span style="color:#cf222e">Executor</span> <span style="color:#0550ae">=</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#1f2328">Blocking</span><span style="color:#0550ae">.</span>blockingExecutor
+</span></span><span style="display:flex;"><span><span style="color:#0550ae">}</span>
+</span></span></code></pre></div><h2 id="默认线程池-defaultexecutor">默认线程池 <code>defaultExecutor</code></h2>
 <p>对于 <code>defaultExecutor</code>，其本身是很复杂的，但它就是一个 ZIO 的 Fiber 调度（执行）器：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#998;font-style:italic">/**
-</span><span style="color:#998;font-style:italic"> * A `ZScheduler` is an `Executor` that is optimized for running ZIO
-</span><span style="color:#998;font-style:italic"> * applications. Inspired by &#34;Making the Tokio Scheduler 10X Faster&#34; by Carl
-</span><span style="color:#998;font-style:italic"> * Lerche. [[https://tokio.rs/blog/2019-10-scheduler]]
-</span><span style="color:#998;font-style:italic"> */</span>
-<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">ZScheduler</span> <span style="color:#000;font-weight:bold">extends</span> <span style="color:#458;font-weight:bold">Executor</span>
-</code></pre></div><p>由于它们都是 <code>zio.Executor</code> 的子类，我们只需要对其及其子类进行增强：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#000;font-weight:bold">final</span> <span style="color:#000;font-weight:bold">val</span> <span style="color:#458;font-weight:bold">ENHANCE_CLASS</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#458;font-weight:bold">LogicalMatchOperation</span><span style="color:#000;font-weight:bold">.</span>or<span style="color:#000;font-weight:bold">(</span>
-  <span style="color:#458;font-weight:bold">HierarchyMatch</span><span style="color:#000;font-weight:bold">.</span>byHierarchyMatch<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;zio.Executor&#34;</span><span style="color:#000;font-weight:bold">),</span>
-  <span style="color:#458;font-weight:bold">MultiClassNameMatch</span><span style="color:#000;font-weight:bold">.</span>byMultiClassMatch<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;zio.Executor&#34;</span><span style="color:#000;font-weight:bold">)</span>
-<span style="color:#000;font-weight:bold">)</span>
-</code></pre></div><p>它们都是线程池，我们只需要在 <code>zio.Executor</code> 的 <code>submit</code> 方法上进行类似 <code>ThreadPoolExecutor</code> 上下文捕获的操作，可以参考 <a href="https://github.com/apache/skywalking-java/blob/main/apm-sniffer/bootstrap-plugins/jdk-threadpool-plugin/src/main/java/org/apache/skywalking/apm/plugin/ThreadPoolSubmitMethodInterceptor.java">jdk-threadpool-plugin</a></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#57606a">/**
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a"> * A `ZScheduler` is an `Executor` that is optimized for running ZIO
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a"> * applications. Inspired by &#34;Making the Tokio Scheduler 10X Faster&#34; by Carl
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a"> * Lerche. [[https://tokio.rs/blog/2019-10-scheduler]]
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a"> */</span>
+</span></span><span style="display:flex;"><span><span style="color:#cf222e">private</span> <span style="color:#cf222e">final</span> <span style="color:#cf222e">class</span> <span style="color:#1f2328">ZScheduler</span> <span style="color:#cf222e">extends</span> <span style="color:#1f2328">Executor</span>
+</span></span></code></pre></div><p>由于它们都是 <code>zio.Executor</code> 的子类，我们只需要对其及其子类进行增强：</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#cf222e">final</span> <span style="color:#cf222e">val</span> <span style="color:#1f2328">ENHANCE_CLASS</span> <span style="color:#cf222e">=</span> <span style="color:#1f2328">LogicalMatchOperation</span><span style="color:#0550ae">.</span>or<span style="color:#0550ae">(</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#1f2328">HierarchyMatch</span><span style="color:#0550ae">.</span>byHierarchyMatch<span style="color:#0550ae">(</span><span style="color:#0a3069">&#34;zio.Executor&#34;</span><span style="color:#0550ae">),</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#1f2328">MultiClassNameMatch</span><span style="color:#0550ae">.</span>byMultiClassMatch<span style="color:#0550ae">(</span><span style="color:#0a3069">&#34;zio.Executor&#34;</span><span style="color:#0550ae">)</span>
+</span></span><span style="display:flex;"><span><span style="color:#0550ae">)</span>
+</span></span></code></pre></div><p>它们都是线程池，我们只需要在 <code>zio.Executor</code> 的 <code>submit</code> 方法上进行类似 <code>ThreadPoolExecutor</code> 上下文捕获的操作，可以参考 <a href="https://github.com/apache/skywalking-java/blob/main/apm-sniffer/bootstrap-plugins/jdk-threadpool-plugin/src/main/java/org/apache/skywalking/apm/plugin/ThreadPoolSubmitMethodInterceptor.java">jdk-threadpool-plugin</a></p>
 <p>这里需要注意，因为 Fiber 也是一种 <code>Runnable</code>：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#000;font-weight:bold">private</span><span style="color:#000;font-weight:bold">[</span><span style="color:#458;font-weight:bold">zio</span><span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">trait</span> <span style="color:#458;font-weight:bold">FiberRunnable</span> <span style="color:#000;font-weight:bold">extends</span> <span style="color:#458;font-weight:bold">Runnable</span> <span style="color:#000;font-weight:bold">{</span>
-  <span style="color:#000;font-weight:bold">def</span> location<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Trace</span>
-  <span style="color:#000;font-weight:bold">def</span> run<span style="color:#000;font-weight:bold">(</span>depth<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Int</span><span style="color:#000;font-weight:bold">)</span><span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">Unit</span>
-<span style="color:#000;font-weight:bold">}</span>
-</code></pre></div><p><a href="https://github.com/bitlap/skywalking-scala/blob/master/plugins/zio-v2x-plugin/src/main/scala/org/bitlap/skywalking/apm/plugin/zio/v2x/define/ZioExecutorInstrumentation.scala">zio-v2x-plugin</a></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#cf222e">private</span><span style="color:#0550ae">[</span><span style="color:#cf222e">zio</span><span style="color:#0550ae">]</span> <span style="color:#cf222e">trait</span> <span style="color:#1f2328">FiberRunnable</span> <span style="color:#cf222e">extends</span> <span style="color:#1f2328">Runnable</span> <span style="color:#0550ae">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#cf222e">def</span> location<span style="color:#cf222e">:</span> <span style="color:#cf222e">Trace</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#cf222e">def</span> run<span style="color:#0550ae">(</span>depth<span style="color:#cf222e">:</span> <span style="color:#cf222e">Int</span><span style="color:#0550ae">)</span><span style="color:#cf222e">:</span> <span style="color:#cf222e">Unit</span>
+</span></span><span style="display:flex;"><span><span style="color:#0550ae">}</span>
+</span></span></code></pre></div><p><a href="https://github.com/bitlap/skywalking-scala/blob/master/plugins/zio-v2x-plugin/src/main/scala/org/bitlap/skywalking/apm/plugin/zio/v2x/define/ZioExecutorInstrumentation.scala">zio-v2x-plugin</a></p>
 <h2 id="阻塞线程池-blockingexecutor">阻塞线程池 <code>blockingExecutor</code></h2>
 <p>对于 <code>blockingExecutor</code>，其实它只是对 Java 线程池进行了一个包装：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala"><span style="color:#000;font-weight:bold">object</span> <span style="color:#458;font-weight:bold">Blocking</span> <span style="color:#000;font-weight:bold">{</span>
-
-  <span style="color:#000;font-weight:bold">val</span> blockingExecutor<span style="color:#000;font-weight:bold">:</span> <span style="color:#458;font-weight:bold">zio.Executor</span> <span style="color:#000;font-weight:bold">=</span>
-    zio<span style="color:#000;font-weight:bold">.</span><span style="color:#458;font-weight:bold">Executor</span><span style="color:#000;font-weight:bold">.</span>fromThreadPoolExecutor <span style="color:#000;font-weight:bold">{</span>
-      <span style="color:#000;font-weight:bold">val</span> corePoolSize  <span style="color:#000;font-weight:bold">=</span> <span style="color:#099">0</span>
-      <span style="color:#000;font-weight:bold">val</span> maxPoolSize   <span style="color:#000;font-weight:bold">=</span> <span style="color:#458;font-weight:bold">Int</span><span style="color:#000;font-weight:bold">.</span><span style="color:#458;font-weight:bold">MaxValue</span>
-      <span style="color:#000;font-weight:bold">val</span> keepAliveTime <span style="color:#000;font-weight:bold">=</span> <span style="color:#099">60000L</span>
-      <span style="color:#000;font-weight:bold">val</span> timeUnit      <span style="color:#000;font-weight:bold">=</span> <span style="color:#458;font-weight:bold">TimeUnit</span><span style="color:#000;font-weight:bold">.</span><span style="color:#458;font-weight:bold">MILLISECONDS</span>
-      <span style="color:#000;font-weight:bold">val</span> workQueue     <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">SynchronousQueue</span><span style="color:#000;font-weight:bold">[</span><span style="color:#458;font-weight:bold">Runnable</span><span style="color:#000;font-weight:bold">]()</span>
-      <span style="color:#000;font-weight:bold">val</span> threadFactory <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">NamedThreadFactory</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;zio-default-blocking&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">)</span>
-
-      <span style="color:#000;font-weight:bold">val</span> threadPool <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">ThreadPoolExecutor</span><span style="color:#000;font-weight:bold">(</span>
-        corePoolSize<span style="color:#000;font-weight:bold">,</span>
-        maxPoolSize<span style="color:#000;font-weight:bold">,</span>
-        keepAliveTime<span style="color:#000;font-weight:bold">,</span>
-        timeUnit<span style="color:#000;font-weight:bold">,</span>
-        workQueue<span style="color:#000;font-weight:bold">,</span>
-        threadFactory
-      <span style="color:#000;font-weight:bold">)</span>
-
-      threadPool
-    <span style="color:#000;font-weight:bold">}</span>
-<span style="color:#000;font-weight:bold">}</span>
-</code></pre></div><p>由于其本身是对 <code>ThreadPoolExecutor</code> 的封装，所以，当我们已经实现了 <code>zio.Executor </code>的增强后，只需要使用官方 <code>jdk-threadpool-plugin</code> 插件即可。
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#cf222e">object</span> <span style="color:#1f2328">Blocking</span> <span style="color:#0550ae">{</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#cf222e">val</span> blockingExecutor<span style="color:#cf222e">:</span> <span style="color:#cf222e">zio.Executor</span> <span style="color:#0550ae">=</span>
+</span></span><span style="display:flex;"><span>    zio<span style="color:#0550ae">.</span><span style="color:#1f2328">Executor</span><span style="color:#0550ae">.</span>fromThreadPoolExecutor <span style="color:#0550ae">{</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> corePoolSize  <span style="color:#cf222e">=</span> <span style="color:#0550ae">0</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> maxPoolSize   <span style="color:#cf222e">=</span> <span style="color:#1f2328">Int</span><span style="color:#0550ae">.</span><span style="color:#1f2328">MaxValue</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> keepAliveTime <span style="color:#cf222e">=</span> <span style="color:#0550ae">60000L</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> timeUnit      <span style="color:#cf222e">=</span> <span style="color:#1f2328">TimeUnit</span><span style="color:#0550ae">.</span><span style="color:#1f2328">MILLISECONDS</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> workQueue     <span style="color:#cf222e">=</span> <span style="color:#cf222e">new</span> <span style="color:#1f2328">SynchronousQueue</span><span style="color:#0550ae">[</span><span style="color:#cf222e">Runnable</span><span style="color:#0550ae">]()</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> threadFactory <span style="color:#cf222e">=</span> <span style="color:#cf222e">new</span> <span style="color:#1f2328">NamedThreadFactory</span><span style="color:#0550ae">(</span><span style="color:#0a3069">&#34;zio-default-blocking&#34;</span><span style="color:#0550ae">,</span> <span style="color:#cf222e">true</span><span style="color:#0550ae">)</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>      <span style="color:#cf222e">val</span> threadPool <span style="color:#cf222e">=</span> <span style="color:#cf222e">new</span> <span style="color:#1f2328">ThreadPoolExecutor</span><span style="color:#0550ae">(</span>
+</span></span><span style="display:flex;"><span>        corePoolSize<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>        maxPoolSize<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>        keepAliveTime<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>        timeUnit<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>        workQueue<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>        threadFactory
+</span></span><span style="display:flex;"><span>      <span style="color:#0550ae">)</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>      threadPool
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#0550ae">}</span>
+</span></span></code></pre></div><p>由于其本身是对 <code>ThreadPoolExecutor</code> 的封装，所以，当我们已经实现了 <code>zio.Executor </code>的增强后，只需要使用官方 <code>jdk-threadpool-plugin</code> 插件即可。
 这里我们还想要对代码进行定制修改和复用，所以重新使用 Scala 实现了一个 <a href="https://github.com/bitlap/skywalking-scala/blob/master/plugins/executors-plugin/src/main/scala/org/bitlap/skywalking/apm/plugin/executor/define/ThreadPoolExecutorInstrumentation.scala">executors-plugin</a> 插件。</p>
 <h2 id="串连-fiber-上下文">串连 Fiber 上下文</h2>
 <p>最后，上面谈到过，Fiber 也是一种 <code>Runnable</code>，因此还需要对 <code>zio.internal.FiberRunnable</code> 进行增强。大致分为两点，其实与 <code>jdk-threading-plugin</code> 是一样的。</p>
@@ -308,21 +310,21 @@
 我们只需要找到一个全局切入点，这个切入点应该是每个请求都会调用的方法，然后对这个方法进行增强。</p>
 <p>要想激活插件，只需要在 Release Notes 下载<a href="https://github.com/bitlap/skywalking-scala/releases/tag/v0.2.0-beta1">插件</a>，放到您的 <code>skywalking-agent/plugins</code> 目录，重新启动服务即可。</p>
 <p>如果您的项目使用 sbt assembly 打包，您可以参考这个 <a href="https://github.com/bitlap/skywalking-scala/tree/master/scenarios">示例</a>。该项目使用了下列技术栈：</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-scala" data-lang="scala">    libraryDependencies <span style="color:#000;font-weight:bold">++=</span> <span style="color:#458;font-weight:bold">Seq</span><span style="color:#000;font-weight:bold">(</span>
-      <span style="color:#d14">&#34;io.d11&#34;</span>               <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;zhttp&#34;</span>                <span style="color:#000;font-weight:bold">%</span> zioHttp2Version<span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;dev.zio&#34;</span>              <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;zio&#34;</span>                  <span style="color:#000;font-weight:bold">%</span> zioVersion<span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;io.grpc&#34;</span>               <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;grpc-netty&#34;</span>           <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;1.50.1&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;com.thesamet.scalapb&#34;</span> <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;scalapb-runtime-grpc&#34;</span> <span style="color:#000;font-weight:bold">%</span> scalapb<span style="color:#000;font-weight:bold">.</span>compiler<span style="color:#000;font-weight:bold">.</span><span style="color:#458;font-weight:bold">Version</span><span style="color:#000;font-weight:bold">.</span>scalapbVersion
-    <span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">++</span> <span style="color:#458;font-weight:bold">Seq</span><span style="color:#000;font-weight:bold">(</span>
-      <span style="color:#d14">&#34;dev.profunktor&#34;</span> <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;redis4cats-effects&#34;</span>  <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;1.3.0&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;dev.profunktor&#34;</span> <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;redis4cats-log4cats&#34;</span> <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;1.3.0&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;dev.profunktor&#34;</span> <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;redis4cats-streams&#34;</span>  <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;1.3.0&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;org.typelevel&#34;</span>  <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;log4cats-slf4j&#34;</span>      <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;2.5.0&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;dev.zio&#34;</span>        <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;zio-interop-cats&#34;</span>    <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;23.0.03&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;ch.qos.logback&#34;</span>  <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;logback-classic&#34;</span>     <span style="color:#000;font-weight:bold">%</span> <span style="color:#d14">&#34;1.2.11&#34;</span><span style="color:#000;font-weight:bold">,</span>
-      <span style="color:#d14">&#34;dev.zio&#34;</span>        <span style="color:#000;font-weight:bold">%%</span> <span style="color:#d14">&#34;zio-cache&#34;</span>           <span style="color:#000;font-weight:bold">%</span> zioCacheVersion
-    <span style="color:#000;font-weight:bold">)</span>
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span>    libraryDependencies <span style="color:#0550ae">++=</span> <span style="color:#1f2328">Seq</span><span style="color:#0550ae">(</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;io.d11&#34;</span>               <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;zhttp&#34;</span>                <span style="color:#0550ae">%</span> zioHttp2Version<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;dev.zio&#34;</span>              <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;zio&#34;</span>                  <span style="color:#0550ae">%</span> zioVersion<span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;io.grpc&#34;</span>               <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;grpc-netty&#34;</span>           <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;1.50.1&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;com.thesamet.scalapb&#34;</span> <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;scalapb-runtime-grpc&#34;</span> <span style="color:#0550ae">%</span> scalapb<span style="color:#0550ae">.</span>compiler<span style="color:#0550ae">.</span><span style="color:#1f2328">Version</span><span style="color:#0550ae">.</span>scalapbVersion
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">)</span> <span style="color:#0550ae">++</span> <span style="color:#1f2328">Seq</span><span style="color:#0550ae">(</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;dev.profunktor&#34;</span> <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;redis4cats-effects&#34;</span>  <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;1.3.0&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;dev.profunktor&#34;</span> <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;redis4cats-log4cats&#34;</span> <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;1.3.0&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;dev.profunktor&#34;</span> <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;redis4cats-streams&#34;</span>  <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;1.3.0&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;org.typelevel&#34;</span>  <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;log4cats-slf4j&#34;</span>      <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;2.5.0&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;dev.zio&#34;</span>        <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;zio-interop-cats&#34;</span>    <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;23.0.03&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;ch.qos.logback&#34;</span>  <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;logback-classic&#34;</span>     <span style="color:#0550ae">%</span> <span style="color:#0a3069">&#34;1.2.11&#34;</span><span style="color:#0550ae">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0a3069">&#34;dev.zio&#34;</span>        <span style="color:#0550ae">%%</span> <span style="color:#0a3069">&#34;zio-cache&#34;</span>           <span style="color:#0550ae">%</span> zioCacheVersion
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">)</span>
+</span></span></code></pre></div>
 	
 
 	<ul class="list-unstyled d-flex justify-content-between align-items-center mb-0 pt-5">
@@ -351,7 +353,7 @@
         </li>
         
         <li>
-            <a href="/zh_tags/apache-shenyu-incubating/" class="tag-link">Apache ShenYu (incubating)</a>
+            <a href="/zh_tags/apache-shenyu-incubating/" class="tag-link">Apache ShenYu (Incubating)</a>
             <span class="count">1</span>
         </li>
         
@@ -376,7 +378,7 @@
         </li>
         
         <li>
-            <a href="/zh_tags/ebpf/" class="tag-link">eBPF</a>
+            <a href="/zh_tags/ebpf/" class="tag-link">EBPF</a>
             <span class="count">1</span>
         </li>
         
@@ -441,7 +443,7 @@
         </li>
         
         <li>
-            <a href="/zh_tags/shardingsphere-proxy/" class="tag-link">ShardingSphere-proxy</a>
+            <a href="/zh_tags/shardingsphere-proxy/" class="tag-link">ShardingSphere-Proxy</a>
             <span class="count">1</span>
         </li>
         
@@ -8910,7 +8912,7 @@
 
 
 
-<script src="/js/main.min.d00d7a99f9e61382b1db35fac38e0e7bdd97f8d3c663a4c4b8d02c3f1d78d894.js" integrity="sha256-0A16mfnmE4Kx2zX6w44Oe92X&#43;NPGY6TEuNAsPx142JQ=" crossorigin="anonymous"></script>
+<script src="/js/main.min.9be14eed0a0e24711261c334305209aa2e5ae3fb624f6a1731e064d5ffb11f3d.js" integrity="sha256-m&#43;FO7QoOJHESYcM0MFIJqi5a4/tiT2oXMeBk1f&#43;xHz0=" crossorigin="anonymous"></script>
 
 
 <script src="/js/highlight.min.js"></script>
