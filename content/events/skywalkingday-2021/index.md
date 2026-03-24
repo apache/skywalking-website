@@ -2,8 +2,7 @@
 title: "SkyWalkingDay Conference 2021, relocating at Beijing"
 date: 2021-06-07
 author: SkyWalking Team
-description: Considering recent COVID19 status of Shenzhen, we have cancelled the Shenzhen event, and NOW we hold it at Beijing.
-description: Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 26th, jointly with Tencent and Tetrate.
+description: Apache SkyWalking hosts SkyWalkingDay Conference 2021 in June 26th, jointly with Tencent and Tetrate. Considering recent COVID19 status of Shenzhen, we have cancelled the Shenzhen event, and NOW we hold it at Beijing.
 endTime: 2021-06-20T10:00:00Z
 poster: /events/skywalkingday-2021/skywalkingday.png
 ---

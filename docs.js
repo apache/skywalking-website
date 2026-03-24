@@ -6,7 +6,7 @@ const {execSync} = require('child_process');
 
 const {promises} = fs;
 const docConfig = './data/docs.yml';
-const layoutTemplateFile = '/themes/docsy/layouts/projectDoc/baseof.html';
+const layoutTemplateFile = '/layouts/projectdoc/baseof.html';
 const NEXT = 'next';
 
 init();
@@ -82,8 +82,8 @@ function replaceMarkdownText(codeTxt, docInfo, filePath) {
     codeTxt =
         `---
 title: ${title}
-type: projectDoc
-layout: baseof
+type: projectdoc
+layout: single
 ---\n` + codeTxt;
     codeTxt = codeTxt
         .replace(/(\[[\s\S]*?\])\(([\s\S]*?)\)/g, function (match, p1, p2) {
@@ -154,8 +154,9 @@ async function traverseDocsList(result) {
         const versionSlug = localPath.split('/').pop();
         commitId = commitId || versionSlug;
         const menuFileName = `${docName.replace(/\-|\./g, '_')}${versionSlug.replace(/\-|v|\./g, '_')}`;
+        const relPath = link.replace(/\/readme\/$/, '/');
 
-        tpl += `{{ if in .File.Path "${localPath.split('/content/')[1]}" }}
+        tpl += `{{ if hasPrefix .RelPermalink "${relPath}" }}
                   <div class="description-wrapper">
                     <h5>
                     <img width="26" height="26" src="/images/project/${icon}.svg">
@@ -163,10 +164,10 @@ async function traverseDocsList(result) {
                     </h5>
                     <p>${description}</p>
                   </div>
-                  {{ $currentVersion := lower .Site.Data.docSidebar.${menuFileName}.version }}
+                  {{ $currentVersion := lower (index .Site.Data.docSidebar "${menuFileName}").version }}
                   <div class="version-wrapper">Version: 
                   <select class="version-select">
-                  {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
+                  {{range (index .Site.Data.docSidebar "${menuFileName}").repoDocs}}
                     {{$version := lower .version}}
                     {{$versionName := .versionName}}
                     <option {{ cond (eq $currentVersion $version) "selected" "" }} value="{{$version}}">
@@ -180,8 +181,8 @@ async function traverseDocsList(result) {
                   </select>
                   </div>
                   
-                  {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
-                  <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
+                  {{ partial "sidebar-menu.html" (index .Site.Data.docSidebar "${menuFileName}") }}
+                  <div class="commit-id">Commit Id: {{(index .Site.Data.docSidebar "${menuFileName}").commitId}}</div>
                 {{ end }}\n`;
 
         execSync(`"./doc.sh" "${repo}" "${repoUrl}" "${commitId}" "${localPath}" "${menuFileName}"`);
