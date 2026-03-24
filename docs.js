@@ -163,10 +163,10 @@ async function traverseDocsList(result) {
                     </h5>
                     <p>${description}</p>
                   </div>
-                  {{ $currentVersion := lower site.Data.docSidebar.${menuFileName}.version }}
+                  {{ $currentVersion := lower .Site.Data.docSidebar.${menuFileName}.version }}
                   <div class="version-wrapper">Version: 
                   <select class="version-select">
-                  {{range site.Data.docSidebar.${menuFileName}.repoDocs}}
+                  {{range .Site.Data.docSidebar.${menuFileName}.repoDocs}}
                     {{$version := lower .version}}
                     {{$versionName := .versionName}}
                     <option {{ cond (eq $currentVersion $version) "selected" "" }} value="{{$version}}">
@@ -180,8 +180,8 @@ async function traverseDocsList(result) {
                   </select>
                   </div>
                   
-                  {{ partial "sidebar-menu.html" site.Data.docSidebar.${menuFileName} }}
-                  <div class="commit-id">Commit Id: {{site.Data.docSidebar.${menuFileName}.commitId}}</div>
+                  {{ partial "sidebar-menu.html" .Site.Data.docSidebar.${menuFileName} }}
+                  <div class="commit-id">Commit Id: {{.Site.Data.docSidebar.${menuFileName}.commitId}}</div>
                 {{ end }}\n`;
 
         execSync(`"./doc.sh" "${repo}" "${repoUrl}" "${commitId}" "${localPath}" "${menuFileName}"`);
