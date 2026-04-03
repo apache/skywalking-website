@@ -14,6 +14,305 @@
     
     
     <item>
+      <title>Blog: Monitoring Envoy AI Gateway with Apache SkyWalking</title>
+      <link>/blog/2026-04-02-envoy-ai-gateway-monitoring/</link>
+      <pubDate>Thu, 02 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-04-02-envoy-ai-gateway-monitoring/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;the-problem-flying-blind-with-llm-traffic&#34;&gt;The Problem: Flying Blind with LLM Traffic&lt;/h2&gt;
+&lt;p&gt;LLM traffic is becoming a first-class citizen in production infrastructure. Teams are calling OpenAI, Anthropic,
+AWS Bedrock, Azure OpenAI, Google Gemini — often multiple providers at once. But most organizations have
+no unified visibility into this traffic:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Token costs spiral&lt;/strong&gt; without knowing which teams, models, or providers drive the spend.
+A single misconfigured prompt template can burn through thousands of dollars before anyone notices.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Provider outages cause cascading failures.&lt;/strong&gt; When OpenAI has a bad hour, your application goes down
+with it — and you have no failover visibility to understand what happened or switch providers automatically.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;No unified metrics&lt;/strong&gt; across heterogeneous LLM calls. Latency, Time to First Token (TTFT),
+Time Per Output Token (TPOT), token usage, error rates — each provider reports these differently,
+if at all. There is no single dashboard to compare them.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is the same observability gap that microservices faced a decade ago. The solution then was
+service meshes and API gateways with built-in telemetry. For AI workloads, the answer is an AI gateway.&lt;/p&gt;
+&lt;h2 id=&#34;why-an-ai-gateway&#34;&gt;Why an AI Gateway&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://aigateway.envoyproxy.io/&#34;&gt;Envoy AI Gateway&lt;/a&gt; is an open-source AI gateway built on top of
+&lt;a href=&#34;https://www.envoyproxy.io/&#34;&gt;Envoy Proxy&lt;/a&gt; and &lt;a href=&#34;https://gateway.envoyproxy.io/&#34;&gt;Envoy Gateway&lt;/a&gt;.
+It is not a standalone SaaS product or a Python proxy — it is infrastructure-grade software built on
+the same Envoy that already handles traffic for a large portion of cloud-native deployments.&lt;/p&gt;
+&lt;p&gt;Key capabilities:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Multi-provider routing&lt;/strong&gt; — supports 16+ AI providers (OpenAI, Anthropic, AWS Bedrock, Azure OpenAI,
+Google Gemini, Mistral, Cohere, DeepSeek, and more) behind a unified API.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Token-based rate limiting&lt;/strong&gt; — rate limit by token consumption, not just request count.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Provider fallback&lt;/strong&gt; — automatic failover when a provider is down or slow.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Model virtualization&lt;/strong&gt; — abstract model names so applications are decoupled from specific providers.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Two-tier architecture&lt;/strong&gt; — a reference architecture with a centralized entry gateway (Tier 1) for
+auth and global routing, and per-cluster gateways (Tier 2) for inference optimization.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CNCF ecosystem native&lt;/strong&gt; — runs on Kubernetes, composes with existing Envoy filters, WASM plugins,
+and standard Kubernetes Gateway API resources.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Because Envoy AI Gateway natively emits GenAI metrics and access logs via OTLP following
+&lt;a href=&#34;https://opentelemetry.io/docs/specs/semconv/gen-ai/&#34;&gt;OpenTelemetry GenAI Semantic Conventions&lt;/a&gt;,
+it plugs directly into any OpenTelemetry-compatible backend.&lt;/p&gt;
+&lt;p&gt;Starting from SkyWalking 10.4.0, the OAP server natively receives and analyzes Envoy AI Gateway&amp;rsquo;s
+OTLP metrics and access logs — no OpenTelemetry Collector needed in between.&lt;/p&gt;
+&lt;h2 id=&#34;data-flow&#34;&gt;Data Flow&lt;/h2&gt;
+&lt;p&gt;The AI Gateway pushes telemetry directly to SkyWalking via OTLP gRPC:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;workflow.jpg&#34; alt=&#34;Data flow&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Application&lt;/strong&gt; sends LLM API requests through the Envoy AI Gateway.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Envoy AI Gateway&lt;/strong&gt; routes requests to AI providers (or local models like Ollama)
+and records GenAI metrics (token usage, latency, TTFT, TPOT) and access logs.&lt;/li&gt;
+&lt;li&gt;The gateway pushes metrics and logs via &lt;strong&gt;OTLP gRPC&lt;/strong&gt; directly to &lt;strong&gt;SkyWalking OAP&lt;/strong&gt; on port 11800.&lt;/li&gt;
+&lt;li&gt;SkyWalking OAP parses metrics with MAL rules and access logs with LAL rules,
+then stores everything in &lt;strong&gt;BanyanDB&lt;/strong&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;No OpenTelemetry Collector is needed. SkyWalking OAP&amp;rsquo;s built-in OTLP receiver handles everything.&lt;/p&gt;
+&lt;h2 id=&#34;try-it-locally&#34;&gt;Try It Locally&lt;/h2&gt;
+&lt;p&gt;This demo uses &lt;a href=&#34;https://ollama.com/&#34;&gt;Ollama&lt;/a&gt; as a local LLM backend so you can try
+everything without an API key. The &lt;a href=&#34;https://github.com/envoyproxy/ai-gateway/tree/main/cmd/aigw&#34;&gt;Envoy AI Gateway CLI&lt;/a&gt;
+(&lt;code&gt;aigw&lt;/code&gt;) provides a standalone mode that runs outside Kubernetes — perfect for local testing.&lt;/p&gt;
+&lt;h3 id=&#34;prerequisites&#34;&gt;Prerequisites&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Docker and Docker Compose&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://ollama.com/&#34;&gt;Ollama&lt;/a&gt; installed on your host&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;step-1-start-ollama&#34;&gt;Step 1: Start Ollama&lt;/h3&gt;
+&lt;p&gt;Start Ollama on all interfaces so Docker containers can reach it:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#953800&#34;&gt;OLLAMA_HOST&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;0.0.0.0 ollama serve
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Pull a small model for testing:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;ollama pull llama3.2:1b
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;step-2-start-the-stack&#34;&gt;Step 2: Start the Stack&lt;/h3&gt;
+&lt;p&gt;Create a &lt;code&gt;docker-compose.yaml&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;services&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;banyandb&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;apache/skywalking-banyandb:0.10.0&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;banyandb&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;17912:17912&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;command&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;standalone --stream-root-path /tmp/stream-data --measure-root-path /tmp/measure-data&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;healthcheck&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;test&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;CMD-SHELL&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;wget -qO- http://localhost:17913/api/healthz || exit 1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;interval&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;5s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;timeout&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;3s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;retries&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;oap&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;apache/skywalking-oap-server:10.4.0&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;oap&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;depends_on&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;banyandb&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;condition&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;service_healthy&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;11800:11800&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;12800:12800&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;environment&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_STORAGE&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;banyandb&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_STORAGE_BANYANDB_TARGETS&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;banyandb:17912&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;healthcheck&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;test&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;CMD-SHELL&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;bash -c &amp;#39;echo &amp;gt; /dev/tcp/localhost/12800&amp;#39; || exit 1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;interval&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;10s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;timeout&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;5s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;retries&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;30&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;start_period&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;60s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ui&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;apache/skywalking-ui:10.4.0&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ui&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;depends_on&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;oap&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;condition&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;service_healthy&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;8080:8080&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;environment&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_OAP_ADDRESS&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;http://oap:12800&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;aigw&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;envoyproxy/ai-gateway-cli:latest&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;aigw&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;depends_on&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;oap&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;condition&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;service_healthy&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;environment&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OPENAI_BASE_URL=http://host.docker.internal:11434/v1&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OPENAI_API_KEY=unused&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_SERVICE_NAME=my-ai-gateway&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_EXPORTER_OTLP_ENDPOINT=http://oap:11800&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_EXPORTER_OTLP_PROTOCOL=grpc&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_METRICS_EXPORTER=otlp&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_LOGS_EXPORTER=otlp&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_METRIC_EXPORT_INTERVAL=5000&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- OTEL_RESOURCE_ATTRIBUTES=job_name=envoy-ai-gateway,service.instance.id=aigw-1,service.layer=ENVOY_AI_GATEWAY&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;1975:1975&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;extra_hosts&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;host.docker.internal:host-gateway&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;command&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;run&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Start everything:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;docker compose up -d
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Wait for all services to become healthy (BanyanDB starts first, then OAP, then UI and AI Gateway):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;docker compose ps
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The key OTLP configuration on the &lt;code&gt;aigw&lt;/code&gt; service:&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Env Var&lt;/th&gt;
+          &lt;th&gt;Value&lt;/th&gt;
+          &lt;th&gt;Purpose&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;OTEL_SERVICE_NAME&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;my-ai-gateway&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Service name in SkyWalking&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;OTEL_EXPORTER_OTLP_ENDPOINT&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http://oap:11800&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;SkyWalking OAP gRPC endpoint&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;OTEL_EXPORTER_OTLP_PROTOCOL&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;grpc&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;OTLP transport&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;OTEL_METRICS_EXPORTER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;otlp&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Enable metrics push&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;OTEL_LOGS_EXPORTER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;otlp&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Enable access log push&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The &lt;code&gt;OTEL_RESOURCE_ATTRIBUTES&lt;/code&gt; must include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;job_name=envoy-ai-gateway&lt;/code&gt; — routing tag for MAL/LAL rules&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;service.instance.id=&amp;lt;id&amp;gt;&lt;/code&gt; — instance identity&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;service.layer=ENVOY_AI_GATEWAY&lt;/code&gt; — routes logs to AI Gateway LAL rules&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The MAL and LAL rules are enabled by default in SkyWalking OAP. No OAP-side configuration is needed.&lt;/p&gt;
+&lt;h3 id=&#34;step-3-run-the-demo-app&#34;&gt;Step 3: Run the Demo App&lt;/h3&gt;
+&lt;p&gt;Create a simple Python application that sends requests through the AI Gateway (&lt;code&gt;app.py&lt;/code&gt;).
+It mixes normal requests, streaming requests (for TTFT/TPOT metrics), and error requests
+(non-existent model → HTTP 404, always captured by the LAL sampling policy):&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#24292e&#34;&gt;time&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#24292e&#34;&gt;random&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#24292e&#34;&gt;requests&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;GATEWAY &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;http://localhost:1975&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;HEADERS &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;Authorization&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;Bearer unused&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;Content-Type&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;application/json&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;questions &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;What is Apache SkyWalking? Answer in one sentence.&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;What is Envoy Proxy used for? Answer in one sentence.&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;What are the benefits of an AI gateway? Answer in two sentences.&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;Explain observability in three sentences.&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#6639ba&#34;&gt;chat&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;model&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; question&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; stream&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;False&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;):&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    resp &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; requests&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;post&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0a3069&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;GATEWAY&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;/v1/chat/completions&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        json&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;model&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; model&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;messages&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;[{&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;role&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;user&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;content&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; question&lt;span style=&#34;color:#1f2328&#34;&gt;}],&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;stream&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt; stream&lt;span style=&#34;color:#1f2328&#34;&gt;},&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        headers&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;HEADERS&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; timeout&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;60&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; stream&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;stream&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#cf222e&#34;&gt;if&lt;/span&gt; stream&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        chunks &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;[]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#cf222e&#34;&gt;for&lt;/span&gt; line &lt;span style=&#34;color:#0550ae&#34;&gt;in&lt;/span&gt; resp&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;iter_lines&lt;span style=&#34;color:#1f2328&#34;&gt;():&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;            &lt;span style=&#34;color:#cf222e&#34;&gt;if&lt;/span&gt; line&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;                chunks&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;append&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;line&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;decode&lt;span style=&#34;color:#1f2328&#34;&gt;())&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#cf222e&#34;&gt;return&lt;/span&gt; resp&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;status_code&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;[streamed &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;len&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;chunks&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt; chunks]&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#cf222e&#34;&gt;return&lt;/span&gt; resp&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;status_code&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; resp&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;json&lt;span style=&#34;color:#1f2328&#34;&gt;()&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;while&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;True&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    r &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; random&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;random&lt;span style=&#34;color:#1f2328&#34;&gt;()&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#cf222e&#34;&gt;if&lt;/span&gt; r &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color:#0550ae&#34;&gt;0.2&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#57606a&#34;&gt;# Error request: non-existent model triggers 404&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        status&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; body &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; chat&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;non-existent-model&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;hello&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#6639ba&#34;&gt;print&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;[error] model=non-existent-model status=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;status&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#cf222e&#34;&gt;elif&lt;/span&gt; r &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;&lt;/span&gt; &lt;span style=&#34;color:#0550ae&#34;&gt;0.5&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#57606a&#34;&gt;# Streaming request — generates TTFT and TPOT metrics&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        q &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; random&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;choice&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;questions&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        status&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; info &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; chat&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;llama3.2:1b&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; q&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; stream&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;True&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#6639ba&#34;&gt;print&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;[stream] status=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;status&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;info&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#cf222e&#34;&gt;else&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#57606a&#34;&gt;# Normal non-streaming request&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        q &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; random&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;choice&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;questions&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        status&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; body &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; chat&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;llama3.2:1b&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; q&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        answer &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; body&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;get&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;choices&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;[{}])[&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;get&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;message&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;{})&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;get&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;content&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)[:&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;80&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        tokens &lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt; body&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;get&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;usage&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;{})&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#6639ba&#34;&gt;print&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;[ok] status=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;status&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt; tokens=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;tokens&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt; answer=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;{&lt;/span&gt;answer&lt;span style=&#34;color:#0a3069&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;...&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    time&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;sleep&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;random&lt;span style=&#34;color:#0550ae&#34;&gt;.&lt;/span&gt;randint&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;20&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt; &lt;span style=&#34;color:#0550ae&#34;&gt;30&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;))&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Run it:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;pip install requests
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;python app.py
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The application talks to the AI Gateway on port 1975, which routes to Ollama.
+Each request generates GenAI metrics (token usage, latency, TTFT, TPOT) and access logs
+that the gateway pushes to SkyWalking via OTLP.&lt;/p&gt;
+&lt;p&gt;The error requests (non-existent model → HTTP 404) are always captured by the access log
+sampling policy, so you will see them in the SkyWalking log view.&lt;/p&gt;
+&lt;h3 id=&#34;step-4-view-in-skywalking-ui&#34;&gt;Step 4: View in SkyWalking UI&lt;/h3&gt;
+&lt;p&gt;Open &lt;a href=&#34;http://localhost:8080&#34;&gt;http://localhost:8080&lt;/a&gt; and select the &lt;strong&gt;GenAI &amp;gt; Envoy AI Gateway&lt;/strong&gt; menu.&lt;/p&gt;
+&lt;p&gt;The service list shows &lt;code&gt;my-ai-gateway&lt;/code&gt; with CPM, latency, and token rates at a glance:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;screen-1.png&#34; alt=&#34;Service list&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Click into the service to see the full dashboard — Request CPM, Latency (average + percentiles),
+Input/Output Token Rates, TTFT, and TPOT:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;screen-2.png&#34; alt=&#34;Service dashboard&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The &lt;strong&gt;Providers&lt;/strong&gt; tab breaks down metrics by AI provider:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;screen-3.png&#34; alt=&#34;Provider breakdown&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The &lt;strong&gt;Models&lt;/strong&gt; tab shows per-model metrics including TTFT and TPOT (streaming only).
+Note the &lt;code&gt;unknown&lt;/code&gt; model entries — these are the error requests with non-existent models:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;screen-4.png&#34; alt=&#34;Model breakdown&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The &lt;strong&gt;Log&lt;/strong&gt; tab shows access logs. The sampling policy drops normal successful responses
+but always captures errors (HTTP 404) and high-token requests:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;screen-5.png&#34; alt=&#34;Access logs&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;cleanup&#34;&gt;Cleanup&lt;/h3&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;docker compose down
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;deploying-on-kubernetes&#34;&gt;Deploying on Kubernetes&lt;/h2&gt;
+&lt;p&gt;For production deployments, Envoy AI Gateway runs as a full Kubernetes controller with
+Envoy Gateway as the control plane. See the
+&lt;a href=&#34;https://aigateway.envoyproxy.io/docs/getting-started/&#34;&gt;Envoy AI Gateway getting started guide&lt;/a&gt;
+for Kubernetes installation.&lt;/p&gt;
+&lt;p&gt;The OTLP configuration is the same — set the &lt;code&gt;OTEL_*&lt;/code&gt; environment variables on the
+AI Gateway&amp;rsquo;s external processor to point at SkyWalking OAP&amp;rsquo;s gRPC port (11800).
+See the &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-envoy-ai-gateway-monitoring/&#34;&gt;SkyWalking Envoy AI Gateway Monitoring&lt;/a&gt;
+documentation for details.&lt;/p&gt;
+&lt;h2 id=&#34;genai-observability-without-an-ai-gateway&#34;&gt;GenAI Observability Without an AI Gateway&lt;/h2&gt;
+&lt;p&gt;Not every deployment uses an AI gateway. If your applications call LLM providers directly,
+SkyWalking 10.4.0 also provides GenAI observability through the
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/service-agent/virtual-genai/&#34;&gt;Virtual GenAI&lt;/a&gt; layer.&lt;/p&gt;
+&lt;p&gt;This works with any SkyWalking-instrumented, OpenTelemetry-instrumented, or Zipkin-instrumented application.
+When traces carry &lt;code&gt;gen_ai.*&lt;/code&gt; tags (following
+&lt;a href=&#34;https://opentelemetry.io/docs/specs/semconv/gen-ai/&#34;&gt;OpenTelemetry GenAI Semantic Conventions&lt;/a&gt;),
+SkyWalking derives per-provider and per-model metrics from the client side:
+latency, token usage, success rate, and estimated cost.&lt;/p&gt;
+&lt;p&gt;For Java applications, the SkyWalking Java Agent (9.7+) includes a Spring AI plugin that automatically
+instruments calls to 13+ providers (OpenAI, Anthropic, AWS Bedrock, Google GenAI, DeepSeek, Mistral, etc.)
+with the correct &lt;code&gt;gen_ai.*&lt;/code&gt; span tags — no code changes needed.&lt;/p&gt;
+&lt;p&gt;This is a different use case from the Envoy AI Gateway monitoring covered above:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Envoy AI Gateway layer&lt;/strong&gt;: infrastructure-level observability — what the gateway sees across all traffic.
+Best for platform teams managing centralized AI routing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Virtual GenAI layer&lt;/strong&gt;: application-level observability — what each instrumented app sees for its own LLM calls.
+Best for teams without a centralized gateway, or for per-application cost tracking.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;references&#34;&gt;References&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://aigateway.envoyproxy.io/&#34;&gt;Envoy AI Gateway&lt;/a&gt; — project site and documentation&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/envoyproxy/ai-gateway/tree/main/cmd/aigw&#34;&gt;Envoy AI Gateway CLI&lt;/a&gt; — standalone mode for local development&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-envoy-ai-gateway-monitoring/&#34;&gt;SkyWalking Envoy AI Gateway Monitoring&lt;/a&gt; — OAP setup doc&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/service-agent/virtual-genai/&#34;&gt;SkyWalking Virtual GenAI&lt;/a&gt; — client-side GenAI observability&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://opentelemetry.io/docs/specs/semconv/gen-ai/&#34;&gt;OpenTelemetry GenAI Semantic Conventions&lt;/a&gt; — the metric/attribute standard both projects follow&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: How AI Changed the Economics of Architecture</title>
       <link>/blog/2026-03-13-how-ai-changed-the-economics-of-architecture/</link>
       <pubDate>Fri, 13 Mar 2026 00:00:00 +0000</pubDate>
@@ -8874,38 +9173,6 @@ Apache SkyWalking. This is a 1.5 hours presentation including the full landscape
       &lt;/tr&gt;
   &lt;/tbody&gt;
 &lt;/table&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: OpenSearch, a new storage option to avoid ElasticSearch&#39;s SSPL</title>
-      <link>/blog/2021-05-09-opensearch-supported/</link>
-      <pubDate>Sun, 09 May 2021 00:00:00 +0000</pubDate>
-      <guid>/blog/2021-05-09-opensearch-supported/</guid>
-      <description>
-        
-        
-        &lt;p&gt;We posted our &lt;a href=&#34;/blog/2021-01-17-elastic-change-license/&#34;&gt;&lt;strong&gt;Response to Elastic 2021 License Change&lt;/strong&gt;&lt;/a&gt; blog 4 months ago. It doesn&amp;rsquo;t have a big impact in
-the short term, but because of the incompatibility between SSPL and Apache 2.0, we lost the chance of upgrading the storage server,
-which concerns the community and our users. So, we have to keep looking for a new option as a replacement.&lt;/p&gt;
-&lt;p&gt;There was an open source project, Open Distro for Elasticsearch, maintained by the AWS team. It is an Apache 2.0-licensed distribution of Elasticsearch enhanced with enterprise security, alerting, SQL, and more. After Elastic relicensed its projects, we talked with their team, and they have an agenda
-to take over the community leadship and keep maintaining Elasticsearch, as it was licensed by Apache 2.0. So, they are good to fork and continue.&lt;/p&gt;
-&lt;p&gt;On April 12th, 2021, AWS announced the new project, OpenSearch, driven by the community, which is initialized from people of AWS, Red Hat, SAP, Capital One, and Logz.io. Read this &lt;a href=&#34;https://aws.amazon.com/cn/blogs/opensource/introducing-opensearch/&#34;&gt;Introducing OpenSearch&lt;/a&gt; blog for more detail.&lt;/p&gt;
-&lt;p&gt;Once we had this news in public, we begin to plan the process of evaluating and testing OpenSearch as SkyWalking&amp;rsquo;s storage option.
-Read our &lt;a href=&#34;https://github.com/apache/skywalking/issues/6745&#34;&gt;issue&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Today, we are glad to ANNOUNCE, OpenSearch could replace ElastcSearch as the storage, and it is still licensed under Apache 2.0.&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;This has been merged in the main stream, and you can find it in the dev doc already.&lt;/p&gt;
-&lt;h3 id=&#34;opensearch&#34;&gt;OpenSearch&lt;/h3&gt;
-&lt;p&gt;OpenSearch storage shares the same configurations as Elasticsearch 7.
-In order to activate Elasticsearch 7 as storage, set storage provider to &lt;strong&gt;elasticsearch7&lt;/strong&gt;.
-Please download the &lt;code&gt;apache-skywalking-bin-es7.tar.gz&lt;/code&gt; if you want to use OpenSearch as storage.&lt;/p&gt;
-&lt;p&gt;SkyWalking community will keep our eyes on the OpenSearch project, and look forward to their first GA release.&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;NOTE: we have to add a warning NOTICE to the Elasticsearch storage doc:&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;NOTICE:&lt;/strong&gt; Elastic announced through their blog that Elasticsearch will be moving over to a Server Side Public
-License (SSPL), which is incompatible with Apache License 2.0. This license change is effective from Elasticsearch
-version 7.11. So please choose the suitable Elasticsearch version according to your usage.&lt;/p&gt;
 
       </description>
     </item>
