@@ -89,7 +89,7 @@ OLLAMA_HOST=0.0.0.0 ollama serve
 Pull a small model for testing:
 
 ```bash
-ollama pull llama3.2
+ollama pull llama3.2:1b
 ```
 
 ### Step 2: Start the Stack
@@ -234,12 +234,12 @@ while True:
     elif r < 0.5:
         # Streaming request — generates TTFT and TPOT metrics
         q = random.choice(questions)
-        status, info = chat("llama3.2", q, stream=True)
+        status, info = chat("llama3.2:1b", q, stream=True)
         print(f"[stream] status={status} {info}")
     else:
         # Normal non-streaming request
         q = random.choice(questions)
-        status, body = chat("llama3.2", q)
+        status, body = chat("llama3.2:1b", q)
         answer = body.get("choices", [{}])[0].get("message", {}).get("content", "")[:80]
         tokens = body.get("usage", {})
         print(f"[ok] status={status} tokens={tokens} answer={answer}...")
