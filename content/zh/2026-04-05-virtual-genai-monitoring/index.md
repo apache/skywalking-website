@@ -1,11 +1,13 @@
 ---
 title: "Virtual GenAI Observability"
 author: "邵一鸣"
-date: 2026-04-02
+date: 2026-04-05
 description: "SkyWalking 10.4 增加了 Virtual GenAI 观测面板,本文将介绍该新特性的使用。"
 tags:
 - GenAI
 - LLM
+- Observability
+- Opentelemetry
 ---
 
 # 问题：当应用开始“吞噬”大模型，监控却留下了盲区
@@ -68,13 +70,13 @@ OAP会基于这些 Trace 自动完成数据的聚合与计算。最终会生成 
 ● SkyWalking Oap: >= 10.4
 
 ### 语义规范与兼容性
-SkyWalking 虚拟 GenAI 遵循 OpenTelemetry GenAI 语义规范。OAP 将根据以下标准识别 GenAI 相关 Span：
+SkyWalking 虚拟 GenAI 遵循` OpenTelemetry GenAI` 语义规范。OAP 将根据以下标准识别 GenAI 相关 Span：
 
 #### SkyWalking Java Agent
-* 上报的 Span 必须为 Exit 类型，其 SpanLayer 属性需设定为 GENAI。
+* 上报的 Span 必须为 Exit 类型，其 SpanLayer 属性需设定为 GENAI,包含`gen_ai.response.model` 标签。
 
 #### 输出OTLP / Zipkin格式数据的探针
-* 上报的 Span 中包含 gen_ai.response.model 标签。
+* 上报的 Span 中包含 `gen_ai.response.model` 标签。
 
 具体可以参考e2e配置  
 [SkyWalking Java Agent上报数据](https://github.com/apache/skywalking/blob/master/test/e2e-v2/cases/virtual-genai/docker-compose.yml)  
@@ -170,7 +172,7 @@ models:
 | `gpt-4o-mini-2024-07-18` | `gpt-4o-mini` | 最长前缀为 `gpt-4o-mini` |
 
   
-  这种机制确保了 API 返回的带有版本的模型名称能够被正确映射到相应的价格档位，而无需在配置文件中维护精确的全名。
+这种机制确保了 API 返回的带有版本的模型名称能够被正确映射到相应的价格档位，而无需在配置文件中维护精确的全名。
 
 ### 模型别名 (Model Aliases)
 部分供应商在 API 响应和官方文档中会使用不同的命名规范。例如，Anthropic 的模型在 Trace 中可能显示为 claude-4-sonnet 或 claude-sonnet-4。通过 aliases 字段，可以让单个计费条目同时支持这两种配置：
@@ -181,8 +183,8 @@ models:
   output-estimated-cost-per-m: 15.0
 ```
 
-在这种配置下，`claude-4-sonnet` 和 `claude-sonnet-4`（以及任何带有版本的变体，如 `claude-sonnet-4-20250514`）都会解析为同一个计费条目。
-注意： 别名同样参与最长前缀匹配。因此，`claude-sonnet-4-20250514` 会匹配到别名 `claude-sonnet-4`，进而解析到 `claude-4-sonnet` 的定价信息。
+在这种配置下，`claude-4-sonnet` 和 `claude-sonnet-4`（以及任何带有版本的变体，如 `claude-sonnet-4-20250514`）都会解析为同一个计费条目。  
+**注意**： 别名同样参与最长前缀匹配。因此，`claude-sonnet-4-20250514` 会匹配到别名 `claude-sonnet-4`，进而解析到 `claude-4-sonnet` 的定价信息。
 
 ## 自定义配置
 添加新供应商 (Adding a New Provider)
