@@ -1,5 +1,5 @@
 ---
-title: "Virtual GenAI Observability"
+title: "基于 SkyWalking 10.4 的大模型应用监控：洞察 LLM 的性能与成本"
 author: "邵一鸣"
 date: 2026-04-05
 description: "SkyWalking 10.4 增加了 Virtual GenAI 观测面板,本文将介绍该新特性的使用。"

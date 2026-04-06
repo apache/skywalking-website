@@ -1,5 +1,5 @@
 ---
-title: "Virtual GenAI Observability"
+title: "Monitoring LLM Applications with SkyWalking 10.4: Insights into Performance and Cost"
 author: "YiMing Shao"
 date: 2026-04-05
 description: "SkyWalking 10.4 introduces the Virtual GenAI dashboard. This article explores how to use this new feature to monitor and optimize LLM integrations."
