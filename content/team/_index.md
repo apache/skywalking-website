@@ -108,6 +108,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Weijie Zou     | kdump        | [RootShellExp](https://twitter.com/RootShellExp) |
 | Weiyi Liu      | wayilau      |                                                  |
 | Xiang Wei      | weixiang1862 |                                                  |
+| YiMing Shao    | peachisai    |                                                  |
 | Youliang Huang | butterbright |                                                  |
 | Yueqin Zhang   | yswdqz       |                                                  |
 | Yuntao Li      | liyuntao     |                                                  |
