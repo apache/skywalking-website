@@ -90,7 +90,7 @@ the conversion descriptions below refer to OTLP field names (e.g., span kind, st
 #### Trace ID Encoding
 
 SkyWalking native trace IDs are arbitrary strings (e.g.,
-`2a2e04e8d1114b14925c04a6321ca26c.38.17739924187687539`), while Grafana Tempo require
+`2a2e04e8d1114b14925c04a6321ca26c.38.17739924187687539`), while Grafana Tempo requires
 pure hex-encoded trace IDs. The TraceQL Service encodes each UTF-8 byte of the original trace
 ID as two lowercase hex characters:
 
