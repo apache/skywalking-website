@@ -5,7 +5,7 @@
     <description>Recent content in Tracing on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 06 Mar 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 08 Apr 2026 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/tracing/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -14,6 +14,709 @@
         
       
     
+    
+    <item>
+      <title>Blog: Query SkyWalking and Zipkin Traces with TraceQL and Visualize in Grafana</title>
+      <link>/blog/2026-04-08-traceql/</link>
+      <pubDate>Wed, 08 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-04-08-traceql/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;query-skywalking-and-zipkin-traces-with-traceql-and-visualize-in-grafana&#34;&gt;Query SkyWalking and Zipkin Traces with TraceQL and Visualize in Grafana&lt;/h1&gt;
+&lt;p&gt;Apache SkyWalking introduced &lt;strong&gt;TraceQL&lt;/strong&gt; support in version &lt;strong&gt;10.4.0&lt;/strong&gt;, implementing
+&lt;a href=&#34;https://grafana.com/docs/tempo/v2.10.x/api_docs/&#34;&gt;Grafana Tempo&amp;rsquo;s HTTP query APIs&lt;/a&gt; so that
+Grafana can query and visualize traces stored in SkyWalking without any additional plugins.
+This means you can now use the familiar Grafana Tempo data source to search, filter, and
+drill into both &lt;strong&gt;SkyWalking native traces&lt;/strong&gt; and &lt;strong&gt;Zipkin-compatible traces&lt;/strong&gt; — all served
+by your existing SkyWalking OAP server.&lt;/p&gt;
+&lt;h2 id=&#34;architecture-overview&#34;&gt;Architecture Overview&lt;/h2&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;┌────────────────────┐         Tempo HTTP API           ┌─────────────────────────────┐
+│                    │  ──── /skywalking/api/search ──► │  SkyWalking Native Backend  │
+│      Grafana       │                                  │  (Query Traces V2 API)      │
+│  (Tempo Data Src)  │                                  ├─────────────────────────────┤
+│                    │  ──── /zipkin/api/search ──────► │  Zipkin-Compatible Backend  │
+└────────────────────┘                                  └──────────┬──────────────────┘
+                                                                   │
+                                                        ┌──────────▼──────────────────┐
+                                                        │    SkyWalking OAP Server    │
+                                                        │  ┌───────────────────────┐  │
+                                                        │  │   TraceQL Service     │  │
+                                                        │  │  (port 3200)          │  │
+                                                        │  └───────────────────────┘  │
+                                                        │  ┌───────────────────────┐  │
+                                                        │  │  Storage (BanyanDB /  │  │
+                                                        │  │  Elasticsearch / …)   │  │
+                                                        │  └───────────────────────┘  │
+                                                        └─────────────────────────────┘
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;The TraceQL Service sits inside the OAP server and exposes the Tempo-compatible HTTP API on
+port &lt;code&gt;3200&lt;/code&gt; (default). It converts traces from their native format into
+&lt;a href=&#34;https://github.com/grafana/tempo/blob/main/pkg/tempopb/tempo.proto&#34;&gt;Tempo&amp;rsquo;s format&lt;/a&gt;,
+where the trace detail part (&lt;code&gt;Trace&lt;/code&gt; message) reuses OTLP &lt;code&gt;Trace&lt;/code&gt; definitions.&lt;/p&gt;
+&lt;h2 id=&#34;limitations-and-supported-traceql-features&#34;&gt;Limitations and Supported TraceQL Features&lt;/h2&gt;
+&lt;p&gt;TraceQL is a rich query language, but SkyWalking currently implements a practical subset.
+The following features are &lt;strong&gt;supported&lt;/strong&gt;:&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Feature&lt;/th&gt;
+          &lt;th&gt;Examples&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Spanset filter&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;{resource.service.name=&amp;quot;frontend&amp;quot;}&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Resource attributes&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;resource.service.name&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Span attributes&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;span.http.method&lt;/code&gt;, &lt;code&gt;span.http.status_code&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Intrinsic fields&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;duration&lt;/code&gt;, &lt;code&gt;name&lt;/code&gt;, &lt;code&gt;status&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Comparison operators&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;=&lt;/code&gt;, &lt;code&gt;&amp;gt;&lt;/code&gt;, &lt;code&gt;&amp;gt;=&lt;/code&gt;, &lt;code&gt;&amp;lt;&lt;/code&gt;, &lt;code&gt;&amp;lt;=&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Compound conditions&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;{resource.service.name=&amp;quot;frontend&amp;quot; &amp;amp;&amp;amp; duration&amp;gt;100ms}&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Duration units&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;us&lt;/code&gt;/&lt;code&gt;µs&lt;/code&gt;, &lt;code&gt;ms&lt;/code&gt;, &lt;code&gt;s&lt;/code&gt;, &lt;code&gt;m&lt;/code&gt;, &lt;code&gt;h&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The following features are &lt;strong&gt;not yet supported&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Spanset logical operations (&lt;code&gt;{...} AND {...}&lt;/code&gt;, &lt;code&gt;{...} OR {...}&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;Pipeline operations (&lt;code&gt;|&lt;/code&gt; operator)&lt;/li&gt;
+&lt;li&gt;Aggregate functions (&lt;code&gt;count()&lt;/code&gt;, &lt;code&gt;avg()&lt;/code&gt;, &lt;code&gt;max()&lt;/code&gt;, &lt;code&gt;min()&lt;/code&gt;, &lt;code&gt;sum()&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;Regular expression matching (&lt;code&gt;=~&lt;/code&gt;, &lt;code&gt;!~&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;event&lt;/code&gt; and &lt;code&gt;link&lt;/code&gt; scopes&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;kind&lt;/code&gt; intrinsic field&lt;/li&gt;
+&lt;li&gt;Streaming mode (must be disabled in the Grafana Tempo data source settings)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Important&lt;/strong&gt;: SkyWalking native trace support in TraceQL is based on the
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/#trace-v2&#34;&gt;Query Traces V2 API&lt;/a&gt;.
+Currently, only &lt;strong&gt;BanyanDB&lt;/strong&gt; storage implements this API. Other storage backends
+(e.g., Elasticsearch, MySQL, PostgreSQL) do not support SkyWalking native trace queries via TraceQL.
+Zipkin-compatible traces are &lt;strong&gt;not&lt;/strong&gt; subject to this restriction.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;trace-format-conversion&#34;&gt;Trace Format Conversion&lt;/h2&gt;
+&lt;p&gt;Since the trace detail part of Tempo&amp;rsquo;s format reuses
+&lt;a href=&#34;https://opentelemetry.io/docs/reference/specification/protocol/&#34;&gt;OTLP Trace&lt;/a&gt; definitions,
+the conversion descriptions below refer to OTLP field names (e.g., span kind, status code).&lt;/p&gt;
+&lt;h3 id=&#34;skywalking-native-trace&#34;&gt;SkyWalking Native Trace&lt;/h3&gt;
+&lt;h4 id=&#34;trace-id-encoding&#34;&gt;Trace ID Encoding&lt;/h4&gt;
+&lt;p&gt;SkyWalking native trace IDs are arbitrary strings (e.g.,
+&lt;code&gt;2a2e04e8d1114b14925c04a6321ca26c.38.17739924187687539&lt;/code&gt;), while Grafana Tempo requires
+pure hex-encoded trace IDs. The TraceQL Service encodes each UTF-8 byte of the original trace
+ID as two lowercase hex characters:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;Original:  2a2e04e8d1114b14925c04a6321ca26c.38.17739924187687539
+Encoded:   32613265303465386431313134623134393235633034613633323163613236632e33382e3137373339393234313837363837353339
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;This encoded hex trace ID is what appears in all API responses and in Grafana. When you click a
+trace ID in Grafana, the TraceQL Service automatically decodes it back to the original SkyWalking
+trace ID for the internal query.&lt;/p&gt;
+&lt;h4 id=&#34;span-kind-mapping&#34;&gt;Span Kind Mapping&lt;/h4&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;SkyWalking Span Type&lt;/th&gt;
+          &lt;th&gt;OTLP Span Kind&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;Entry&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_SERVER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;Exit&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_CLIENT&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;Local&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_INTERNAL&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;status-mapping&#34;&gt;Status Mapping&lt;/h4&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;SkyWalking &lt;code&gt;isError&lt;/code&gt;&lt;/th&gt;
+          &lt;th&gt;OTLP Status Code&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;true&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;STATUS_CODE_ERROR&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;false&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;STATUS_CODE_OK&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;spanattachedevents&#34;&gt;SpanAttachedEvents&lt;/h4&gt;
+&lt;p&gt;SkyWalking &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/event/&#34;&gt;SpanAttachedEvents&lt;/a&gt; are converted to OTLP span events,
+with &lt;code&gt;tags&lt;/code&gt; mapped as string attributes and &lt;code&gt;summary&lt;/code&gt; mapped as numeric attributes (serialized as strings).&lt;/p&gt;
+&lt;h3 id=&#34;zipkin-trace&#34;&gt;Zipkin Trace&lt;/h3&gt;
+&lt;h4 id=&#34;span-kind-mapping-1&#34;&gt;Span Kind Mapping&lt;/h4&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Zipkin Span Kind&lt;/th&gt;
+          &lt;th&gt;OTLP Span Kind&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;CLIENT&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_CLIENT&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;SERVER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_SERVER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;PRODUCER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_PRODUCER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;CONSUMER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_CONSUMER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;status-mapping-1&#34;&gt;Status Mapping&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;If the &lt;code&gt;otel.status_code&lt;/code&gt; tag is present, it is used directly.&lt;/li&gt;
+&lt;li&gt;Otherwise, if the &lt;code&gt;error&lt;/code&gt; tag equals &lt;code&gt;true&lt;/code&gt;, the status is &lt;code&gt;STATUS_CODE_ERROR&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;If neither tag is present, the status defaults to &lt;code&gt;STATUS_CODE_UNSET&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;endpoint-and-annotation-mapping&#34;&gt;Endpoint and Annotation Mapping&lt;/h4&gt;
+&lt;p&gt;Zipkin endpoint fields are mapped to OTLP attributes (e.g., &lt;code&gt;localEndpoint.ipv4&lt;/code&gt; → &lt;code&gt;net.host.ip&lt;/code&gt;),
+and Zipkin annotations are converted to OTLP span events.&lt;/p&gt;
+&lt;p&gt;For the full conversion details, see the &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/traceql-service/&#34;&gt;TraceQL Service documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;how-to-enable-traceql&#34;&gt;How to Enable TraceQL&lt;/h2&gt;
+&lt;h3 id=&#34;step-1-enable-the-traceql-module&#34;&gt;Step 1: Enable the TraceQL Module&lt;/h3&gt;
+&lt;p&gt;By default, the TraceQL module is &lt;strong&gt;disabled&lt;/strong&gt; (&lt;code&gt;selector: ${SW_TRACEQL:-}&lt;/code&gt;). To enable it, set
+the selector to &lt;code&gt;default&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#57606a&#34;&gt;# In application.yml&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;traceQL&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;selector&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_TRACEQL:default}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;enableDatasourceSkywalking&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_TRACEQL_ENABLE_DATASOURCE_SKYWALKING:true}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;enableDatasourceZipkin&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_TRACEQL_ENABLE_DATASOURCE_ZIPKIN:true}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Or via environment variables:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_TRACEQL&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;default
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_TRACEQL_ENABLE_DATASOURCE_SKYWALKING&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;true&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_TRACEQL_ENABLE_DATASOURCE_ZIPKIN&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;true&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;step-2-enable-the-zipkin-receiver-for-zipkin-traces-only&#34;&gt;Step 2: Enable the Zipkin Receiver (for Zipkin traces only)&lt;/h3&gt;
+&lt;p&gt;If you want to query Zipkin traces, you also need to enable the Zipkin receiver so that
+SkyWalking can ingest Zipkin trace data:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#57606a&#34;&gt;# In application.yml&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;receiver-zipkin&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;selector&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_RECEIVER_ZIPKIN:default}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;searchableTracesTags&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_ZIPKIN_SEARCHABLE_TAG_KEYS:http.method}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;sampleRate&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_ZIPKIN_SAMPLE_RATE:10000}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restHost&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_RECEIVER_ZIPKIN_REST_HOST:0.0.0.0}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restPort&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_RECEIVER_ZIPKIN_REST_PORT:9411}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Or via environment variable:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_RECEIVER_ZIPKIN&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;default
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;full-configuration-reference&#34;&gt;Full Configuration Reference&lt;/h3&gt;
+&lt;p&gt;For the complete list of all configuration options and their default values, see the
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/traceql-service/#configuration&#34;&gt;Configuration section of the TraceQL Service documentation&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;configuring-grafana-tempo-data-source&#34;&gt;Configuring Grafana Tempo Data Source&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Prerequisite&lt;/strong&gt;: Grafana &lt;strong&gt;12 or later&lt;/strong&gt; is required.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Each trace backend (SkyWalking native / Zipkin) needs its own Tempo data source in Grafana,
+because each is served under a different context path.&lt;/p&gt;
+&lt;h3 id=&#34;context-paths&#34;&gt;Context Paths&lt;/h3&gt;
+&lt;p&gt;The two backends are served under separate context paths on the same port:&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Backend&lt;/th&gt;
+          &lt;th&gt;Default Context Path&lt;/th&gt;
+          &lt;th&gt;Env Variable&lt;/th&gt;
+          &lt;th&gt;Full Default URL&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;SkyWalking native&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;/skywalking&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_REST_CONTEXT_PATH_SKYWALKING&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/skywalking&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Zipkin&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;/zipkin&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_REST_CONTEXT_PATH_ZIPKIN&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/zipkin&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;setting-up-the-skywalking-data-source&#34;&gt;Setting Up the SkyWalking Data Source&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;In Grafana, go to &lt;strong&gt;Configuration → Data Sources → Add data source&lt;/strong&gt;.&lt;/li&gt;
+&lt;li&gt;Choose &lt;strong&gt;Tempo&lt;/strong&gt;.&lt;/li&gt;
+&lt;li&gt;Set the URL to &lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/skywalking&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Disable the Streaming option&lt;/strong&gt; (SkyWalking does not support streaming mode).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-datasource-streaming.png&#34; alt=&#34;Disable Streaming&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;Save and test the data source.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-datasource.png&#34; alt=&#34;SkyWalking Data Source&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;setting-up-the-zipkin-data-source&#34;&gt;Setting Up the Zipkin Data Source&lt;/h3&gt;
+&lt;p&gt;Same as above, but set the URL to &lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/zipkin&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-zipkin-datasource.png&#34; alt=&#34;Zipkin Data Source&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;configuring-trace-list-result-tags&#34;&gt;Configuring Trace List Result Tags&lt;/h2&gt;
+&lt;p&gt;When you search for traces in Grafana, the trace list panel shows a summary of each trace.
+The &lt;code&gt;tracesListResultTags&lt;/code&gt; configuration controls &lt;strong&gt;which span tags are included in the search
+result&lt;/strong&gt; and displayed as columns in the trace list.&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Env Variable&lt;/th&gt;
+          &lt;th&gt;Default Value&lt;/th&gt;
+          &lt;th&gt;Purpose&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_ZIPKIN_TRACES_LIST_RESULT_TAGS&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http.method,error&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Tags shown for Zipkin traces&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_SKYWALKING_TRACES_LIST_RESULT_TAGS&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http.method,http.status_code,rpc.status_code,db.type,db.instance,mq.queue,mq.topic,mq.broker&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Tags shown for SkyWalking traces&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Note that &lt;code&gt;service.name&lt;/code&gt; and &lt;code&gt;span.kind&lt;/code&gt; are &lt;strong&gt;always included&lt;/strong&gt; regardless of this setting.&lt;/p&gt;
+&lt;p&gt;These tags appear as attribute columns in the Grafana Tempo trace search results, making it
+easier to identify and group traces at a glance:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;SkyWalking native trace list:&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-trace-list.png&#34; alt=&#34;SkyWalking Trace List&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Zipkin trace list:&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-zipkin-trace-list.png&#34; alt=&#34;Zipkin Trace List&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You can customize these tags based on your application&amp;rsquo;s instrumentation. For example, if your
+services heavily use messaging, you might add &lt;code&gt;mq.destination&lt;/code&gt; or &lt;code&gt;messaging.system&lt;/code&gt; to the list.&lt;/p&gt;
+&lt;h2 id=&#34;building-a-trace-dashboard-in-grafana&#34;&gt;Building a Trace Dashboard in Grafana&lt;/h2&gt;
+&lt;h3 id=&#34;skywalking-native-trace-dashboard&#34;&gt;SkyWalking Native Trace Dashboard&lt;/h3&gt;
+&lt;h4 id=&#34;step-1-explore-and-save&#34;&gt;Step 1: Explore and Save&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;Go to the &lt;strong&gt;Explore&lt;/strong&gt; page in Grafana.&lt;/li&gt;
+&lt;li&gt;Select the Tempo data source you configured for SkyWalking (e.g., &lt;code&gt;SkyWalkingTraceQL&lt;/code&gt;).&lt;/li&gt;
+&lt;li&gt;Run a test query, then click &lt;strong&gt;Add to dashboard&lt;/strong&gt; and save it as &lt;code&gt;SkyWalking Trace&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-explore.png&#34; alt=&#34;SkyWalking Explore&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;step-2-configure-variables&#34;&gt;Step 2: Configure Variables&lt;/h4&gt;
+&lt;p&gt;Add dashboard variables so users can filter traces dynamically (e.g., by service name):&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-variables.png&#34; alt=&#34;SkyWalking Variables&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;step-3-add-a-trace-panel&#34;&gt;Step 3: Add a Trace Panel&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;Choose a &lt;strong&gt;Table&lt;/strong&gt; chart (or edit the panel you saved).&lt;/li&gt;
+&lt;li&gt;Set &lt;strong&gt;Query type&lt;/strong&gt; to &lt;code&gt;Search&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Set the &lt;strong&gt;Service Name&lt;/strong&gt; query condition to the variable &lt;code&gt;$Service&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Add other query conditions as needed (e.g., duration, span name, tags).&lt;/li&gt;
+&lt;li&gt;Test and save.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-panel.png&#34; alt=&#34;SkyWalking Panel&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;step-4-view-trace-details&#34;&gt;Step 4: View Trace Details&lt;/h4&gt;
+&lt;p&gt;Click any trace ID in the trace panel to jump to the Explore page showing the full trace
+waterfall view with all spans, tags, and events:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-trace-detail.png&#34; alt=&#34;SkyWalking Trace Detail&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;zipkin-trace-dashboard&#34;&gt;Zipkin Trace Dashboard&lt;/h3&gt;
+&lt;p&gt;The setup for Zipkin traces is identical to SkyWalking native traces — just use the Zipkin
+Tempo data source you configured (e.g., &lt;code&gt;ZipkinTraceQL&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Zipkin trace detail view:&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-zipkin-trace-detail.png&#34; alt=&#34;Zipkin Trace Detail&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary&lt;/h2&gt;
+&lt;p&gt;With TraceQL support in SkyWalking 10.4.0, you can now leverage Grafana&amp;rsquo;s powerful Tempo
+data source to query and visualize both SkyWalking native traces and Zipkin-compatible traces.
+The key points to remember:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Enable the TraceQL module&lt;/strong&gt; by setting &lt;code&gt;SW_TRACEQL=default&lt;/code&gt; and enabling the desired backends.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Configure separate Tempo data sources&lt;/strong&gt; in Grafana for each backend (&lt;code&gt;/skywalking&lt;/code&gt; and &lt;code&gt;/zipkin&lt;/code&gt;).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Disable the Streaming option&lt;/strong&gt; in the Grafana Tempo data source settings.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Customize result tags&lt;/strong&gt; via &lt;code&gt;SW_TRACEQL_SKYWALKING_TRACES_LIST_RESULT_TAGS&lt;/code&gt; and &lt;code&gt;SW_TRACEQL_ZIPKIN_TRACES_LIST_RESULT_TAGS&lt;/code&gt; to control what&amp;rsquo;s shown in search results.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SkyWalking native trace queries require BanyanDB&lt;/strong&gt; storage (Zipkin traces work with all storage backends).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;For the complete API reference and conversion details, see the
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/traceql-service/&#34;&gt;TraceQL Service documentation&lt;/a&gt;.
+For Grafana integration details, see
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/ui-grafana/#use-grafana-as-the-ui&#34;&gt;Use Grafana As The UI&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 使用 TraceQL 查询 SkyWalking 和 Zipkin 链路追踪数据并在 Grafana 中可视化</title>
+      <link>/zh/2026-04-08-traceql/</link>
+      <pubDate>Wed, 08 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-04-08-traceql/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;使用-traceql-查询-skywalking-和-zipkin-链路追踪数据并在-grafana-中可视化&#34;&gt;使用 TraceQL 查询 SkyWalking 和 Zipkin 链路追踪数据并在 Grafana 中可视化&lt;/h1&gt;
+&lt;p&gt;Apache SkyWalking 在 &lt;strong&gt;10.4.0&lt;/strong&gt; 版本中引入了 &lt;strong&gt;TraceQL&lt;/strong&gt; 支持，实现了
+&lt;a href=&#34;https://grafana.com/docs/tempo/v2.10.x/api_docs/&#34;&gt;Grafana Tempo 的 HTTP 查询 API&lt;/a&gt;，使
+Grafana 无需任何额外插件即可查询和可视化 SkyWalking 中存储的链路追踪数据。
+这意味着你现在可以使用熟悉的 Grafana Tempo 数据源来搜索、过滤和深入分析
+&lt;strong&gt;SkyWalking 原生链路追踪&lt;/strong&gt;和 &lt;strong&gt;Zipkin 兼容链路追踪&lt;/strong&gt; —— 所有数据都由现有的 SkyWalking OAP 服务器提供。&lt;/p&gt;
+&lt;h2 id=&#34;架构概览&#34;&gt;架构概览&lt;/h2&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;┌────────────────────┐         Tempo HTTP API           ┌─────────────────────────────┐
+│                    │  ──── /skywalking/api/search ──► │  SkyWalking Native Backend  │
+│      Grafana       │                                  │  (Query Traces V2 API)      │
+│  (Tempo Data Src)  │                                  ├─────────────────────────────┤
+│                    │  ──── /zipkin/api/search ──────► │  Zipkin-Compatible Backend  │
+└────────────────────┘                                  └──────────┬──────────────────┘
+                                                                   │
+                                                        ┌──────────▼──────────────────┐
+                                                        │    SkyWalking OAP Server    │
+                                                        │  ┌───────────────────────┐  │
+                                                        │  │   TraceQL Service     │  │
+                                                        │  │  (port 3200)          │  │
+                                                        │  └───────────────────────┘  │
+                                                        │  ┌───────────────────────┐  │
+                                                        │  │  Storage (BanyanDB /  │  │
+                                                        │  │  Elasticsearch / …)   │  │
+                                                        │  └───────────────────────┘  │
+                                                        └─────────────────────────────┘
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;TraceQL Service 位于 OAP 服务器内部，在端口 &lt;code&gt;3200&lt;/code&gt;（默认）上暴露 Tempo 兼容的 HTTP API。
+它将链路追踪数据从原生格式转换为
+&lt;a href=&#34;https://github.com/grafana/tempo/blob/main/pkg/tempopb/tempo.proto&#34;&gt;Tempo 的格式&lt;/a&gt;，
+其中链路追踪详情部分（&lt;code&gt;Trace&lt;/code&gt; 消息）复用了 OTLP &lt;code&gt;Trace&lt;/code&gt; 定义。&lt;/p&gt;
+&lt;h2 id=&#34;支持的-traceql-特性与限制&#34;&gt;支持的 TraceQL 特性与限制&lt;/h2&gt;
+&lt;p&gt;TraceQL 是一种功能丰富的查询语言，但 SkyWalking 目前实现了一个实用的子集。
+以下特性&lt;strong&gt;已支持&lt;/strong&gt;：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Feature&lt;/th&gt;
+          &lt;th&gt;Examples&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Spanset filter&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;{resource.service.name=&amp;quot;frontend&amp;quot;}&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Resource attributes&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;resource.service.name&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Span attributes&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;span.http.method&lt;/code&gt;, &lt;code&gt;span.http.status_code&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Intrinsic fields&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;duration&lt;/code&gt;, &lt;code&gt;name&lt;/code&gt;, &lt;code&gt;status&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Comparison operators&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;=&lt;/code&gt;, &lt;code&gt;&amp;gt;&lt;/code&gt;, &lt;code&gt;&amp;gt;=&lt;/code&gt;, &lt;code&gt;&amp;lt;&lt;/code&gt;, &lt;code&gt;&amp;lt;=&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Compound conditions&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;{resource.service.name=&amp;quot;frontend&amp;quot; &amp;amp;&amp;amp; duration&amp;gt;100ms}&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Duration units&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;us&lt;/code&gt;/&lt;code&gt;µs&lt;/code&gt;, &lt;code&gt;ms&lt;/code&gt;, &lt;code&gt;s&lt;/code&gt;, &lt;code&gt;m&lt;/code&gt;, &lt;code&gt;h&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;以下特性&lt;strong&gt;暂不支持&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Spanset logical operations (&lt;code&gt;{...} AND {...}&lt;/code&gt;, &lt;code&gt;{...} OR {...}&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;Pipeline operations (&lt;code&gt;|&lt;/code&gt; operator)&lt;/li&gt;
+&lt;li&gt;Aggregate functions (&lt;code&gt;count()&lt;/code&gt;, &lt;code&gt;avg()&lt;/code&gt;, &lt;code&gt;max()&lt;/code&gt;, &lt;code&gt;min()&lt;/code&gt;, &lt;code&gt;sum()&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;Regular expression matching (&lt;code&gt;=~&lt;/code&gt;, &lt;code&gt;!~&lt;/code&gt;)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;event&lt;/code&gt; and &lt;code&gt;link&lt;/code&gt; scopes&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;kind&lt;/code&gt; intrinsic field&lt;/li&gt;
+&lt;li&gt;Streaming mode (must be disabled in the Grafana Tempo data source settings)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;重要提示&lt;/strong&gt;：TraceQL 中的 SkyWalking 原生链路追踪支持基于
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/query-protocol/#trace-v2&#34;&gt;Query Traces V2 API&lt;/a&gt;。
+目前只有 &lt;strong&gt;BanyanDB&lt;/strong&gt; 存储实现了该 API。其他存储后端
+（如 Elasticsearch、MySQL、PostgreSQL）不支持通过 TraceQL 查询 SkyWalking 原生链路追踪数据。
+Zipkin 兼容链路追踪&lt;strong&gt;不受&lt;/strong&gt;此限制。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;trace-格式转换&#34;&gt;Trace 格式转换&lt;/h2&gt;
+&lt;p&gt;由于 Tempo 格式的链路追踪详情部分复用了
+&lt;a href=&#34;https://opentelemetry.io/docs/reference/specification/protocol/&#34;&gt;OTLP Trace&lt;/a&gt; 定义，
+以下转换描述使用 OTLP 字段名称（如 span kind、status code）。&lt;/p&gt;
+&lt;h3 id=&#34;skywalking-原生链路追踪&#34;&gt;SkyWalking 原生链路追踪&lt;/h3&gt;
+&lt;h4 id=&#34;trace-id-编码&#34;&gt;Trace ID 编码&lt;/h4&gt;
+&lt;p&gt;SkyWalking 原生 trace ID 是任意字符串（例如
+&lt;code&gt;2a2e04e8d1114b14925c04a6321ca26c.38.17739924187687539&lt;/code&gt;），而 Grafana Tempo 要求
+纯十六进制编码的 trace ID。TraceQL Service 将原始 trace ID 的每个 UTF-8 字节编码为两个小写十六进制字符：&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;原始值:  2a2e04e8d1114b14925c04a6321ca26c.38.17739924187687539
+编码后:  32613265303465386431313134623134393235633034613633323163613236632e33382e3137373339393234313837363837353339
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;编码后的十六进制 trace ID 会出现在所有 API 响应和 Grafana 中。当你在 Grafana 中点击
+trace ID 时，TraceQL Service 会自动将其解码回原始的 SkyWalking trace ID 进行内部查询。&lt;/p&gt;
+&lt;h4 id=&#34;span-kind-映射&#34;&gt;Span Kind 映射&lt;/h4&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;SkyWalking Span Type&lt;/th&gt;
+          &lt;th&gt;OTLP Span Kind&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;Entry&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_SERVER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;Exit&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_CLIENT&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;Local&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_INTERNAL&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;状态映射&#34;&gt;状态映射&lt;/h4&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;SkyWalking &lt;code&gt;isError&lt;/code&gt;&lt;/th&gt;
+          &lt;th&gt;OTLP Status Code&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;true&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;STATUS_CODE_ERROR&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;false&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;STATUS_CODE_OK&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;spanattachedevents&#34;&gt;SpanAttachedEvents&lt;/h4&gt;
+&lt;p&gt;SkyWalking &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/event/&#34;&gt;SpanAttachedEvents&lt;/a&gt; 被转换为 OTLP span events，
+其中 &lt;code&gt;tags&lt;/code&gt; 映射为字符串属性，&lt;code&gt;summary&lt;/code&gt; 映射为数值属性（序列化为字符串）。&lt;/p&gt;
+&lt;h3 id=&#34;zipkin-链路追踪&#34;&gt;Zipkin 链路追踪&lt;/h3&gt;
+&lt;h4 id=&#34;span-kind-映射-1&#34;&gt;Span Kind 映射&lt;/h4&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Zipkin Span Kind&lt;/th&gt;
+          &lt;th&gt;OTLP Span Kind&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;CLIENT&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_CLIENT&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;SERVER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_SERVER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;PRODUCER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_PRODUCER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;CONSUMER&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SPAN_KIND_CONSUMER&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h4 id=&#34;状态映射-1&#34;&gt;状态映射&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;如果存在 &lt;code&gt;otel.status_code&lt;/code&gt; 标签，则直接使用。&lt;/li&gt;
+&lt;li&gt;否则，如果 &lt;code&gt;error&lt;/code&gt; 标签等于 &lt;code&gt;true&lt;/code&gt;，则状态为 &lt;code&gt;STATUS_CODE_ERROR&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;如果以上标签都不存在，则状态默认为 &lt;code&gt;STATUS_CODE_UNSET&lt;/code&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h4 id=&#34;endpoint-与-annotation-映射&#34;&gt;Endpoint 与 Annotation 映射&lt;/h4&gt;
+&lt;p&gt;Zipkin endpoint 字段被映射为 OTLP 属性（例如 &lt;code&gt;localEndpoint.ipv4&lt;/code&gt; → &lt;code&gt;net.host.ip&lt;/code&gt;），
+Zipkin annotations 被转换为 OTLP span events。&lt;/p&gt;
+&lt;p&gt;完整的转换详情请参阅 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/traceql-service/&#34;&gt;TraceQL Service 文档&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;如何启用-traceql&#34;&gt;如何启用 TraceQL&lt;/h2&gt;
+&lt;h3 id=&#34;步骤-1启用-traceql-模块&#34;&gt;步骤 1：启用 TraceQL 模块&lt;/h3&gt;
+&lt;p&gt;默认情况下，TraceQL 模块是&lt;strong&gt;禁用的&lt;/strong&gt;（&lt;code&gt;selector: ${SW_TRACEQL:-}&lt;/code&gt;）。要启用它，将 selector
+设置为 &lt;code&gt;default&lt;/code&gt;：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#57606a&#34;&gt;# 在 application.yml 中&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;traceQL&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;selector&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_TRACEQL:default}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;enableDatasourceSkywalking&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_TRACEQL_ENABLE_DATASOURCE_SKYWALKING:true}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;enableDatasourceZipkin&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_TRACEQL_ENABLE_DATASOURCE_ZIPKIN:true}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;或通过环境变量设置：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_TRACEQL&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;default
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_TRACEQL_ENABLE_DATASOURCE_SKYWALKING&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;true&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_TRACEQL_ENABLE_DATASOURCE_ZIPKIN&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;true&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;步骤-2启用-zipkin-接收器仅用于-zipkin-链路追踪&#34;&gt;步骤 2：启用 Zipkin 接收器（仅用于 Zipkin 链路追踪）&lt;/h3&gt;
+&lt;p&gt;如果你需要查询 Zipkin 链路追踪数据，还需要启用 Zipkin 接收器，以便 SkyWalking 能够接收
+Zipkin 链路追踪数据：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#57606a&#34;&gt;# 在 application.yml 中&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;receiver-zipkin&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;selector&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_RECEIVER_ZIPKIN:default}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;default&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;searchableTracesTags&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_ZIPKIN_SEARCHABLE_TAG_KEYS:http.method}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;sampleRate&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_ZIPKIN_SAMPLE_RATE:10000}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restHost&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_RECEIVER_ZIPKIN_REST_HOST:0.0.0.0}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restPort&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;${SW_RECEIVER_ZIPKIN_REST_PORT:9411}&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;或通过环境变量设置：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_RECEIVER_ZIPKIN&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;default
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;完整配置参考&#34;&gt;完整配置参考&lt;/h3&gt;
+&lt;p&gt;所有配置选项及其默认值的完整列表，请参阅
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/traceql-service/#configuration&#34;&gt;TraceQL Service 文档的配置章节&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;配置-grafana-tempo-数据源&#34;&gt;配置 Grafana Tempo 数据源&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;前提条件&lt;/strong&gt;：需要 Grafana &lt;strong&gt;12 或更高版本&lt;/strong&gt;。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;每个链路追踪后端（SkyWalking 原生 / Zipkin）需要在 Grafana 中配置各自独立的 Tempo 数据源，
+因为它们分别在不同的上下文路径下提供服务。&lt;/p&gt;
+&lt;h3 id=&#34;上下文路径&#34;&gt;上下文路径&lt;/h3&gt;
+&lt;p&gt;两个后端在同一端口上使用不同的上下文路径提供服务：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Backend&lt;/th&gt;
+          &lt;th&gt;Default Context Path&lt;/th&gt;
+          &lt;th&gt;Env Variable&lt;/th&gt;
+          &lt;th&gt;Full Default URL&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;SkyWalking native&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;/skywalking&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_REST_CONTEXT_PATH_SKYWALKING&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/skywalking&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Zipkin&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;/zipkin&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_REST_CONTEXT_PATH_ZIPKIN&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/zipkin&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;配置-skywalking-数据源&#34;&gt;配置 SkyWalking 数据源&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;在 Grafana 中，前往 &lt;strong&gt;Configuration → Data Sources → Add data source&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;选择 &lt;strong&gt;Tempo&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;将 URL 设置为 &lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/skywalking&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;禁用 Streaming 选项&lt;/strong&gt;（SkyWalking 不支持流式模式）。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-datasource-streaming.png&#34; alt=&#34;禁用 Streaming&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;5&#34;&gt;
+&lt;li&gt;保存并测试数据源。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-datasource.png&#34; alt=&#34;SkyWalking 数据源&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;配置-zipkin-数据源&#34;&gt;配置 Zipkin 数据源&lt;/h3&gt;
+&lt;p&gt;与上述步骤相同，但将 URL 设置为 &lt;code&gt;http://&amp;lt;oap-host&amp;gt;:3200/zipkin&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-zipkin-datasource.png&#34; alt=&#34;Zipkin 数据源&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;配置链路追踪列表结果标签&#34;&gt;配置链路追踪列表结果标签&lt;/h2&gt;
+&lt;p&gt;在 Grafana 中搜索链路追踪时，链路追踪列表面板会显示每条追踪的摘要信息。
+&lt;code&gt;tracesListResultTags&lt;/code&gt; 配置控制&lt;strong&gt;哪些 span 标签会包含在搜索结果中&lt;/strong&gt;并作为列显示在追踪列表中。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;Env Variable&lt;/th&gt;
+          &lt;th&gt;Default Value&lt;/th&gt;
+          &lt;th&gt;Purpose&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_ZIPKIN_TRACES_LIST_RESULT_TAGS&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http.method,error&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Tags shown for Zipkin traces&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;SW_TRACEQL_SKYWALKING_TRACES_LIST_RESULT_TAGS&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;http.method,http.status_code,rpc.status_code,db.type,db.instance,mq.queue,mq.topic,mq.broker&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Tags shown for SkyWalking traces&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;注意，无论此设置如何，&lt;code&gt;service.name&lt;/code&gt; 和 &lt;code&gt;span.kind&lt;/code&gt; &lt;strong&gt;始终包含&lt;/strong&gt;在结果中。&lt;/p&gt;
+&lt;p&gt;这些标签在 Grafana Tempo 链路追踪搜索结果中显示为属性列，方便快速识别和分组追踪数据：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;SkyWalking 原生追踪列表：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-trace-list.png&#34; alt=&#34;SkyWalking 追踪列表&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Zipkin 追踪列表：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-zipkin-trace-list.png&#34; alt=&#34;Zipkin 追踪列表&#34;&gt;&lt;/p&gt;
+&lt;p&gt;你可以根据应用程序的埋点情况自定义这些标签。例如，如果你的服务大量使用消息队列，
+可以在列表中添加 &lt;code&gt;mq.destination&lt;/code&gt; 或 &lt;code&gt;messaging.system&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;在-grafana-中构建链路追踪仪表板&#34;&gt;在 Grafana 中构建链路追踪仪表板&lt;/h2&gt;
+&lt;h3 id=&#34;skywalking-原生追踪仪表板&#34;&gt;SkyWalking 原生追踪仪表板&lt;/h3&gt;
+&lt;h4 id=&#34;步骤-1探索并保存&#34;&gt;步骤 1：探索并保存&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;前往 Grafana 的 &lt;strong&gt;Explore&lt;/strong&gt; 页面。&lt;/li&gt;
+&lt;li&gt;选择你为 SkyWalking 配置的 Tempo 数据源（例如 &lt;code&gt;SkyWalkingTraceQL&lt;/code&gt;）。&lt;/li&gt;
+&lt;li&gt;运行一个测试查询，然后点击 &lt;strong&gt;Add to dashboard&lt;/strong&gt; 并保存为 &lt;code&gt;SkyWalking Trace&lt;/code&gt;。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-explore.png&#34; alt=&#34;SkyWalking 探索&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;步骤-2配置变量&#34;&gt;步骤 2：配置变量&lt;/h4&gt;
+&lt;p&gt;添加仪表板变量，以便用户可以动态过滤追踪数据（例如按服务名称过滤）：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-variables.png&#34; alt=&#34;SkyWalking 变量&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;步骤-3添加追踪面板&#34;&gt;步骤 3：添加追踪面板&lt;/h4&gt;
+&lt;ol&gt;
+&lt;li&gt;选择 &lt;strong&gt;Table&lt;/strong&gt; 图表（或编辑你保存的面板）。&lt;/li&gt;
+&lt;li&gt;将 &lt;strong&gt;Query type&lt;/strong&gt; 设置为 &lt;code&gt;Search&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;将 &lt;strong&gt;Service Name&lt;/strong&gt; 查询条件设置为变量 &lt;code&gt;$Service&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;根据需要添加其他查询条件（如 duration、span name、tags）。&lt;/li&gt;
+&lt;li&gt;测试并保存。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-panel.png&#34; alt=&#34;SkyWalking 面板&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;步骤-4查看追踪详情&#34;&gt;步骤 4：查看追踪详情&lt;/h4&gt;
+&lt;p&gt;点击追踪面板中的任意 trace ID，即可跳转到 Explore 页面，查看完整的追踪瀑布图，
+包含所有 span、标签和事件：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-skywalking-trace-detail.png&#34; alt=&#34;SkyWalking 追踪详情&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;zipkin-追踪仪表板&#34;&gt;Zipkin 追踪仪表板&lt;/h3&gt;
+&lt;p&gt;Zipkin 追踪的设置与 SkyWalking 原生追踪完全相同 —— 只需使用你配置的 Zipkin Tempo 数据源
+（例如 &lt;code&gt;ZipkinTraceQL&lt;/code&gt;）。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Zipkin 追踪详情视图：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;grafana-tempo-zipkin-trace-detail.png&#34; alt=&#34;Zipkin 追踪详情&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;通过 SkyWalking 10.4.0 中的 TraceQL 支持，你现在可以利用 Grafana 强大的 Tempo 数据源
+来查询和可视化 SkyWalking 原生链路追踪和 Zipkin 兼容链路追踪数据。
+需要记住的要点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;启用 TraceQL 模块&lt;/strong&gt;：设置 &lt;code&gt;SW_TRACEQL=default&lt;/code&gt; 并启用所需的后端。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 Grafana 中配置独立的 Tempo 数据源&lt;/strong&gt;：为每个后端分别配置（&lt;code&gt;/skywalking&lt;/code&gt; 和 &lt;code&gt;/zipkin&lt;/code&gt;）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;禁用 Streaming 选项&lt;/strong&gt;：在 Grafana Tempo 数据源设置中关闭流式模式。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;自定义结果标签&lt;/strong&gt;：通过 &lt;code&gt;SW_TRACEQL_SKYWALKING_TRACES_LIST_RESULT_TAGS&lt;/code&gt; 和 &lt;code&gt;SW_TRACEQL_ZIPKIN_TRACES_LIST_RESULT_TAGS&lt;/code&gt; 控制搜索结果中显示的内容。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SkyWalking 原生追踪查询需要 BanyanDB&lt;/strong&gt; 存储（Zipkin 追踪支持所有存储后端）。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;完整的 API 参考和转换详情，请参阅
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/traceql-service/&#34;&gt;TraceQL Service 文档&lt;/a&gt;。
+Grafana 集成详情，请参阅
+&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/ui-grafana/#use-grafana-as-the-ui&#34;&gt;使用 Grafana 作为 UI&lt;/a&gt;。&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: SkyWalking Ruby Quick Start and Principle Introduction</title>
