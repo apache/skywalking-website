@@ -36,7 +36,7 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
   <meta itemprop="description" content="Lifecycle Management in BanyanDB BanyanDB uses a hot-warm-cold data tiering strategy to optimize storage costs and query performance. The lifecycle management feature automatically migrates data between storage tiers based on configured policies.
 Overview A dedicated lifecycle agent (an independent Go process) is responsible for:
 Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
-  <meta itemprop="wordCount" content="934">
+  <meta itemprop="wordCount" content="1181">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Lifecycle Management in BanyanDB">
   <meta name="twitter:description" content="Lifecycle Management in BanyanDB BanyanDB uses a hot-warm-cold data tiering strategy to optimize storage costs and query performance. The lifecycle management feature automatically migrates data between storage tiers based on configured policies.
@@ -1178,7 +1178,7 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 1c954da</div>
+                  <div class="commit-id">Commit Id: 5c42cd0</div>
                 
 
 
@@ -1202,6 +1202,9 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 <li>Removing the original data after a successful migration.</li>
 </ul>
 <p>This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.</p>
+<blockquote>
+<p><strong>Prerequisite: node discovery must be configured.</strong> The lifecycle agent resolves the target nodes of every stage by listing all data nodes through the cluster&rsquo;s node registry and filtering them by the stage&rsquo;s <code>node_selector</code>. In the default <code>--node-discovery-mode=none</code> setting the registry is empty, so the agent cannot find any destination to migrate data to and the run will be a no-op. Configure <code>dns</code> or <code>file</code> mode on the lifecycle agent using the same source of truth as the rest of the cluster; see the <a href="../node-discovery">node discovery documentation</a> for the full list of <code>--node-discovery-*</code> flags.</p>
+</blockquote>
 <h2 id="data-migration-process">Data Migration Process</h2>
 <p>The lifecycle agent performs the following steps:</p>
 <ol>
@@ -1330,13 +1333,14 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 <p>The lifecycle command offers options to customize data migration:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>lifecycle <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --grpc-addr 127.0.0.1:17912 <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  --etcd-endpoints &lt;etcd-endpoints&gt; <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --stream-root-path /path/to/stream <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --measure-root-path /path/to/measure <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --trace-root-path /path/to/trace <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --node-labels <span style="color:#953800">type</span><span style="color:#0550ae">=</span>hot <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --progress-file /path/to/progress.json <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  --schedule @daily
+</span></span></span><span style="display:flex;"><span>  --schedule @daily <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-mode file <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-file-path /etc/banyandb/nodes.yaml
 </span></span></code></pre></div><h3 id="command-line-parameters">Command-Line Parameters</h3>
 <table>
   <thead>
@@ -1354,7 +1358,7 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
       </tr>
       <tr>
           <td><code>--grpc-addr</code></td>
-          <td>gRPC address of the data node</td>
+          <td>gRPC address of the source data node to snapshot and read from</td>
           <td><code>127.0.0.1:17912</code></td>
       </tr>
       <tr>
@@ -1393,11 +1397,6 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
           <td><code>/tmp/lifecycle-progress.json</code></td>
       </tr>
       <tr>
-          <td><code>--etcd-endpoints</code></td>
-          <td>Endpoints for etcd connections</td>
-          <td><code>&quot;&quot;</code></td>
-      </tr>
-      <tr>
           <td><code>--schedule</code></td>
           <td>Schedule for periodic backup (e.g., @yearly, @monthly, @weekly, @daily, etc.)</td>
           <td><code>&quot;&quot;</code></td>
@@ -1411,6 +1410,7 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 <li><strong>Retention is disabled on non-last stages</strong>: TTL-based segment deletion is disabled on all stages except the last one. Data removal on intermediate stages is managed by the lifecycle migration process, not by the built-in retention mechanism.</li>
 </ul>
 <p>If a node&rsquo;s labels do not match any stage, both rotation and retention are disabled as a safety measure.</p>
+<p>The lifecycle agent also accepts the full suite of <code>--node-discovery-*</code> flags so it can enumerate every candidate target node in the cluster. At a minimum you need <code>--node-discovery-mode</code> and either <code>--node-discovery-dns-srv-addresses</code> (DNS mode) or <code>--node-discovery-file-path</code> (file mode). The set of nodes visible to the lifecycle agent must include every warm/cold data node that any stage&rsquo;s <code>node_selector</code> could match — use the same discovery configuration that the liaison nodes use. See the <a href="../node-discovery">node discovery documentation</a> for the complete reference.</p>
 <h2 id="best-practices">Best Practices</h2>
 <ol>
 <li><strong>Node Labeling:</strong>
@@ -1446,14 +1446,25 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 <ol>
 <li>
 <p><strong>Setup nodes with appropriate labels:</strong></p>
+<p>Every node (liaison, hot, warm, cold, and the lifecycle agent itself) must point at the same node-discovery source so that the lifecycle agent and liaison nodes see the identical topology. The example below uses file mode with a shared <code>/etc/banyandb/nodes.yaml</code>; see the <a href="../node-discovery">node discovery documentation</a> for DNS mode.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#57606a"># Liaison node</span>
-</span></span><span style="display:flex;"><span>banyand liaison --etcd-endpoints &lt;etcd-endpoints&gt;
+</span></span><span style="display:flex;"><span>banyand liaison <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-mode<span style="color:#0550ae">=</span>file <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-file-path<span style="color:#0550ae">=</span>/etc/banyandb/nodes.yaml
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#57606a"># Hot node</span>
-</span></span><span style="display:flex;"><span>banyand data --node-labels <span style="color:#953800">type</span><span style="color:#0550ae">=</span>hot --etcd-endpoints &lt;etcd-endpoints&gt; --grpc-port <span style="color:#0550ae">17912</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># Hot data node</span>
+</span></span><span style="display:flex;"><span>banyand data <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-labels <span style="color:#953800">type</span><span style="color:#0550ae">=</span>hot <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --grpc-port <span style="color:#0550ae">17912</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-mode<span style="color:#0550ae">=</span>file <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-file-path<span style="color:#0550ae">=</span>/etc/banyandb/nodes.yaml
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#57606a"># Warm node</span>
-</span></span><span style="display:flex;"><span>banyand data --node-labels <span style="color:#953800">type</span><span style="color:#0550ae">=</span>warm --etcd-endpoints &lt;etcd-endpoints&gt; --grpc-port <span style="color:#0550ae">18912</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># Warm data node</span>
+</span></span><span style="display:flex;"><span>banyand data <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-labels <span style="color:#953800">type</span><span style="color:#0550ae">=</span>warm <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --grpc-port <span style="color:#0550ae">18912</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-mode<span style="color:#0550ae">=</span>file <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-file-path<span style="color:#0550ae">=</span>/etc/banyandb/nodes.yaml
 </span></span></code></pre></div></li>
 <li>
 <p><strong>Create a group with lifecycle stages.</strong></p>
@@ -1487,15 +1498,16 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 </span></span></code></pre></div><ol start="3">
 <li><strong>Run the lifecycle agent:</strong></li>
 </ol>
-<p><code>lifecycle</code> connects to the <code>hot</code> node to manage data migration:</p>
+<p><code>lifecycle</code> connects to the <code>hot</code> node (as its snapshot source via <code>--grpc-addr</code>) and uses node discovery to locate the warm/cold target nodes:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>lifecycle <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  --etcd-endpoints &lt;etcd-endpoints&gt; <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --node-labels <span style="color:#953800">type</span><span style="color:#0550ae">=</span>hot <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --grpc-addr 127.0.0.1:17912 <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --stream-root-path /data/stream <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --measure-root-path /data/measure <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --trace-root-path /data/trace <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  --progress-file /data/progress.json
+</span></span></span><span style="display:flex;"><span>  --progress-file /data/progress.json <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-mode<span style="color:#0550ae">=</span>file <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --node-discovery-file-path<span style="color:#0550ae">=</span>/etc/banyandb/nodes.yaml
 </span></span></code></pre></div><ol start="4">
 <li><strong>Verify migration:</strong>
 <ul>

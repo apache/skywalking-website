@@ -36,7 +36,7 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
   <meta itemprop="description" content="Cluster Maintenance Introduction Properly maintaining and scaling a cluster is crucial for ensuring its reliable and efficient operation. This document provides guidance on setting up a cluster, planning its capacity, and scaling it to meet evolving requirements.
 Cluster Setup Before deploying or maintaining a cluster, it is recommended to familiarize oneself with the basic clustering concepts by reviewing the clustering documentation.
 To set up a cluster, one can refer to the cluster installation guide, which describes the process in detail. A minimal cluster should consist of the following nodes:">
-  <meta itemprop="wordCount" content="1487">
+  <meta itemprop="wordCount" content="1305">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Cluster Maintenance">
   <meta name="twitter:description" content="Cluster Maintenance Introduction Properly maintaining and scaling a cluster is crucial for ensuring its reliable and efficient operation. This document provides guidance on setting up a cluster, planning its capacity, and scaling it to meet evolving requirements.
@@ -1178,7 +1178,7 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 1c954da</div>
+                  <div class="commit-id">Commit Id: 5c42cd0</div>
                 
 
 
@@ -1198,7 +1198,6 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
 <p>Before deploying or maintaining a cluster, it is recommended to familiarize oneself with the basic clustering concepts by reviewing the <a href="../../concept/clustering">clustering documentation</a>.</p>
 <p>To set up a cluster, one can refer to the <a href="../../installation/cluster">cluster installation guide</a>, which describes the process in detail. A minimal cluster should consist of the following nodes:</p>
 <ul>
-<li>3 etcd nodes</li>
 <li>2 liaison nodes</li>
 <li>2 data nodes</li>
 </ul>
@@ -1221,17 +1220,15 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
 <p>Vertical scalability refers to adding more resources (CPU, RAM, disk I/O, disk space, network bandwidth) to existing nodes in the cluster.</p>
 <p>Increasing the CPU and RAM of existing liaison nodes can improve the performance for heavy queries that process a large number of time series with many data points.</p>
 <p>Increasing the CPU and RAM of existing data nodes can increase the number of time series the cluster can handle. However, it is generally preferred to add more data nodes rather than increasing the resources of existing data nodes, as a higher number of data nodes increases cluster stability and improves query performance over time series.</p>
-<p>Increasing the disk I/O and disk space of existing etcd nodes can improve the performance for heavy metadata queries that process a large number of metadata entries.</p>
 <h3 id="horizontal-scalability">Horizontal Scalability</h3>
 <p>Horizontal scalability refers to adding more nodes to the cluster.</p>
 <p>Increasing the number of liaison nodes can increase the maximum possible data ingestion speed, as the ingested data can be split among a larger number of liaison nodes. It can also increase the maximum possible query rate, as the incoming concurrent requests can be split among a larger number of liaison nodes.</p>
 <p>Increasing the number of data nodes can increase the number of time series the cluster can handle. This can also improve query performance, as each data node contains a lower number of time series when the number of data nodes increases.</p>
 <p>The new added data nodes can be automatically discovered by the existing liaison nodes. It is recommended to add data nodes one by one to avoid overloading the liaison nodes with the new data nodes&rsquo; metadata.</p>
 <p>The cluster&rsquo;s availability is also improved by increasing the number of data nodes, as active data nodes need to handle a lower additional workload when some data nodes become unavailable. For example, if one node out of 2 nodes is unavailable, then 50% of the load is re-distributed across the remaining node, resulting in a 100% per-node workload increase. If one node out of 10 nodes is unavailable, then 10% of the load is re-distributed across the 9 remaining nodes, resulting in only an 11% per-node workload increase.</p>
-<p>Increasing the number of etcd nodes can increase the cluster&rsquo;s metadata capacity and improve the cluster&rsquo;s metadata query performance. It can also improve the cluster&rsquo;s metadata availability, as the metadata is replicated across all the etcd nodes. However, the cluster size should be odd to avoid split-brain situations.</p>
 <p>The steps of adding more data nodes:</p>
 <ol>
-<li>Boot up the new data node. They will register themselves to the etcd cluster. The liaison nodes will discover the new data node automatically.</li>
+<li>Boot up the new data node. The liaison nodes will discover the new data node automatically through the configured node discovery mechanism.</li>
 <li>If the shards are not balanced, the new data node will receive the shards from the existing data nodes. The shards are balanced automatically.</li>
 <li>Or if the shards are too few to balance, more shards should be created by increasing <code>shard_num</code> of the <code>group</code>. Seeing the <a href="../../interacting/bydbctl/schema/group">CRUD Groups</a> for more details.</li>
 <li>The new data node will start to ingest data and serve queries.</li>
@@ -1243,14 +1240,10 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
 <p>It is recommended to monitor the cluster&rsquo;s performance and add more liaison nodes in case of performance degradation. A workload management platform, such as Kubernetes, can be used to automatically scale the liaison nodes based on the cluster&rsquo;s performance metrics.</p>
 <h3 id="data-node-failure">Data Node Failure</h3>
 <p>If a data node fails, the cluster remains available. The failed data node is replaced by the remaining data nodes, and the cluster continues to ingest new data and serve queries. If the remaining data nodes are overloaded, the cluster might face performance degradation.</p>
-<p>The liaison nodes automatically discover the failed data node through the etcd cluster. They will perform a health check on the failed data node. If the failed data node is not healthy, the liaison nodes will stop sending requests to the failed data node and start sending requests to the remaining data nodes. Otherwise, the liaison nodes will continue sending requests to the failed data node in case of a temporary failure between the etcd cluster and the data node.</p>
+<p>The liaison nodes automatically discover the failed data node through the node discovery mechanism. They will perform a health check on the failed data node. If the failed data node is not healthy, the liaison nodes will stop sending requests to the failed data node and start sending requests to the remaining data nodes. Otherwise, the liaison nodes will continue sending requests to the failed data node in case of a temporary network failure.</p>
 <p>Liaison nodes continue serving queries if at least one data node is available. However, the responses might lose some data points that are stored in the failed data node. The lost data points are automatically recovered when the failed data node is back online.</p>
 <p>The client might face a &ldquo;grpc: the client connection is closing&rdquo; error temporarily when the liaison nodes are switching the requests from the failed data node to the remaining data nodes. The client should retry the request in case of this error.</p>
 <p>A workload management platform, such as Kubernetes, can be used to automatically scale the data nodes based on the cluster&rsquo;s performance metrics. But the shard number of the group should be increased manually. A proper practice is to set a expected maximum shard number for the group when creating the group. The shard number should match the maximum number of data nodes that the group can have.</p>
-<h3 id="etcd-node-failure">etcd Node Failure</h3>
-<p>If an etcd node fails, the cluster can still ingest new data and serve queries of <code>Stream</code>, <code>Measure</code> and <code>Trace</code>. <code>Property</code> operations are not available during the etcd node failure.</p>
-<p>When the etcd node is back online, the cluster automatically recovers without any manual intervention. If the etcd cluster lost the data, the client should rerun the metadata initialization process to recover the metadata.</p>
-<p>You might see some etcd-related errors in the logs of the liaison nodes and data nodes. These errors are automatically recovered when the failed etcd node is back online.</p>
 
 </div>
 
@@ -1297,7 +1290,6 @@ To set up a cluster, one can refer to the cluster installation guide, which desc
           <ul>
             <li><a href="#liaison-node-failure">Liaison Node Failure</a></li>
             <li><a href="#data-node-failure">Data Node Failure</a></li>
-            <li><a href="#etcd-node-failure">etcd Node Failure</a></li>
           </ul>
         </li>
       </ul>
