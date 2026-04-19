@@ -34,7 +34,7 @@ The OpenTelemetry Swift SDK (v2.3.0, tracing stable) provides auto-instrumentati
   <meta itemprop="name" content="SWIP-11 Support iOS App Monitoring via OpenTelemetry">
   <meta itemprop="description" content="SWIP-11 Support iOS App Monitoring via OpenTelemetry Motivation iOS (including iPadOS) is one of the most important client-side platforms. Monitoring iOS app performance — HTTP request latency, crash rates, app launch time — is as important as browser monitoring, which SkyWalking has supported since v8.x.
 The OpenTelemetry Swift SDK (v2.3.0, tracing stable) provides auto-instrumentation for iOS apps including HTTP request tracing (URLSession), device/OS resource attributes, and Apple MetricKit integration. All data is exported via standard OTLP.">
-  <meta itemprop="wordCount" content="3629">
+  <meta itemprop="wordCount" content="3566">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SWIP-11 Support iOS App Monitoring via OpenTelemetry">
   <meta name="twitter:description" content="SWIP-11 Support iOS App Monitoring via OpenTelemetry Motivation iOS (including iPadOS) is one of the most important client-side platforms. Monitoring iOS app performance — HTTP request latency, crash rates, app launch time — is as important as browser monitoring, which SkyWalking has supported since v8.x.
@@ -750,6 +750,32 @@ The OpenTelemetry Swift SDK (v2.3.0, tracing stable) provides auto-instrumentati
     <li>
         
             <a href="/docs/main/next/en/setup/service-agent/browser-agent">Browser Monitoring</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Mobile Monitoring<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/backend-ios-monitoring">iOS</a>
+        
+    </li>
+
+    
+
+</ul>
+
         
     </li>
 
@@ -2789,7 +2815,7 @@ The OpenTelemetry Swift SDK (v2.3.0, tracing stable) provides auto-instrumentati
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 272ba7d</div>
+                  <div class="commit-id">Commit Id: 9e57d91</div>
                 
 
 
@@ -3148,16 +3174,9 @@ This gives listeners access to:</p>
       <tr>
           <td><code>IOSMetricKitSpanListener</code></td>
           <td><code>scopeName == &quot;MetricKit&quot;</code> + <code>span.name == &quot;MXMetricPayload&quot;</code></td>
-          <td>Device stats → SampleFamily → MAL</td>
+          <td>Device stats → SampleFamily → shared MAL pipeline</td>
           <td><strong>No</strong></td>
           <td>No</td>
-      </tr>
-      <tr>
-          <td><code>IOSLayerSpanListener</code></td>
-          <td>resource <code>os.name == &quot;iOS&quot;</code> or <code>&quot;iPadOS&quot;</code></td>
-          <td>None (layer assignment only)</td>
-          <td>Yes</td>
-          <td>No (sets <code>layer = Layer.IOS</code>)</td>
       </tr>
   </tbody>
 </table>
@@ -3169,10 +3188,13 @@ just better structure.</p>
 <li>Listeners see raw OTLP data — InstrumentationScope name, resource attributes as separate map</li>
 <li>Any listener can veto trace persistence — prevents Zipkin conversion entirely (no wasted work)</li>
 <li>Any listener can inject tags — merged before Zipkin conversion</li>
-<li>Any listener can set layer — applies to service registration</li>
 <li>Multiple listeners can process the same span (e.g., a GenAI span on iOS triggers both)</li>
 <li>If ANY listener vetoes persistence, the span is not converted or stored</li>
 </ul>
+<p><strong>Note:</strong> No <code>IOSLayerSpanListener</code> is needed. The <code>IOS</code> layer is registered automatically
+when the MAL <code>expSuffix</code> with <code>Layer.IOS</code> processes MetricKit metrics. The OTLP→Zipkin trace
+pipeline (<code>SpanForward</code>) emits Zipkin-specific sources (not OAL sources), so there are no
+OAL traffic metrics for OTLP traces.</p>
 <h3 id="6-entity-model">6. Entity Model</h3>
 <table>
   <thead>
@@ -3185,114 +3207,24 @@ just better structure.</p>
   <tbody>
       <tr>
           <td><strong>Service</strong></td>
-          <td><code>service.name</code> resource attribute</td>
+          <td><code>service_name</code> label in MAL <code>expSuffix</code></td>
           <td><code>MyApp</code></td>
       </tr>
       <tr>
           <td><strong>Service Instance</strong></td>
-          <td><code>service.version</code> resource attribute (set by LAL/listener, SDK doesn&rsquo;t set <code>service.instance.id</code>)</td>
-          <td><code>2.1.0 (45)</code></td>
-      </tr>
-      <tr>
-          <td><strong>Endpoint</strong></td>
-          <td>HTTP span <code>http.target</code> attribute</td>
-          <td><code>/api/users</code></td>
+          <td><code>service_instance_id</code> label in MAL <code>expSuffix</code></td>
+          <td><code>2.1.0</code></td>
       </tr>
   </tbody>
 </table>
+<p>No endpoint entity — MetricKit metrics are service/instance scoped only.</p>
 <h3 id="7-http-span-processing-trace-path">7. HTTP Span Processing (Trace Path)</h3>
 <p>HTTP spans from <code>InstrumentationScope NSURLSession</code> flow through the existing OTLP → Zipkin → SpanForward
-trace pipeline. The layer detection in Section 5 assigns <code>Layer.IOS</code> to the service.</p>
-<p>Span attributes (verified from real SDK output):</p>
-<table>
-  <thead>
-      <tr>
-          <th>Attribute</th>
-          <th>Example</th>
-          <th>Description</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td><code>http.method</code></td>
-          <td><code>GET</code></td>
-          <td>HTTP method</td>
-      </tr>
-      <tr>
-          <td><code>http.url</code></td>
-          <td><code>https://api.example.com/users</code></td>
-          <td>Full URL</td>
-      </tr>
-      <tr>
-          <td><code>http.target</code></td>
-          <td><code>/users</code></td>
-          <td>URL path (used as endpoint)</td>
-      </tr>
-      <tr>
-          <td><code>http.status_code</code></td>
-          <td><code>200</code></td>
-          <td>Response status</td>
-      </tr>
-      <tr>
-          <td><code>http.scheme</code></td>
-          <td><code>https</code></td>
-          <td>URL scheme</td>
-      </tr>
-      <tr>
-          <td><code>net.peer.name</code></td>
-          <td><code>api.example.com</code></td>
-          <td>Server host</td>
-      </tr>
-      <tr>
-          <td><code>net.peer.port</code></td>
-          <td><code>443</code></td>
-          <td>Server port</td>
-      </tr>
-      <tr>
-          <td><code>http.request.body.size</code></td>
-          <td><code>128</code></td>
-          <td>Request body bytes</td>
-      </tr>
-      <tr>
-          <td><code>http.response.body.size</code></td>
-          <td><code>505</code></td>
-          <td>Response body bytes</td>
-      </tr>
-      <tr>
-          <td><code>network.connection.type</code></td>
-          <td><code>wifi</code>, <code>cell</code></td>
-          <td>Network type (iOS only)</td>
-      </tr>
-      <tr>
-          <td><code>network.connection.subtype</code></td>
-          <td><code>LTE</code>, <code>NR</code></td>
-          <td>Radio technology (iOS cellular only)</td>
-      </tr>
-      <tr>
-          <td><code>network.carrier.name</code></td>
-          <td><code>China Mobile</code></td>
-          <td>Carrier name (iOS cellular only)</td>
-      </tr>
-      <tr>
-          <td><code>network.carrier.icc</code></td>
-          <td><code>CN</code></td>
-          <td>Carrier country code</td>
-      </tr>
-      <tr>
-          <td><code>network.carrier.mcc</code></td>
-          <td><code>460</code></td>
-          <td>Mobile country code</td>
-      </tr>
-      <tr>
-          <td><code>network.carrier.mnc</code></td>
-          <td><code>00</code></td>
-          <td>Mobile network code</td>
-      </tr>
-  </tbody>
-</table>
-<p>SkyWalking&rsquo;s existing OAL <code>core.oal</code> already derives standard service/endpoint metrics
-(<code>service_cpm</code>, <code>service_resp_time</code>, <code>service_percentile</code>, <code>endpoint_cpm</code>, etc.) from trace spans.
-These work automatically for iOS HTTP spans once the layer is assigned.</p>
+trace pipeline. They are stored as Zipkin spans and queryable via the Zipkin query API.</p>
+<p><strong>Note:</strong> The OTLP→Zipkin trace pipeline (<code>SpanForward</code>) emits Zipkin-specific sources
+(<code>ZipkinService</code>, <code>ZipkinServiceSpan</code>, <code>ZipkinServiceRelation</code>), not OAL sources. There are
+<strong>no OAL traffic metrics</strong> (e.g., <code>service_cpm</code>, <code>service_resp_time</code>) generated from OTLP traces.
+HTTP trace metrics for iOS may be added in the future via MAL extraction in a SpanListener.</p>
 <h4 id="otlp-export-feedback-loop">OTLP Export Feedback Loop</h4>
 <p>The URLSession auto-instrumentation captures <strong>all</strong> HTTP calls including the OTLP export calls
 themselves. This creates an exponential feedback loop — validated in our POC: 4 real HTTP requests
@@ -3304,187 +3236,23 @@ exclude the collector URL:</p>
 </span></span><span style="display:flex;"><span>        <span style="color:#cf222e">return</span> request<span style="color:#1f2328">.</span>url<span style="color:#1f2328">?.</span>host <span style="color:#0550ae">!=</span> <span style="color:#0a3069">&#34;&lt;collector-host&gt;&#34;</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#1f2328">}</span>
 </span></span><span style="display:flex;"><span><span style="color:#1f2328">)</span>
-</span></span></code></pre></div><h4 id="searchable-tags">Searchable Tags</h4>
-<p>Add the following to <code>searchableTracesTags</code> default configuration:</p>
-<table>
-  <thead>
-      <tr>
-          <th>Tag</th>
-          <th>Purpose</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td><code>device.model.identifier</code></td>
-          <td>Filter by device model (iPhone15,2, etc.)</td>
-      </tr>
-      <tr>
-          <td><code>os.version</code></td>
-          <td>Filter by iOS version</td>
-      </tr>
-      <tr>
-          <td><code>network.connection.type</code></td>
-          <td>Filter by wifi/cell</td>
-      </tr>
-      <tr>
-          <td><code>network.carrier.name</code></td>
-          <td>Filter by carrier</td>
-      </tr>
-  </tbody>
-</table>
-<h3 id="8-metrics-overview">8. Metrics Overview</h3>
-<p>iOS monitoring has two distinct metrics sources with different characteristics:</p>
-<table>
-  <thead>
-      <tr>
-          <th>Source</th>
-          <th>Granularity</th>
-          <th>Delivery</th>
-          <th>Time Bucket</th>
-          <th>Example</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td>HTTP trace spans</td>
-          <td>Per-request, real-time</td>
-          <td>Continuous</td>
-          <td>Minute (standard)</td>
-          <td>Request latency, error rate, CPM</td>
-      </tr>
-      <tr>
-          <td>MetricKit spans</td>
-          <td>Per-device, daily aggregate</td>
-          <td>Once/day per device</td>
-          <td>Day</td>
-          <td>App launch time, crash count, memory</td>
-      </tr>
-  </tbody>
-</table>
-<h4 id="http-trace-metrics-existing-oal-minute-granularity">HTTP Trace Metrics (Existing OAL, Minute Granularity)</h4>
-<p>HTTP spans from URLSession flow through the standard trace pipeline. The existing <code>core.oal</code> metrics
-apply automatically — no new OAL needed:</p>
-<p><strong>Service scope:</strong></p>
-<table>
-  <thead>
-      <tr>
-          <th>Monitoring Panel</th>
-          <th>Metric Name</th>
-          <th>OAL</th>
-          <th>Description</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td>HTTP Throughput</td>
-          <td><code>service_cpm</code></td>
-          <td><code>from(Service.*).cpm()</code></td>
-          <td>Requests per minute</td>
-      </tr>
-      <tr>
-          <td>HTTP Avg Latency</td>
-          <td><code>service_resp_time</code></td>
-          <td><code>from(Service.latency).longAvg()</code></td>
-          <td>Average response time</td>
-      </tr>
-      <tr>
-          <td>HTTP Latency Percentile</td>
-          <td><code>service_percentile</code></td>
-          <td><code>from(Service.latency).percentile2(10)</code></td>
-          <td>P50/P75/P90/P95/P99</td>
-      </tr>
-      <tr>
-          <td>HTTP Success Rate</td>
-          <td><code>service_sla</code></td>
-          <td><code>from(Service.*).percent(status == true)</code></td>
-          <td>Success percentage</td>
-      </tr>
-      <tr>
-          <td>HTTP Apdex</td>
-          <td><code>service_apdex</code></td>
-          <td><code>from(Service.latency).apdex(name, status)</code></td>
-          <td>User satisfaction score</td>
-      </tr>
-  </tbody>
-</table>
-<p><strong>Instance scope (per app version):</strong></p>
-<table>
-  <thead>
-      <tr>
-          <th>Monitoring Panel</th>
-          <th>Metric Name</th>
-          <th>OAL</th>
-          <th>Description</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td>HTTP Throughput</td>
-          <td><code>service_instance_cpm</code></td>
-          <td><code>from(ServiceInstance.*).cpm()</code></td>
-          <td>RPM per version</td>
-      </tr>
-      <tr>
-          <td>HTTP Avg Latency</td>
-          <td><code>service_instance_resp_time</code></td>
-          <td><code>from(ServiceInstance.latency).longAvg()</code></td>
-          <td>Avg latency per version</td>
-      </tr>
-      <tr>
-          <td>HTTP Success Rate</td>
-          <td><code>service_instance_sla</code></td>
-          <td><code>from(ServiceInstance.*).percent(status == true)</code></td>
-          <td>Success rate per version</td>
-      </tr>
-  </tbody>
-</table>
-<p><strong>Endpoint scope (per URL path):</strong></p>
-<table>
-  <thead>
-      <tr>
-          <th>Monitoring Panel</th>
-          <th>Metric Name</th>
-          <th>OAL</th>
-          <th>Description</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td>Endpoint Throughput</td>
-          <td><code>endpoint_cpm</code></td>
-          <td><code>from(Endpoint.*).cpm()</code></td>
-          <td>RPM per endpoint</td>
-      </tr>
-      <tr>
-          <td>Endpoint Avg Latency</td>
-          <td><code>endpoint_resp_time</code></td>
-          <td><code>from(Endpoint.latency).longAvg()</code></td>
-          <td>Avg latency per endpoint</td>
-      </tr>
-      <tr>
-          <td>Endpoint Latency Percentile</td>
-          <td><code>endpoint_percentile</code></td>
-          <td><code>from(Endpoint.latency).percentile2(10)</code></td>
-          <td>P50–P99 per endpoint</td>
-      </tr>
-      <tr>
-          <td>Endpoint Success Rate</td>
-          <td><code>endpoint_sla</code></td>
-          <td><code>from(Endpoint.*).percent(status == true)</code></td>
-          <td>Success rate per endpoint</td>
-      </tr>
-  </tbody>
-</table>
+</span></span></code></pre></div><h3 id="8-metrics-overview">8. Metrics Overview</h3>
+<p>iOS monitoring metrics come from MetricKit — daily aggregated device statistics delivered once
+per day per device via the OTel Swift SDK&rsquo;s MetricKit instrumentation.</p>
 <h3 id="9-metrickit-span-listener-iosmetrickitspanlistener">9. MetricKit Span Listener (<code>IOSMetricKitSpanListener</code>)</h3>
 <p>Apple&rsquo;s MetricKit delivers pre-aggregated app statistics once per day. The OTel Swift SDK encodes
 this as a single span with <code>startTime = 24h ago</code>, <code>endTime = now</code>, with all statistics as span
 attributes. These are <strong>not trace spans</strong> — they must be intercepted and converted to metrics.</p>
-<p><code>IOSMetricKitSpanListener</code> implements the <code>OTLPSpanListener</code> interface (Section 5):</p>
+<p><code>IOSMetricKitSpanListener</code> implements the <code>SpanListener</code> SPI (Section 5):</p>
 <ul>
-<li><strong>Detection:</strong> <code>scopeName == &quot;MetricKit&quot;</code> AND <code>span.getName() == &quot;MXMetricPayload&quot;</code> — uses the
+<li><strong>Detection:</strong> <code>scopeName == &quot;MetricKit&quot;</code> AND <code>span.spanName() == &quot;MXMetricPayload&quot;</code> — uses the
 raw OTLP InstrumentationScope name, available because listeners run before Zipkin conversion</li>
-<li><strong>Action:</strong> Extract span attributes as <code>SampleFamily</code> samples with labels, feed into MAL pipeline</li>
-<li><strong>Persistence:</strong> Returns <code>persistTrace = false</code> — a 24-hour span must not be stored as a trace</li>
+<li><strong>Action:</strong> Extract span attributes as <code>SampleFamily</code> samples with 4 labels (<code>service_name</code>,
+<code>service_instance_id</code>, <code>device_model</code>, <code>os_version</code>), push into the shared MAL pipeline via
+<code>OpenTelemetryMetricRequestProcessor.toMeter()</code> — no duplicate rule loading</li>
+<li><strong>Persistence:</strong> Returns <code>shouldPersist = false</code> — a 24-hour span must not be stored as a trace</li>
+<li><strong>Required module:</strong> <code>receiver-otel</code> — the listener uses the otel-receiver&rsquo;s MAL converters
+configured via <code>enabledOtelMetricsRules</code></li>
 </ul>
 <h4 id="metrickit-source-attributes">MetricKit Source Attributes</h4>
 <table>
@@ -3549,25 +3317,31 @@ raw OTLP InstrumentationScope name, available because listeners run before Zipki
           <td><code>metrickit.app_exit.foreground.abnormal_exit_count</code></td>
           <td>Int</td>
           <td>count</td>
-          <td>Abnormal exits (crashes)</td>
+          <td>Abnormal exits (foreground crashes) — aggregated</td>
       </tr>
       <tr>
           <td><code>metrickit.app_exit.foreground.normal_app_exit_count</code></td>
           <td>Int</td>
           <td>count</td>
-          <td>Normal exits</td>
+          <td>Normal foreground exits — not aggregated</td>
       </tr>
       <tr>
           <td><code>metrickit.app_exit.background.abnormal_exit_count</code></td>
           <td>Int</td>
           <td>count</td>
-          <td>Background abnormal exits</td>
+          <td>Background abnormal exits — aggregated</td>
+      </tr>
+      <tr>
+          <td><code>metrickit.app_exit.background.normal_app_exit_count</code></td>
+          <td>Int</td>
+          <td>count</td>
+          <td>Normal background exits — not aggregated</td>
       </tr>
       <tr>
           <td><code>metrickit.app_exit.background.memory_pressure_exit_count</code></td>
           <td>Int</td>
           <td>count</td>
-          <td>OOM kills</td>
+          <td>OOM kills — aggregated</td>
       </tr>
       <tr>
           <td><code>metrickit.animation.scroll_hitch_time_ratio</code></td>
@@ -3647,7 +3421,7 @@ point timestamp with <strong>day-level time bucket</strong> (<code>TimeBucket.ge
 <pre tabindex="0"><code>metrickit_app_launch_time{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2.1.0&#34;, device_model=&#34;iPhone15,2&#34;, os_version=&#34;17.4.1&#34;} 850
 metrickit_hang_time{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2.1.0&#34;, device_model=&#34;iPhone15,2&#34;, os_version=&#34;17.4.1&#34;} 120
 metrickit_peak_memory{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2.1.0&#34;, device_model=&#34;iPhone15,2&#34;, os_version=&#34;17.4.1&#34;} 157286400
-metrickit_abnormal_exit_count{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2.1.0&#34;, device_model=&#34;iPhone15,2&#34;, os_version=&#34;18.0&#34;} 2
+metrickit_foreground_abnormal_exit_count{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2.1.0&#34;, device_model=&#34;iPhone15,2&#34;, os_version=&#34;18.0&#34;} 2
 metrickit_wifi_download{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2.1.0&#34;, device_model=&#34;iPhone15,2&#34;, os_version=&#34;17.4.1&#34;} 52428800
 </code></pre><p>Labels are extracted from:</p>
 <ul>
@@ -3658,51 +3432,60 @@ metrickit_wifi_download{service_name=&#34;MyApp&#34;, service_instance_id=&#34;2
 </ul>
 <h4 id="mal-rules">MAL Rules</h4>
 <p>Create <code>oap-server/server-starter/src/main/resources/otel-rules/ios/ios-metrickit.yaml</code>:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">expSuffix</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>service([&#39;service_name&#39;], Layer.IOS).instance([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">expSuffix</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>service([&#39;service_name&#39;], Layer.IOS)<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#0550ae">metricPrefix</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>meter_ios<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#57606a"># App responsiveness — average across devices</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">app_launch_time</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_app_launch_time.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">app_launch_time_by_device</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_app_launch_time.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;, &#39;device_model&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">hang_time</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_hang_time.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">metricsRules</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># App responsiveness — percentile across devices (P50 = median)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>app_launch_time_percentile<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_app_launch_time_histogram.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;, &#39;le&#39;]).histogram().histogram_percentile([50,75,90,95,99])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>hang_time_percentile<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_hang_time_histogram.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;, &#39;le&#39;]).histogram().histogram_percentile([50,75,90,95,99])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>hang_time_sum<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_hang_time.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#57606a"># Stability — sum across devices</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">abnormal_exit_count</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_abnormal_exit_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">abnormal_exit_count_by_os</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_abnormal_exit_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;, &#39;os_version&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">normal_exit_count</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_normal_exit_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">oom_kill_count</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_oom_kill_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># Stability — sum across devices. Foreground/background are reported separately so</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># watchdog kills and background-task crashes don&#39;t hide behind total crash counts.</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># Normal graceful exits are not aggregated (no diagnostic signal).</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>foreground_abnormal_exit_count<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_foreground_abnormal_exit_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>background_abnormal_exit_count<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_background_abnormal_exit_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>background_oom_kill_count<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_background_oom_kill_count.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#57606a"># Resource usage</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">peak_memory</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_peak_memory.max([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">cpu_time</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_cpu_time.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">gpu_time</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_gpu_time.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">disk_write</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_disk_write.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># Resource usage</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>peak_memory<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_peak_memory.max([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>cpu_time<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_cpu_time.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>gpu_time<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_gpu_time.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>disk_write<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_disk_write.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#57606a"># Network transfer — sum across devices</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">wifi_download</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_wifi_download.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">wifi_upload</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_wifi_upload.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">cellular_download</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_cellular_download.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">cellular_upload</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_cellular_upload.sum([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># Network transfer — average per device</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>wifi_download<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_wifi_download.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>wifi_upload<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_wifi_upload.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>cellular_download<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_cellular_download.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>cellular_upload<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_cellular_upload.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#57606a"># UI quality — average across devices</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">scroll_hitch_ratio</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_scroll_hitch_ratio.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
-</span></span></span></code></pre></div><h4 id="aggregation-example">Aggregation Example</h4>
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#57606a"># UI quality</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>scroll_hitch_ratio<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>metrickit_scroll_hitch_ratio.avg([&#39;service_name&#39;, &#39;service_instance_id&#39;])<span style="color:#fff">
+</span></span></span></code></pre></div><p>The listener emits histogram-bucketed samples (with <code>le</code> labels) for app launch time and
+hang time, enabling <code>histogram_percentile</code> to compute P50/P75/P90/P95/P99 across the device fleet.</p>
+<p><strong>Bucket ceiling</strong>: both histograms top out at a finite 30 s bucket rather than <code>+Inf</code>. MAL
+parses <code>le=&quot;Infinity&quot;</code> to <code>(long) Double.POSITIVE_INFINITY = Long.MAX_VALUE</code> and surfaces it
+verbatim in percentile queries; on a dashboard that renders as ~9.2×10¹⁸, which is worse than
+a visibly alarming but human-readable cap. Values above 30 s are vanishingly rare for iOS app
+launch / hang observations (MetricKit itself hard-caps hangs near 30 s), so the finite sentinel
+preserves percentile accuracy without breaking the UI.</p>
+<h4 id="aggregation-example">Aggregation Example</h4>
 <p>Given 3 devices reporting on the same day for service &ldquo;MyApp&rdquo;:</p>
 <pre tabindex="0"><code>Device A: appLaunchTime=850ms, peakMemory=150MB, abnormalExitCount=2, wifiDownload=50MB
 Device B: appLaunchTime=1200ms, peakMemory=200MB, abnormalExitCount=0, wifiDownload=80MB
@@ -3718,9 +3501,14 @@ Device C: appLaunchTime=900ms, peakMemory=140MB, abnormalExitCount=1, wifiDownlo
   </thead>
   <tbody>
       <tr>
-          <td><code>ios_app_launch_time</code></td>
-          <td>avg(850, 1200, 900)</td>
-          <td><strong>983 ms</strong></td>
+          <td><code>ios_app_launch_time_percentile P50</code></td>
+          <td>histogram_percentile</td>
+          <td><strong>900 ms</strong></td>
+      </tr>
+      <tr>
+          <td><code>ios_app_launch_time_percentile P90</code></td>
+          <td>histogram_percentile</td>
+          <td><strong>1200 ms</strong></td>
       </tr>
       <tr>
           <td><code>ios_peak_memory</code></td>
@@ -3728,14 +3516,14 @@ Device C: appLaunchTime=900ms, peakMemory=140MB, abnormalExitCount=1, wifiDownlo
           <td><strong>200 MB</strong></td>
       </tr>
       <tr>
-          <td><code>ios_abnormal_exit_count</code></td>
+          <td><code>ios_foreground_abnormal_exit_count</code></td>
           <td>sum(2, 0, 1)</td>
           <td><strong>3 crashes</strong></td>
       </tr>
       <tr>
           <td><code>ios_wifi_download</code></td>
-          <td>sum(50, 80, 30)</td>
-          <td><strong>160 MB</strong></td>
+          <td>avg(50, 80, 30)</td>
+          <td><strong>53 MB</strong></td>
       </tr>
   </tbody>
 </table>
@@ -3879,55 +3667,45 @@ LogData (proto) {
   </thead>
   <tbody>
       <tr>
-          <td>HTTP Performance</td>
-          <td><code>service_cpm</code>, <code>service_resp_time</code>, <code>service_percentile</code></td>
-          <td>OAL (from HTTP trace spans)</td>
-      </tr>
-      <tr>
-          <td>HTTP Errors</td>
-          <td><code>service_sla</code> (success rate)</td>
-          <td>OAL</td>
+          <td>HTTP Traffic</td>
+          <td><code>service_cpm</code>, <code>service_resp_time</code>, <code>service_sla</code>, <code>service_percentile</code></td>
+          <td>OAL (from IOSHTTPSpanListener)</td>
       </tr>
       <tr>
           <td>App Launch</td>
           <td><code>meter_ios_app_launch_time</code></td>
-          <td>MetricKit analyzer</td>
+          <td>MetricKit MAL</td>
+      </tr>
+      <tr>
+          <td>Stability</td>
+          <td><code>meter_ios_foreground_abnormal_exit_count</code>, <code>meter_ios_background_oom_kill_count</code></td>
+          <td>MetricKit MAL</td>
       </tr>
       <tr>
           <td>Memory</td>
           <td><code>meter_ios_peak_memory</code></td>
-          <td>MetricKit analyzer</td>
-      </tr>
-      <tr>
-          <td>CPU</td>
-          <td><code>meter_ios_cpu_time</code></td>
-          <td>MetricKit analyzer</td>
+          <td>MetricKit MAL</td>
       </tr>
       <tr>
           <td>Network Transfer</td>
           <td><code>meter_ios_wifi_download</code>, <code>meter_ios_cellular_download</code>, etc.</td>
-          <td>MetricKit analyzer</td>
-      </tr>
-      <tr>
-          <td>Stability</td>
-          <td><code>meter_ios_abnormal_exit_count</code>, <code>meter_ios_oom_kill_count</code></td>
-          <td>MetricKit analyzer</td>
+          <td>MetricKit MAL</td>
       </tr>
       <tr>
           <td>Responsiveness</td>
-          <td><code>meter_ios_hang_time</code>, <code>meter_ios_scroll_hitch_ratio</code></td>
-          <td>MetricKit analyzer</td>
+          <td><code>meter_ios_hang_time</code></td>
+          <td>MetricKit MAL</td>
       </tr>
   </tbody>
 </table>
 <p><strong>ios-instance.json</strong> — Per-version dashboard (instance = app version):</p>
 <ul>
-<li>Same HTTP performance metrics scoped to instance</li>
+<li>HTTP traffic metrics scoped to instance (<code>service_instance_cpm</code>, <code>service_instance_resp_time</code>, <code>service_instance_sla</code>)</li>
 <li>MetricKit metrics per version</li>
 </ul>
-<p><strong>ios-endpoint.json</strong> — Per-HTTP-endpoint dashboard:</p>
+<p><strong>ios-endpoint.json</strong> — Per-domain dashboard (endpoint = <code>net.peer.name</code> domain):</p>
 <ul>
-<li><code>endpoint_cpm</code>, <code>endpoint_resp_time</code>, <code>endpoint_percentile</code>, <code>endpoint_sla</code> (from OAL)</li>
+<li><code>endpoint_cpm</code>, <code>endpoint_resp_time</code>, <code>endpoint_sla</code>, <code>endpoint_percentile</code> (from OAL)</li>
 </ul>
 <h4 id="ui-side">UI Side</h4>
 <p>A separate PR in <a href="https://github.com/apache/skywalking-booster-ui">skywalking-booster-ui</a> is needed
@@ -13016,6 +12794,8 @@ UIViewController or SwiftUI lifecycle</li>
 
 
 
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -13054,6 +12834,8 @@ UIViewController or SwiftUI lifecycle</li>
                     
                 </a>
             </div>
+            
+            
             
             
             
