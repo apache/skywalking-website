@@ -34,7 +34,7 @@ In TSDB, the data in a group is partitioned based on the time range of the data.
   <meta itemprop="name" content="TimeSeries Database(TSDB) v1.3.0">
   <meta itemprop="description" content="TimeSeries Database(TSDB) v1.3.0 TSDB is a time-series storage engine designed to store and query large volumes of time-series data. One of the key features of TSDB is its ability to automatically manage data storage over time, optimize performance and ensure that the system can scale to handle large workloads. TSDB empowers Measure, Stream and Trace relevant data.
 In TSDB, the data in a group is partitioned based on the time range of the data. The segment size is determined by the segment_interval of a group. The number of segments in a group is determined by the ttl of a group. A new segment is created when the written data exceeds the time range of the current segment. The expired segment will be deleted after the ttl of the group.">
-  <meta itemprop="wordCount" content="1546">
+  <meta itemprop="wordCount" content="1692">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="TimeSeries Database(TSDB) v1.3.0">
   <meta name="twitter:description" content="TimeSeries Database(TSDB) v1.3.0 TSDB is a time-series storage engine designed to store and query large volumes of time-series data. One of the key features of TSDB is its ability to automatically manage data storage over time, optimize performance and ensure that the system can scale to handle large workloads. TSDB empowers Measure, Stream and Trace relevant data.
@@ -1183,7 +1183,7 @@ In TSDB, the data in a group is partitioned based on the time range of the data.
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 998ce31</div>
+                  <div class="commit-id">Commit Id: a05c3ef</div>
                 
 
 
@@ -1241,7 +1241,7 @@ The max size of the measure block is controlled by data volume and the number of
 The diagram below shows the detailed fields within each block. The block is the minimal unit of TSDB, which contains several rows of data. Due to the column-based design, each block is spread over several files.</p>
 <p>In measure&rsquo;s timestamp file, there are version fields to record the version of the data. The version field is used to deduplicate. It determine the latest data when the data&rsquo;s timestamp are identical. Only the latest data will be returned to the user.</p>
 <p><img src="https://skywalking.apache.org/doc-graph/banyandb/v0.9.0/measure-block.png" alt="measure-block"></p>
-<p>Unlike the measure, there are element ids in the stream&rsquo;s timestamp file. The element id is used to identify the data of the same series. The data with the same timestamp but different element id will both be stored in the TSDB. This introduces a series of new files, named &ldquo;<em>.tff&rdquo;, which contain bloom filters for each tag, enabling efficient skipping of irrelevant data. Additionally, min/max fields are added to the &ldquo;</em>.tfm&rdquo; file to further aid in skipping blocks.</p>
+<p>Unlike the measure, there are element ids in the stream&rsquo;s timestamp file. The element id is used to identify the data of the same series. The data with the same timestamp but different element id will both be stored in the TSDB. This introduces a series of new files, named <code>*.tff</code>, which contain tag filter information for each tag. As of 0.10.0, dictionary-encoded tags no longer use Bloom filters, replacing them with a more efficient dictionary-based filter. Additionally, min/max fields are added to the <code>*.tfm</code> file to further aid in skipping blocks.</p>
 <p><img src="https://skywalking.apache.org/doc-graph/banyandb/v0.9.0/stream-block.png" alt="stream-block"></p>
 <h2 id="write-path">Write Path</h2>
 <p>The write path of TSDB begins when time-series data is ingested into the system. TSDB will consult the schema repository to check if the group exists, and if it does, then it will hash the SeriesID to determine which shard it belongs to.</p>
@@ -1251,6 +1251,12 @@ The diagram below shows the detailed fields within each block. The block is the 
 <h2 id="read-path">Read Path</h2>
 <p>The read path in TSDB retrieves time-series data from disk or memory, and returns it to the query engine. The read path comprises several components: the buffer and parts. The following is a high-level overview of how these components work together to retrieve time-series data in TSDB.</p>
 <p>The first step in the read path is to perform an index lookup to determine which parts contain the desired time range. The index contains metadata about each data part, including its start and end time.</p>
+<h3 id="snapshot-coordination">Snapshot Coordination</h3>
+<p>BanyanDB uses a shared snapshot coordination mechanism to ensure atomic snapshot transitions across the trace and sidx (skipping index) engines. When a snapshot transition occurs, both engines coordinate to produce a consistent view of the data. This prevents situations where the trace engine and the sidx engine have different views of the same data.</p>
+<p>This coordination is automatic and requires no operator configuration.</p>
+<h3 id="series-metadata-persistence">Series Metadata Persistence</h3>
+<p>In cluster mode, liaison nodes persist series metadata to disk. This improves recovery after restarts by allowing the liaison to rebuild its series mapping without waiting for data from other nodes. The persisted metadata includes the mapping between series IDs and entity values.</p>
+<p>The dump tool can analyze series metadata files (<code>smeta.bin</code>) stored in each part directory for debugging purposes. See <a href="../../operation/disk-management#dump-tool-series-metadata">Disk Management</a> for details.</p>
 <p>If the requested data is present in the buffer (i.e., it has been recently written but not yet persisted to disk), the buffer is checked to see if the data can be returned directly from memory. The read path determines which memory part(s) contain the requested time range. If the data is not present in the buffer, the read path proceeds to the next step.</p>
 <p>The next step in the read path is to look up the appropriate parts on disk. Files are the on-disk representation of blocks and are organized by shard and time range. The read path determines which parts contain the requested time range and reads the appropriate blocks from the disk. Due to the column-based storage design, it may be necessary to read multiple data files.</p>
 
@@ -1293,7 +1299,12 @@ The diagram below shows the detailed fields within each block. The block is the 
         <li><a href="#part">Part</a></li>
         <li><a href="#block">Block</a></li>
         <li><a href="#write-path">Write Path</a></li>
-        <li><a href="#read-path">Read Path</a></li>
+        <li><a href="#read-path">Read Path</a>
+          <ul>
+            <li><a href="#snapshot-coordination">Snapshot Coordination</a></li>
+            <li><a href="#series-metadata-persistence">Series Metadata Persistence</a></li>
+          </ul>
+        </li>
       </ul>
     </li>
   </ul>
