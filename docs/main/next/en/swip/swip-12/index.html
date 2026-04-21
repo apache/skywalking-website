@@ -36,7 +36,7 @@ OTLP logs — JS errors, promise rejections, pageNotFound (WeChat), HTTP failure
   <meta itemprop="description" content="SWIP-12 Support WeChat &amp; Alipay Mini Program Monitoring Motivation WeChat (微信) and Alipay (支付宝) Mini Programs are among the most widely used client-side platforms in China — many businesses ship a mini-program before (or instead of) a native mobile app. Observability for mini-programs is as important as iOS/Android monitoring.
 The SkyAPM mini-program-monitor SDK provides a single JavaScript client that covers both WeChat and Alipay runtimes. It emits:
 OTLP logs — JS errors, promise rejections, pageNotFound (WeChat), HTTP failures OTLP metrics — app launch / first-render / route / script / sub-package perf gauges (durations) &#43; a first_paint.time epoch-ms timestamp gauge &#43; a request-duration delta histogram (per-flush) SkyWalking native trace segments (opt-in) — one SegmentObject per sampled outgoing request, posted to /v3/segments with an sw8 header injected on the wire so downstream services join the same trace. As of SDK v0.3.0, every exit span carries per-platform componentId (10002 WeChat, 10003 Alipay) and a miniprogram.platform tag Because the SDK speaks standard OTLP &#43; SkyWalking native, no new receiver is required. This SWIP focuses on: two new layers, platform-aware MAL/LAL routing, service/instance/ endpoint entity convention, componentId-driven layer mapping for native trace segments, menu/dashboard support, and a data generator for skywalking-showcase.">
-  <meta itemprop="wordCount" content="4875">
+  <meta itemprop="wordCount" content="4829">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SWIP-12 Support WeChat & Alipay Mini Program Monitoring">
   <meta name="twitter:description" content="SWIP-12 Support WeChat &amp; Alipay Mini Program Monitoring Motivation WeChat (微信) and Alipay (支付宝) Mini Programs are among the most widely used client-side platforms in China — many businesses ship a mini-program before (or instead of) a native mobile app. Observability for mini-programs is as important as iOS/Android monitoring.
@@ -772,6 +772,22 @@ OTLP logs — JS errors, promise rejections, pageNotFound (WeChat), HTTP failure
     <li>
         
             <a href="/docs/main/next/en/setup/backend/backend-ios-monitoring">iOS</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/backend-wechat-mini-program-monitoring">WeChat Mini Program</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/backend-alipay-mini-program-monitoring">Alipay Mini Program</a>
         
     </li>
 
@@ -2818,7 +2834,7 @@ OTLP logs — JS errors, promise rejections, pageNotFound (WeChat), HTTP failure
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 681a5be</div>
+                  <div class="commit-id">Commit Id: 8242ff6</div>
                 
 
 
@@ -3144,53 +3160,27 @@ expose <code>PerformanceObserver</code> entries for the same events. These are a
 &ldquo;time-to-interactive&rdquo; rather than authoritative renderer timings. Dashboards should not
 compare WeChat and Alipay perf values directly; this is documented in the per-platform
 doc pages.</p>
-<h3 id="3a-oal--topology-metrics-emerge-from-the-layer-mapping">3a. OAL / Topology Metrics Emerge From the Layer Mapping</h3>
+<h3 id="3a-native-trace-segments--client-side-pattern-browser-parity">3a. Native Trace Segments — Client-Side Pattern (Browser Parity)</h3>
 <p>The SDK posts Exit spans (<code>spanType=Exit</code>, <code>spanLayer=Http</code>) to <code>/v3/segments</code> via the
-SkyWalking native protocol. After §6&rsquo;s <code>identifyServiceLayer</code> mapping assigns
-<code>Layer.WECHAT_MINI_PROGRAM</code> / <code>Layer.ALIPAY_MINI_PROGRAM</code>, the native trace pipeline&rsquo;s
-<code>RPCAnalysisListener</code> emits <code>Service</code>, <code>ServiceInstance</code>, <code>Endpoint</code> sources — plus
-<code>ServiceRelation</code> / <code>ServiceInstanceRelation</code> / <code>EndpointRelation</code> for the
-mini-program → backend call edge — all tagged with the mini-program layer.</p>
-<p><code>core.oal</code> then produces, for free, under each mini-program layer:</p>
-<table>
-  <thead>
-      <tr>
-          <th>Metric family</th>
-          <th>Scope</th>
-          <th>Source</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td><code>service_cpm</code>, <code>service_resp_time</code>, <code>service_sla</code>, <code>service_percentile</code>, <code>service_apdex</code></td>
-          <td>Service</td>
-          <td>OAL on <code>Service</code> source</td>
-      </tr>
-      <tr>
-          <td><code>service_instance_cpm</code>, <code>service_instance_resp_time</code>, <code>service_instance_sla</code>, <code>service_instance_percentile</code></td>
-          <td>ServiceInstance</td>
-          <td>OAL on <code>ServiceInstance</code> source</td>
-      </tr>
-      <tr>
-          <td><code>endpoint_cpm</code>, <code>endpoint_resp_time</code>, <code>endpoint_sla</code>, <code>endpoint_percentile</code></td>
-          <td>Endpoint (page path)</td>
-          <td>OAL on <code>Endpoint</code> source</td>
-      </tr>
-      <tr>
-          <td>Topology edges to backend services</td>
-          <td>ServiceRelation / EndpointRelation</td>
-          <td><code>sw8</code> propagation + backend receives the trace</td>
-      </tr>
-  </tbody>
-</table>
-<p>These are <strong>in addition to</strong> the MAL-produced <code>meter_wechat_mp_*</code> /
-<code>meter_alipay_mp_*</code> metrics from §4. The service dashboard panels should mix both —
-outbound request latency from OAL (<code>service_resp_time</code>, <code>service_percentile</code>) keyed on
-observed response time, plus the SDK&rsquo;s own per-page perf gauges from MAL.</p>
+SkyWalking native protocol. Mini-programs are client-side (edge) platforms — same shape
+as browser JS-agent traces — so segments only ever carry exit spans and are processed
+by OAP&rsquo;s standard <code>RPCAnalysisListener</code> pipeline with <strong>no componentId-based layer
+override</strong>. <code>parseExit</code> fires, produces <code>ServiceRelation</code> / <code>ServiceInstanceRelation</code>
+edges to the backend services the mini-program calls (topology shows the outbound
+dependency, carrying <code>sw8</code> propagation for cross-trace joining), and does <strong>not</strong>
+call <code>toService()</code> / <code>toEndpoint()</code>.</p>
+<p>So under the mini-program layer, <code>service_cpm</code> / <code>service_resp_time</code> / <code>service_sla</code> /
+<code>service_percentile</code> / <code>service_apdex</code> / <code>endpoint_cpm</code> / <code>endpoint_resp_time</code> /
+<code>endpoint_sla</code> / <code>endpoint_percentile</code> are <strong>not populated</strong> — those come from inbound
+(entry-span) analysis, which mini-programs don&rsquo;t have. The mini-program service /
+instance / endpoint entities are created by MAL (OTLP metrics) and LAL (OTLP logs)
+instead, and the dashboards&rsquo; request-load / latency metrics all come from the
+<code>miniprogram.request.duration</code> histogram (<code>_count</code> family for CPM, bucket family for
+percentiles).</p>
 <p>Topology note: mini-programs are leaf sources — they issue outbound requests but never
-receive inbound traffic. So each mini-program service has outbound edges (to backend
-APIs carrying <code>sw8</code>) but no upstream. This is correct by construction for client-side
-platforms.</p>
+receive inbound traffic. Each mini-program service has outbound edges but no upstream.
+This is correct by construction for client-side platforms and matches how OAP handles
+browser agent traces.</p>
 <h3 id="3b-error-count-metric--log-mal-rule">3b. Error-Count Metric — Log-MAL Rule</h3>
 <p><code>error_count</code> in §3&rsquo;s metric table is derived from LAL-processed error logs. The
 extraction itself is a separate file in the log-MAL rules directory (not the MAL <code>otel-rules/</code>
@@ -3378,52 +3368,26 @@ MetricKit hang/launch histograms.</p>
 </span></span></span></code></pre></div><p>The rule sets the layer script-side based on <code>miniprogram.platform</code>, so <strong>one rule file
 produces two layers</strong>. Error counts per service / instance / endpoint / exception.type
 can be derived via existing OAL log-metric machinery.</p>
-<h3 id="6-trace-segment-handling--component-driven-layer-mapping">6. Trace Segment Handling — Component-Driven Layer Mapping</h3>
+<h3 id="6-trace-segment-handling--standard-pipeline-no-componentid-override">6. Trace Segment Handling — Standard Pipeline, No Componentid Override</h3>
 <p>The SDK posts <code>SegmentObject</code> directly to <code>/v3/segments</code> (SkyWalking native protocol).
-These segments are parsed by the normal trace pipeline — no new SPI is needed.</p>
-<p>Service-layer assignment already lives in
-<code>CommonAnalysisListener.identifyServiceLayer(SpanLayer)</code> (a <code>protected</code> instance method
-on the abstract base shared by <code>RPCAnalysisListener</code> and
-<code>EndpointDepFromCrossThreadAnalysisListener</code> in the agent-analyzer module —
-<code>SegmentAnalysisListener</code> does <strong>not</strong> extend <code>CommonAnalysisListener</code>, it has its own
-service-meta path). Today it
-maps <code>SpanLayer.FAAS → Layer.FAAS</code> and everything else to <code>Layer.GENERAL</code>. Extend it to
-also accept the span&rsquo;s <code>componentId</code> (which the SDK already sets on every outbound span)
-and dispatch to the mini-program layers.</p>
-<p>The component name → id mapping lives in <code>component-libraries.yml</code> and is exposed only
-at runtime via <code>IComponentLibraryCatalogService</code>
-(<code>ComponentLibraryCatalogService.java:84-104</code>) — there are no auto-generated Java
-constants. So the listener&rsquo;s abstract base resolves the two ids once at construction
-time and caches them as <code>int</code> fields:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#cf222e">abstract</span><span style="color:#fff"> </span><span style="color:#cf222e">class</span> <span style="color:#1f2328">CommonAnalysisListener</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">private</span><span style="color:#fff"> </span><span style="color:#cf222e">final</span><span style="color:#fff"> </span><span style="color:#cf222e">int</span><span style="color:#fff"> </span>wechatMiniProgramComponentId<span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">private</span><span style="color:#fff"> </span><span style="color:#cf222e">final</span><span style="color:#fff"> </span><span style="color:#cf222e">int</span><span style="color:#fff"> </span>alipayMiniProgramComponentId<span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">protected</span><span style="color:#fff"> </span><span style="color:#6639ba">CommonAnalysisListener</span><span style="color:#1f2328">(</span>IComponentLibraryCatalogService<span style="color:#fff"> </span>catalog<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">this</span><span style="color:#1f2328">.</span><span style="color:#1f2328">wechatMiniProgramComponentId</span><span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span>catalog<span style="color:#1f2328">.</span><span style="color:#1f2328">getComponentId</span><span style="color:#1f2328">(</span><span style="color:#0a3069">&#34;WeChat-MiniProgram&#34;</span><span style="color:#1f2328">);</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">this</span><span style="color:#1f2328">.</span><span style="color:#1f2328">alipayMiniProgramComponentId</span><span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span>catalog<span style="color:#1f2328">.</span><span style="color:#1f2328">getComponentId</span><span style="color:#1f2328">(</span><span style="color:#0a3069">&#34;AliPay-MiniProgram&#34;</span><span style="color:#1f2328">);</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">protected</span><span style="color:#fff"> </span>Layer<span style="color:#fff"> </span><span style="color:#6639ba">identifyServiceLayer</span><span style="color:#1f2328">(</span>SpanLayer<span style="color:#fff"> </span>spanLayer<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">int</span><span style="color:#fff"> </span>componentId<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span>componentId<span style="color:#fff"> </span><span style="color:#0550ae">==</span><span style="color:#fff"> </span>wechatMiniProgramComponentId<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#cf222e">return</span><span style="color:#fff"> </span>Layer<span style="color:#1f2328">.</span><span style="color:#1f2328">WECHAT_MINI_PROGRAM</span><span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span>componentId<span style="color:#fff"> </span><span style="color:#0550ae">==</span><span style="color:#fff"> </span>alipayMiniProgramComponentId<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#cf222e">return</span><span style="color:#fff"> </span>Layer<span style="color:#1f2328">.</span><span style="color:#1f2328">ALIPAY_MINI_PROGRAM</span><span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span>SpanLayer<span style="color:#1f2328">.</span><span style="color:#1f2328">FAAS</span><span style="color:#1f2328">.</span><span style="color:#1f2328">equals</span><span style="color:#1f2328">(</span>spanLayer<span style="color:#1f2328">))</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#cf222e">return</span><span style="color:#fff"> </span>Layer<span style="color:#1f2328">.</span><span style="color:#1f2328">FAAS</span><span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">return</span><span style="color:#fff"> </span>Layer<span style="color:#1f2328">.</span><span style="color:#1f2328">GENERAL</span><span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span></code></pre></div><p><code>IComponentLibraryCatalogService</code> is already a <code>CoreModule</code> service, so wiring it into
-the listener factories is one constructor parameter. Each of the 5 existing call sites
-in <code>RPCAnalysisListener</code> (×4) and <code>EndpointDepFromCrossThreadAnalysisListener</code> (×1)
-adds <code>span.getComponentId()</code> to its current <code>identifyServiceLayer(span.getSpanLayer())</code>
-call.</p>
-<p>No new SPI, no new listener registration — all the work happens inside the existing
-<code>SegmentParserListenerManager</code> pipeline.</p>
+These segments are parsed by the normal trace pipeline — no new SPI, no listener
+extension, and <strong>no componentId → layer override</strong> in <code>CommonAnalysisListener</code>.</p>
+<p>Rationale: mini-programs are client-side (edge) platforms. They carry only exit spans,
+same shape as browser JS-agent traces. OAP&rsquo;s existing <code>RPCAnalysisListener.parseExit</code>
+already handles that: it emits <code>ServiceRelation</code> / <code>ServiceInstanceRelation</code> edges to
+the backend services the mini-program calls (so outbound topology works, with <code>sw8</code>
+joining the downstream trace), and never calls <code>toService()</code> / <code>toEndpoint()</code> for exit
+spans — so no mini-program Service / Endpoint entity is created from trace analysis.</p>
+<p>The mini-program Service / ServiceInstance / Endpoint entities are created separately
+by MAL (OTLP metrics, §4) and LAL (OTLP logs, §5). That&rsquo;s exactly how browser
+monitoring works: traces run through the general pipeline while the browser receiver
+plugin creates Browser-layer entities via its own dispatcher.</p>
+<p>This means <code>CommonAnalysisListener.identifyServiceLayer(SpanLayer)</code> stays unchanged;
+the 5 callsites in <code>RPCAnalysisListener</code> / <code>EndpointDepFromCrossThreadAnalysisListener</code>
+keep their current signatures; listener factories need no new service injection.
+<code>component-libraries.yml</code> still registers <code>WeChat-MiniProgram: 10002</code> /
+<code>AliPay-MiniProgram: 10003</code> (§7) so topology tooltips and UI renderers show the
+component name — but those ids don&rsquo;t drive layer assignment.</p>
 <p><strong>Persistence:</strong> default <code>true</code> — unlike iOS MetricKit spans (which represent 24-hour
 windows and must be suppressed), mini-program segments are real outgoing HTTP spans
 that belong in the trace UI.</p>
@@ -3864,11 +3828,11 @@ the current SDK.</li>
             <li><a href="#1-two-new-layers">1. Two New Layers</a></li>
             <li><a href="#2-service--instance--endpoint-mapping">2. Service / Instance / Endpoint Mapping</a></li>
             <li><a href="#3-metric-coverage-per-platform">3. Metric Coverage Per Platform</a></li>
-            <li><a href="#3a-oal--topology-metrics-emerge-from-the-layer-mapping">3a. OAL / Topology Metrics Emerge From the Layer Mapping</a></li>
+            <li><a href="#3a-native-trace-segments--client-side-pattern-browser-parity">3a. Native Trace Segments — Client-Side Pattern (Browser Parity)</a></li>
             <li><a href="#3b-error-count-metric--log-mal-rule">3b. Error-Count Metric — Log-MAL Rule</a></li>
             <li><a href="#4-mal-rules--per-platform--per-scope-mirroring-the-ios-layout">4. MAL Rules — Per-Platform × Per-Scope, Mirroring the iOS Layout</a></li>
             <li><a href="#5-lal-rules-error-logs-layer-auto-fork-by-platform">5. LAL Rules (Error Logs, <code>layer: auto</code> Fork by Platform)</a></li>
-            <li><a href="#6-trace-segment-handling--component-driven-layer-mapping">6. Trace Segment Handling — Component-Driven Layer Mapping</a></li>
+            <li><a href="#6-trace-segment-handling--standard-pipeline-no-componentid-override">6. Trace Segment Handling — Standard Pipeline, No Componentid Override</a></li>
             <li><a href="#7-component-library-entries">7. Component Library Entries</a></li>
             <li><a href="#8-sdk-side-convention">8. SDK-Side Convention</a></li>
             <li><a href="#9-ui-menu-and-dashboards">9. UI Menu and Dashboards</a></li>
@@ -12825,6 +12789,10 @@ the current SDK.</li>
 
 
 
+
+
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -12863,6 +12831,10 @@ the current SDK.</li>
                     
                 </a>
             </div>
+            
+            
+            
+            
             
             
             
