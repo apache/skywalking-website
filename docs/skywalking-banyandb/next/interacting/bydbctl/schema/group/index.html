@@ -40,7 +40,7 @@ The group represents a collection of a class of resources. Each resource has a n
 bydbctl is the command line tool in examples.
 Create operation Create operation adds a new group to the database’s metadata registry repository. If the group does not currently exist, create operation will create the schema.
 Examples of creating bydbctl group create -f - &lt;&lt;EOF metadata: name: sw_metric catalog: CATALOG_MEASURE resource_opts: shard_num: 2 segment_interval: unit: UNIT_DAY num: 1 ttl: unit: UNIT_DAY num: 7 EOF The group creates two shards to store group data points. Every day, it would create a segment.">
-  <meta itemprop="wordCount" content="248">
+  <meta itemprop="wordCount" content="511">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="CRUD [Groups](../../../../concept/data-model#groups)">
   <meta name="twitter:description" content="CRUD Groups CRUD operations create, read, update and delete groups.
@@ -1192,7 +1192,7 @@ Examples of creating bydbctl group create -f - &lt;&lt;EOF metadata: name: sw_me
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 9654d08</div>
+                  <div class="commit-id">Commit Id: 0bb071a</div>
                 
 
 
@@ -1250,15 +1250,61 @@ Examples of creating bydbctl group create -f - &lt;&lt;EOF metadata: name: sw_me
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">EOF</span>
 </span></span></code></pre></div><p>You can&rsquo;t change the unit of <code>segment_interval</code>. If you want to change the unit, you should delete the group and create a new one.</p>
 <h2 id="delete-operation">Delete operation</h2>
-<p>Delete operation deletes a group&rsquo;s schema.</p>
+<p>Delete operation removes a group&rsquo;s data and, unless <code>--data-only</code> is set, its associated schema resources. For non-dry-run deletes, BanyanDB creates a background task so the request can return quickly while data files and schema resources are removed in order.</p>
+<h3 id="delete-modes">Delete modes</h3>
+<ul>
+<li>Default delete only succeeds when the group is empty.</li>
+<li><code>--force</code> allows deleting a non-empty group.</li>
+<li><code>--dry-run</code> previews the schema resources that would be deleted and does not create a deletion task.</li>
+<li><code>--data-only</code> removes only the data files and keeps the group metadata and schema resources.</li>
+</ul>
 <h3 id="examples-of-deleting">Examples of deleting</h3>
+<p>Delete an empty group:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl group delete -g sw_metric
-</span></span></code></pre></div><h2 id="list-operation">List operation</h2>
+</span></span></code></pre></div><p>Preview what would be deleted from a non-empty group:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl group delete -g sw_metric --dry-run
+</span></span></code></pre></div><p>Force delete a non-empty group:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl group delete -g sw_metric --force
+</span></span></code></pre></div><p>Delete only the data files while keeping the schema:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl group delete -g sw_metric --force --data-only
+</span></span></code></pre></div><h3 id="deletion-task-status">Deletion task status</h3>
+<p>For non-dry-run deletes, BanyanDB creates a background deletion task. The task typically moves through these phases:</p>
+<ul>
+<li><code>PHASE_PENDING</code>: the task is created and waiting to start.</li>
+<li><code>PHASE_IN_PROGRESS</code>: data files and schema resources are being removed.</li>
+<li><code>PHASE_COMPLETED</code>: deletion finished successfully.</li>
+<li><code>PHASE_FAILED</code>: deletion stopped with an error message.</li>
+</ul>
+<p><code>bydbctl</code> currently exposes the delete request itself, but not a dedicated subcommand for polling the task status. Because <code>bydbctl</code> uses BanyanDB&rsquo;s HTTP endpoints, you can query the task status with any HTTP client:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>curl http://127.0.0.1:17913/api/v1/group/task/sw_metric
+</span></span></code></pre></div><p>Example response:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#1f2328">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;task&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;currentPhase&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;PHASE_IN_PROGRESS&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;totalCounts&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0550ae">&#34;stream&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">1</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0550ae">&#34;index_rule_binding&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#1f2328">},</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;deletedCounts&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#0550ae">&#34;index_rule_binding&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#1f2328">},</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;totalDataSizeBytes&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;1048576&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;deletedDataSizeBytes&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;524288&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;message&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;deleting streams&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;createdAt&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;2026-04-21T10:30:00Z&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;updatedAt&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;2026-04-21T10:31:15Z&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#1f2328">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span>
+</span></span></code></pre></div><p>The task endpoint is especially useful after <code>--force</code> or <code>--data-only</code>, because those operations may continue after the initial delete request returns.</p>
+<h2 id="list-operation">List operation</h2>
 <p>The list operation shows all groups&rsquo; schema.</p>
 <h3 id="examples">Examples</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl group list
 </span></span></code></pre></div><h2 id="api-reference">API Reference</h2>
-<p><a href="../../../../api-reference#groupregistryservice">Group Registration Operations</a></p>
+<ul>
+<li><a href="../../../../api-reference#banyandb-database-v1-groupregistryservice">Group Registration Operations</a></li>
+<li><a href="../../../../api-reference#banyandb-database-v1-groupdeletiontask">GroupDeletionTask</a></li>
+</ul>
 
 </div>
 
@@ -1309,7 +1355,9 @@ Examples of creating bydbctl group create -f - &lt;&lt;EOF metadata: name: sw_me
         </li>
         <li><a href="#delete-operation">Delete operation</a>
           <ul>
+            <li><a href="#delete-modes">Delete modes</a></li>
             <li><a href="#examples-of-deleting">Examples of deleting</a></li>
+            <li><a href="#deletion-task-status">Deletion task status</a></li>
           </ul>
         </li>
         <li><a href="#list-operation">List operation</a>
