@@ -34,7 +34,7 @@ The LAL config files are in YAML format, and are located under directory lal. Yo
   <meta itemprop="name" content="Log Analysis Language">
   <meta itemprop="description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
 The LAL config files are in YAML format, and are located under directory lal. You can set log-analyzer/default/lalFiles in the application.yml file or set environment variable SW_LOG_LAL_FILES to activate specific LAL config files.">
-  <meta itemprop="wordCount" content="3236">
+  <meta itemprop="wordCount" content="3547">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Log Analysis Language">
   <meta name="twitter:description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
@@ -2847,7 +2847,7 @@ The LAL config files are in YAML format, and are located under directory lal. Yo
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: dae1553</div>
+                  <div class="commit-id">Commit Id: 2b745b2</div>
                 
 
 
@@ -2950,6 +2950,46 @@ Use <code>tag 'key': sourceAttribute(&quot;attr&quot;)</code> in the extractor t
 <h2 id="layer">Layer</h2>
 <p>Layer should be declared in the LAL script to represent the analysis scope of the logs.
 LAL rules are routed by layer — only rules matching the incoming log&rsquo;s layer are evaluated.</p>
+<h3 id="inline-layer-declarations-layerdefinitions">Inline layer declarations (<code>layerDefinitions:</code>)</h3>
+<p>A LAL file may declare its own custom layers with a top-level <code>layerDefinitions:</code> block.
+Each entry is funneled through <code>Layer.register(name, ordinal, normal)</code> <strong>before</strong>
+the rules in the same file compile, so a LAL file is fully self-describing — a new
+monitoring target can land as a single LAL file without an enum edit elsewhere in the OAP
+source.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">layerDefinitions</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>IOT_FLEET   <span style="color:#fff"> </span><span style="color:#57606a"># upper-snake-case, must match [A-Z][A-Z0-9_]*</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">ordinal</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">1000</span><span style="color:#fff">      </span><span style="color:#57606a"># unique across all layers; &gt;= 1000 recommended</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">normal</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">       </span><span style="color:#57606a"># true = agent-installed (default), false = conjectured/virtual</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">rules</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>iot-fleet-access<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">layer</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>IOT_FLEET<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">dsl</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">|</span><span style="color:#0a3069">
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      filter {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        text { regexp $/(?&lt;status&gt;\d+)\s+(?&lt;path&gt;\S+)/$ }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink { sampler { rateLimit { rpm 1800 } } }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>Notes:</p>
+<ul>
+<li><strong>Storage encoding is the ordinal int</strong>, persisted in BanyanDB / Elasticsearch / JDBC.
+Every OAP node that reads or writes a given layer must agree on its <code>(name, ordinal)</code>
+mapping — deploy a LAL file with <code>layerDefinitions:</code> identically across all nodes.</li>
+<li><strong>Identical re-registration is a no-op</strong>, so the same <code>IOT_FLEET</code> entry can appear in
+multiple LAL files (and additionally in a MAL file, in <code>layer-extensions.yml</code>, or via the
+<code>LayerExtension</code> SPI). Conflicting registrations cause OAP boot to fail loudly with the
+offending file in the stack trace.</li>
+<li><strong>Ordinals 0–49</strong> are in active use by the OAP distribution&rsquo;s built-in layers; <strong>50–999</strong>
+are reserved by convention for future built-ins. External layers should start at <code>&gt;= 1000</code>
+— enforcement is not strict, but staying above the reserved band avoids upgrade-time
+collisions.</li>
+<li><code>layer: auto</code> works with extension layers too — the extractor body can call
+<code>layer &quot;IOT_FLEET&quot;</code> and the runtime resolves it through the registry.</li>
+</ul>
+<p>Three other registration paths exist for layers that are <strong>not</strong> specific to a LAL file: an
+operator-managed <code>layer-extensions.yml</code>, a <code>LayerExtension</code> Java SPI for plugin jars, and
+the built-in static fields in <code>Layer.java</code> for distribution layers. See
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
+javadoc for the full picture.</p>
 <p>When <code>layer: auto</code> is declared, the rule matches logs where <code>service.layer</code> is absent (common for OTLP
 sources that don&rsquo;t set this attribute). The script is expected to set the layer in the extractor:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">rules</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -3229,7 +3269,7 @@ not dropped) and is used to associate with traces / metrics.</p>
 </code></pre><ul>
 <li><code>layer</code></li>
 </ul>
-<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
+<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
 not dropped) and is used to associate with service.</p>
 <ul>
 <li><code>tag</code></li>
@@ -3461,18 +3501,18 @@ by the extractor as usual and pre-populated via <code>init()</code> from <code>L
 <p><strong>Note</strong>, slow SQL sampling would only flag this SQL in the candidate list. The OAP server would run statistic per service
 and only persistent the top 50 every 10(controlled by <code>topNReportPeriod: ${SW_CORE_TOPN_REPORT_PERIOD:10}</code>) minutes by default.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
 <h4 id="sampled-trace-network-profiling">Sampled Trace (Network Profiling)</h4>
 <p>SkyWalking converts network profiling sampled trace logs into <code>SampledTraceRecord</code> for process-level network analysis.</p>
 <p>Use <code>outputType: SampledTrace</code> in your rule config.
 The available output fields are: <code>latency</code>, <code>uri</code>, <code>reason</code>, <code>processId</code>, <code>destProcessId</code>, <code>detectPoint</code>, <code>componentId</code>.</p>
 <p>We require a log tag <code>&quot;LOG_KIND&quot; = &quot;NET_PROFILING_SAMPLED_TRACE&quot;</code> to make OAP distinguish sampled trace logs from other log reports.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/dae15534d92aad328f86552a11588473d7cac988/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/2b745b2783472e5f0a65b237b6799eb327938914/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
 <h3 id="extending-custom-output-types">Extending: custom output types</h3>
 <p>For developers who need to create custom output types (implementing <code>LALOutputBuilder</code>, extending
 <code>AbstractLog</code>, registering <code>LALSourceTypeProvider</code> SPI, or defining custom input types), see the
@@ -3619,7 +3659,11 @@ Register it in `META-INF/services/org.apache.skywalking.oap.log.analyzer.v2.spi.
     <li><a href="#log-analysis-language">Log Analysis Language</a>
       <ul>
         <li><a href="#otlp-log-attribute-mapping">OTLP log attribute mapping</a></li>
-        <li><a href="#layer">Layer</a></li>
+        <li><a href="#layer">Layer</a>
+          <ul>
+            <li><a href="#inline-layer-declarations-layerdefinitions">Inline layer declarations (<code>layerDefinitions:</code>)</a></li>
+          </ul>
+        </li>
         <li><a href="#filter">Filter</a>
           <ul>
             <li><a href="#global-functions">Global Functions</a></li>
@@ -12605,6 +12649,8 @@ Register it in `META-INF/services/org.apache.skywalking.oap.log.analyzer.v2.spi.
 
 
 
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -12618,6 +12664,8 @@ Register it in `META-INF/services/org.apache.skywalking.oap.log.analyzer.v2.spi.
         </div>
 
         <div class="content-box">
+            
+            
             
             
             
