@@ -11,8 +11,6 @@ tags:
 - End User Monitoring
 ---
 
-# 用 SkyWalking 监控微信和支付宝小程序
-
 小程序是国内移动端体验里绕不过去的一块，但开源监控生态长期偏向 Web 浏览器和原生 App。SkyWalking 自身已经覆盖了浏览器（client-js）、iOS、服务端，缺口主要在小程序和 Android。[SkyAPM/mini-program-monitor](https://github.com/SkyAPM/mini-program-monitor) 加入 SkyWalking 生态后，把这块缺口的小程序部分补上了 —— 一份 SDK 同时支持微信和支付宝，OAP 端的 component、MAL 规则、UI 模板已经合进 main 分支，会随 10.5.0 一起发布。
 
 这篇博客面向已经跑着 SkyWalking 后端、希望把小程序也接进来的团队。重点不是"项目存在"这件事，而是数据从小程序到 SkyWalking dashboard 走的是哪条路、双平台是怎么共存的、以及上线之前需要知道哪些设计取舍。

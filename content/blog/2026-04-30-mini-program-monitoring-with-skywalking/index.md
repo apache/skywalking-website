@@ -11,8 +11,6 @@ tags:
 - End User Monitoring
 ---
 
-# Monitoring WeChat and Alipay Mini Programs with SkyWalking
-
 Mini programs are a major part of the mobile experience in China, but the open-source observability ecosystem has long focused on web browsers and native apps. SkyWalking already covers browser (client-js), iOS, and the server side; mini programs and Android were the remaining gaps. With [SkyAPM/mini-program-monitor](https://github.com/SkyAPM/mini-program-monitor) joining the SkyWalking ecosystem, the mini-program half of that gap is closed — one SDK supports both WeChat and Alipay, and the matching OAP-side component IDs, MAL rules, and UI templates are merged on `main` and will ship with 10.5.0.
 
 This post is for teams that already run a SkyWalking backend and want to bring their mini programs into the same observability stack. The interesting parts aren't *that* the project exists — they are how the data flows from a mini program to a SkyWalking dashboard, how the two platforms coexist, and what design trade-offs you should know about before rolling this out.
