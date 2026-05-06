@@ -66,6 +66,7 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Yihao Chen              | yihaochen   | <i class="iconfont icon-twitter"></i> [Superskyyy](https://twitter.com/Superskyyyyy)     |
 | Yixiong Cao             | caoyixiong  |                                                                                          |
 | Yongsheng Peng          | pengys      |                                                                                          |
+| Youliang Huang          | butterbright | <i class="iconfont icon-twitter"></i> [butterbright](https://twitter.com/butterbright) |
 | Yuguang Zhao            | zhaoyuguang |                                                                                          |
 | Zhang Kewei             | zhangkewei  |                                                                                          |
 | Zhenxu Ke               | kezhenxu94  | <i class="iconfont icon-twitter"></i> [kezhenxu94](https://twitter.com/kezhenxu94)       |
@@ -109,7 +110,6 @@ The SkyWalking team is comprised of Members and Contributors, and the growth has
 | Weiyi Liu      | wayilau      |                                                  |
 | Xiang Wei      | weixiang1862 |                                                  |
 | YiMing Shao    | peachisai    |                                                  |
-| Youliang Huang | butterbright |                                                  |
 | Yueqin Zhang   | yswdqz       |                                                  |
 | Yuntao Li      | liyuntao     |                                                  |
 | Zhusheng Xu    | aderm        |                                                  |
