@@ -20,8 +20,8 @@ set -e
 
 SW_STORAGE=
 
-SW_VERSION=${SW_VERSION:-10.3.0}
-SW_BANYANDB_VERSION=${SW_BANYANDB_VERSION:-0.9.0}
+SW_VERSION=${SW_VERSION:-10.4.0}
+SW_BANYANDB_VERSION=${SW_BANYANDB_VERSION:-0.10.2}
 
 usage() {
   echo "Usage: quickstart-docker.sh [-f]"
@@ -54,6 +54,10 @@ fi
 temp_dir=$(mktemp -d)
 
 curl -fsSL https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml -o "$temp_dir/docker-compose.yml"
+
+# Patch OAP health check for SkyWalking 10.4.0+ (curl not available in image)
+perl -pi -e "s|curl http://localhost:12800/internal/l7check|bash -c 'echo >/dev/tcp/localhost/12800'|" "$temp_dir/docker-compose.yml"
+sed -i 's|start_period: 10s|start_period: 120s|g' "$temp_dir/docker-compose.yml"
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
 if [ -z "$SW_STORAGE" ]; then
