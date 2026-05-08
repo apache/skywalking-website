@@ -34,7 +34,7 @@ All telemetry data are trusted. The OAP server would not validate any field of t
   <meta itemprop="name" content="Security Notice">
   <meta itemprop="description" content="Security Notice The SkyWalking OAP server, UI, and agent deployments should run in a secure environment, such as only inside your data center. OAP server, UI, and agent deployments should only be reachable by the operation team on default deployment.
 All telemetry data are trusted. The OAP server would not validate any field of the telemetry data to avoid extra load for the server. Every field of every telemetry category should be validated by the operator before it reaches OAP — none are inherently safer than the others.">
-  <meta itemprop="wordCount" content="852">
+  <meta itemprop="wordCount" content="963">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Security Notice">
   <meta name="twitter:description" content="Security Notice The SkyWalking OAP server, UI, and agent deployments should run in a secure environment, such as only inside your data center. OAP server, UI, and agent deployments should only be reachable by the operation team on default deployment.
@@ -2225,9 +2225,82 @@ All telemetry data are trusted. The OAP server would not validate any field of t
 
     
 
+</ul>
+
+        
+    </li>
+    
     <li>
         
-            <a href="/docs/main/next/en/setup/backend/backend-runtime-rule-api">Runtime Rule Hot-Update</a>
+            
+            <a href="#">Admin API<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/admin-api/readme">Introduction</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/admin-api/runtime-rule">Runtime Rule Hot-Update API</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">DSL Debug API<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/admin-api/dsl-debugging">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/admin-api/dsl-debugging-mal">MAL</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/admin-api/dsl-debugging-oal">OAL</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/admin-api/dsl-debugging-lal">LAL</a>
+        
+    </li>
+
+    
+
+</ul>
+
         
     </li>
 
@@ -2847,7 +2920,7 @@ All telemetry data are trusted. The OAP server would not validate any field of t
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 67160de</div>
+                  <div class="commit-id">Commit Id: 4890024</div>
                 
 
 
@@ -2953,33 +3026,42 @@ implementations of this layer; the OAP itself does not perform that validation.<
 those fields, causing XSS or even Remote Code Execution (RCE) issues.</p>
 <p>For some sensitive environment, consider to limit the telemetry report frequency in case of DoS/DDoS for exposed OAP
 and UI services.</p>
-<h2 id="runtime-rule-admin-surface-port-17128">Runtime Rule Admin Surface (port 17128)</h2>
-<p>The <code>skywalking-runtime-rule-receiver-plugin</code> exposes an HTTP admin API on port 17128 that
-lets operators <strong>add, override, inactivate, and delete MAL/LAL rule files at runtime</strong> without
-restarting OAP. Rules are compiled and loaded into the OAP JVM on the fly. This surface is
-<strong>far more powerful than the telemetry receiver ports</strong> — a request can register new Javassist-
-compiled bytecode, mutate <code>MeterSystem</code> state, and drop backend schema (BanyanDB measures).</p>
-<p>The module is <strong>disabled by default</strong>. Enabling it (via <code>SW_RECEIVER_RUNTIME_RULE=default</code> or
-the YAML selector) opens port 17128 with <strong>no authentication</strong>. This is intentional for now —
-the design goal is a simple admin socket that a gateway / service mesh wraps with the
-operator&rsquo;s existing auth story.</p>
+<h2 id="admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</h2>
+<p>The <code>admin-server</code> module hosts a shared HTTP port (default <code>17128</code>) for admin / on-demand
+write APIs. Today this includes the <strong>Runtime Rule Hot-Update API</strong> (add, override, inactivate,
+delete MAL/LAL rule files at runtime — rules are compiled and loaded into the OAP JVM on the
+fly) and the <strong>DSL Debug API</strong> (sampling debugger that captures live MAL/LAL/OAL rule
+executions, including the raw payloads each rule processed). This surface is <strong>far more
+powerful than the telemetry receiver ports</strong> — a request can register new Javassist-compiled
+bytecode, mutate <code>MeterSystem</code> state, drop backend schema (BanyanDB measures), or inspect
+operationally-sensitive payloads (raw log bodies, parsed maps, metric source events).</p>
+<p><code>admin-server</code> also opens an <strong>admin-internal gRPC bus</strong> (default <code>17129</code>) for peer-to-peer
+cluster RPCs between OAP nodes — runtime-rule <code>Suspend / Resume / Forward</code>, DSL debug
+<code>install / collect / stop</code>. This is intentionally a <strong>separate transport</strong> from the public
+agent / cluster gRPC port (<code>core.gRPCPort</code>, default <code>11800</code>). An attacker who reaches <code>11800</code>
+to submit telemetry MUST NOT be able to invoke privileged admin RPCs.</p>
+<p><code>admin-server</code> is <strong>disabled by default</strong>. Enabling it (<code>SW_ADMIN_SERVER=default</code> plus the
+relevant feature module&rsquo;s selector) opens both ports with <strong>no built-in authentication</strong>.
+This is intentional for now — the design goal is a simple admin socket that a gateway /
+service mesh wraps with the operator&rsquo;s existing auth story.</p>
 <p>Required operator actions when enabling:</p>
 <ol>
-<li><strong>Never expose port 17128 to the public internet.</strong> Bind to a private network interface or
-<code>localhost</code> and reach it through an operator-controlled gateway.</li>
-<li><strong>Gateway-protect with IP allow-list + authentication.</strong> Only the operator team should be
-able to reach the endpoint.</li>
+<li><strong>Never expose port 17128 (HTTP) to the public internet.</strong> Bind to a private network
+interface or <code>localhost</code> and reach it through an operator-controlled gateway.</li>
+<li><strong>Never expose port 17129 (admin gRPC) to operators or the agent network.</strong> Bind
+<code>gRPCHost</code> to a private peer-to-peer interface reachable ONLY between OAP nodes. This
+port has the same blast radius as port 17128; do not gateway-publish it.</li>
+<li><strong>Gateway-protect 17128 with IP allow-list + authentication.</strong> Only the operator team
+should be able to reach the HTTP endpoint.</li>
 <li><strong>Audit every request.</strong> Rule content is arbitrary YAML that compiles into the OAP JVM —
 a malicious rule could exfiltrate data, spike resource use, or create metric-name
-collisions. Treat <code>POST /runtime/rule/*</code> as equivalent to shell access on the OAP host.</li>
-<li><strong>Keep the port off the cluster-external interface even in cluster mode.</strong> The cluster-
-internal Suspend RPC is registered on the OAP cluster-bus gRPC server (shared with
-RemoteService / HealthCheck) — that is a separate transport from 17128 and follows the
-same security posture as the rest of the cluster bus.</li>
+collisions. Captured DSL-debug payloads include sensitive operational state. Treat
+<code>POST /runtime/rule/*</code> and <code>POST /dsl-debugging/*</code> as equivalent to shell access on the
+OAP host.</li>
 </ol>
-<p>Without these protections an attacker with network reach to port 17128 can execute arbitrary
-code inside the OAP JVM. See <code>docs/en/setup/backend/backend-runtime-rule-api.md</code> for the full
-API surface.</p>
+<p>Without these protections an attacker with network reach to port 17128 or 17129 can execute
+arbitrary code inside the OAP JVM. See <code>docs/en/setup/backend/admin-api/readme.md</code> for the
+full security notice and per-feature API surface.</p>
 <h2 id="client-side-monitoring">Client-Side Monitoring</h2>
 <p>Client-side applications — iOS/iPadOS apps (via OpenTelemetry Swift SDK), browser web apps
 (via <a href="https://github.com/apache/skywalking-client-js">client-js</a>), and WeChat/Alipay
@@ -3023,7 +3105,7 @@ client-side sources.</p>
   <ul>
     <li><a href="#security-notice">Security Notice</a>
       <ul>
-        <li><a href="#runtime-rule-admin-surface-port-17128">Runtime Rule Admin Surface (port 17128)</a></li>
+        <li><a href="#admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</a></li>
         <li><a href="#client-side-monitoring">Client-Side Monitoring</a></li>
       </ul>
     </li>
@@ -11999,6 +12081,18 @@ client-side sources.</p>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -12061,6 +12155,18 @@ client-side sources.</p>
                     
                 </a>
             </div>
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
             
             
             
