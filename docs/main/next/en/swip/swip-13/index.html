@@ -34,7 +34,7 @@ Motivation SkyWalking has three DSLs that turn ingested telemetry into L1 output
   <meta itemprop="name" content="SWIP-13 Live Debugger for MAL / LAL / OAL">
   <meta itemprop="description" content="SWIP-13 Live Debugger for MAL / LAL / OAL Status: implemented in 10.5.0. Operator reference: DSL Debug API.
 Motivation SkyWalking has three DSLs that turn ingested telemetry into L1 outputs (metrics, logs, records ready for downstream aggregation/persistence): MAL (meter analyzer), LAL (log analyzer), and OAL (observability analysis). All three are compiled at OAP boot or via runtime-rule hot-update; the operator authoring the rule then has to infer correctness from downstream effects — “did the metric appear in the dashboard?”, “did the log get classified into the right layer?”, “why is endpoint_cpm reading zero on this endpoint?”.">
-  <meta itemprop="wordCount" content="19101">
+  <meta itemprop="wordCount" content="19136">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SWIP-13 Live Debugger for MAL / LAL / OAL">
   <meta name="twitter:description" content="SWIP-13 Live Debugger for MAL / LAL / OAL Status: implemented in 10.5.0. Operator reference: DSL Debug API.
@@ -2920,7 +2920,7 @@ Motivation SkyWalking has three DSLs that turn ingested telemetry into L1 output
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 4890024</div>
+                  <div class="commit-id">Commit Id: 0cec0de</div>
                 
 
 
@@ -3155,7 +3155,7 @@ object but hasn&rsquo;t yet entered the streaming/aggregation kernel.</p>
 <code>kind</code>, <code>component</code>) and in a multi-tenant or multi-component flow a
 rule routinely rejects 99% of the traffic routed to it by metric
 name. Publishing every rejected execution would burn <code>recordCap</code>
-(default 1000) on noise within seconds and never reach a row that
+(default 100) on noise within seconds and never reach a row that
 demonstrates the rule&rsquo;s actual processing. So for MAL the contract
 is: <strong>every record represents one <code>SampleFamily</code> that passed the
 rule&rsquo;s filter and walked through to <code>meterEmit</code></strong>. Implementation:
@@ -5293,10 +5293,10 @@ extended with <code>contentHash</code> carried alongside on the
 <code>OALRuleRegistry.OalFileSnapshot</code> record (defined below).</p>
 <h6 id="oalruleregistry--explicit-retention-contract"><code>OALRuleRegistry</code> — explicit retention contract</h6>
 <p><strong>Today&rsquo;s loader does not retain the parsed structures</strong>:
-<a href="https://github.com/apache/skywalking/tree/4890024b6cc1c222838b5ebd16e10938762cd7f2/oap-server/oal-rt/src/main/java/org/apache/skywalking/oal/v2/OALEngineV2.java"><code>OALEngineV2.start</code></a>
+<a href="https://github.com/apache/skywalking/tree/0cec0de68b6767a5328418ecf1115d09458517d7/oap-server/oal-rt/src/main/java/org/apache/skywalking/oal/v2/OALEngineV2.java"><code>OALEngineV2.start</code></a>
 parses, enriches, generates classes, and lets the local <code>OALScriptParserV2</code>
 and <code>List&lt;CodeGenModel&gt;</code> go out of scope.
-<a href="https://github.com/apache/skywalking/tree/4890024b6cc1c222838b5ebd16e10938762cd7f2/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/oal/rt/OALEngineLoaderService.java"><code>OALEngineLoaderService</code></a>
+<a href="https://github.com/apache/skywalking/tree/0cec0de68b6767a5328418ecf1115d09458517d7/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/oal/rt/OALEngineLoaderService.java"><code>OALEngineLoaderService</code></a>
 only stores the <code>OALDefine</code> set; the parsed AST is discarded after class
 generation. Naively re-parsing on each REST call would work but is fragile
 (two engines see different shapes if one diverges) and slow.</p>
@@ -5590,8 +5590,8 @@ disappearance.</p>
       </tr>
       <tr>
           <td><strong>Records per session</strong></td>
-          <td><strong>default 1000, hard cap 10000</strong></td>
-          <td>recorder stops appending once the count is hit and moves the session to CAPTURED. Out-of-range request returns 400 invalid_limits.</td>
+          <td><strong>default 100, hard cap 100</strong></td>
+          <td>recorder stops appending once the count is hit and moves the session to CAPTURED. Out-of-range request returns 400 invalid_limits. The cap is deliberately small — operators inspect a handful of executions, not a paginated firehose; per-session heap stays at ~1 MiB and the rendered UI page stays readable.</td>
       </tr>
       <tr>
           <td>Capture window (retention)</td>
@@ -5617,15 +5617,15 @@ operators can verify their own budget assumptions against real
 captures.</p>
 <h4 id="why-200-active-sessions-is-the-right-ceiling">Why 200 active sessions is the right ceiling</h4>
 <p>200 sessions is a defensible upper bound for an OAP node. With the
-hard <code>recordCap = 10000</code> and a typical per-record JSON payload of
+hard <code>recordCap = 100</code> and a typical per-record JSON payload of
 ~10 KiB (MAL is the largest of the three), the worst-case footprint
 across all active sessions on one node is roughly:</p>
 <pre tabindex="0"><code>worst-case heap ≈ MAX_ACTIVE_SESSIONS × MAX_RECORD_CAP × per-record-bytes
-                ≈ 200 × 10 000 × 10 KiB ≈ 20 GiB (theoretical)
-</code></pre><p>That&rsquo;s the worst-case product; realistic usage is one to two orders of
-magnitude below because most captures stop on retention (5 min default)
-or operator stop long before hitting <code>recordCap</code>, and most records are
-several KiB rather than the worst-case 10. The 200 default leaves
+                ≈ 200 × 100 × 10 KiB ≈ 200 MiB (theoretical)
+</code></pre><p>That&rsquo;s the worst-case product; realistic usage is well below it
+because most captures stop on retention (5 min default) or operator
+stop long before hitting <code>recordCap</code>, and most records are several
+KiB rather than the worst-case 10. The 200 default leaves
 headroom for many concurrent operators (one debug context = one
 sessionId; the UI maintains a single session per debug widget and
 reuses it for polls) without letting a runaway script exhaust the
@@ -5756,9 +5756,10 @@ returns <code>429 too_many_sessions</code> once the count is reached. The
 receiving node also runs the prior-session cleanup pass for the
 supplied <code>clientId</code> BEFORE counting toward this ceiling, so a single
 client repeatedly clicking Start sampling cannot itself trigger 429.</li>
-<li><code>MAX_RECORD_CAP = 10000</code> per session — request bodies asking for more
-return <code>400 invalid_limits</code>. Session retention is similarly capped
-at 1 hour (<code>MAX_RETENTION_MILLIS</code>).</li>
+<li><code>MAX_RECORD_CAP = 100</code> per session — request bodies asking for more
+return <code>400 invalid_limits</code>. The default also resolves to 100 (capped
+by the hard ceiling). Session retention is similarly capped at 1 hour
+(<code>MAX_RETENTION_MILLIS</code>).</li>
 </ul>
 <p>There is intentionally <strong>no per-session byte cap and no structural
 char / sample / label sub-caps</strong>. Operators sizing for memory pressure
