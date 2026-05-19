@@ -36,7 +36,7 @@ Here we create a kubernetes cluster with 1 control-plane node and 1 worker nodes
   <meta itemprop="description" content="Getting Started This document introduces how to create a kubernetes cluster locally using kind and how to deploy the basic skywalking components to the cluster.
 Prerequisites docker &gt;= v20.10.6 kubectl &gt;= v1.21.0 kind &gt;= v0.20.0 swctl &gt;= v0.10.0 Step1: Create a kubernetes cluster locally using kind Note: If you have a kubernetes cluster (&gt; v1.21.10) already, you can skip this step.
 Here we create a kubernetes cluster with 1 control-plane node and 1 worker nodes.">
-  <meta itemprop="wordCount" content="972">
+  <meta itemprop="wordCount" content="1200">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Getting Started">
   <meta name="twitter:description" content="Getting Started This document introduces how to create a kubernetes cluster locally using kind and how to deploy the basic skywalking components to the cluster.
@@ -212,6 +212,7 @@ Here we create a kubernetes cluster with 1 control-plane node and 1 worker nodes
       <div class="td-main">
         <div class="row flex-xl-nowrap">
           <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
 
 
 
@@ -495,7 +496,7 @@ Here we create a kubernetes cluster with 1 control-plane node and 1 worker nodes
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b17c2d3</div>
+                  <div class="commit-id">Commit Id: d299bc0</div>
                 
 
 
@@ -627,11 +628,14 @@ your kubernetes cluster can access.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      type: ClusterIP
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">---
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">apiVersion: operator.skywalking.apache.org/v1alpha1
-</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">kind: UI 
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">kind: UI
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">metadata:
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  name: skywalking-system
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  namespace: skywalking-system
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">spec:
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  # spec.kind selects the UI flavor. Default is &#34;horizon&#34; (next-gen UI).
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  # Use &#34;booster&#34; to deploy the legacy apache/skywalking-ui image.
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  kind: booster
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  version: 9.5.0
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  instances: 1
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  image: apache/skywalking-ui:9.5.0
@@ -642,7 +646,57 @@ your kubernetes cluster can access.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    ingress:
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      host: demo.ui.skywalking
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">EOF</span>
-</span></span></code></pre></div><p>Check the status of the skywalking components.</p>
+</span></span></code></pre></div><h4 id="ui-flavors-speckind">UI flavors (<code>spec.kind</code>)</h4>
+<p>The <code>UI</code> resource supports two flavors via <code>spec.kind</code>:</p>
+<table>
+  <thead>
+      <tr>
+          <th><code>spec.kind</code></th>
+          <th>Default image</th>
+          <th>Listens on</th>
+          <th>OAP wire-up</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>horizon</code> <em>(default)</em></td>
+          <td><code>apache/skywalking-horizon-ui:&lt;ver&gt;</code></td>
+          <td><code>8081</code></td>
+          <td>YAML config mounted at <code>/app/horizon.yaml</code></td>
+      </tr>
+      <tr>
+          <td><code>booster</code></td>
+          <td><code>apache/skywalking-ui:&lt;ver&gt;</code></td>
+          <td><code>8080</code></td>
+          <td><code>SW_OAP_ADDRESS</code> env var</td>
+      </tr>
+  </tbody>
+</table>
+<p>When <code>spec.kind: horizon</code>, the operator additionally:</p>
+<ul>
+<li>Creates <code>ConfigMap/&lt;name&gt;-ui-horizon</code> with key <code>horizon.yaml</code>, populated from <code>spec.OAPServerAddress</code> (→ <code>oap.queryUrl</code>), <code>spec.OAPServerAdminAddress</code> (default <code>http://&lt;name&gt;-oap.&lt;ns&gt;:17128</code> → <code>oap.adminUrl</code>), and <code>spec.OAPServerZipkinAddress</code> (default <code>&lt;OAPServerAddress&gt;/zipkin</code> → <code>oap.zipkinUrl</code>).</li>
+<li>Mounts that ConfigMap as <code>/app/horizon.yaml</code> (read-only) on the Horizon UI container.</li>
+<li>Mounts an <code>emptyDir</code> at <code>/data</code> for Horizon&rsquo;s writable state (audit log, setup state, alarm state, wire-debug log). State is lost on pod restart.</li>
+</ul>
+<p>Set <code>spec.config</code> to a raw <code>horizon.yaml</code> string to fully override the operator-generated config (e.g. to configure local users, LDAP, RBAC, or session settings). When set, the operator-generated fields above are ignored.</p>
+<p>Note: the <code>OAPServer</code> Service exposes port <code>17128</code> (admin) in addition to <code>12800</code>/<code>11800</code>/<code>1234</code> so Horizon UI can reach runtime-rule, DSL/MQE debug, and inspect endpoints. The admin port must be enabled in your OAP configuration for Horizon&rsquo;s admin features to work.</p>
+<p>Minimal horizon example (defaults pick image, admin URL, and Zipkin URL):</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">apiVersion</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>operator.skywalking.apache.org/v1alpha1<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">kind</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>UI<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">metadata</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>skywalking-system<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">namespace</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>skywalking-system<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">spec</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">kind</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>horizon             <span style="color:#fff"> </span><span style="color:#57606a"># default — can be omitted</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">version</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">9.5.0</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">instances</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">OAPServerAddress</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>http://skywalking-system-oap.skywalking-system:12800<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">service</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">template</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span><span style="color:#0550ae">type</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>ClusterIP<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">ingress</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span><span style="color:#0550ae">host</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>demo.ui.skywalking<span style="color:#fff">
+</span></span></span></code></pre></div><p>Check the status of the skywalking components.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>$ kubectl get pod -n skywalking-system      
 </span></span><span style="display:flex;"><span>NAME                                     READY   STATUS    RESTARTS   AGE
 </span></span><span style="display:flex;"><span>skywalking-system-oap-68bd877f57-fhzdz   1/1     Running   <span style="color:#0550ae">0</span>          6m23s
@@ -767,7 +821,7 @@ sure the java agent is injected into the application pod.</p>
 <p><img src="https://skywalking.apache.org/doc-graph/swck/demo-ui.png" alt="ui"></p>
 </details>
 <p>Also, if you want to expose the external metrics to the kubernetes HPA, you can follow the <a href="./../custom-metrics-adapter">guide</a> to deploy the custom metrics adapter and you may get some inspiration from the
-<a href="https://github.com/apache/skywalking-swck/tree/b17c2d3734e1788f531836d11becfac8bbd3179a/test/e2e/oap-agent-adapter-hpa/e2e.yaml">e2e test</a>.</p>
+<a href="https://github.com/apache/skywalking-swck/tree/d299bc05ee230f5f366584054db5b099ca60166f/test/e2e/oap-agent-adapter-hpa/e2e.yaml">e2e test</a>.</p>
 
 </div>
 
@@ -9806,6 +9860,70 @@ sure the java agent is injected into the application pod.</p>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -9868,6 +9986,70 @@ sure the java agent is injected into the application pod.</p>
                     
                 </a>
             </div>
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
             
             
             
