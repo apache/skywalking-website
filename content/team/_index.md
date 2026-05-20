@@ -6,11 +6,6 @@ description: About SkyWalking Team.
 
 <div class="skywalking-team">
 
-<h1>SkyWalking Team</h1>
-<p class="text-box">
-The SkyWalking team is comprised of Members and Contributors, and the growth has never stopped. Members have direct access to the source of SkyWalking project and actively evolve the code-base. Contributors improve the project through submission of patches and suggestions to the Members.
-</p>
-
 <div class="appreciate"> 
 <h4>All contributions to SkyWalking are appreciated</h4>
 <p>The number of contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards.</p>
