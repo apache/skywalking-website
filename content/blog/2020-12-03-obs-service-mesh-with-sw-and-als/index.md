@@ -4,7 +4,7 @@ date: 2020-12-03
 author: Zhenxu Ke, Sheng Wu, and Tevah Platt. tetrate.io
 description: In this tutorial, learn how to use Apache SkyWalking for service mesh observability without Istio Mixer
 tags:
-- Service Mesh
+- Cloud Native
 ---
 
 ![](canyonhorseshoe.jpg)

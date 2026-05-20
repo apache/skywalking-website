@@ -4,9 +4,8 @@ date: 2026-04-02
 author: "Sheng Wu"
 description: "Set up full-stack observability for your AI/LLM traffic using Envoy AI Gateway, SkyWalking OAP 10.4.0, and BanyanDB 0.10.0."
 tags:
-- GenAI
-- Envoy
-- Observability
+- AI
+- Cloud Native
 ---
 
 ## The Problem: Flying Blind with LLM Traffic

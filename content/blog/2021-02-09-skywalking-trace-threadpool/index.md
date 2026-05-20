@@ -5,8 +5,7 @@ author: "Binglong Li"
 description: "This post introduces how to propagate context between threads when using ThreadPoolExecutor, 
 which SkyWalking agent should not enhance"
 tags:
-- Java
-- Agent
+- Agents
 - Tracing
 ---
 

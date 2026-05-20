@@ -5,6 +5,8 @@ author: "Apache SkyWalking"
 description: "HashiCorp announced to adopt the Business Source License from Mozilla Public License v2.0 (MPL 2.0). SkyWalking community posts the statement for our own users to explain the evaluation of the potential implications."
 startTime: 2023-08-13T00:00:00Z
 endTime: 2023-09-30T10:00:00Z
+tags:
+- Community
 ---
 
 On Aug. 10th, 2023, HashiCorp announced to adopt the Business Source License (BSL) from Mozilla Public License v2.0 (MPL 2.0), here is their [post](https://www.hashicorp.com/blog/hashicorp-adopts-business-source-license). 

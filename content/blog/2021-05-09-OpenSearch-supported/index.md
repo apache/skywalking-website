@@ -4,7 +4,7 @@ date: 2021-05-09
 author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github.com/wu-sheng) [Twitter](https://twitter.com/wusheng1108) [Linkedin](https://www.linkedin.com/in/wusheng1108)
 description: "Elasticsearch server doesn't release under Apache 2.0 anymore. But we have another open option in OpenSearch project."
 tags:
-- License
+- Community
 ---
 
 We posted our [**Response to Elastic 2021 License Change**](/blog/2021-01-17-elastic-change-license/) blog 4 months ago. It doesn't have a big impact in 

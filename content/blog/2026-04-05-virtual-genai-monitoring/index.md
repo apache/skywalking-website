@@ -4,10 +4,8 @@ author: "YiMing Shao"
 date: 2026-04-05
 description: "SkyWalking 10.4 introduces the Virtual GenAI dashboard. This article explores how to use this new feature to monitor and optimize LLM integrations."
 tags:
-- GenAI
-- LLM
-- Observability
-- Opentelemetry
+- AI
+- Metrics
 ---
 # The Problem: As Applications "Consume" LLMs, Monitoring Leaves a Blind Spot
 

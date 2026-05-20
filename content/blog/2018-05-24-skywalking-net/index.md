@@ -4,8 +4,7 @@ date: 2018-05-24
 author: Haoyang Liu, the major maintainer of SkyWalking .NET Core agent
 description: "SkyWalking .NET Core SDK is available."
 tags:
-- DotNetCore
-- Agent
+- Agents
 ---
 
 Translated by Sheng Wu.

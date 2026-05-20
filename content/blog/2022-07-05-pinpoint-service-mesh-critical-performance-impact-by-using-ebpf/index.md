@@ -4,11 +4,8 @@ date: 2022-07-05
 author: Han Liu, Sheng Wu
 description: Introducing performance analysis in production with SkyWalking Rover
 tags:
-- SkyWalking
-- Observability
-- eBPF
-- service mesh
-- profiling
+- Profiling
+- Cloud Native
 ---
 
 ### Content

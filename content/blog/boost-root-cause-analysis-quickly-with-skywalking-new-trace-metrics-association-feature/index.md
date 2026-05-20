@@ -4,8 +4,8 @@ date: 2022-12-19
 author: "Sheng Wu"
 description: "SkyWalking 9.3.0 introduced the new capability that help you visualize the connection between traces and corresponding metrics quickly."
 tags:
-- Trace
-- Metric
+- Tracing
+- Metrics
 ---
 
 ![Banner](banner.jpg)

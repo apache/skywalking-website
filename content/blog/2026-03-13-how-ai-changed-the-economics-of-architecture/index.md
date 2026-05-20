@@ -4,13 +4,9 @@ date: 2026-03-13
 author: Sheng Wu
 description: "A case study in how AI changed the economics of architecture in a mature  project by making better designs cheaper to prototype, validate, and refine."
 tags:
-- GraalVM
-- Native Image
-- Performance
 - Cloud Native
-- Serverless
+- Profiling
 - AI
-- Claude
 ---
 
 *SkyWalking GraalVM Distro: A case study in turning runnable PoCs into a repeatable migration pipeline.*

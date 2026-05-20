@@ -4,12 +4,9 @@ date: 2026-03-13
 author: Sheng Wu
 description: "A technical deep-dive into SkyWalking GraalVM Distro — how we turned a mature, reflection-heavy Java observability backend into a native binary with a repeatable migration pipeline."
 tags:
-- GraalVM
-- Native Image
-- Performance
 - Cloud Native
-- Serverless
-- BanyanDB
+- Profiling
+- Storage
 ---
 
 *A technical deep-dive into how we migrated Apache SkyWalking OAP to GraalVM Native Image — not as a one-off port, but as a repeatable pipeline that stays aligned with upstream.*

@@ -4,7 +4,6 @@ date: 2023-06-25
 author: "Han Liu"
 description: "Introduce and demonstrate how SkyWalking implements eBPF-based process monitoring with few manual engagements. The profiling could be automatically activated driven by the preset conditions."
 tags:
-- eBPF
 - Profiling
 - Tracing
 ---

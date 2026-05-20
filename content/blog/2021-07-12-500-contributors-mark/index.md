@@ -6,6 +6,8 @@ description: "SkyWalking has over 500 contributors based on GitHub repository st
 startTime: 2021-07-01T00:00:00Z
 endTime: 2021-08-01T10:00:00Z
 poster: /images/500-mark.png
+tags:
+- Community
 ---
 
 ![](500-mark.png)

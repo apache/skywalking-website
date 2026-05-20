@@ -4,7 +4,7 @@ date: 2021-01-22
 author: Apache SkyWalking
 description: "Tencent Cloud Service, Tencent Service Watcher - TSW, have been reported as it violates Apache 2.0 License requirements."
 tags:
-- License
+- Community
 ---
 
 [Apache SkyWalking](https://skywalking.apache.org) is an open source APM for distributed system, Apache Software Foundation top-level project.

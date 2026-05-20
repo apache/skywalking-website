@@ -4,8 +4,7 @@ date: 2023-07-31
 author: "Han Liu"
 description: "Introduction the new features of SkyWalking Go 0.2.0"
 tags:
-- Golang
-- Agent
+- Agents
 - Metrics
 - Logging
 ---

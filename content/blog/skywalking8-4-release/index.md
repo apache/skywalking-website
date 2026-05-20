@@ -4,8 +4,8 @@ date: 2021-02-05
 author: Zhenxu Ke, Sheng Wu. tetrate.io
 description: "Logs, VM Monitoring, and Dynamic Configurations at Agent Side"
 tags:
-- Release Blog
-- Logs
+- Release
+- Logging
 ---
 
 ![](heading.png)

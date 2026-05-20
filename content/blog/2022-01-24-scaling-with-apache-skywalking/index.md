@@ -3,9 +3,8 @@ title: "Scaling with Apache SkyWalking"
 date: 2022-01-24
 author: Han Liu, Sheng Wu
 description: "Introduce how to load balance the traffic between SkyWalking backend and agent through SkyWalking Satellite"
-
 tags:
-- Performance
+- Profiling
 ---
 
 ## Background

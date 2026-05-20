@@ -4,8 +4,7 @@ date: 2022-12-14
 author: "[Jimmy Song (tetrate.io)](https://jimmysong.io/en/)"
 description: "This blog will guide you to use SkyWalking for distributed tracing with Istio."
 tags:
-- Istio
-- Service Mesh
+- Cloud Native
 ---
 
 In cloud native applications, a request often needs to be processed through a series of APIs or backend services, some of which are parallel and some serial and located on different platforms or nodes. How do we determine the service paths and nodes a call goes through to help us troubleshoot the problem? This is where distributed tracing comes into play.

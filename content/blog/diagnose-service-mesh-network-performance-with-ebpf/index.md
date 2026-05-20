@@ -4,8 +4,7 @@ date: 2022-09-27
 author: "Han Liu, Sheng Wu"
 description: "This article will show how to use Apache SkyWalking with eBPF to make network troubleshooting easier in a service mesh environment."
 tags:
-- eBPF
-- Performance
+- Profiling
 ---
 
 ## Background

@@ -4,7 +4,7 @@ author: "YiMing Shao"
 date: 2025-04-25
 description: "SkyWalking 10.3 introduces a new Flink monitoring dashboard, and this article will demonstrate the usage of this monitoring dashboard."
 tags:
-- Flink
+- Metrics
 ---
 
 # Background

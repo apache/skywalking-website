@@ -3,6 +3,8 @@ title: "Monitoring Kubernetes network traffic by using eBPF"
 date: 2024-03-18
 author: Han Liu
 description: This article demonstrates how SkyWalking uses eBPF technology to monitor network traffic on Kubernetes.
+tags:
+- Profiling
 ---
 
 ## Background
