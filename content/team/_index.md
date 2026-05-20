@@ -4,17 +4,6 @@ linkTitle: Team
 description: About SkyWalking Team.
 ---
 
-<div class="skywalking-team">
-
-<div class="appreciate"> 
-<h4>All contributions to SkyWalking are appreciated</h4>
-<p>The number of contributors to the project is unbounded. All contributions to SkyWalking are greatly appreciated, whether for trivial cleanups, big new features or other material rewards.</p>
-<a href="https://skywalking.apache.org/docs/main/latest/en/guides/community/">CONNECT WITH US.</a>
-<img class="deco-img" data-nolightbox="true" src="/images/team/team.svg" >
-</div>
-
-</div>
-
 ## Members
 
 ##### Project Management Committee
