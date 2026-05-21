@@ -4,8 +4,7 @@ author: "[Haochao Zhuang](https://github.com/dmsolr)"
 date: 2021-12-08
 description: "This paper mainly introduces two Apache APISIX integrated SkyWalking log plug-ins to provide a more convenient operation and environment for log processing in Apache APISIX."
 tags:
-- Observability
-- APISIX
+- Agents
 ---
 
 In the field of observability, the three main directions of data collection and analysis, Metrics, Logger and Tracing, are usually used to achieve insight into the operational status of applications.

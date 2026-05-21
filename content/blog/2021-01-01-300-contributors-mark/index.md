@@ -3,6 +3,8 @@ title: "Celebrate SkyWalking single repository hits the 300 contributors mark"
 date: 2020-12-22
 author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github.com/wu-sheng) [Twitter](https://twitter.com/wusheng1108) [Linkedin](https://www.linkedin.com/in/wusheng1108)
 description: "SkyWalking hits 300 contributors mark at one single repository"
+tags:
+- Community
 ---
 
 Apache SkyWalking is an open source APM for distributed system. Provide tracing, service mesh observability, metrics analysis, alarm and visualization.

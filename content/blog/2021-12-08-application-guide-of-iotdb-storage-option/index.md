@@ -3,10 +3,8 @@ title: "The Application Guide of Apache IoTDB Storage Option"
 date: "2021-12-08"
 author: "[Wei Liu](https://github.com/LIU-WEI-git), School of Computer Science, NPU, China"
 description: "This guide will tell you how to use SkyWalking Showcase to run demo applications or start manually step by step. In addition, it introduces some methods about visiting IoTDB server and gives some query SQLs as example."
-
 tags:
 - Storage
-- IoTDB
 ---
 
 This document is one of the outcomes of [Apache IoTDB - Apache SkyWalking Adapter](https://summer.iscas.ac.cn/#/org/prodetail/210070771) in [Summer 2021 of Open Source Promotion Plan](https://summer.iscas.ac.cn/#/homepage). The design and development work is under the guidance of [@jixuan1989](https://github.com/jixuan1989) from IoTDB and [@wu-sheng](https://github.com/wu-sheng) from SkyWalking. Thanks for their guidance and the help from community.

@@ -4,7 +4,7 @@ date: 2024-04-19
 author: Ziyan Chen
 description: "This article will demonstrate the usage of the new ActiveMQ monitoring dashboard."
 tags:
-- ActiveMQ
+- Agents
 ---
 
 ![icon](activemq_logo.png)

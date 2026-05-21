@@ -3,9 +3,8 @@ title: "How to use the java agent injector?"
 date: 2022-04-19
 author: "[Ye Cao](https://github.com/dashanji), Apache SkyWalking Committer; [Hongtao Gao](https://github.com/hanahmily), Apache SkyWalking PMC member, Tetrate.io."
 description: "Introduce how to quickly get started the java agent injector based on SWCK"
-
 tags:
-- User Manual
+- Engineering
 ---
 
 ### content:

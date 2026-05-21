@@ -3,15 +3,11 @@ title: "Agentic Vibe Coding in a Mature OSS Project: What Worked, What Didn't"
 date: 2026-03-08
 author: Sheng Wu
 description: "What happens when you apply agentic AI coding to a mature open-source project with real users, real compatibility contracts, and real consequences? 77K lines changed in 5 weeks — here's what I learned."
+endTime: 2026-03-08T23:00:00Z
 tags:
 - AI
-- Agentic Coding
-- Vibe Coding
-- TDD
-- Architecture
-- Engineering Productivity
-- Open Source
-endTime: 2026-03-08T23:00:00Z
+- Engineering
+- Community
 ---
 
 Most "vibe coding" stories start with a greenfield project. This one doesn't.

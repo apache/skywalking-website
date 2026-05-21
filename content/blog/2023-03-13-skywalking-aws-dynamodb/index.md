@@ -3,6 +3,8 @@ title: "Monitoring DynamoDB with SkyWalking"
 date: 2023-03-13
 author: Yueqin Zhang
 description: This article shows how to use SkyWalking to monitor DynamoDB.
+tags:
+- Community
 ---
 
 

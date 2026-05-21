@@ -3,6 +3,8 @@ title: "Improving Alert Accuracy with Dynamic Baselines"
 date: 2025-02-24
 author: "Han Liu"
 description: "This article explores how to leverage history metrics to generate dynamic baselines for a future period, thereby enhancing the accuracy of alerts."
+tags:
+- Community
 ---
 
 ## Background

@@ -3,6 +3,8 @@ title: "Profiling Java application with SkyWalking bundled async-profiler"
 date: 2024-12-09
 author: "zhengziyi0117"
 description: "This document presents an introduction to and usage of the async-profiler in SkyWalking."
+tags:
+- Profiling
 ---
 
 ## Background

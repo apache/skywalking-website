@@ -5,8 +5,7 @@ author: "Sheng Wu, Adrian Cole and Han Liu"
 description: "This post introduces a way to automatically profile code in production with Apache SkyWalking. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis."
 tags:
 - Profiling
-- Java
-- Agent
+- Agents
 - Tracing
 ---
 

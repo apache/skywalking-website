@@ -4,9 +4,8 @@ date: 2024-06-04
 author: Hongtao Gao, Sheng Wu. tetrate.io
 description: "Introducing What's New in BanyanDB v0.6 and a Benchmark Test Against Elasticsearch"
 tags:
-- Release Blog
+- Release
 - Storage
-- BanyanDB
 ---
 
 # Introduction

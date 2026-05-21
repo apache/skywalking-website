@@ -4,7 +4,7 @@ date: 2022-01-28
 author: Apache SkyWalking
 description: "Volcengine Inc.(火山引擎) Application Performance Monitoring - Distributed Tracing (应用性能监控全链路版) redistributed Apache SkyWalking illegally. They don't follow the Apache 2.0 License requirements"
 tags:
-- License
+- Community
 ---
 
 [Apache SkyWalking](https://skywalking.apache.org) is an open-source APM for a distributed system, Apache Software Foundation top-level project.

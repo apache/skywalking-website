@@ -3,6 +3,8 @@ title: "Monitoring AWS EKS and S3 with SkyWalking"
 date: 2023-03-12
 author: Puguang Yang
 description: This article shows how to use SkyWalking to monitor EKS and S3.
+tags:
+- Community
 ---
 
 ![icon.png](./icon.png)

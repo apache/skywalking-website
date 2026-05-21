@@ -4,7 +4,7 @@ author: "Brandon Fergerson"
 date: 2021-12-06
 description: "SkyWalking is designed for easy customization, and with the latest release of Source++, it is now easier than ever to add non-breaking breakpoints to existing SkyWalking installations."
 tags:
-- Observability
+- Community
 ---
 
 Non-breaking breakpoints are breakpoints specifically designed for live production environments. With non-breaking breakpoints, reproducing production bugs locally or in staging is conveniently replaced with capturing them directly in production.

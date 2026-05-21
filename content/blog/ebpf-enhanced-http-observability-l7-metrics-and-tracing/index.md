@@ -4,10 +4,9 @@ date: 2023-01-12
 author: "Han Liu, Sheng Wu"
 description: "This article will show how to use Apache SkyWalking with eBPF to enhance metrics and traces in HTTP observability."
 tags:
-- Trace
-- Metric
-- eBPF
-- HTTP
+- Tracing
+- Metrics
+- Profiling
 ---
 
 ![banner](banner.jpg)

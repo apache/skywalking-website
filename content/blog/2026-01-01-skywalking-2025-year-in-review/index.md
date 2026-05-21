@@ -3,13 +3,11 @@ title: "Apache SkyWalking 2025 in Review: Making BanyanDB Ready for Production"
 date: 2026-01-01
 author: Sheng Wu
 description: "A review of Apache SkyWalking community work in 2025, with a focus on BanyanDB becoming the production-grade native storage for SkyWalking."
-tags:
-- Community
-- Year in Review
-- BanyanDB
-- Storage
-- Release Blog
 endTime: 2026-01-01T23:00:00Z
+tags:
+- Release
+- Storage
+- Community
 ---
 
 2025 was a very focused year for the Apache SkyWalking community: **moving BanyanDB from “native storage” to a “production-ready default”**, and making SkyWalking APM fully benefit from that foundation.
