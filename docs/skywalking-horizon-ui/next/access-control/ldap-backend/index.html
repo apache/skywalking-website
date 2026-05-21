@@ -34,7 +34,7 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
   <meta itemprop="name" content="LDAP Backend">
   <meta itemprop="description" content="LDAP Backend The LDAP backend authenticates users against an external directory (OpenLDAP, Active Directory, FreeIPA, 389-DS) and derives Horizon roles from LDAP group membership. Passwords are never stored by Horizon — login binds as the user with their typed password.
 Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=horizon,ou=services,dc=corp&#34; bindPassword: &#34;${HORIZON_LDAP_BIND_PW}&#34; userBaseDn: &#34;ou=people,dc=corp&#34; userFilter: &#34;(uid={username})&#34; displayNameAttr: cn groupStrategy: memberOf groupBaseDn: &#34;&#34; memberAttr: member timeoutMs: 5000 tlsInsecure: false groupMappings: - { group: &#34;cn=horizon-admin,ou=groups,dc=corp&#34;, role: admin } - { group: &#34;cn=sre,ou=groups,dc=corp&#34;, role: operator } - { group: &#34;cn=platform,ou=groups,dc=corp&#34;, role: maintainer } - { group: &#34;*&#34;, role: viewer } Bootstrap rule: ldap.groupMappings must be non-empty before LDAP users can sign in. The BFF boots and surfaces the setup-required state on the login page, but no LDAP login succeeds until at least one mapping is configured.">
-  <meta itemprop="wordCount" content="901">
+  <meta itemprop="wordCount" content="1009">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="LDAP Backend">
   <meta name="twitter:description" content="LDAP Backend The LDAP backend authenticates users against an external directory (OpenLDAP, Active Directory, FreeIPA, 389-DS) and derives Horizon roles from LDAP group membership. Passwords are never stored by Horizon — login binds as the user with their typed password.
@@ -688,7 +688,7 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: bf5a64d</div>
+                  <div class="commit-id">Commit Id: 94f864e</div>
                 
 
 
@@ -755,22 +755,15 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span>- {<span style="color:#fff"> </span><span style="color:#0550ae">group</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;cn=platform,ou=groups,dc=corp&#34;</span><span style="color:#0550ae">, role</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>maintainer }<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span>- {<span style="color:#fff"> </span><span style="color:#0550ae">group</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;*&#34;</span><span style="color:#0550ae">, role</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>viewer }<span style="color:#fff">
 </span></span></span></code></pre></div><p>Bootstrap rule: <code>ldap.groupMappings</code> must be non-empty before LDAP users can sign in. The BFF boots and surfaces the setup-required state on the login page, but no LDAP login succeeds until at least one mapping is configured.</p>
-<h2 id="login-flow">Login flow</h2>
-<p><code>apps/bff/src/user/ldap.ts</code>:</p>
-<ol>
-<li><strong>Service bind</strong> (if <code>bindDn</code> is set) or anonymous bind. Used to search for the user&rsquo;s DN.</li>
-<li><strong>User search</strong> — apply <code>userFilter</code> against <code>userBaseDn</code>, substituting <code>{username}</code> (RFC 4515 escaped). Expect exactly one result; multiple matches abort with <code>null</code>.</li>
-<li><strong>User bind</strong> — bind directly as the discovered DN with the typed password. A successful bind proves the password.</li>
-<li><strong>Group resolution</strong> — per <code>groupStrategy</code>:
+<h2 id="how-sign-in-works">How sign-in works</h2>
+<p>Horizon never stores or reads stored passwords. A sign-in attempt authenticates <strong>as the user</strong> against the directory with the typed password, so the directory itself decides whether the password is valid. On success, Horizon reads the user&rsquo;s group memberships and maps them to roles via <code>groupMappings</code>.</p>
+<p>What this means when you configure LDAP:</p>
 <ul>
-<li><code>memberOf</code>: read the <code>memberOf</code> attribute from the user entry (AD-style).</li>
-<li><code>search</code>: search <code>groupBaseDn</code> for groups whose <code>memberAttr</code> contains the user&rsquo;s DN (OpenLDAP-style).</li>
+<li><strong>Group membership is read with the service account</strong> (<code>bindDn</code>), not the user&rsquo;s own credentials. Many directories deny ordinary users read access to the group subtree, so the <strong>service account must be able to see groups</strong> — otherwise every user falls back to the <code>*</code> role.</li>
+<li><strong><code>userFilter</code> must resolve to a single user.</strong> If it matches more than one entry, the first match is used.</li>
+<li><strong>Roles are the union of all matching <code>groupMappings</code></strong> — a user in two mapped groups gets both roles&rsquo; permissions.</li>
+<li><strong>Failures are deliberately indistinguishable.</strong> A wrong password, a missing user, or no matching group all surface the same &ldquo;Invalid credentials&rdquo; message; the specific cause is never revealed to the browser.</li>
 </ul>
-</li>
-<li><strong>Group → role mapping</strong> — walk <code>groupMappings</code> in order. <strong>First match wins per mapping</strong> (a user matching multiple mappings gets the union of their roles).</li>
-<li>Return <code>{ username, roles }</code> on success, <code>null</code> on any failure.</li>
-</ol>
-<p>A failure at any step returns <code>null</code> — the UI shows a generic &ldquo;Invalid credentials&rdquo; message. No information leak about which step failed.</p>
 <h2 id="field-reference">Field reference</h2>
 <p>See <a href="../../setup/auth"><code>auth</code></a> for the field table.</p>
 <h2 id="userfilter-recipes"><code>userFilter</code> recipes</h2>
@@ -820,7 +813,7 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
       </tr>
       <tr>
           <td><code>search</code></td>
-          <td>OpenLDAP deployments where users do not carry <code>memberOf</code>. Requires <code>groupBaseDn</code> and uses <code>memberAttr</code> (usually <code>member</code> or <code>uniqueMember</code>).</td>
+          <td>OpenLDAP deployments where users do not carry <code>memberOf</code>. Requires <code>groupBaseDn</code> and uses <code>memberAttr</code> (usually <code>member</code> or <code>uniqueMember</code>). The <strong>service account</strong> (<code>bindDn</code>) — not the logging-in user — performs this search, so it must have read access to the group subtree.</td>
       </tr>
   </tbody>
 </table>
@@ -837,20 +830,9 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
 <li>A user matching multiple groups gets the <strong>union</strong> of all matching roles. E.g., a user in both <code>cn=sre</code> and <code>cn=platform</code> ends up with <code>operator</code> and <code>maintainer</code> roles (effective verbs are the union of both role&rsquo;s grants).</li>
 <li>Order matters only in the sense of being listed; all matching entries contribute.</li>
 </ul>
-<h2 id="health-probing">Health probing</h2>
-<p>The BFF exposes <code>GET /api/auth/health</code> (polled by the login page every 5 seconds):</p>
-<ul>
-<li><code>local</code>: backend is local — returns <code>reachable: true</code> unconditionally.</li>
-<li><code>ldap reachable</code>: last LDAP probe succeeded.</li>
-<li><code>ldap unreachable</code>: last probe failed.</li>
-</ul>
-<p>The health probe runs:</p>
-<ol>
-<li>TCP / TLS connect to <code>ldap.url</code>.</li>
-<li>Service bind (or anonymous bind).</li>
-<li>(Optional username resolver) A test search for a known username when invoked from the admin Auth Status page.</li>
-</ol>
-<p>Probe failure is the trigger condition for <a href="../break-glass">Break-Glass Access</a>.</p>
+<h2 id="health-and-directory-reachability">Health and directory reachability</h2>
+<p>The login page continuously reflects whether the directory is reachable, so operators see an outage before a user reports a failed login. When the directory is unreachable, that state is also what arms <a href="../break-glass">Break-Glass Access</a>.</p>
+<p>The admin <strong>Auth Status</strong> page lets you confirm the connection (and the service bind) and test a username against the live directory — it shows the groups returned and the roles those groups resolve to, without the user needing to sign in. Use it to debug <code>groupMappings</code> and to verify the service account can read the group subtree.</p>
 <h2 id="tls">TLS</h2>
 <ul>
 <li><code>ldaps://</code> (TLS-on-connect) is the recommended scheme. Default port 636.</li>
@@ -891,6 +873,7 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
 <ul>
 <li><strong>Service bind fails silently.</strong> Wrong <code>bindDn</code> or <code>bindPassword</code> causes all logins to fail with a generic message. Verify by looking at LDAP server logs.</li>
 <li><strong><code>groupStrategy: memberOf</code> on a directory that doesn&rsquo;t populate it.</strong> Logins succeed but every user gets only the <code>&quot;*&quot;</code> fallback role. Switch to <code>search</code>.</li>
+<li><strong><code>search</code> strategy with a locked-down group subtree.</strong> Group resolution runs on the service account (<code>bindDn</code>), so grant <em>that</em> account read access to <code>groupBaseDn</code>. (The logging-in user does not need it — Horizon never uses the user&rsquo;s own bind for group lookup.)</li>
 <li><strong>Forgetting the <code>&quot;*&quot;</code> fallback.</strong> A user who authenticates but matches no group mapping is rejected — change to <code>null</code> and the UI shows &ldquo;Invalid credentials&rdquo;. Add <code>&quot;*&quot; → viewer</code> for graceful degradation.</li>
 <li><strong><code>tlsInsecure: true</code> in production.</strong> A man-in-the-middle on the LDAP connection can capture every typed password. Use proper certificates instead.</li>
 </ul>
@@ -929,12 +912,12 @@ Activate auth: backend: ldap ldap: url: ldaps://ldap.corp:636 bindDn: &#34;cn=ho
     <li><a href="#ldap-backend">LDAP Backend</a>
       <ul>
         <li><a href="#activate">Activate</a></li>
-        <li><a href="#login-flow">Login flow</a></li>
+        <li><a href="#how-sign-in-works">How sign-in works</a></li>
         <li><a href="#field-reference">Field reference</a></li>
         <li><a href="#userfilter-recipes"><code>userFilter</code> recipes</a></li>
         <li><a href="#groupstrategy-choice"><code>groupStrategy</code> choice</a></li>
         <li><a href="#group-mappings">Group mappings</a></li>
-        <li><a href="#health-probing">Health probing</a></li>
+        <li><a href="#health-and-directory-reachability">Health and directory reachability</a></li>
         <li><a href="#tls">TLS</a></li>
         <li><a href="#operations">Operations</a></li>
         <li><a href="#wire-up-to-oap">Wire-up to OAP</a></li>
