@@ -34,7 +34,7 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
   <meta itemprop="name" content="Runtime Rule Hot-Update — Architecture">
   <meta itemprop="description" content="Runtime Rule Hot-Update — Architecture Operators change MAL and LAL rule files at runtime without restarting OAP. Changes persist in management storage, survive reboots, and propagate across every node in an OAP cluster within a bounded window. This page explains the contract: what the feature guarantees, how the cluster stays consistent, and what to expect when something goes wrong. The HTTP surface is documented separately in Runtime Rule Hot-Update API.
 Vocabulary Runtime rule entry — the unit of operator state: one entry per (catalog, name), carrying the full rule-file content plus a status of ACTIVE or INACTIVE. Entries live in management storage (the same persistence layer used for UI templates, UI menus, and other cluster-wide operator state). Catalog — the rule group named in the API, currently otel-rules, log-mal-rules, telegraf-rules, or lal. It mirrors the on-disk directory layout so a rule’s (catalog, name) identity is portable between disk and the runtime-rule entry store. Main — the single OAP node designated to run the on-demand workflow. Every node can compute it locally from the sorted cluster peer list; no election. Peer — every node other than the main. Periodic scan — every OAP node re-reads management storage every 30 s (default, configurable) and brings its in-memory state into line with what storage holds. This is the convergence loop the consistency contract is built on. Scope: MAL and LAL, not OAL Runtime hot-update covers only the MAL (otel-rules, log-mal-rules, telegraf-rules) and LAL (lal) catalogs. OAL rules are deliberately out of scope. Three reasons, in order of weight:">
-  <meta itemprop="wordCount" content="3557">
+  <meta itemprop="wordCount" content="3742">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Runtime Rule Hot-Update — Architecture">
   <meta name="twitter:description" content="Runtime Rule Hot-Update — Architecture Operators change MAL and LAL rule files at runtime without restarting OAP. Changes persist in management storage, survive reboots, and propagate across every node in an OAP cluster within a bounded window. This page explains the contract: what the feature guarantees, how the cluster stays consistent, and what to expect when something goes wrong. The HTTP surface is documented separately in Runtime Rule Hot-Update API.
@@ -2985,7 +2985,7 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 5e9db8f</div>
+                  <div class="commit-id">Commit Id: 1ad850f</div>
                 
 
 
@@ -3227,16 +3227,40 @@ backing schema needs to change.</p>
 <p>Streams whose schema lives in OAP source code (e.g. <code>AlarmRecord</code>) can opt in
 to <strong>additive</strong> boot-time reshape via
 <code>@Stream(allowBootReshape = true)</code>. When the flag is on and the diff is
-purely additive (new tag / new field; no type changes, no drops, no entity /
-interval / sharding-key flips), the installer calls <code>client.update</code> at boot
-to append the new column to the live measure / stream; non-additive
-divergences still record <code>SKIPPED_SHAPE_MISMATCH</code> and require an operator
-drop+recreate. Only the init / standalone OAP performs the reshape; non-init
-peers continue through the existing poll-and-wait loop so a single node
-drives DDL during a rolling restart.</p>
+purely additive, the installer calls <code>client.update</code> at boot to extend the
+live measure / stream; non-additive divergences still record
+<code>SKIPPED_SHAPE_MISMATCH</code> and require an operator drop+recreate. Only the
+init / standalone OAP performs the reshape; non-init peers continue through
+the existing poll-and-wait loop so a single node drives DDL during a rolling
+restart.</p>
+<p>&ldquo;Additive&rdquo; includes two cases:</p>
+<ol>
+<li><strong>New tag / new field</strong> — a brand-new <code>@Column</code> is appended to the live
+tag family (or fields list, for measures).</li>
+<li><strong>Tag relocation between families</strong> — a <code>@Column</code>&rsquo;s <code>storageOnly</code> flag
+flips, moving the tag between the <code>storage-only</code> and <code>searchable</code>
+families. The tag identity and type are preserved; only its on-disk
+family location changes.</li>
+</ol>
+<p>Drops, tag-type changes, kind flips (tag↔field), and entity / interval /
+sharding-key changes are still rejected with <code>SKIPPED_SHAPE_MISMATCH</code>.</p>
+<p>When the primary <code>check*</code> records <code>SKIPPED_SHAPE_MISMATCH</code>, the dependent
+<code>IndexRule</code> and <code>IndexRuleBinding</code> reconciliation is <strong>also skipped</strong>. This
+preserves coherence between the stream / measure tag layout and the binding
+that points into it — without the gate, the binding would silently update to
+reference the new declared tag list while the live tag families still carry
+the old shape, leaving operators with a binding routing to tags that don&rsquo;t
+exist in the live family layout.</p>
 <p>This opt-in is <strong>BanyanDB-only</strong>. JDBC and Elasticsearch are append-only on
 the data path and already accept additive column / mapping additions at boot
 without operator intervention, so the flag is unread on those backends.</p>
+<blockquote>
+<p><strong>Operator caveat:</strong> BanyanDB does not physically migrate existing rows
+when a tag&rsquo;s family changes. Pre-existing data for the relocated tag stays
+in its original on-disk family location; new writes go to the declared
+family. Queries that route through a new IndexRule on the relocated tag
+will only see post-reshape rows until historical data ages out via TTL.</p>
+</blockquote>
 <h2 id="on-demand-workflow">On-demand workflow</h2>
 <p>Triggered by an HTTP call to one of the admin endpoints. A request arriving at any
 node is forwarded to the <strong>main</strong> (the node selected from the cluster view); the main
