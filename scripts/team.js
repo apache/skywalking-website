@@ -82,7 +82,13 @@ class GenerateTeamYaml {
   }
 
   async getRepoContributors({user, repo, extraContributors = [], page = 1, per_page = 100, list = [], item}) {
-    let {data = []} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`)
+    // GitHub's anonymous rate limit is 60 req/hr/IP — far too low for ~49 repos
+    // with multi-page contributor lists. Auth lifts the cap to 5000/hr.
+    const headers = {'User-Agent': 'skywalking-website-build'};
+    if (process.env.GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+    let {data = []} = await axios.get(`https://api.github.com/repos/${user}/${repo}/contributors?page=${page}&per_page=${per_page}&anon=true&t=${new Date().getTime()}`, {headers})
     data = this.handleData(data);
     list.push(...data);
     if (data.length === per_page) {
