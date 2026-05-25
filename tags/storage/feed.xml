@@ -5,7 +5,7 @@
     <description>Recent content in Storage on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Fri, 13 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 15 Mar 2026 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/storage/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -14,6 +14,231 @@
         
       
     
+    
+    <item>
+      <title>Zh: SkyWalking GraalVM Distro：设计与基准测试</title>
+      <link>/zh/2026-03-13-skywalking-graalvm-distro-design-and-benchmarks/</link>
+      <pubDate>Sun, 15 Mar 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-03-13-skywalking-graalvm-distro-design-and-benchmarks/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;这篇文章会完整介绍我们如何把 Apache SkyWalking OAP 迁移到 GraalVM Native Image。目标不是做一次性移植，而是把这件事做成一套能持续跟上上游演进的流程。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./graph.jpg&#34; alt=&#34;graph.jpg&#34;&gt;&lt;/p&gt;
+&lt;p&gt;如果你想看这项工作的更大背景，以及 AI Coding 如何让这个项目真正做得出来，请阅读：&lt;a href=&#34;/zh/2026-03-13-how-ai-changed-the-economics-of-architecture/&#34;&gt;AI Coding 如何重塑软件架构师的工作方式&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;为什么-graalvm-在这里是刚需&#34;&gt;为什么 GraalVM 在这里是刚需&lt;/h2&gt;
+&lt;p&gt;GraalVM Native Image 可以把 Java 应用做 Ahead-of-Time（AOT）编译，生成独立可执行文件。对于像 SkyWalking OAP 这样的可观测性后端来说，这不是“锦上添花”的性能优化，而是明确的工程刚需。&lt;/p&gt;
+&lt;p&gt;可观测性平台必须是基础设施中最可靠的部分。它必须在自己要观测的那些故障发生时依然存活。在云原生环境里，工作负载会不断扩缩容、迁移和重启，负责观测一切的后端本身不能还是那个启动慢、空闲占用大、恢复缓慢的重型进程。&lt;/p&gt;
+&lt;p&gt;我们的基准测试结果让这个结论变得非常具体：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;**启动时间：**约 5 ms 对比约 635 ms。在 Kubernetes 集群里，当 OAP Pod 被驱逐或重新调度时，635 ms 的差距意味着这段时间里的遥测数据可能会丢失。5 ms 的情况下，新 Pod 往往在大部分客户端还没感知到中断之前就已经重新开始接收数据了。&lt;/li&gt;
+&lt;li&gt;**空闲内存：**约 41 MiB 对比约 1.2 GiB。可观测性后端是 24/7 常驻运行的。在多租户或边缘部署场景里，基础 RSS 降了 97%，可以放进更小的节点，而不再必须占用一台专用机器。&lt;/li&gt;
+&lt;li&gt;**负载下内存：**在 20 RPS 下约 629 MiB 对比约 2.0 GiB。生产级负载下内存降了 70%，直接对应更少的节点、更低的云账单，以及在后端本身成为扩容瓶颈之前更多的余量。&lt;/li&gt;
+&lt;li&gt;**没有预热惩罚：**峰值吞吐可以更早发挥出来。JVM 的 JIT 编译器往往需要数分钟流量才能完成热点优化，在这段时间里，尾延迟更差，数据处理也会滞后。原生二进制没有同样的阶段。&lt;/li&gt;
+&lt;li&gt;**更小的攻击面：**不再需要完整 JDK 运行时，需要跟踪和修补的 CVE 也就少了很多。对于一个会接收整个集群所有服务数据的组件来说，这一点很重要。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这些都不是“小修小补”。它们直接改变了哪些部署形态开始变得可行：无服务器形态的可观测性后端、边车式采集模型、内存预算极其紧张的边缘节点。只有当后端足够轻、足够快时，这些方案才真正有落地空间。&lt;/p&gt;
+&lt;h2 id=&#34;挑战一个成熟动态特性很多的-java-平台&#34;&gt;挑战：一个成熟、动态特性很多的 Java 平台&lt;/h2&gt;
+&lt;p&gt;SkyWalking OAP 身上有大型 Java 平台的所有典型问题：运行时字节码生成、重反射初始化、classpath 扫描、基于 SPI 的模块装配，以及动态 DSL 执行。这些机制方便扩展，但做 GraalVM native image 时全是障碍。&lt;/p&gt;
+&lt;p&gt;GraalVM 文档中列出的限制，只是问题的开始。在一个成熟的 OSS 平台里，这些限制会深深缠绕在多年积累下来的运行时设计决策中。常规的 GraalVM native image 很难处理运行时类生成、反射、动态发现和脚本执行，而这些在 SkyWalking OAP 中都不是零散存在的，它们本来就是系统设计的一部分。&lt;/p&gt;
+&lt;p&gt;在这个发行版的早期历史里，还有一座非常具体的大山。那时上游 SkyWalking 仍然高度依赖 Groovy 来处理 LAL、MAL 和 Hierarchy 脚本。理论上，它只是另一个“不支持运行时动态”的组件；但在实践里，Groovy 是整条路径上最大的障碍。它不仅仅是脚本执行问题，而是代表着一整套在 JVM 世界里极其便利、在 native image 世界里极其不友好的动态模型。&lt;/p&gt;
+&lt;h2 id=&#34;设计目标让迁移这件事可以重复做&#34;&gt;设计目标：让迁移这件事可以重复做&lt;/h2&gt;
+&lt;p&gt;设计目标不是”把 native-image 跑通一次就完”，而是做出一套能反复用、能长期维护的迁移系统：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;把运行时生成的产物前移到构建期。&lt;/strong&gt; OAL、MAL、LAL、Hierarchy 规则，以及 meter 相关的生成类，都在构建期完成编译并打包，而不是等到启动时才动态生成。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;用确定性的加载机制替代动态发现。&lt;/strong&gt; classpath 扫描和运行时注册路径被转换为基于 manifest 的加载方式。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;减少运行时反射，并在构建期生成 native 元数据。&lt;/strong&gt; 反射配置不再依赖人工维护的猜测清单，而是根据真实 manifest 和扫描结果生成。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;让上游同步边界保持清晰。&lt;/strong&gt; same-FQCN replacements 会被显式打包、列清单，并通过陈旧性检查守住边界。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;让变化第一时间暴露出来。&lt;/strong&gt; 一旦上游 provider、规则文件或被替换的源文件发生变化，测试就会失败，迫使我们做显式审查。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这才是最关键的架构转变。好的抽象和前瞻性，在 AI 时代并没有变得不重要，反而变得更重要了，因为它们决定了 AI 带来的速度，最终产出的是一个可维护的系统，还是一堆膨胀得更快的代码。&lt;/p&gt;
+&lt;h2 id=&#34;把运行时动态行为变成构建期产物&#34;&gt;把运行时动态行为变成构建期产物&lt;/h2&gt;
+&lt;p&gt;SkyWalking OAP 里有多个在 JVM 世界里很自然、但在 native image 里很棘手的动态子系统：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;OAL 会在运行时生成类。&lt;/li&gt;
+&lt;li&gt;LAL、MAL 和 Hierarchy 在历史上与大量基于 Groovy 的运行时行为绑定在一起，这也是早期 distro 工作中最难处理的阻碍之一。&lt;/li&gt;
+&lt;li&gt;MAL、LAL 和 Hierarchy 规则依赖运行时编译行为。&lt;/li&gt;
+&lt;li&gt;基于 Guava 的 classpath 扫描会发现注解、dispatcher、decorator 和 meter function。&lt;/li&gt;
+&lt;li&gt;基于 SPI 的模块和 provider 发现依赖更动态的运行时环境。&lt;/li&gt;
+&lt;li&gt;YAML/config 初始化和框架集成依赖反射访问。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在 SkyWalking GraalVM Distro 里，这些问题不是靠零散补丁一个个修掉的，而是被统一收敛到一条构建期流水线里。&lt;/p&gt;
+&lt;p&gt;预编译器会在构建过程中运行 DSL 引擎、导出生成类、写入 manifest、序列化配置数据，并生成 native-image 元数据。这样一来，启动时只需要做类加载和注册，不再需要运行时代码生成。运行期之所以能变得更简单，是因为原本的复杂性被前移到了构建期。&lt;/p&gt;
+&lt;p&gt;这也是为什么这个项目不只是一次性能优化。我们的设计目标，是把复杂性前移到一个更容易验证、更容易自动化、也更便于反复执行的位置。&lt;/p&gt;
+&lt;h2 id=&#34;same-fqcn-替换一条可控的边界&#34;&gt;same-FQCN 替换：一条可控的边界&lt;/h2&gt;
+&lt;p&gt;这个发行版里最实用的设计选择之一，就是使用 same-FQCN 替换类。我们没有依赖模糊的启动技巧，也没有依赖未文档化的加载顺序假设。相反，我们会重新打包 GraalVM 特定 jar，排除原本的上游类，再让替换类占据完全相同的 fully-qualified class name。&lt;/p&gt;
+&lt;p&gt;这对可维护性非常关键，因为它建立了一条非常清晰的边界：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;上游类仍然定义行为契约；&lt;/li&gt;
+&lt;li&gt;GraalVM 侧的替换类提供兼容的实现策略；&lt;/li&gt;
+&lt;li&gt;打包过程则让这次替换变得显式可见。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;例如，OAL 的加载过程从运行时编译变成了基于 manifest 的预编译类加载。类似的替换也处理了 MAL 和 LAL DSL 加载、模块装配、配置初始化，以及多个对反射敏感的路径。目标不是把一切都 fork 出去，而是只替换那些运行时模型从根本上不适合 native image 的部分。&lt;/p&gt;
+&lt;p&gt;随后，这条边界还会通过测试来守护：测试会对照与 replacement 对应的上游源文件做哈希。当上游改动了这些文件中的任何一个，构建就会失败，并明确告诉我们哪个 replacement 需要重新审查。这样一来，“如何跟上上游”就不再是一个充满焦虑的抽象问题，而变成一项明确、可落地的工程工作。&lt;/p&gt;
+&lt;h2 id=&#34;反射配置不是猜出来的而是生成出来的&#34;&gt;反射配置不是猜出来的，而是生成出来的&lt;/h2&gt;
+&lt;p&gt;在很多 GraalVM 迁移项目里，&lt;code&gt;reflect-config.json&lt;/code&gt; 最终会变成一个靠经验不断累积的工件。它会越来越大，越来越陈旧，最后没有人真正清楚它是不是完整，也不清楚每一项配置为什么存在。这种模式在一个持续演化的大型 OSS 平台里是无法扩展的。&lt;/p&gt;
+&lt;p&gt;在这个发行版里，反射元数据直接从构建产物和扫描结果中生成，包括：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;OAL、MAL、LAL、Hierarchy 以及 meter 生成类的 manifest；&lt;/li&gt;
+&lt;li&gt;注解扫描得到的类；&lt;/li&gt;
+&lt;li&gt;Armeria HTTP handler；&lt;/li&gt;
+&lt;li&gt;GraphQL resolver 和 schema 映射类型；&lt;/li&gt;
+&lt;li&gt;被接受的 &lt;code&gt;ModuleConfig&lt;/code&gt; 类。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这是一种健康得多的模式。我们不再依赖人去记住所有可能触发反射访问的路径，而是让系统根据真实迁移流水线推导出反射元数据。构建过程本身，成为了事实来源。&lt;/p&gt;
+&lt;h2 id=&#34;让上游同步变得现实可行&#34;&gt;让上游同步变得现实可行&lt;/h2&gt;
+&lt;p&gt;如果这个发行版只是一次性的工程冲刺，那它的意义会小很多。真正困难的事情，是在上游 SkyWalking 继续演进的同时，让它还能持续维护下去。&lt;/p&gt;
+&lt;p&gt;这也是为什么仓库里会有一整套显式的清单和漂移检测机制：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;provider 清单，用来强制新上游 provider 被分类；&lt;/li&gt;
+&lt;li&gt;规则文件清单，用来强制新 DSL 输入被显式确认；&lt;/li&gt;
+&lt;li&gt;预编译 YAML 输入的 SHA watcher；&lt;/li&gt;
+&lt;li&gt;带 GraalVM 特定 replacement 的上游源文件 SHA watcher。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;好的抽象不仅仅是代码结构优雅，更在于你是否选择了一种能在未来变化面前继续成立的迁移设计。&lt;/p&gt;
+&lt;h2 id=&#34;基准测试结果&#34;&gt;基准测试结果&lt;/h2&gt;
+&lt;p&gt;我们在一台 Apple M3 Max（macOS、Docker Desktop、10 CPUs / 62.7 GB）上，对标准 JVM OAP 和 GraalVM Distro 做了对比测试，两者都连接到 BanyanDB。&lt;/p&gt;
+&lt;h3 id=&#34;启动测试docker-compose无流量3-次取中位数&#34;&gt;启动测试（Docker Compose，无流量，3 次取中位数）&lt;/h3&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;指标&lt;/th&gt;
+          &lt;th&gt;JVM OAP&lt;/th&gt;
+          &lt;th&gt;GraalVM OAP&lt;/th&gt;
+          &lt;th&gt;差异&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;冷启动时间&lt;/td&gt;
+          &lt;td&gt;635 ms&lt;/td&gt;
+          &lt;td&gt;5 ms&lt;/td&gt;
+          &lt;td&gt;约快 127 倍&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;热启动时间&lt;/td&gt;
+          &lt;td&gt;630 ms&lt;/td&gt;
+          &lt;td&gt;5 ms&lt;/td&gt;
+          &lt;td&gt;约快 126 倍&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;空闲 RSS&lt;/td&gt;
+          &lt;td&gt;约 1.2 GiB&lt;/td&gt;
+          &lt;td&gt;约 41 MiB&lt;/td&gt;
+          &lt;td&gt;约降低 97%&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;启动时间的测量方式，是从 OAP 第一条应用日志时间戳开始，到出现 &lt;code&gt;listening on 11800&lt;/code&gt; 日志（即 gRPC 服务 ready）为止。&lt;/p&gt;
+&lt;h3 id=&#34;持续负载下kind--istio-1252--bookinfo约-20-rps2-个-oap-副本&#34;&gt;持续负载下（Kind + Istio 1.25.2 + Bookinfo，约 20 RPS，2 个 OAP 副本）&lt;/h3&gt;
+&lt;p&gt;在 60 秒预热之后，每 10 秒采样一次，共 30 个样本。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;指标&lt;/th&gt;
+          &lt;th&gt;JVM OAP&lt;/th&gt;
+          &lt;th&gt;GraalVM OAP&lt;/th&gt;
+          &lt;th&gt;差异&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;CPU 中位数（millicores）&lt;/td&gt;
+          &lt;td&gt;101&lt;/td&gt;
+          &lt;td&gt;68&lt;/td&gt;
+          &lt;td&gt;-33%&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;CPU 平均值（millicores）&lt;/td&gt;
+          &lt;td&gt;107&lt;/td&gt;
+          &lt;td&gt;67&lt;/td&gt;
+          &lt;td&gt;-37%&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;内存中位数（MiB）&lt;/td&gt;
+          &lt;td&gt;2068&lt;/td&gt;
+          &lt;td&gt;629&lt;/td&gt;
+          &lt;td&gt;&lt;strong&gt;-70%&lt;/strong&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;内存平均值（MiB）&lt;/td&gt;
+          &lt;td&gt;2082&lt;/td&gt;
+          &lt;td&gt;624&lt;/td&gt;
+          &lt;td&gt;&lt;strong&gt;-70%&lt;/strong&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;两个版本报告的 entry-service CPM 一致，说明在这个测试负载下，两者的流量处理能力相同。&lt;/p&gt;
+&lt;p&gt;我们每 30 秒通过 swctl 对所有已发现服务收集这些指标：
+&lt;code&gt;service_cpm&lt;/code&gt;、&lt;code&gt;service_resp_time&lt;/code&gt;、&lt;code&gt;service_sla&lt;/code&gt;、&lt;code&gt;service_apdex&lt;/code&gt;、&lt;code&gt;service_percentile&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;完整的基准测试脚本和原始数据位于发行版仓库中的 &lt;a href=&#34;https://github.com/apache/skywalking-graalvm-distro/tree/main/benchmark&#34;&gt;benchmark/&lt;/a&gt; 目录。&lt;/p&gt;
+&lt;h2 id=&#34;当前状态&#34;&gt;当前状态&lt;/h2&gt;
+&lt;p&gt;这个项目已经是一个可运行的实验性发行版，托管在独立仓库中：&lt;a href=&#34;https://github.com/apache/skywalking-graalvm-distro&#34;&gt;apache/skywalking-graalvm-distro&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;当前发行版有意聚焦在一种现代、高性能的运行模式上：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;存储：&lt;/strong&gt; BanyanDB&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;集群模式：&lt;/strong&gt; Standalone 和 Kubernetes&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;配置方式：&lt;/strong&gt; 无配置或 Kubernetes ConfigMap&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;运行模型：&lt;/strong&gt; 固定模块集合、预编译产物和 AOT 友好的装配方式&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这种聚焦是刻意的。要把迁移做成一套可重复的系统，第一步必须先把边界收清楚，做出一个真正能跑起来的版本，然后再在不失控的前提下逐步扩展。&lt;/p&gt;
+&lt;h2 id=&#34;快速开始&#34;&gt;快速开始&lt;/h2&gt;
+&lt;p&gt;由于 SkyWalking GraalVM Distro 的设计目标就是追求极致性能，它目前最适合与 &lt;strong&gt;BanyanDB&lt;/strong&gt; 存储后端搭配使用。当前发布的镜像已经可以在 Docker Hub 获取，你可以直接用下面这个 &lt;code&gt;docker-compose.yml&lt;/code&gt; 启动整套系统。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;version&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;3.8&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;services&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;banyandb&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ghcr.io/apache/skywalking-banyandb:e1ba421bd624727760c7a69c84c6fe55878fb526&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;banyandb&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restart&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;always&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;17912:17912&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;17913:17913&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;command&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;standalone --stream-root-path /tmp/stream-data --measure-root-path /tmp/measure-data --measure-metadata-cache-wait-duration 1m --stream-metadata-cache-wait-duration 1m&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;healthcheck&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;test&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;CMD&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;sh&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;-c&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;nc -nz 127.0.0.1 17912&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;interval&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;5s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;timeout&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;10s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;retries&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;120&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;oap&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;apache/skywalking-graalvm-distro:0.1.1&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;oap&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;depends_on&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;banyandb&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;condition&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;service_healthy&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restart&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;always&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;11800:11800&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;12800:12800&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;environment&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_STORAGE&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;banyandb&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_STORAGE_BANYANDB_TARGETS&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;banyandb:17912&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_HEALTH_CHECKER&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;default&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;healthcheck&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;test&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;CMD-SHELL&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;nc -nz 127.0.0.1 11800 || exit 1&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;]&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;interval&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;5s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;timeout&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;10s&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;retries&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;120&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ui&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;image&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ghcr.io/apache/skywalking/ui:10.3.0&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;container_name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ui&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;depends_on&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;oap&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;        &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;condition&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;service_healthy&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;restart&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;always&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;ports&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;- &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;8080:8080&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;environment&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;SW_OAP_ADDRESS&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;http://oap:12800&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;只需要执行：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;docker compose up -d
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;欢迎社区来测试这个新发行版、提交 issue，并帮助我们推动它走向生产可用。&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;特别感谢 GraalVM 团队提供的技术基础。&lt;/em&gt;&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: SkyWalking GraalVM Distro: Design and Benchmarks</title>
@@ -922,6 +1147,106 @@ This change reduced long-term maintenance burden and removed a storage choice th
     </item>
     
     <item>
+      <title>Zh: SkyWalking 10 发布：服务层次结构、基于 eBPF 的 Kubernetes 网络监控、BanyanDB 等</title>
+      <link>/zh/2024-05-13-skywalking-10-release/</link>
+      <pubDate>Mon, 13 May 2024 00:00:00 +0000</pubDate>
+      <guid>/zh/2024-05-13-skywalking-10-release/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Apache SkyWalking 团队今天宣布发布 SkyWalking 10。SkyWalking 10 提供了一系列突破性的功能和增强功能。Layer 和 Service Hierarchy 的引入通过将服务和指标组织成不同的层次，并提供跨层无缝导航，从而简化了监控。利用 eBPF 技术，Kubernetes 网络监控提供了对网络流量、拓扑和 TCP/HTTP 指标的详细洞察。BanyanDB 作为高性能的原生存储解决方案出现，同时扩展的监控支持包括 Apache RocketMQ、ClickHouse 和 Apache ActiveMQ Classic。对多标签名称的支持增强了指标分析的灵活性，而增强的导出和查询功能简化了数据分发和处理。&lt;/p&gt;
+&lt;p&gt;本文简要介绍了这些新功能和增强功能以及其他一些值得注意的变化。&lt;/p&gt;
+&lt;h2 id=&#34;layer-和-service-hierarchy&#34;&gt;Layer 和 Service Hierarchy&lt;/h2&gt;
+&lt;p&gt;Layer 概念是在 SkyWalking 9.0.0 中引入的，它代表计算机科学中的一个抽象框架，例如操作系统（OS_LINUX layer）、Kubernetes（k8s layer）。它根据系统中服务和指标的角色和职责将其组织到不同的层次。SkyWalking 为每个层提供了一套监控和诊断工具，但层之间存在 gap，无法轻松跨层桥接数据。&lt;/p&gt;
+&lt;p&gt;在 SkyWalking 10 中，SkyWalking 提供了跨层跳转/连接的新功能，为用户提供无缝的监控体验。&lt;/p&gt;
+&lt;h3 id=&#34;layer-jump&#34;&gt;Layer Jump&lt;/h3&gt;
+&lt;p&gt;在拓扑图中，用户可以点击服务节点跳转到另一层服务的仪表板。下图显示了通过点击拓扑节点从 GENERAL 层服务拓扑跳转到 VIRTUAL_DATABASE 服务层仪表板的过程。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;layer_jump.jpg&#34; alt=&#34;图 1: Layer Jump&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;layer_jump2.jpg&#34; alt=&#34;图 2: Layer jump Dashboard&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;service-hierarchy&#34;&gt;Service Hierarchy&lt;/h3&gt;
+&lt;p&gt;SkyWalking 10 引入了一个新概念，称为 Service Hierarchy，它定义了各层中现有逻辑相同服务的关系。OAP 将检测不同层次的服务，并尝试建立连接。用户可以点击任何层的服务拓扑节点或服务仪表板中的 Hierarchy Services 获取 Hierarchy Topology。在此拓扑图中，用户可以看到不同层次服务之间的关系和指标摘要，并且可以跳转到该层的服务仪表板。当服务发生性能问题时，用户可以轻松分析不同层次的指标并找出根本原因：&lt;/p&gt;
+&lt;p&gt;以下是 Service Hierarchy 关系的示例：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;应用程序 &lt;code&gt;song&lt;/code&gt; 同时在 Kubernetes 集群中部署了 SkyWalking agent 和 Service Mesh。因此，应用程序 &lt;code&gt;song&lt;/code&gt; 跨越了 GENERAL、MESH、MESH_DP 和 K8S_SERVICE 层，SkyWalking 可以监控这些层次，Service Hierarchy 拓扑如下：&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;song.jpg&#34; alt=&#34;图 3: Service Hierarchy Agent With K8s Service And Mesh With K8s Service&#34;&gt;&lt;/p&gt;
+&lt;p&gt;还可以有 Service Instance Hierarchy 拓扑来获取跨层的单实例状态，如下所示：    &lt;img src=&#34;song_instance.jpg&#34; alt=&#34;图 4: Instance Hierarchy Agent With K8s Service(Pod)&#34;&gt;&lt;/p&gt;
+&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;在 Kubernetes 集群中部署并由应用程序 &lt;code&gt;song&lt;/code&gt; 使用的 PostgreSQL 数据库 &lt;code&gt;psql&lt;/code&gt;。因此，数据库 &lt;code&gt;psql&lt;/code&gt; 跨越 &lt;code&gt;VIRTUAL_DATABASE&lt;/code&gt;、&lt;code&gt;POSTGRESQL&lt;/code&gt; 和 &lt;code&gt;K8S_SERVICE&lt;/code&gt; 层，SkyWalking 可以监控这些层次，Service Hierarchy 拓扑如下：&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;postgre.jpg&#34; alt=&#34;图 5: Service Hierarchy Agent(Virtual Database) With Real Database And K8s Service&#34;&gt;&lt;/p&gt;
+&lt;p&gt;有关更多支持的层次以及如何检测不同层次服务之间的关系，请参阅 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/concepts-and-designs/service-hierarchy/#service-hierarchy&#34;&gt;Service Hierarchy&lt;/a&gt;。有关如何在 SkyWalking 中配置 Service Hierarchy，请参阅 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/concepts-and-designs/service-hierarchy-configuration/&#34;&gt;Service Hierarchy Configuration&lt;/a&gt; 部分。&lt;/p&gt;
+&lt;h2 id=&#34;使用-ebpf-监控-kubernetes-网络流量&#34;&gt;使用 eBPF 监控 Kubernetes 网络流量&lt;/h2&gt;
+&lt;p&gt;在之前的版本中，SkyWalking 提供了 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-k8s-monitoring-metrics-cadvisor/&#34;&gt;来自 kube-state-metrics 和 cAdvisor 的 Kubernetes (K8s) 监控&lt;/a&gt;，它可以监控 Kubernetes 集群状态和 Kubernetes 资源的指标。&lt;/p&gt;
+&lt;p&gt;在 SkyWalking 10 中，通过利用 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/latest/readme/&#34;&gt;Apache SkyWalking Rover&lt;/a&gt; 0.6+，SkyWalking 具有使用 eBPF 监控 Kubernetes 网络流量的能力，可以收集和映射 Kubernetes 环境中应用程序的访问日志。通过这些数据，SkyWalking 可以从 Kubernetes 角度分析和提供服务流量、拓扑、TCP/HTTP 级别指标。&lt;/p&gt;
+&lt;p&gt;下图显示了 Kubernetes 网络流量的拓扑和 TCP 仪表板：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;k8s_topology.jpg&#34; alt=&#34;图 6: Kubernetes Network Traffic Topology&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;k8s_dashboard.jpg&#34; alt=&#34;图 7: Kubernetes Network Traffic TCP Dashboard&#34;&gt;&lt;/p&gt;
+&lt;p&gt;有关如何使用 eBPF 监控 Kubernetes 网络流量的更多详细信息，请参阅 &lt;a href=&#34;https://skywalking.apache.org/blog/2024-03-18-monitor-kubernetes-network-by-ebpf/&#34;&gt;使用 eBPF 监控 Kubernetes 网络流量&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;banyandb---原生-apm-数据库&#34;&gt;BanyanDB - 原生 APM 数据库&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-banyandb/latest/readme/&#34;&gt;BanyanDB&lt;/a&gt; 0.6.0 和 &lt;a href=&#34;https://github.com/apache/skywalking-banyandb-java-client&#34;&gt;BanyanDB Java 客户端&lt;/a&gt; 0.6.0 随 SkyWalking 10 一起发布。作为 SkyWalking 的原生存储解决方案，BanyanDB 将成为 SkyWalking 的下一代存储解决方案。推荐在 0.6 到 1.0 期间用于中等规模的部署。
+它展示了高性能改进的潜力。与 Elasticsearch 在同一规模下相比，CPU 使用率降低 50%，内存使用率降低 50%，磁盘使用量减少 40%。&lt;/p&gt;
+&lt;h2 id=&#34;apache-rocketmq-服务器监控&#34;&gt;Apache RocketMQ 服务器监控&lt;/h2&gt;
+&lt;p&gt;Apache RocketMQ 是一个开源的分布式消息和流平台，广泛应用于互联网、大数据、移动互联网、物联网等领域。SkyWalking 为 RocketMQ 提供了一个基本的监控仪表板，包括以下指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Cluster Metrics：包括当天产生/消费的消息数、总生产者/消费者 TPS、生产者/消费者消息大小、截至昨天产生/消费的消息数、最大消费者延迟、最大 commitLog 磁盘比、commitLog 磁盘比、拉取/发送线程池队列头等待时间、topic count 和 broker count。&lt;/li&gt;
+&lt;li&gt;Broker Metrics：包括生产/消费 TPS、生产者/消费者消息大小。&lt;/li&gt;
+&lt;li&gt;Topic Metrics：包括最大生产者/消费者消息大小、消费者延迟、生产/消费 TPS、生产/消费偏移、生产/消费消息大小、消费者组数和代理数。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下图显示了 RocketMQ Cluster Metrics 仪表板：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;rocket_mq.jpg&#34; alt=&#34;图 8: Apache RocketMQ 服务器监控&#34;&gt;&lt;/p&gt;
+&lt;p&gt;有关 RocketMQ 监控的更多指标和详细信息，请参阅 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-rocketmq-monitoring/&#34;&gt;Apache RocketMQ 服务器监控&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;clickhouse-server-监控&#34;&gt;ClickHouse Server 监控&lt;/h2&gt;
+&lt;p&gt;ClickHouse 是一个开源的列式数据库管理系统，可以实时生成分析数据报告，广泛用于在线分析处理 (OLAP)。ClickHouse 监控提供了 ClickHouse 服务器的指标、事件和异步指标的监控，包括以下部分的指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Server Metrics&lt;/li&gt;
+&lt;li&gt;Query Metrics&lt;/li&gt;
+&lt;li&gt;Network Metrics&lt;/li&gt;
+&lt;li&gt;Insert Metrics&lt;/li&gt;
+&lt;li&gt;Replica Metrics&lt;/li&gt;
+&lt;li&gt;MergeTree Metrics&lt;/li&gt;
+&lt;li&gt;ZooKeeper Metrics&lt;/li&gt;
+&lt;li&gt;Embedded ClickHouse Keeper Metrics&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下图显示了 ClickHouse Cluster Metrics 仪表板：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;clickhouse.jpg&#34; alt=&#34;图 9: ClickHouse 服务器监控&#34;&gt;&lt;/p&gt;
+&lt;p&gt;有关 ClickHouse 监控的更多指标和详细信息，请参阅 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-clickhouse-monitoring/&#34;&gt;ClickHouse 服务器监控&lt;/a&gt;，以及一篇可以帮助快速入门的博客 &lt;a href=&#34;https://skywalking.apache.org/blog/2024-03-12-monitoring-clickhouse-through-skywalking/&#34;&gt;通过 SkyWalking 监控 ClickHouse&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;apache-activemq-服务器监控&#34;&gt;Apache ActiveMQ 服务器监控&lt;/h2&gt;
+&lt;p&gt;Apache ActiveMQ Classic 是一个流行且强大的开源消息和集成模式服务器。SkyWalking 为 ActiveMQ 提供了一个基本的监控仪表板，包括以下指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Cluster Metrics：包括内存使用率、写入/读取速率和平均/最大写入持续时间。&lt;/li&gt;
+&lt;li&gt;Broker Metrics：包括节点状态、连接数、生产者/消费者数和代理下的写入/读取速率。根据集群模式，一个集群可以包含一个或多个代理。&lt;/li&gt;
+&lt;li&gt;Destination Metrics：包括生产者/消费者数、不同状态的消息、队列和队列/主题中的入队持续时间。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;下图显示了 ActiveMQ Cluster Metrics 仪表板：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;active_mq.jpg&#34; alt=&#34;图 10: Apache ActiveMQ 服务器监控&#34;&gt;&lt;/p&gt;
+&lt;p&gt;有关 ActiveMQ 监控的更多指标和详细信息，请参阅 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/setup/backend/backend-activemq-monitoring/&#34;&gt;Apache ActiveMQ 服务器监控&lt;/a&gt;，以及一篇可以帮助快速入门的博客 &lt;a href=&#34;https://skywalking.apache.org/blog/2024-04-19-monitoring-activemq-through-skywalking/&#34;&gt;通过 SkyWalking 监控 ActiveMQ&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;支持多标签名称&#34;&gt;支持多标签名称&lt;/h2&gt;
+&lt;p&gt;在 SkyWalking 10 之前，SkyWalking 不会在指标数据中存储标签名称，这使得 MQE 必须使用 &lt;code&gt;_&lt;/code&gt; 作为通用标签名称，无法使用多个标签名称查询指标数据。&lt;/p&gt;
+&lt;p&gt;SkyWalking 10 支持在指标数据中存储标签名称，MQE 可以使用多个标签名称查询或计算指标数据。例如：&lt;code&gt;k8s_cluster_deployment_status&lt;/code&gt; 指标具有 &lt;code&gt;namespace&lt;/code&gt;、&lt;code&gt;deployment&lt;/code&gt; 和 &lt;code&gt;status&lt;/code&gt; 标签。如果我们想查询所有 &lt;code&gt;namespace=skywalking-showcase&lt;/code&gt; 和 &lt;code&gt;status=true&lt;/code&gt; 的部署指标值，可以使用以下表达式：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;k8s_cluster_deployment_status{namespace=&amp;#39;skywalking-showcase&amp;#39;, status=&amp;#39;true&amp;#39;}
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;相关增强：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;由于在 SkyWalking 9.6.0 中告警规则配置已迁移到 MQE，因此告警规则也支持多标签名称。&lt;/li&gt;
+&lt;li&gt;PromeQL 服务支持多标签名称查询。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;metrics-grpc-导出器&#34;&gt;Metrics gRPC 导出器&lt;/h2&gt;
+&lt;p&gt;SkyWalking 10 增强了 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/setup/backend/exporter/#grpc-exporter&#34;&gt;metrics gPRC exporter&lt;/a&gt;，支持将所有类型的指标数据导出到 gRPC 服务器。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-原生-ui-指标查询切换到-v3-api&#34;&gt;SkyWalking 原生 UI 指标查询切换到 V3 API&lt;/h2&gt;
+&lt;p&gt;SkyWalking 原生 UI 指标查询弃用 V2 API，全部迁移到 &lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/en/api/query-protocol/#v3-apis&#34;&gt;V3 API&lt;/a&gt; 和 &lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/metrics-query-expression/#metrics-query-expressionmqe-syntax&#34;&gt;MQE&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;其他值得注意的增强功能&#34;&gt;其他值得注意的增强功能&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;支持 Java 21 运行时和 oap-java21 镜像用于 Java 21 运行时。&lt;/li&gt;
+&lt;li&gt;从镜像中删除 CLI（&lt;code&gt;swctl&lt;/code&gt;）。&lt;/li&gt;
+&lt;li&gt;支持更多的 MQE 函数和操作。&lt;/li&gt;
+&lt;li&gt;增强原生 UI 并改善用户体验。&lt;/li&gt;
+&lt;li&gt;修复了一些 Bug 和 CVE。&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Monitoring Clickhouse Server through SkyWalking</title>
       <link>/blog/2024-03-12-monitoring-clickhouse-through-skywalking/</link>
       <pubDate>Tue, 12 Mar 2024 00:00:00 +0000</pubDate>
@@ -1142,6 +1467,248 @@ This change reduced long-term maintenance burden and removed a storage choice th
     </item>
     
     <item>
+      <title>Zh: 使用 SkyWalking 监控 ClickHouse Server</title>
+      <link>/zh/2024-03-12-monitoring-clickhouse-through-skywalking/</link>
+      <pubDate>Tue, 12 Mar 2024 00:00:00 +0000</pubDate>
+      <guid>/zh/2024-03-12-monitoring-clickhouse-through-skywalking/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景介绍&#34;&gt;背景介绍&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&#34;https://clickhouse.com/&#34;&gt;ClickHouse&lt;/a&gt; 是一个开源的面向列的数据库管理系统，可以实时生成分析数据报告，因此被广泛用于在线分析处理（OLAP）。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;Apache SkyWalking&lt;/a&gt; 是一个开源的 APM 系统，为云原生架构中的分布式系统提供监控、跟踪和诊断能力。应用服务体系越来越多地将 Skywalking 作为服务或实例的基本监视组件。&lt;/p&gt;
+&lt;p&gt;ClickHouse 和 Skywalking 框架都是当下流行的服务组件，通过 Skywalking 监控您的 ClickHouse 数据库将是一个不错的选择。接下来，就来分享一下如何使用 Skywalking 监控 ClickHouse 数据库。&lt;/p&gt;
+&lt;h2 id=&#34;前提与配置&#34;&gt;前提与配置&lt;/h2&gt;
+&lt;p&gt;在开始接入监控之前，请先确认以下前提条件。&lt;/p&gt;
+&lt;p&gt;配置步骤:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;暴露 &lt;a href=&#34;https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#prometheus&#34;&gt;Prometheus 端点&lt;/a&gt;。&lt;/li&gt;
+&lt;li&gt;通过 &lt;a href=&#34;https://opentelemetry.io/&#34;&gt;OpenTelemetry&lt;/a&gt; 拉取 ClickHouse 的指标数据。&lt;/li&gt;
+&lt;li&gt;将指标数据发送到 Skywalking OAP server.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;使用的前提&#34;&gt;使用的前提&lt;/h3&gt;
+&lt;p&gt;ClickHouse 的监控依赖于 ClickHouse 的内嵌 Prometheus 端点配置，配置从 v20.1.2.4 开始支持，因此之前的老版本将无法支持。&lt;/p&gt;
+&lt;p&gt;您可以检查 ClickHouse 服务的版本:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:)&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;select&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;version&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;();&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;version&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Query&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;id&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;2&lt;/span&gt;d3773ca&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;c320&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;41&lt;/span&gt;f6&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;b2ac&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;7&lt;/span&gt;ebe37eddc58&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;┌─&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;version&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;()&lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;───┐&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;24&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;2&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;2248&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;└─────────────┘&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;如果您的 ClickHouse 版本低于 v20.1.2.4，则需要依靠 &lt;a href=&#34;https://github.com/ClickHouse/clickhouse_exporter&#34;&gt;ClickHouse-exporter&lt;/a&gt; 获取数据。&lt;/p&gt;
+&lt;h3 id=&#34;暴露-prometheus-端点&#34;&gt;暴露 Prometheus 端点&lt;/h3&gt;
+&lt;p&gt;内嵌的 Prometheus 端点简化了数据采集流程，您只需要在 ClickHouse 的核心配置文件 config.xml 打开所需的配置即可。除了您原来的配置，您只需要参考如下修改 Prometheus 的配置。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;/etc/clickhouse-server/config.xml&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;clickhouse&amp;gt;&lt;/span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    ......
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;prometheus&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;endpoint&amp;gt;&lt;/span&gt;/metrics&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/endpoint&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;port&amp;gt;&lt;/span&gt;9363&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/port&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;metrics&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/metrics&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;events&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/events&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;asynchronous_metrics&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/asynchronous_metrics&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;errors&amp;gt;&lt;/span&gt;true&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/errors&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/prometheus&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;&amp;lt;/clickhouse&amp;gt;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;配置说明:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;endpoint – 通过 prometheus 服务器抓取指标的 HTTP 端点。从&lt;code&gt;/&lt;/code&gt;开始。&lt;/li&gt;
+&lt;li&gt;port – 端点的端口。&lt;/li&gt;
+&lt;li&gt;metrics – 暴露 &lt;code&gt;system.metrics&lt;/code&gt; 表中的指标。&lt;/li&gt;
+&lt;li&gt;events – 暴露 &lt;code&gt;system.events&lt;/code&gt; 表中的指标。&lt;/li&gt;
+&lt;li&gt;asynchronous_metrics – 暴露 &lt;code&gt;system.asynchronous_metrics&lt;/code&gt; 表中的当前指标值。&lt;/li&gt;
+&lt;li&gt;errors - 按错误代码暴露自上次服务器重新启动以来发生的错误数。此信息也可以从 &lt;code&gt;system.errors&lt;/code&gt; 中获得。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;保存配置并重启 ClickHouse 服务。&lt;/p&gt;
+&lt;p&gt;端点数据包含1000多个指标，涵盖服务、网络、磁盘、MergeTree、错误等。想了解更多指标细节，在重启服务后，可以调用 &lt;code&gt;curl 127.0.0.1:9363/metrics&lt;/code&gt; 看到具体指标的内容。&lt;/p&gt;
+&lt;p&gt;您还可以通过数据库表的数据与端点数据进行检查对比。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:)&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;select&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;system&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;metrics&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;limit&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;FROM&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;system&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;metrics&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;LIMIT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Query&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;id&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;af677622&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;960&lt;/span&gt;e&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;4589&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;b2ca&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;b6a40c443aa&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;┌─&lt;/span&gt;metric&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;───────────────────────────────┬─&lt;/span&gt;value&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;─┬─&lt;/span&gt;description&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;─────────────────────────────────────────────────────────────────────┐&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Query&lt;span style=&#34;color:#fff&#34;&gt;                                &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;1&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;executing&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt;                                                     &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Merge&lt;span style=&#34;color:#fff&#34;&gt;                                &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;executing&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;background&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;merges&lt;span style=&#34;color:#fff&#34;&gt;                                           &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;Move&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                 &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;currently&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;executing&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;moves&lt;span style=&#34;color:#fff&#34;&gt;                                             &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;PartMutation&lt;span style=&#34;color:#fff&#34;&gt;                         &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;mutations&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;ALTER&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;DELETE&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;/&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;UPDATE&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                       &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ReplicatedFetch&lt;span style=&#34;color:#fff&#34;&gt;                      &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;parts&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;being&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;fetched&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;replica&lt;span style=&#34;color:#fff&#34;&gt;                                 &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ReplicatedSend&lt;span style=&#34;color:#fff&#34;&gt;                       &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;parts&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;being&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;sent&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;replicas&lt;span style=&#34;color:#fff&#34;&gt;                                     &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ReplicatedChecks&lt;span style=&#34;color:#fff&#34;&gt;                     &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;data&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;parts&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;checking&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;consistency&lt;span style=&#34;color:#fff&#34;&gt;                                   &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;BackgroundMergesAndMutationsPoolTask&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;active&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;merges&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;and&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;mutations&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;in&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;an&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;associated&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;background&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;pool&lt;span style=&#34;color:#fff&#34;&gt;          &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;BackgroundMergesAndMutationsPoolSize&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;64&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;Limit&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;on&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;active&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;merges&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;and&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;mutations&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;in&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;an&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;associated&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;background&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;pool&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;BackgroundFetchesPoolTask&lt;span style=&#34;color:#fff&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;active&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;fetches&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;in&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;an&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;associated&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;background&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;pool&lt;span style=&#34;color:#fff&#34;&gt;                       &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;└──────────────────────────────────────┴───────┴─────────────────────────────────────────────────────────────────────────────────┘&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:)&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;select&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;system&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;events&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;limit&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;*&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;FROM&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;system&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;events&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;LIMIT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;10&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Query&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;id&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;32&lt;/span&gt;c618d0&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;037&lt;/span&gt;a&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;400&lt;/span&gt;a&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;92&lt;/span&gt;a4&lt;span style=&#34;color:#0550ae&#34;&gt;-&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;59&lt;/span&gt;fde832e4e2&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;┌─&lt;/span&gt;event&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;────────────────────────────┬──&lt;/span&gt;value&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;─┬─&lt;/span&gt;description&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Query&lt;span style=&#34;color:#fff&#34;&gt;                            &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;7&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;be&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;interpreted&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;and&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;potentially&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;executed&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Does&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;not&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;include&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;that&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;failed&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;parse&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;or&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;were&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;rejected&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;due&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;to&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;AST&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;size&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;limits&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;quota&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;limits&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;or&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;limits&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;on&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;the&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;simultaneously&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;running&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;May&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;include&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;internal&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;initiated&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;by&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ClickHouse&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;itself&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Does&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;not&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;count&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;subqueries&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;SelectQuery&lt;span style=&#34;color:#fff&#34;&gt;                      &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;7&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Same&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;as&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Query&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;but&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;only&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;for&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                                &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;InitialQuery&lt;span style=&#34;color:#fff&#34;&gt;                     &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;7&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Same&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;as&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Query&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;but&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;only&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;counts&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;initial&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;see&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;is_initial_query&lt;span style=&#34;color:#1f2328&#34;&gt;).&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                     &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;QueriesWithSubqueries&lt;span style=&#34;color:#fff&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;40&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;Count&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;with&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;all&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;subqueries&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                                          &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;SelectQueriesWithSubqueries&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;     &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;40&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;Count&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;with&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;all&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;subqueries&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                                   &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;QueryTimeMicroseconds&lt;span style=&#34;color:#fff&#34;&gt;            &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;202862&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Total&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;time&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;all&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                                                 &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;SelectQueryTimeMicroseconds&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;202862&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Total&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;time&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;SELECT&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;queries&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                                              &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;FileOpen&lt;span style=&#34;color:#fff&#34;&gt;                         &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;40473&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;files&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;opened&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                                                    &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Seek&lt;span style=&#34;color:#fff&#34;&gt;                             &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;100&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;times&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;the&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;lseek&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;function&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;was&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;called&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                                                           &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ReadBufferFromFileDescriptorRead&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;67995&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;Number&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;of&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;reads&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;read&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;/&lt;/span&gt;pread&lt;span style=&#34;color:#1f2328&#34;&gt;)&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;from&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;a&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;file&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;descriptor&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;Does&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;not&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;include&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;sockets&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;                                                                                                                                                                             &lt;/span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;│&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f6f8fa;background-color:#82071e&#34;&gt;└──────────────────────────────────┴────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;启动-opentelemetry-collector&#34;&gt;启动 Opentelemetry-Collector&lt;/h3&gt;
+&lt;p&gt;根据自身环境 &lt;a href=&#34;https://opentelemetry.io/docs/collector/quick-start/&#34;&gt;配置 OpenTelemetry&lt;/a&gt;。 您可参照下面的例子:&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;otel-collector-config.yaml&lt;/code&gt;:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-xml&#34; data-lang=&#34;xml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;receivers:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  prometheus:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    config:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;     scrape_configs:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;       - job_name: &amp;#39;clickhouse-monitoring&amp;#39;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;         scrape_interval: 15s
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;         static_configs:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;           - targets: [&amp;#39;127.0.0.1:9363&amp;#39;,&amp;#39;127.0.0.1:9364&amp;#39;,&amp;#39;127.0.0.1:9365&amp;#39;]
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;             labels:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;               host_name: prometheus-clickhouse
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;processors:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  batch:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt; 
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;exporters:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  otlp:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    endpoint: 127.0.0.1:11800
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    tls:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      insecure: true
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;service:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  pipelines:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    metrics:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      receivers:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      - prometheus
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      processors:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      - batch
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      exporters:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;      - otlp
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;请着重关注:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;job_name: &#39;clickhouse-monitoring&#39;&lt;/code&gt; 标记着来自 ClickHouse 的数据，如果自行修改，数据会被服务忽略。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;host_name&lt;/code&gt; 定义服务的名称。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;endpoint&lt;/code&gt; 指向您的 OAP 服务地址.&lt;/li&gt;
+&lt;li&gt;ClickHouse、OpenTelemetry Collector 和 Skywalking OAP Server 之间的网络必须可访问。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果进展顺利，几秒钟后刷新 Skywalking-ui 网页，您可以在数据库的菜单下看到 ClickHouse。&lt;/p&gt;
+&lt;p&gt;启动成功日志样例:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code class=&#34;language-log&#34; data-lang=&#34;log&#34;&gt;2024-03-12T03:57:39.407Z	info	service@v0.93.0/telemetry.go:76	Setting up own telemetry...
+2024-03-12T03:57:39.412Z	info	service@v0.93.0/telemetry.go:146	Serving metrics	{&amp;#34;address&amp;#34;: &amp;#34;:8888&amp;#34;, &amp;#34;level&amp;#34;: &amp;#34;Basic&amp;#34;}
+2024-03-12T03:57:39.416Z	info	service@v0.93.0/service.go:139	Starting otelcol...	{&amp;#34;Version&amp;#34;: &amp;#34;0.93.0&amp;#34;, &amp;#34;NumCPU&amp;#34;: 4}
+2024-03-12T03:57:39.416Z	info	extensions/extensions.go:34	Starting extensions...
+2024-03-12T03:57:39.423Z	info	prometheusreceiver@v0.93.0/metrics_receiver.go:240	Starting discovery manager	{&amp;#34;kind&amp;#34;: &amp;#34;receiver&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;prometheus&amp;#34;, &amp;#34;data_type&amp;#34;: &amp;#34;metrics&amp;#34;}
+2024-03-12T03:57:59.431Z	info	prometheusreceiver@v0.93.0/metrics_receiver.go:231	Scrape job added	{&amp;#34;kind&amp;#34;: &amp;#34;receiver&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;prometheus&amp;#34;, &amp;#34;data_type&amp;#34;: &amp;#34;metrics&amp;#34;, &amp;#34;jobName&amp;#34;: &amp;#34;clickhouse-monitoring&amp;#34;}
+2024-03-12T03:57:59.431Z	info	service@v0.93.0/service.go:165	Everything is ready. Begin running and processing data.
+2024-03-12T03:57:59.432Z	info	prometheusreceiver@v0.93.0/metrics_receiver.go:282	Starting scrape manager	{&amp;#34;kind&amp;#34;: &amp;#34;receiver&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;prometheus&amp;#34;, &amp;#34;data_type&amp;#34;: &amp;#34;metrics&amp;#34;}
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;clickhouse-监控面板&#34;&gt;ClickHouse 监控面板&lt;/h2&gt;
+&lt;h3 id=&#34;关于面板&#34;&gt;关于面板&lt;/h3&gt;
+&lt;p&gt;这个仪表盘包含服务仪表盘和实例仪表盘。&lt;/p&gt;
+&lt;p&gt;指标涵盖服务器、查询、网络、插入、副本、MergeTree、ZooKeeper 和内嵌 ClickHouse Keeper。&lt;/p&gt;
+&lt;p&gt;服务仪表盘主要展示整个集群相关的指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;clickhouse-service-monitoring.png&#34; alt=&#34;clickhouse-service-monitoring&#34;&gt;&lt;/p&gt;
+&lt;p&gt;实例仪表盘主要展示单个实例相关的指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;clickhouse-instance-monitoring.png&#34; alt=&#34;clickhouse-instance-monitoring&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;关于指标&#34;&gt;关于指标&lt;/h3&gt;
+&lt;p&gt;以下是ClickHouse实例指标的一些含义，&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/docs/en/swip/SWIP-5.md&#34;&gt;前往了解完整的指标列表&lt;/a&gt;。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;面板名称&lt;/th&gt;
+          &lt;th&gt;单位&lt;/th&gt;
+          &lt;th&gt;指标含义&lt;/th&gt;
+          &lt;th&gt;数据源&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;CpuUsage&lt;/td&gt;
+          &lt;td&gt;count&lt;/td&gt;
+          &lt;td&gt;操作系统每秒花费的 CPU 时间（根据 ClickHouse.system.dashboard.CPU 使用率（核心数））。&lt;/td&gt;
+          &lt;td&gt;ClickHouse&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;MemoryUsage&lt;/td&gt;
+          &lt;td&gt;percentage&lt;/td&gt;
+          &lt;td&gt;服务器分配的内存总量（字节）/操作系统内存总量。&lt;/td&gt;
+          &lt;td&gt;ClickHouse&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;MemoryAvailable&lt;/td&gt;
+          &lt;td&gt;percentage&lt;/td&gt;
+          &lt;td&gt;可用于程序的内存总量（字节）/操作系统内存总量。&lt;/td&gt;
+          &lt;td&gt;ClickHouse&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Uptime&lt;/td&gt;
+          &lt;td&gt;sec&lt;/td&gt;
+          &lt;td&gt;服务器正常运行时间（以秒为单位）。它包括在接受连接之前进行服务器初始化所花费的时间。&lt;/td&gt;
+          &lt;td&gt;ClickHouse&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Version&lt;/td&gt;
+          &lt;td&gt;string&lt;/td&gt;
+          &lt;td&gt;以 base-1000 样式展示的服务器版本。&lt;/td&gt;
+          &lt;td&gt;ClickHouse&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;FileOpen&lt;/td&gt;
+          &lt;td&gt;count&lt;/td&gt;
+          &lt;td&gt;打开的文件数。&lt;/td&gt;
+          &lt;td&gt;ClickHouse&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;ZooKeeper 的指标在 ZooKeeper 管理集群时有效。&lt;/li&gt;
+&lt;li&gt;内嵌ClickHouse Keeper的指标在开启内嵌 &lt;a href=&#34;https://clickhouse.com/docs/en/guides/sre/keeper/clickhouse-keeper&#34;&gt;ClickHouse Keeper&lt;/a&gt; 配置时有效。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;参考文档&#34;&gt;参考文档&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#prometheus&#34;&gt;ClickHouse prometheus endpoint&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://clickhouse.com/docs/en/operations/monitoring#built-in-observability-dashboard&#34;&gt;ClickHouse built-in observability dashboard&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://clickhouse.com/docs/en/guides/sre/keeper/clickhouse-keeper&#34;&gt;ClickHouse Keeper&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: CommunityOverCode Conference 2023 Asia</title>
+      <link>/zh/2023-08-20-coc-asia-2023/</link>
+      <pubDate>Tue, 03 Oct 2023 00:00:00 +0000</pubDate>
+      <guid>/zh/2023-08-20-coc-asia-2023/</guid>
+      <description>
+        
+        
+        &lt;p&gt;CommunityOverCode (原 ApacheCon) 是 Apache 软件基金会（ASF）的官方全球系列大会。自 1998 年以来&amp;ndash;在 ASF 成立之前 &amp;ndash; ApacheCon 已经吸引了各个层次的参与者，在 300 多个 Apache 项目及其不同的社区中探索 &amp;ldquo;明天的技术&amp;rdquo;。CommunityOverCode 通过动手实作、主题演讲、实际案例研究、培训、黑客松活动等方式，展示 Apache 项目的最新发展和新兴创新。&lt;/p&gt;
+&lt;p&gt;CommunityOverCode 展示了无处不在的 Apache 项目的最新突破和 Apache 孵化器中即将到来的创新，以及开源开发和以 Apache 之道领导社区驱动的项目。与会者可以了解到独立于商业利益、企业偏见或推销话术之外的核心开源技术。&lt;/p&gt;
+&lt;h2 id=&#34;skywalking的golang自动探针实践-刘晗&#34;&gt;SkyWalking的Golang自动探针实践 刘晗&lt;/h2&gt;
+&lt;p&gt;分布式追踪技术在可观测领域尤为重要，促使各个语言的追踪探针的易用性获得了更多的关注。目前在golang语言探针方面大多为手动埋点探针，接入流程过于复杂，而且局限性很强。本次讨论的重点着重于简化golang语言探针的接入方式，创新性的使用了自动埋点技术，并且突破了很多框架中对于上下文信息的依赖限制。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.bilibili.com/video/BV1U8411v71k&#34;&gt;B站视频地址&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;banyandb一个高扩展性的分布式追踪数据库-高洪涛&#34;&gt;BanyanDB一个高扩展性的分布式追踪数据库 高洪涛&lt;/h2&gt;
+&lt;p&gt;追踪数据是一种用于分析微服务系统性能和故障的重要数据源，它记录了系统中每个请求的调用链路和相关指标。随着微服务系统的规模和复杂度的增长，追踪数据的量级也呈指数级增长，给追踪数据的存储和查询带来了巨大的挑战。传统的关系型数据库或者时序数据库往往难以满足追踪数据的高效存储和灵活查询的需求。
+BanyanDB是一个专为追踪数据而设计的分布式数据库，它具有高扩展性、高性能、高可用性和高灵活性的特点。BanyanDB采用了基于时间序列的分片策略，将追踪数据按照时间范围划分为多个分片，每个分片可以独立地进行存储、复制和负载均衡。BanyanDB还支持多维索引，可以根据不同的维度对追踪数据进行快速过滤和聚合。
+在本次演讲中，我们将介绍BanyanDB的设计思想、架构和实现细节，以及它在实际场景中的应用和效果。我们也将展示BanyanDB与其他数据库的对比和优势，以及它未来的发展方向和计划。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.bilibili.com/video/BV18K4y1w7eL&#34;&gt;B站视频地址&lt;/a&gt;&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: How to run Apache SkyWalking on AWS EKS and RDS/Aurora</title>
       <link>/blog/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</link>
       <pubDate>Tue, 13 Dec 2022 00:00:00 +0000</pubDate>
@@ -1286,6 +1853,137 @@ traffic.&lt;/p&gt;
 &lt;img src=&#34;./outputs/aurora/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;clean-up&#34;&gt;Clean up&lt;/h2&gt;
 &lt;p&gt;When you are done with the demo, you can run the following command to destroy all AWS resources:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;terraform destroy -var-file&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 如何在 AWS EKS 和 RDS/Aurora 上运行 Apache SkyWalking</title>
+      <link>/zh/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</link>
+      <pubDate>Tue, 13 Dec 2022 00:00:00 +0000</pubDate>
+      <guid>/zh/2022-12-13-how-to-run-apache-skywalking-on-aws-eks-rds/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;介绍&#34;&gt;介绍&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 是一个开源的 APM 工具，用于监控分布式系统和排除故障，特别是为微服务、云原生和基于容器（Docker、Kubernetes、Mesos）的架构而设计。它提供分布式跟踪、服务网格可观测性、指标聚合和可视化以及警报。&lt;/p&gt;
+&lt;p&gt;在本文中，我将介绍如何在 AWS EKS 和 RDS/Aurora 上快速设置 Apache SkyWalking，以及几个示例服务，监控服务以观察 SkyWalking 本身。&lt;/p&gt;
+&lt;h2 id=&#34;先决条件&#34;&gt;先决条件&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;AWS 账号&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html&#34;&gt;AWS CLI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/downloads.html&#34;&gt;Terraform&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://kubernetes.io/docs/tasks/tools/#kubectl&#34;&gt;kubectl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我们可以使用 AWS Web 控制台或 CLI 来创建本教程所需的所有资源，但是当出现问题时，它可能过于繁琐且难以调试。因此，在本文中，我将使用 Terraform 创建所有 AWS 资源、部署 SkyWalking、示例服务和负载生成器服务 (Locust)。&lt;/p&gt;
+&lt;h2 id=&#34;架构&#34;&gt;架构&lt;/h2&gt;
+&lt;p&gt;演示架构如下：&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code class=&#34;language-mermaid&#34; data-lang=&#34;mermaid&#34;&gt;graph LR
+    subgraph AWS
+        subgraph EKS
+          subgraph istio-system namespace
+              direction TB
+              OAP[[SkyWalking OAP]]
+              UI[[SkyWalking UI]]
+            Istio[[istiod]]
+          end
+          subgraph sample namespace
+              Service0[[Service0]]
+              Service1[[Service1]]
+              ServiceN[[Service ...]]
+          end
+          subgraph locust namespace
+              LocustMaster[[Locust Master]]
+              LocustWorkers0[[Locust Worker 0]]
+              LocustWorkers1[[Locust Worker 1]]
+              LocustWorkersN[[Locust Worker ...]]
+          end
+        end
+        RDS[[RDS/Aurora]]
+    end
+    OAP --&amp;gt; RDS
+    Service0 -. telemetry data -.-&amp;gt; OAP
+    Service1 -. telemetry data -.-&amp;gt; OAP
+    ServiceN -. telemetry data -.-&amp;gt; OAP
+    UI --query--&amp;gt; OAP
+    LocustWorkers0 -- traffic --&amp;gt; Service0
+    LocustWorkers1 -- traffic --&amp;gt; Service0
+    LocustWorkersN -- traffic --&amp;gt; Service0
+    Service0 --&amp;gt; Service1 --&amp;gt; ServiceN
+    LocustMaster --&amp;gt; LocustWorkers0
+    LocustMaster --&amp;gt; LocustWorkers1
+    LocustMaster --&amp;gt; LocustWorkersN
+    User --&amp;gt; LocustMaster
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;如架构图所示，我们需要创建以下 AWS 资源：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;EKS 集群&lt;/li&gt;
+&lt;li&gt;RDS 实例或 Aurora 集群&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;听起来很简单，但背后有很多东西，比如 VPC、子网、安全组等。你必须正确配置它们以确保 EKS 集群可以连接到 RDS 实例 / Aurora 集群，否则 SkyWalking 不会不工作。幸运的是，Terraform 可以帮助我们自动创建和销毁所有这些资源。&lt;/p&gt;
+&lt;p&gt;我创建了一个 Terraform 模块来创建本教程所需的所有 AWS 资源，您可以在 &lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/tree/main/aws&#34;&gt;GitHub 存储库&lt;/a&gt;中找到它。&lt;/p&gt;
+&lt;h2 id=&#34;创建-aws-资源&#34;&gt;创建 AWS 资源&lt;/h2&gt;
+&lt;p&gt;首先，我们需要将 GitHub 存储库克隆 &lt;code&gt;cd&lt;/code&gt; 到文件夹中：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;git clone https://github.com/kezhenxu94/oap-load-test.git
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后，我们需要创建一个文件 &lt;code&gt;terraform.tfvars&lt;/code&gt; 来指定 AWS 区域和其他变量：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;cat &amp;gt; terraform.tfvars &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;lt;&amp;lt;EOF
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;aws_access_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;aws_secret_key = &amp;#34;&amp;#34;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;cluster_name   = &amp;#34;skywalking-on-aws&amp;#34;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;region         = &amp;#34;ap-east-1&amp;#34;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;db_type        = &amp;#34;rds-postgresql&amp;#34;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;EOF&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;如果您已经配置了 AWS CLI，则可以跳过 &lt;code&gt;aws_access_key&lt;/code&gt; 和 &lt;code&gt;aws_secret_key&lt;/code&gt; 变量。要使用 RDS postgresql 安装 SkyWalking，请将 &lt;code&gt;db_type&lt;/code&gt; 设置为 &lt;code&gt;rds-postgresql&lt;/code&gt;，要使用 Aurora postgresql 安装 SkyWalking，请将 &lt;code&gt;db_type&lt;/code&gt; 设置为 &lt;code&gt;aurora-postgresql&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;您可以配置许多其他变量，例如标签、示例服务计数、副本等，您可以在 variables.tf 中找到&lt;a href=&#34;https://github.com/kezhenxu94/oap-load-test/blob/main/aws/variables.tf&#34;&gt;它们&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;然后，我们可以运行以下命令来初始化 Terraform 模块并下载所需的提供程序，然后创建所有 AWS 资源：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;terraform init
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;terraform apply -var-file&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;terraform.tfvars
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;键入 &lt;code&gt;yes&lt;/code&gt; 以确认所有 AWS 资源的创建，或将标志 &lt;code&gt;-auto-approve&lt;/code&gt; 添加到 &lt;code&gt;terraform apply&lt;/code&gt; 以跳过确认：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;terraform apply -var-file&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;现在你需要做的就是等待所有 AWS 资源的创建完成，这可能需要几分钟的时间。您可以在 AWS Web 控制台查看创建进度，也可以查看 EKS 集群内部服务的部署进度。&lt;/p&gt;
+&lt;h2 id=&#34;产生流量&#34;&gt;产生流量&lt;/h2&gt;
+&lt;p&gt;除了创建必要的 AWS 资源外，Terraform 模块还将 SkyWalking、示例服务和 Locust 负载生成器服务部署到 EKS 集群。&lt;/p&gt;
+&lt;p&gt;您可以访问 Locust Web UI 以生成到示例服务的流量：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;open http://&lt;span style=&#34;color:#cf222e&#34;&gt;$(&lt;/span&gt;kubectl get svc -n locust -l &lt;span style=&#34;color:#953800&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;locust-master -o &lt;span style=&#34;color:#953800&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;{.items[0].status.loadBalancer.ingress[0].hostname}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;)&lt;/span&gt;:8089
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;该命令将浏览器打开到 Locust web UI，您可以配置用户数量和孵化率以生成流量。&lt;/p&gt;
+&lt;h2 id=&#34;观察-skywalking&#34;&gt;观察 SkyWalking&lt;/h2&gt;
+&lt;p&gt;您可以访问 SkyWalking Web UI 来观察示例服务。&lt;/p&gt;
+&lt;p&gt;首先需要将 SkyWalking UI 端口转发到本地：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;kubectl -n istio-system port-forward &lt;span style=&#34;color:#cf222e&#34;&gt;$(&lt;/span&gt;kubectl -n istio-system get pod -l &lt;span style=&#34;color:#953800&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;skywalking -l &lt;span style=&#34;color:#953800&#34;&gt;component&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;ui -o name&lt;span style=&#34;color:#cf222e&#34;&gt;)&lt;/span&gt; 8080:8080
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;然后在浏览器中打开 http://localhost:8080 访问 SkyWalking web UI。&lt;/p&gt;
+&lt;h2 id=&#34;观察-rdsaurora&#34;&gt;观察 RDS/Aurora&lt;/h2&gt;
+&lt;p&gt;您也可以访问 RDS/Aurora web 控制台，观察 RDS/Aurora 实例 / Aurora 集群的性能。&lt;/p&gt;
+&lt;h2 id=&#34;试验结果&#34;&gt;试验结果&lt;/h2&gt;
+&lt;h3 id=&#34;测试-1使用-eks-和-rds-postgresql-的-skywalking&#34;&gt;测试 1：使用 EKS 和 RDS PostgreSQL 的 SkyWalking&lt;/h3&gt;
+&lt;h4 id=&#34;服务流量&#34;&gt;服务流量&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-cpm.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-性能&#34;&gt;RDS 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-性能&#34;&gt;SkyWalking 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/postgresql/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/postgresql/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;测试-2使用-eks-和-aurora-postgresql-的-skywalking&#34;&gt;测试 2：使用 EKS 和 Aurora PostgreSQL 的 SkyWalking&lt;/h3&gt;
+&lt;h4 id=&#34;服务流量-1&#34;&gt;服务流量&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-cpm-locust.png&#34; alt=&#34;Service Traffic Locust&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-cpm-skywalking.png&#34; alt=&#34;Service Traffic SW&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;rds-性能-1&#34;&gt;RDS 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-postgresql-1.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-2.png&#34; alt=&#34;RDS Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-postgresql-3.png&#34; alt=&#34;RDS Performance&#34;&gt;&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-性能-1&#34;&gt;SkyWalking 性能&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;./outputs/aurora/test1-so11y-1.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-2.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-3.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-4.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;
+&lt;img src=&#34;./outputs/aurora/test1-so11y-5.png&#34; alt=&#34;SkyWalking Performance&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;清理&#34;&gt;清理&lt;/h2&gt;
+&lt;p&gt;完成演示后，您可以运行以下命令销毁所有 AWS 资源：&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;terraform destroy -var-file&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;terraform.tfvars -auto-approve
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
       </description>

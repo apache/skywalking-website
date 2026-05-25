@@ -34,7 +34,7 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
   <meta itemprop="name" content="Runtime Rule Hot-Update — Architecture">
   <meta itemprop="description" content="Runtime Rule Hot-Update — Architecture Operators change MAL and LAL rule files at runtime without restarting OAP. Changes persist in management storage, survive reboots, and propagate across every node in an OAP cluster within a bounded window. This page explains the contract: what the feature guarantees, how the cluster stays consistent, and what to expect when something goes wrong. The HTTP surface is documented separately in Runtime Rule Hot-Update API.
 Vocabulary Runtime rule entry — the unit of operator state: one entry per (catalog, name), carrying the full rule-file content plus a status of ACTIVE or INACTIVE. Entries live in management storage (the same persistence layer used for UI templates, UI menus, and other cluster-wide operator state). Catalog — the rule group named in the API, currently otel-rules, log-mal-rules, telegraf-rules, or lal. It mirrors the on-disk directory layout so a rule’s (catalog, name) identity is portable between disk and the runtime-rule entry store. Main — the single OAP node designated to run the on-demand workflow. Every node can compute it locally from the sorted cluster peer list; no election. Peer — every node other than the main. Periodic scan — every OAP node re-reads management storage every 30 s (default, configurable) and brings its in-memory state into line with what storage holds. This is the convergence loop the consistency contract is built on. Scope: MAL and LAL, not OAL Runtime hot-update covers only the MAL (otel-rules, log-mal-rules, telegraf-rules) and LAL (lal) catalogs. OAL rules are deliberately out of scope. Three reasons, in order of weight:">
-  <meta itemprop="wordCount" content="3742">
+  <meta itemprop="wordCount" content="4349">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Runtime Rule Hot-Update — Architecture">
   <meta name="twitter:description" content="Runtime Rule Hot-Update — Architecture Operators change MAL and LAL rule files at runtime without restarting OAP. Changes persist in management storage, survive reboots, and propagate across every node in an OAP cluster within a bounded window. This page explains the contract: what the feature guarantees, how the cluster stays consistent, and what to expect when something goes wrong. The HTTP surface is documented separately in Runtime Rule Hot-Update API.
@@ -42,8 +42,8 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
 
 
 
-<link rel="preload" href="/scss/main.min.5b2ba2aa85ff038ebd51269e8b8bfbc7524ec30179408681749035412dad67ce.css" as="style">
-<link href="/scss/main.min.5b2ba2aa85ff038ebd51269e8b8bfbc7524ec30179408681749035412dad67ce.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.7b0122b0238b021800187754c7416861b20b7203f30fcac0842ed6e328f98ea3.css" as="style">
+<link href="/scss/main.min.7b0122b0238b021800187754c7416861b20b7203f30fcac0842ed6e328f98ea3.css" rel="stylesheet" integrity="">
 
 
 
@@ -2985,7 +2985,7 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 658832e</div>
+                  <div class="commit-id">Commit Id: 40d95a1</div>
                 
 
 
@@ -3468,6 +3468,113 @@ peer-list to settle (seconds) and retry.</li>
 status, per-node <code>localState</code>, and <code>lastApplyError</code> for any rule whose most recent
 apply failed. There is no separate alert channel — <code>/list</code> plus the OAP log are
 the entire diagnostic surface.</p>
+<h2 id="dynamic-layers">Dynamic layers</h2>
+<p>Runtime MAL/LAL rules MAY introduce new layer names through the same
+<code>layerDefinitions:</code> block bundled rule files use:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">layerDefinitions</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>MY_NEW_LAYER<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">ordinal</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">100050</span><span style="color:#fff">         </span><span style="color:#57606a"># required, runtime tier (&gt;=100_000)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#57606a"># normal: true          # optional; defaults to true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">metricPrefix</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>my_prefix<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">metricsRules</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>requests<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">exp</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>any.sum([&#39;service&#39;, &#39;instance&#39;])<span style="color:#fff">
+</span></span></span></code></pre></div><h3 id="ordinal-tier--operator-pinned">Ordinal tier — operator-pinned</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Range</th>
+          <th>Channel</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>0 – 9_999</code></td>
+          <td>Built-in <code>Layer.*</code> constants</td>
+      </tr>
+      <tr>
+          <td><code>10_000 – 99_999</code></td>
+          <td><code>layer-extensions.yml</code> + bundled MAL/LAL <code>layerDefinitions:</code></td>
+      </tr>
+      <tr>
+          <td><code>100_000 – Integer.MAX_VALUE</code></td>
+          <td>Runtime DSL dynamic layers</td>
+      </tr>
+  </tbody>
+</table>
+<p>The OAP does NOT auto-allocate. Ordinals land in persisted <code>ServiceTraffic</code> primary
+keys; they must be operator-stable across restarts.</p>
+<h3 id="lifecycle-1">Lifecycle</h3>
+<p><code>RuntimeLayerRegistry</code> refcounts each runtime claim per declaring rule. When the last
+runtime claim is removed (<code>/delete</code> of the rule, or <code>/addOrUpdate</code> that drops the
+entry), the layer is unregistered if it was originally registered through the runtime
+channel.</p>
+<h3 id="limitations">Limitations</h3>
+<ul>
+<li><strong>Runtime overrides of bundled rules cannot declare <code>layerDefinitions:</code></strong>. Bundled
+and runtime are separate layer-ownership channels — never overwrite, never share. The
+REST handler rejects <code>/addOrUpdate</code> of a rule whose name matches a bundled disk file
+AND whose body carries a non-empty <code>layerDefinitions:</code> block with <code>applyStatus = layer_override_forbidden</code> (HTTP 400). Operators wanting new layers on a bundled rule
+must either edit the bundled source on disk and restart, OR push a pure-runtime rule
+with a different name that declares the layer.</li>
+<li><strong>Legacy override rows</strong> (persisted before the rejection was introduced) are handled
+at boot: the static-loader substitution is dropped so the bundled disk content loads
+with its original layers, and <code>RuleSync</code> then applies the runtime row dynamically
+post-seal — the runtime row&rsquo;s <code>layerDefinitions</code> go through the dynamic channel and
+are operator-removable via <code>/inactivate</code> + <code>/delete</code>.</li>
+<li><strong>Pure runtime rules (no bundled twin) ARE fully removable</strong>. The layer registers
+through the runtime channel and <code>unregisterDynamic</code> succeeds when the refcount hits
+zero.</li>
+<li><strong>Removing a layer with historical <code>ServiceTraffic</code> rows orphans those rows</strong> — the
+persisted ordinal no longer resolves and reads throw <code>Unknown Layer value</code>. Operator
+must migrate or purge the data before removal; the feature does not auto-clean.</li>
+<li><strong>No redeclaration of built-in or boot-time-external layers</strong> at runtime. Use the
+existing name in your rule body (<code>layer: GENERAL</code>, <code>dest: ...Layer.MESH...</code>) — do
+not list those names under <code>layerDefinitions:</code>.</li>
+</ul>
+<h3 id="conflict-rules">Conflict rules</h3>
+<p>Validation runs before any apply lands and returns HTTP 400 with the standard
+<code>{applyStatus, catalog, name, message}</code> envelope.</p>
+<table>
+  <thead>
+      <tr>
+          <th><code>applyStatus</code></th>
+          <th>Trigger</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>layer_ordinal_out_of_range</code></td>
+          <td><code>ordinal:</code> missing (default 0) or <code>&lt; 100_000</code>.</td>
+      </tr>
+      <tr>
+          <td><code>layer_name_invalid</code></td>
+          <td><code>name</code> does not match <code>[A-Z][A-Z0-9_]*</code>.</td>
+      </tr>
+      <tr>
+          <td><code>layer_name_conflict</code></td>
+          <td>Same <code>name</code> already registered with a different <code>(ordinal, normal)</code> by another rule (bundled or runtime). Also raised for same-batch duplicate names with different triples, and for self-edit triple changes when another runtime rule shares the layer.</td>
+      </tr>
+      <tr>
+          <td><code>layer_ordinal_collision</code></td>
+          <td>Different <code>name</code>, same <code>ordinal</code> already in use. Also raised for same-batch duplicate ordinals, and for self-edit ordinal reuse when another runtime rule still holds the prior layer at that ordinal.</td>
+      </tr>
+      <tr>
+          <td><code>layer_override_forbidden</code></td>
+          <td><code>/addOrUpdate</code> on a rule with a bundled disk twin where the body contains <code>layerDefinitions:</code>. Bundled rules own their layer declarations; runtime overrides may only change the rule body.</td>
+      </tr>
+  </tbody>
+</table>
+<p>Same triple as an existing bundled layer is permitted as a soft claim (see Limitations
+above). Same triple as an existing runtime layer is a no-op refcount-add. Self-edits
+(changing the triple of a layer this rule already owns) are permitted only when the
+rule is the sole claimant; if other rules share the name, the operator must align both
+sides in lockstep or remove the prior declaration first.</p>
+<p>INACTIVE rules hold no layer claims — their refcount entries are dropped at
+<code>/inactivate</code>. Reactivation (<code>/addOrUpdate</code> against an INACTIVE row) runs full
+validation; if another rule started claiming the name in the meantime,
+<code>layer_name_conflict</code> surfaces and the operator must edit or <code>/delete</code> the inactive
+rule before it can come back.</p>
 <h2 id="what-this-feature-does-not-do">What this feature does not do</h2>
 <ul>
 <li><strong>OAL hot-update</strong> is out of scope (see &ldquo;Scope&rdquo; above).</li>
@@ -3542,6 +3649,14 @@ rules diverge along the version split. Use deployment discipline.</li>
         </li>
         <li><a href="#schema-visibility-fence-banyandb">Schema-visibility fence (BanyanDB)</a></li>
         <li><a href="#failure-handling--what-operators-see">Failure handling — what operators see</a></li>
+        <li><a href="#dynamic-layers">Dynamic layers</a>
+          <ul>
+            <li><a href="#ordinal-tier--operator-pinned">Ordinal tier — operator-pinned</a></li>
+            <li><a href="#lifecycle-1">Lifecycle</a></li>
+            <li><a href="#limitations">Limitations</a></li>
+            <li><a href="#conflict-rules">Conflict rules</a></li>
+          </ul>
+        </li>
         <li><a href="#what-this-feature-does-not-do">What this feature does not do</a></li>
       </ul>
     </li>
@@ -12582,116 +12697,6 @@ rules diverge along the version split. Use deployment discipline.</li>
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -12705,14 +12710,6 @@ rules diverge along the version split. Use deployment discipline.</li>
         </div>
 
         <div class="content-box">
-            
-            
-            
-            
-            
-            
-            
-            
             
             
             
@@ -12762,108 +12759,6 @@ rules diverge along the version split. Use deployment discipline.</li>
                     
                 </a>
             </div>
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
             
             
             

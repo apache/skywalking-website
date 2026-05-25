@@ -5,7 +5,7 @@
     <description>Recent content in Tracing on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Wed, 08 Apr 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 30 Apr 2026 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/tracing/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -14,6 +14,95 @@
         
       
     
+    
+    <item>
+      <title>Zh: 用 SkyWalking 监控微信和支付宝小程序</title>
+      <link>/zh/2026-04-30-mini-program-monitoring-with-skywalking/</link>
+      <pubDate>Thu, 30 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-04-30-mini-program-monitoring-with-skywalking/</guid>
+      <description>
+        
+        
+        &lt;p&gt;小程序是国内移动端体验里绕不过去的一块，但开源监控生态长期偏向 Web 浏览器和原生 App。SkyWalking 自身已经覆盖了浏览器（client-js）、iOS、服务端，缺口主要在小程序和 Android。&lt;a href=&#34;https://github.com/SkyAPM/mini-program-monitor&#34;&gt;SkyAPM/mini-program-monitor&lt;/a&gt; 加入 SkyWalking 生态后，把这块缺口的小程序部分补上了 —— 一份 SDK 同时支持微信和支付宝，OAP 端的 component、MAL 规则、UI 模板已经合进 main 分支，会随 10.5.0 一起发布。&lt;/p&gt;
+&lt;p&gt;这篇博客面向已经跑着 SkyWalking 后端、希望把小程序也接进来的团队。重点不是&amp;quot;项目存在&amp;quot;这件事，而是数据从小程序到 SkyWalking dashboard 走的是哪条路、双平台是怎么共存的、以及上线之前需要知道哪些设计取舍。&lt;/p&gt;
+&lt;h2 id=&#34;数据通路&#34;&gt;数据通路&lt;/h2&gt;
+&lt;p&gt;SDK 走两条腿：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;OTLP HTTP&lt;/strong&gt;（错误日志、性能指标、请求指标）→ OAP 的 &lt;code&gt;/v1/logs&lt;/code&gt;、&lt;code&gt;/v1/metrics&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SkyWalking 原生协议&lt;/strong&gt;（链路追踪 segment，可选）→ OAP 的 &lt;code&gt;/v3/segments&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;为什么不是单协议？OTLP 已经覆盖了 logs 和 metrics 两类信号，没必要再造一份原生 endpoint；但分布式追踪上 OAP 的原生 &lt;code&gt;SegmentObject&lt;/code&gt; 比 OTLP traces 表达力更贴 SkyWalking 自己的 trace 模型，且与服务端通过 &lt;code&gt;sw8&lt;/code&gt; header 透传时无需任何转换。所以追踪走原生，其它走 OTLP，两边都不绕路。&lt;/p&gt;
+&lt;p&gt;OTLP 默认用 protobuf，调试时可切成 JSON。SDK 没有任何运行时依赖。&lt;/p&gt;
+&lt;h2 id=&#34;双平台对应两个独立的-layer-与监控面板&#34;&gt;双平台对应两个独立的 Layer 与监控面板&lt;/h2&gt;
+&lt;p&gt;很多团队会同时维护一个微信小程序和一个支付宝小程序，业务逻辑共享一个后端。这套设计没有把它们塞进同一个 service 用 tag 区分，而是直接做成两个独立的 Layer：&lt;code&gt;WECHAT_MINI_PROGRAM&lt;/code&gt; 和 &lt;code&gt;ALIPAY_MINI_PROGRAM&lt;/code&gt;，对应两套独立的监控面板。SDK 在每个信号上打 resource 属性 &lt;code&gt;miniprogram.platform = wechat | alipay&lt;/code&gt;，并给两端各分配独立的 component ID（微信 10002、支付宝 10003）。&lt;/p&gt;
+&lt;p&gt;OAP 这一头是用 MAL 规则的 &lt;code&gt;filter&lt;/code&gt; 把数据在 ingest 阶段就分流到对应 Layer 的：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;metricPrefix&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;meter_wechat_mp&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;filter&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;{ tags -&amp;gt; tags.miniprogram_platform == &amp;#39;wechat&amp;#39; }&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;支付宝那份规则同理过滤 &lt;code&gt;alipay&lt;/code&gt;。两份规则互斥，不会重复计数；输出的 metric 前缀也不一样（&lt;code&gt;meter_wechat_mp_*&lt;/code&gt; vs &lt;code&gt;meter_alipay_mp_*&lt;/code&gt;），各自落在对应 Layer 的 dashboard 上。即使两端用同一个 &lt;code&gt;service.name&lt;/code&gt;（比如都叫 &lt;code&gt;mini-program-demo&lt;/code&gt;），UI 里也是两套完全独立的入口。&lt;/p&gt;
+&lt;h2 id=&#34;不对等的指标语义&#34;&gt;不对等的指标语义&lt;/h2&gt;
+&lt;p&gt;这是这套设计里我特别想强调的一处诚实选择。微信的基础库提供 &lt;code&gt;PerformanceObserver&lt;/code&gt;，能拿到来自渲染层的权威时序：app launch、first render、route navigation、script execution、sub-package load 都是真实指标。支付宝的基础库不提供等价 API，SDK 只能用生命周期回退做近似：&lt;code&gt;App.onLaunch → App.onShow&lt;/code&gt; 的 delta 当作启动时间，渲染相关的拿不到。&lt;/p&gt;
+&lt;p&gt;所以两份 OAP 规则里的 metric 集合不对等：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;微信：&lt;code&gt;app_launch_duration&lt;/code&gt;、&lt;code&gt;first_render_duration&lt;/code&gt;、&lt;code&gt;route_duration&lt;/code&gt;、&lt;code&gt;script_duration&lt;/code&gt;、&lt;code&gt;package_load_duration&lt;/code&gt;、&lt;code&gt;request_duration_percentile&lt;/code&gt;、&lt;code&gt;request_cpm&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;支付宝：&lt;code&gt;app_launch_duration&lt;/code&gt;、&lt;code&gt;first_render_duration&lt;/code&gt;、&lt;code&gt;request_duration_percentile&lt;/code&gt;、&lt;code&gt;request_cpm&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;支付宝侧的 &lt;code&gt;app_launch_duration&lt;/code&gt; 是生命周期近似值，与微信的渲染层数值不可直接对比，这一点在 dashboard 的字段提示里也写明了。把两个数字放一起做横评等于在比较两种不同测量定义。&lt;/p&gt;
+&lt;h2 id=&#34;sdk-端做了什么&#34;&gt;SDK 端做了什么&lt;/h2&gt;
+&lt;p&gt;四类信号：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;错误&lt;/strong&gt;：JS 异常 / unhandled promise rejection / pageNotFound 走 OTLP logs，按 OTel &lt;code&gt;exception.*&lt;/code&gt; 语义约定（&lt;code&gt;exception.type&lt;/code&gt;、&lt;code&gt;exception.stacktrace&lt;/code&gt;），下游不光 SkyWalking，OTel Collector / Grafana 也都认。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;性能&lt;/strong&gt;：上面那张表里那些。OTLP gauge。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;请求&lt;/strong&gt;：&lt;code&gt;wx.request&lt;/code&gt; / &lt;code&gt;my.request&lt;/code&gt; / &lt;code&gt;downloadFile&lt;/code&gt; / &lt;code&gt;uploadFile&lt;/code&gt; 都走 OTLP delta histogram，每个 flush 间隔（默认 5s）发一次增量。&lt;code&gt;le&lt;/code&gt; 桶标签直接用 ms，OAP MAL 里显式声明 &lt;code&gt;MILLISECONDS&lt;/code&gt; 阻止默认的 SECONDS→MS 缩放。失败请求（4xx/5xx/超时）额外发一条错误日志，方便从 dashboard 跳到具体错误。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;追踪（可选）&lt;/strong&gt;：开启后给出站请求注入 &lt;code&gt;sw8&lt;/code&gt; 头，落到 OAP 后能与服务端 trace 拼成一条完整链路。trace 段以 SkyWalking &lt;code&gt;SegmentObject&lt;/code&gt; 形式发出，不走 OTLP traces。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;可靠性和基数控制的两个细节值得一提：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;App hide 时落本地存储&lt;/strong&gt;。小程序后台一段时间会被框架杀掉，弱网时也容易丢包。SDK 在 &lt;code&gt;onAppHide&lt;/code&gt; 时把未发送的事件写到 &lt;code&gt;wx.setStorage&lt;/code&gt; / &lt;code&gt;my.setStorage&lt;/code&gt;，下次启动恢复并继续上报。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;反基数膨胀&lt;/strong&gt;。强烈建议把 &lt;code&gt;serviceInstance&lt;/code&gt; 设成应用版本号（如 &lt;code&gt;1.4.2&lt;/code&gt;），不要用设备 ID —— 小程序日活百万级时设备 ID 维度直接把 OAP 的 instance 索引打爆。请求路径方面 SDK 提供 &lt;code&gt;urlGroupRules&lt;/code&gt; 正则把 &lt;code&gt;/api/user/12345&lt;/code&gt; 这类参数化路径归并到 &lt;code&gt;/api/user/{id}&lt;/code&gt;，避免 endpoint 维度也膨胀。&lt;/p&gt;
+&lt;h2 id=&#34;oap-端要做什么&#34;&gt;OAP 端要做什么&lt;/h2&gt;
+&lt;p&gt;如果你用的是 main 分支或者 10.5.0 之后的发布版，下面这些已经内置：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;config/component-libraries.yml&lt;/code&gt;：注册了 &lt;code&gt;WeChat-MiniProgram: 10002&lt;/code&gt; 和 &lt;code&gt;AliPay-MiniProgram: 10003&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config/otel-rules/miniprogram/&lt;/code&gt;：四份 MAL 规则，按 service / instance 维度分别定义&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config/ui-initialized-templates/wechat_mini_program/&lt;/code&gt; 和 &lt;code&gt;alipay_mini_program/&lt;/code&gt;：root / service / instance / endpoint 四张 dashboard&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config/ui-initialized-templates/menu.yaml&lt;/code&gt;：把两个 layer 注册到 Mobile 菜单组下&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;唯一需要做的就是确认 OTel receiver 启用、给 OTLP HTTP 一个 SDK 能直连的端口。SkyWalking OAP 的 OTLP HTTP handler 默认绑在 receiver-sharing-server 的端口上，而该端口默认值是 0（即复用 core REST 端口 12800）。如果想让 SDK 用标准 OTLP HTTP 端口 4318，把 sharing 端口设到 4318：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;docker run -d --name sw-oap &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -p 11800:11800 -p 12800:12800 -p 4318:4318 &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_STORAGE&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;banyandb &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_STORAGE_BANYANDB_TARGETS&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;banyandb:17912 &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_OTEL_RECEIVER&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;default &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_RECEIVER_SHARING_REST_PORT&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;4318&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  apache/skywalking-oap-server:latest
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这样所有 receiver（OTLP + native segment + browser perf + log report）一起搬到 4318，GraphQL 仍在 12800 给 UI 用。&lt;/p&gt;
+&lt;p&gt;SDK 端配置最小集：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-js&#34; data-lang=&#34;js&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;MiniProgramMonitor&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;mini-program-monitor&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;MiniProgramMonitor&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;init&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;({&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;service&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;mini-program-demo&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;serviceInstance&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;1.4.2&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;          &lt;span style=&#34;color:#57606a&#34;&gt;// 推荐：应用版本号
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;collector&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;http://your-oap:4318&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;enable&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;error&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;perf&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;request&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;tracing&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;                  &lt;span style=&#34;color:#57606a&#34;&gt;// 默认关，按需开
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;},&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;});&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;微信和支付宝两端配置一模一样，平台标签由 SDK 在运行时自动判定。&lt;/p&gt;
+&lt;h2 id=&#34;兼容性&#34;&gt;兼容性&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;微信基础库 ≥ 2.11&lt;/li&gt;
+&lt;li&gt;支付宝基础库 ≥ 2.0&lt;/li&gt;
+&lt;li&gt;Apache SkyWalking OAP main 分支或 ≥ 10.5.0；OTLP HTTP receiver 启用即可&lt;/li&gt;
+&lt;li&gt;也可对接任意 OTLP 后端（OpenTelemetry Collector、Grafana 等），但那条路上拿不到 SkyWalking 专属的双平台 dashboard&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;后续&#34;&gt;后续&lt;/h2&gt;
+&lt;p&gt;参与方式直接去 &lt;a href=&#34;https://github.com/SkyAPM/mini-program-monitor&#34;&gt;SkyAPM/mini-program-monitor&lt;/a&gt; 提 issue / PR。仓库里有一个 &lt;code&gt;make preview&lt;/code&gt; 一键拉起 OAP、UI、两端模拟器的本地 demo 环境，想看效果可以直接跑。&lt;/p&gt;
+&lt;p&gt;Android 端的端用户体验监控目前还是 SkyWalking 生态的空白，欢迎对这块感兴趣的同学一起补齐。&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: Query SkyWalking and Zipkin Traces with TraceQL and Visualize in Grafana</title>
@@ -719,6 +808,384 @@ Grafana 集成详情，请参阅
     </item>
     
     <item>
+      <title>Zh: 基于 SkyWalking 10.4 的大模型应用监控：洞察 LLM 的性能与成本</title>
+      <link>/zh/2026-04-05-virtual-genai-monitoring/</link>
+      <pubDate>Sun, 05 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-04-05-virtual-genai-monitoring/</guid>
+      <description>
+        
+        
+        &lt;h1 id=&#34;问题当应用开始吞噬大模型监控却留下了盲区&#34;&gt;问题：当应用开始“吞噬”大模型，监控却留下了盲区&lt;/h1&gt;
+&lt;p&gt;随着生成式 AI（GenAI）在企业业务中的深度渗透，开发者正面临一个尴尬的局面：我们在应用中通过&lt;code&gt;Spring AI&lt;/code&gt;或&lt;code&gt;OpenAI SDK&lt;/code&gt;快速集成了强大的大模型能力，但对于这些调用的实际表现却几乎一无所知。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;成本与性能的“黑盒”：昂贵的模型真的更具性价比吗？&lt;/strong&gt;&lt;br&gt;
+面对高昂的大模型账单，我们往往只知道把钱交给了某个&lt;code&gt;Provider&lt;/code&gt;，却算不清这笔账在应用内部的“投入产出比”。
+盲目的选型升级：为了追求更好的体验，你可能将业务默认切换到了成本更高的旗舰模型。但在具体的业务场景下，花费数倍的 Token 成本，它真的能在真实请求中带来更低的延迟和更快的 TTFT(Time to First Token) 吗？
+缺乏真实的评估基准：脱离了真实的业务请求，单纯看官网的 Benchmark 意义不大，你需要知道在实际的 Prompt 长度和并发压力下，同一&lt;code&gt;Provider&lt;/code&gt;下的哪个模型能在“Token/Cost 消耗”与“响应速度”之间达到完美的平衡。如果没有应用侧的数据支撑，你根本无从判断哪款模型才是当前业务的最优解。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;消失的“黄金超时时间”&lt;/strong&gt;&lt;br&gt;
+很多团队在代码里给 LLM 调用设置超时（Timeout）时，往往是拍脑袋决定（比如 30s 或 60s）。&lt;br&gt;
+设太短：长文本生成或模型高峰期时，请求会被频繁强行中断，导致业务失败率飙升。&lt;br&gt;
+设太长：如果下游供应商出现故障（卡死），大量的请求会堆积在应用内存中，阻塞执行线程，最终导致整个 Java 应用甚至微服务集群的瘫痪。
+只有真正掌握了预估的整体调用延迟（P99/P95 Latency），你才能基于数据而非直觉，为不同模型设置最合理的超时策略。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;被忽视的体验杀手：TTFT&lt;/strong&gt;&lt;br&gt;
+在 GenAI 场景下，用户对“快”的感知并不完全取决于整个对话结束的总耗时，而取决于**“第一行字什么时候跳出来”**。
+一个总耗时 10 秒但 TTFT 仅 500ms 的流式响应，给用户的观感是“秒回”。
+一个总耗时 5 秒但 TTFT 需要 4s 的非流式响应，给用户的观感却是“卡死”。
+如果你的观测系统只能看到总耗时，你就会漏掉最核心的 UX 指标，无法解释为什么用户反馈“AI 很慢”即便总耗时看起来还行。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;SkyWalking 10.4：应用视角的“数字仪表盘”&lt;/strong&gt;&lt;br&gt;
+Apache SkyWalking 自 10.4 版本引入的 Virtual GenAI 能力，正是为了解决应用层侧的这种“观测真空”。它不依赖任何外部网关，直接通过应用侧探针（如 Java Agent）在客户端视角采集最真实的数据。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;精准的延迟分布（Latency Percentiles）：通过 P50、P90、P99 等多维指标，帮你勾勒出 LLM 调用的真实波动曲线，为设置“动态超时时间”提供科学依据。&lt;/li&gt;
+&lt;li&gt;核心 UX 指标——TTFT 监控：原生支持流式（Streaming）调用的首字延迟统计。通过对比不同 Provider 或不同模型的 TTFT，你可以优化提示词（Prompt）策略或切换更快的模型，确保用户体验始终在线。&lt;/li&gt;
+&lt;li&gt;多维度的模型“画像”分析：在 Provider 和 Model 两个维度上，将 Token 消耗、预估成本与性能指标深度对齐。这让你不再看供应商全网的“理想平均数”，而是看清你的应用在调用特定模型时的真实表现，从而在复杂的模型生态中选出最具性价比的选型方案。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;虚拟-genai-观测&#34;&gt;虚拟 GenAI 观测&lt;/h1&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;虚拟 GenAI&lt;/strong&gt; 代表了由探针插件检测到的生成式 AI 服务节点。GenAI 操作的性能指标均基于 &lt;strong&gt;GenAI 客户端视角&lt;/strong&gt;。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;例如，Java 探针中的 &lt;strong&gt;Spring AI 插件&lt;/strong&gt;可以检测一次对话补全（Chat Completion）请求的响应延迟。随后，SkyWalking 将在仪表盘中展示：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;流量与成功率&lt;/strong&gt; (CPM &amp;amp; SLA)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应延迟&lt;/strong&gt; (Latency &amp;amp; TTFT)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Token 消耗&lt;/strong&gt; (Input/Output)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;预估成本&lt;/strong&gt; (Estimated Cost)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如图：
+&lt;img src=&#34;provider-dashboard-1.png&#34; alt=&#34;provider-dashboard-1.png&#34;&gt;
+&lt;img src=&#34;provider-dashboard-2.png&#34; alt=&#34;provider-dashboard-2.png&#34;&gt;
+&lt;img src=&#34;provider-dashboard-3.png&#34; alt=&#34;provider-dashboard-3.png&#34;&gt;
+&lt;img src=&#34;model-dashboard-1.png&#34; alt=&#34;model-dashboard-1.png&#34;&gt;
+&lt;img src=&#34;model-dashboard-2.png&#34; alt=&#34;model-dashboard-2.png&#34;&gt;
+&lt;img src=&#34;model-dashboard-3.png&#34; alt=&#34;model-dashboard-3.png&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;原理&#34;&gt;原理&lt;/h1&gt;
+&lt;p&gt;当 SkyWalking Java Agent 或 OTLP 探针拦截到主流 AI 框架（如 Spring AI、OpenAI SDK 等）的调用时，将Trace 数据上报至 SkyWalking OAP。
+OAP会基于这些 Trace 自动完成数据的聚合与计算。最终会生成 Provider（服务商）与 Model（模型）两个维度的各类性能指标，并直接渲染填充至内置的 Virtual-GenAI 仪表盘中。&lt;/p&gt;
+&lt;h1 id=&#34;安装配置&#34;&gt;安装配置&lt;/h1&gt;
+&lt;h2 id=&#34;要求&#34;&gt;要求&lt;/h2&gt;
+&lt;h3 id=&#34;版本要求&#34;&gt;版本要求&lt;/h3&gt;
+&lt;p&gt;● SkyWalking Java Agent: &amp;gt;= 9.7
+● SkyWalking Oap: &amp;gt;= 10.4&lt;/p&gt;
+&lt;h3 id=&#34;语义规范与兼容性&#34;&gt;语义规范与兼容性&lt;/h3&gt;
+&lt;p&gt;SkyWalking 虚拟 GenAI 遵循&lt;code&gt; OpenTelemetry GenAI&lt;/code&gt; 语义规范。OAP 将根据以下标准识别 GenAI 相关 Span：&lt;/p&gt;
+&lt;h4 id=&#34;skywalking-java-agent&#34;&gt;SkyWalking Java Agent&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;上报的 Span 必须为 Exit 类型，其 SpanLayer 属性需设定为 GENAI,包含&lt;code&gt;gen_ai.response.model&lt;/code&gt; 标签。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;输出otlp--zipkin格式数据的探针&#34;&gt;输出OTLP / Zipkin格式数据的探针&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;上报的 Span 中包含 &lt;code&gt;gen_ai.response.model&lt;/code&gt; 标签。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;具体可以参考e2e配置&lt;br&gt;
+&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/test/e2e-v2/cases/virtual-genai/docker-compose.yml&#34;&gt;SkyWalking Java Agent上报数据&lt;/a&gt;&lt;br&gt;
+&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/test/e2e-v2/cases/otlp-virtual-genai/docker-compose.yml&#34;&gt;探针上报OTLP格式数据&lt;/a&gt;&lt;br&gt;
+&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/test/e2e-v2/cases/zipkin-virtual-genai/docker-compose.yml&#34;&gt;探针上报Zipkin格式数据&lt;/a&gt;&lt;/p&gt;
+&lt;h1 id=&#34;genai-预估成本配置&#34;&gt;GenAI 预估成本配置&lt;/h1&gt;
+&lt;h2 id=&#34;概览&#34;&gt;概览&lt;/h2&gt;
+&lt;p&gt;SkyWalking 提供了一个内置的&lt;a href=&#34;https://github.com/apache/skywalking/blob/master/oap-server/server-starter/src/main/resources/gen-ai-config.yml&#34;&gt;GenAI计费配置文件&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;该配置定义了SkyWalking 如何将 Trace 数据中的模型名称映射到对应的供应商，并估算每次 LLM 调用的 Token 成本。估算成本将与 Trace 和指标数据一起显示在 SkyWalking UI 中，帮助用户直观了解 GenAI 使用带来的 预估费用影响。
+重要提示: 此文件中的定价仅用于成本估算，不得视为实际账单或发票金额。建议用户定期从供应商官方定价页面核实最新费率。&lt;/p&gt;
+&lt;h2 id=&#34;配置结构&#34;&gt;配置结构&lt;/h2&gt;
+&lt;h3 id=&#34;top-字段&#34;&gt;Top 字段&lt;/h3&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;字段&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;类型&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;描述&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;last-updated&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;date&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;定价数据的最后更新日期。所有价格均基于该日期前各厂商官网公布的公开计费标准。&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;providers&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;list&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;GenAI 厂商定义列表。每个厂商条目下包含匹配规则（matching rules）以及具体的模型计费信息（model pricing）。&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;provider-定义&#34;&gt;provider 定义&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;providers&lt;/code&gt; 下的每个条目定义一个 GenAI 供应商：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;providers&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;provider&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&amp;lt;provider-name&amp;gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;prefix-match&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- &amp;lt;prefix-1&amp;gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- &amp;lt;prefix-2&amp;gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;models&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&amp;lt;model-name&amp;gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;aliases&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;&amp;lt;alias-1&amp;gt;, &amp;lt;alias-2&amp;gt;]&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;input-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&amp;lt;cost&amp;gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;output-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&amp;lt;cost&amp;gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;字段 (Field)&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;类型 (Type)&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;必填 (Required)&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;描述 (Description)&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;provider&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;string&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;是&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;供应商标识（如 &lt;code&gt;openai&lt;/code&gt;, &lt;code&gt;anthropic&lt;/code&gt;, &lt;code&gt;gemini&lt;/code&gt;）。在 SkyWalking 中作为虚拟 GenAI 服务名显示。&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;prefix-match&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;list[string]&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;是&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;用于将模型名称匹配到该供应商的前缀列表。如果 Trace 数据中的模型名以其中任一前缀开头，则会被映射到该供应商。&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;models&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;list[model]&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;否&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;包含定价信息的模型定义列表。如果省略，系统仍能识别供应商，但不会进行成本估算。&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;model-定义&#34;&gt;model 定义&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;models&lt;/code&gt; 下的每个条目定义特定模型的定价：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;字段 (Field)&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;类型 (Type)&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;必填 (Required)&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;描述 (Description)&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;name&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;string&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;是&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;用于匹配的标准模型名称。&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;aliases&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;list[string]&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;否&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;应解析为同一计费条目的备选名称。当供应商使用不同的命名习惯时非常有用（参见“模型别名”部分）。&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;input-estimated-cost-per-m&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;float&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;否&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;每 1,000,000（一百万）输入（Prompt）Token 的预估成本。默认单位为 USD。&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;output-estimated-cost-per-m&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;float&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;否&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;每 1,000,000（一百万）输出（Completion）Token 的预估成本。默认单位为 USD。&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;模型匹配机制&#34;&gt;模型匹配机制&lt;/h2&gt;
+&lt;h3 id=&#34;供应商级前缀匹配&#34;&gt;供应商级前缀匹配&lt;/h3&gt;
+&lt;p&gt;当 SkyWalking 接收到包含 GenAI 调用的 Trace 时，会按照以下优先级顺序来确定供应商（Provider）：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;gen_ai.provider.name&lt;/code&gt; 标签：首先检索此标签。它是&lt;code&gt;OpenTelemetry&lt;/code&gt;最新的语义规范。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gen_ai.system&lt;/code&gt; 标签：如果缺少上述标签，系统将回退到此旧版（Legacy）标签。注意：此标签仅在处理 OTLP 或 Zipkin 协议的数据时会被解析，主要用于兼容旧版的 Python 自动仪表化等库。&lt;/li&gt;
+&lt;li&gt;前缀匹配 (Prefix Matching)：若上述两个标签均不存在，&lt;code&gt;SkyWalking&lt;/code&gt; 会读取 &lt;code&gt;gen-ai-config.yml&lt;/code&gt; 中定义的 prefix-match 规则，通过匹配 模型名称 (Model Name) 来尝试识别供应商。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;provider&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;openai&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;prefix-match&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- gpt&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;任何以 gpt 开头的模型名称（如 gpt-4o, gpt-4.1-mini, gpt-5-nano）都会被映射到 openai 供应商。
+一个供应商可以拥有多个前缀：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;provider&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;tencent&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;prefix-match&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- hunyuan&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- Tencent&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;模型级最长前缀匹配-model-level-longest-prefix-matching&#34;&gt;模型级最长前缀匹配 (Model-Level Longest-Prefix Matching)&lt;/h3&gt;
+&lt;p&gt;一旦确定了供应商，SkyWalking 会使用基于前缀树 (Trie) 的最长前缀匹配算法来查找最佳的模型计费条目。这至关重要，因为 LLM 供应商在 API 响应中返回的模型名称通常包含版本号或时间戳，与配置中的基础模型名称有所不同。
+示例： 假设 OpenAI 的配置条目如下：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;models&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;gpt-4o&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;input-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;2.5&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;output-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;10.0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;gpt-4o-mini&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;input-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0.15&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;output-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0.6&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;其匹配行为如下表所示：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;Trace 中的模型名称&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;匹配的配置条目&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;原因&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;完全匹配&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o-2024-08-06&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;最长前缀为 &lt;code&gt;gpt-4o&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o-mini&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o-mini&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;完全匹配（比 &lt;code&gt;gpt-4o&lt;/code&gt; 更长的前缀优先）&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o-mini-2024-07-18&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gpt-4o-mini&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;最长前缀为 &lt;code&gt;gpt-4o-mini&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这种机制确保了 API 返回的带有版本的模型名称能够被正确映射到相应的价格档位，而无需在配置文件中维护精确的全名。&lt;/p&gt;
+&lt;h3 id=&#34;模型别名-model-aliases&#34;&gt;模型别名 (Model Aliases)&lt;/h3&gt;
+&lt;p&gt;部分供应商在 API 响应和官方文档中会使用不同的命名规范。例如，Anthropic 的模型在 Trace 中可能显示为 claude-4-sonnet 或 claude-sonnet-4。通过 aliases 字段，可以让单个计费条目同时支持这两种配置：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;claude-4-sonnet&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;aliases&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;[&lt;/span&gt;claude-sonnet-4]&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;input-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;3.0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;output-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;15.0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在这种配置下，&lt;code&gt;claude-4-sonnet&lt;/code&gt; 和 &lt;code&gt;claude-sonnet-4&lt;/code&gt;（以及任何带有版本的变体，如 &lt;code&gt;claude-sonnet-4-20250514&lt;/code&gt;）都会解析为同一个计费条目。&lt;br&gt;
+&lt;strong&gt;注意&lt;/strong&gt;： 别名同样参与最长前缀匹配。因此，&lt;code&gt;claude-sonnet-4-20250514&lt;/code&gt; 会匹配到别名 &lt;code&gt;claude-sonnet-4&lt;/code&gt;，进而解析到 &lt;code&gt;claude-4-sonnet&lt;/code&gt; 的定价信息。&lt;/p&gt;
+&lt;h2 id=&#34;自定义配置&#34;&gt;自定义配置&lt;/h2&gt;
+&lt;p&gt;添加新供应商 (Adding a New Provider)
+要添加默认配置中未包含的供应商：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;providers&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#57606a&#34;&gt;# ... 现有供应商 ...&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;provider&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;ollama&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;prefix-match&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- mymodel&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;  &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;models&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;mymodel-large&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;input-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;1.0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;output-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;5.0&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;    &lt;/span&gt;- &lt;span style=&#34;color:#0550ae&#34;&gt;name&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;mymodel-small&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;input-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0.1&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#fff&#34;&gt;      &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;output-estimated-cost-per-m&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;0.5&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;针对OTLP/zipkin的数据，新增了单独的estimated tag, 可以在UI上看到这次GenAI调用消耗的cost。&lt;br&gt;
+&lt;img src=&#34;otlp-estimated-tag.png&#34; alt=&#34;otlp-estimated-tag&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;主要指标&#34;&gt;主要指标&lt;/h1&gt;
+&lt;h2 id=&#34;1-provider-level-服务商维度&#34;&gt;1. Provider Level (服务商维度)&lt;/h2&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;指标 ID&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;描述&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;含义&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_cpm&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Calls Per Minute&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;每分钟请求数 (吞吐量)&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_sla&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Success Rate&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;请求成功率&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_resp_time&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Avg Response Time&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;平均响应耗时&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_latency_percentile&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Latency Percentiles&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;响应耗时百分位数 (P50, P75, P90, P95, P99)&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_input_tokens_sum/avg&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Input Token Usage&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;输入 Token 的总和及平均值&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_output_tokens_sum/avg&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Output Token Usage&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;输出 Token 的总和及平均值&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_provider_total_estimated_cost/avg&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Estimated Cost&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;预估总成本及次均成本&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;2-model-level-模型维度&#34;&gt;2. Model Level (模型维度)&lt;/h2&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;指标 ID&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;描述&lt;/th&gt;
+          &lt;th style=&#34;text-align: left&#34;&gt;含义&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_call_cpm&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Calls Per Minute&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;该特定模型的每分钟请求数&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_sla&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Success Rate&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;模型请求成功率&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_latency_avg/percentile&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Latency&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;模型响应耗时的平均值及百分位数&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_ttft_avg/percentile&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;TTFT&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;首个token响应时间 (仅限流式传输 Streaming)&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_input_tokens_sum/avg&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Input Token Usage&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;该模型的输入 Token 消耗详情&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_output_tokens_sum/avg&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Output Token Usage&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;该模型的输出 Token 消耗详情&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;&lt;code&gt;gen_ai_model_total_estimated_cost/avg&lt;/code&gt;&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;Estimated Cost&lt;/td&gt;
+          &lt;td style=&#34;text-align: left&#34;&gt;该模型的预估总成本及次均成本&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;建议使用场景&#34;&gt;建议使用场景&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;性能评估：利用 响应延迟（Latency） 和 首字响应时间（TTFT） 指标，分析模型推理效率及终端用户交互体验。&lt;/li&gt;
+&lt;li&gt;Token 监控：实时监控 输入（Input）与输出（Output）Token 的消耗，用于分析不同业务场景下的资源占用情况。&lt;/li&gt;
+&lt;li&gt;成本预警：支持基于 预估成本（Cost） 或 Token 消耗量 配置告警阈值，及时发现异常调用，防止成本超支。&lt;/li&gt;
+&lt;/ul&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: SkyWalking Ruby Quick Start and Principle Introduction</title>
       <link>/blog/2025-03-06-introduction-to-skywalking-ruby/</link>
       <pubDate>Thu, 06 Mar 2025 00:00:00 +0000</pubDate>
@@ -1114,6 +1581,102 @@ This allows R3 to generate and test traffic patterns that simulate real RESTFul 
 &lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
 &lt;p&gt;In this article, we discussed in detail how SkyWalking utilizes the R3 service to format RESTFul URIs and aggregate related metrics upon receiving them.
 Currently, it applies to most RESTFul scenarios, and if more cases need to be supported, we can extend it further as needed.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 引入 R3 识别 RESTFul URI</title>
+      <link>/zh/2024-010-15-introduce-r3-to-recognition-restful-url/</link>
+      <pubDate>Thu, 17 Oct 2024 00:00:00 +0000</pubDate>
+      <guid>/zh/2024-010-15-introduce-r3-to-recognition-restful-url/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;在现代应用中，服务通常通过 RESTFul HTTP URI 提供。使用 RESTFul HTTP URI 作为唯一的资源标识符，不仅具备良好的可读性，还能让客户端和服务器更容易理解请求。然而，在可观测性领域，这种方式也带来了一些挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;大量的端点（HTTP URI）&lt;/strong&gt;：浏览所有对外提供的端点变得更加困难，因此很难识别出存在问题的端点。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;指标收集困难&lt;/strong&gt;：尤其难以对类似的端点进行归类并生成可观测性指标。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;现有解决方案通常采用以下应用级别的方式来解决此问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;代理检测&lt;/strong&gt;：在某些框架中，通常会声明规则来处理 RESTFul 请求。例如，在 Java 的 Spring Web 中可以使用 &lt;code&gt;@GET&lt;/code&gt; 等注解，然后可以通过 Java Agent 将其与当前请求关联起来。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OpenAPI&lt;/strong&gt;：应用可以关联预定义文件，使可观测性系统知晓可能使用的 URI。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这两种解决方案都与应用设置紧密耦合，这对于未知应用或者无法监控代理的应用来说是一个局限。因此，我们需要考虑是否有一种更通用的解决方案来识别 URI，并合并来自类似 URI 生成的指标，以便更好地展示数据。&lt;/p&gt;
+&lt;h2 id=&#34;r3&#34;&gt;R3&lt;/h2&gt;
+&lt;p&gt;R3（RESTFul 模式识别）是一个高性能的 RESTFul URI 识别工具，其灵感来自 &lt;a href=&#34;https://github.com/logpai/Drain3&#34;&gt;Drain3&lt;/a&gt;。它可以作为独立应用部署在可观测性服务器上，并与 SkyWalking OAP 进行通信。&lt;/p&gt;
+&lt;p&gt;R3 可以通过 gRPC 协议接收 URI 列表，并将类似的 URI 聚合为特定格式。聚合后的（格式化）URI 列表也可以通过 gRPC 协议进行查询。&lt;/p&gt;
+&lt;h3 id=&#34;数据交互流程&#34;&gt;数据交互流程&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;data_interaction_flow.png&#34; alt=&#34;OAP 与 R3 之间的数据交互流程&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;OAP 接收并缓存未格式化的 URI 列表&lt;/strong&gt;：OAP 通过不同协议接收可观测性数据，并识别出所有未格式化的 URI。然后将这些 URI 按照所属服务暂时存储在列表中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP 将待格式化的 URI 发送给 R3&lt;/strong&gt;：OAP 定期将需要格式化的 URI 批量发送到 R3 服务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;R3 接收并解析 URI 列表&lt;/strong&gt;：R3 异步分析接收到的 URI 相似性，并将结果存储（持久化）在本地磁盘中，以便在重启后进行恢复。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP 查询 R3 中的格式化 URI 列表&lt;/strong&gt;：OAP 定期查询 R3 中检测到的格式化 URI，并将结果保存在内存中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP 格式化 URI&lt;/strong&gt;：当 OAP 接收到新的可观测性数据时，会将 URI 与从 R3 获取的格式化 URI 进行匹配。如果匹配成功，后续的指标计算将使用格式化后的 URI。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;场景&#34;&gt;场景&lt;/h3&gt;
+&lt;p&gt;在 R3 中，主要解决以下场景。对于识别为重复的 URI，R3 将用 &lt;code&gt;{var}&lt;/code&gt; 替换变量部分以标准化 URI。&lt;/p&gt;
+&lt;h4 id=&#34;id-匹配&#34;&gt;ID 匹配&lt;/h4&gt;
+&lt;p&gt;在 RESTFul API 中，常见做法是将各种 ID 包含在 URI 路径中，这导致了大量唯一的 URI 端点。例如，以下路径将被 R3 聚合为标准化格式 &lt;code&gt;/api/users/{var}&lt;/code&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/users/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/api/users/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/api/users/44cf77fc351f4c6c9c4f1448f2f12800&lt;/li&gt;
+&lt;li&gt;/api/users/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/api/users/5ad14302e7924f4aa1d60e58d65b3dd2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;词语检测&#34;&gt;词语检测&lt;/h4&gt;
+&lt;p&gt;在 RESTFul URI 中，实体的操作通常通过 HTTP 方法指定，但有时还需要在路径中添加特定名词。为此，R3 实现了词语解析：当 R3 检测到路径中的特定词语时，将不会格式化该部分。例如，以下 URI 将不会被视为相似，因此不会被合并：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/sale&lt;/li&gt;
+&lt;li&gt;/api/product_sale&lt;/li&gt;
+&lt;li&gt;/api/ProductSale&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;样本不足&#34;&gt;样本不足&lt;/h4&gt;
+&lt;p&gt;为防止由于样本不足而导致错误判断，R3 允许在&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini&#34;&gt;配置文件&lt;/a&gt;中配置&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini#L38&#34;&gt;最小 URI 合并计数&lt;/a&gt;参数。&lt;/p&gt;
+&lt;p&gt;例如，当阈值为 &lt;code&gt;3&lt;/code&gt; 时，以下 URI 将保持原样，不会被参数化。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但是以下 URI 将被参数化为 &lt;code&gt;/api/{var}&lt;/code&gt;，因为样本数大于阈值。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;li&gt;/api/fetch3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;版本-api&#34;&gt;版本 API&lt;/h4&gt;
+&lt;p&gt;在实际场景中，常会遇到包含多个版本的 URI。R3 通过确保指定路径中包含 &lt;code&gt;v\\d+&lt;/code&gt; 参数（表示版本信息）来解决这个问题，该部分将不会被参数化。例如，以下 URI 将分别解析为 &lt;code&gt;/test/v1/{var}&lt;/code&gt; 和 &lt;code&gt;/test/v999/{var}&lt;/code&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/test/v1/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/test/v1/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/test/v1/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/test/v999/1&lt;/li&gt;
+&lt;li&gt;/test/v999/2&lt;/li&gt;
+&lt;li&gt;/test/v999/3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;演示&#34;&gt;演示&lt;/h2&gt;
+&lt;p&gt;接下来我们快速演示如何使用 R3 格式化观察到的端点，帮助你更具体地理解它的功能。&lt;/p&gt;
+&lt;h3 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase 包含一整套示例服务，可以通过 SkyWalking 进行监控。更多信息请查看&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在此演示中，我们仅部署服务、最新发布的 SkyWalking OAP、R3 服务和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;java-agent-injector,single-node,elasticsearch,r3
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;make deploy.kubernetes
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，请运行以下脚本打开 SkyWalking UI：&lt;a href=&#34;http://localhost:8080/&#34;&gt;http://localhost:8080/&lt;/a&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;触发-restful-请求&#34;&gt;触发 RESTFul 请求&lt;/h3&gt;
+&lt;p&gt;在 R3 中，默认启动了定时任务以定期生成 RESTFul 流量。不过，你也可以使用以下命令手动触发此过程：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;kubectl &lt;span style=&#34;color:#6639ba&#34;&gt;exec&lt;/span&gt; -n sample-services &lt;span style=&#34;color:#cf222e&#34;&gt;$(&lt;/span&gt;kubectl get pod -n sample-services --selector&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#953800&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;gateway -o &lt;span style=&#34;color:#953800&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;{.items[0].metadata.name}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;)&lt;/span&gt; -- /bin/bash -c &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;for i in $(seq 1 200); do curl http://rating/songs/$i/reviews/$((i+1)); sleep 1; done&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在上述命令中，R3 将自动定位网关节点，并以 RESTFul 格式向该节点内的 rating 服务发送请求。此操作允许 R3 生成并测试模拟实际 RESTFul 请求的流量模式。&lt;/p&gt;
+&lt;h3 id=&#34;查看格式化-uri&#34;&gt;查看格式化 URI&lt;/h3&gt;
+&lt;p&gt;一旦触发 RESTFul 请求，你可以在 UI 中查看聚合后的端点。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;注意&lt;/strong&gt;：由于格式化端点是异步生成的，因此一些较早的请求可能尚未被格式化。你可能需要等待一段时间，UI 才会仅显示格式化后的地址。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;formated_images.png&#34; alt=&#34;格式化端点&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;在本文中，我们详细讨论了 SkyWalking 如何利用 R3 服务来格式化 RESTFul URI，并在接收后聚合相关的指标。目前，它适用于大多数 RESTFul 场景，如果需要支持更多情况，我们可以根据需求进一步扩展。&lt;/p&gt;
 
       </description>
     </item>
@@ -2334,6 +2897,207 @@ If you&amp;rsquo;re interested in learning which frameworks the SkyWalking Go ag
     </item>
     
     <item>
+      <title>Zh: 使用 eBPF 提升 HTTP 可观测性 - L7 指标和追踪</title>
+      <link>/zh/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</link>
+      <pubDate>Thu, 12 Jan 2023 00:00:00 +0000</pubDate>
+      <guid>/zh/ebpf-enhanced-http-observability-l7-metrics-and-tracing/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;banner&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;Apache SkyWalking 是一个开源应用性能管理系统，帮助用户收集和聚合日志、追踪、指标和事件，并在 UI 上显示。在&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;上一篇文章&lt;/a&gt;中，我们介绍了如何使用 Apache SkyWalking Rover 分析服务网格环境中的网络性能问题。但是，在商业场景中，用户通常依靠成熟的第 7 层协议（如 HTTP）来进行系统之间的交互。在本文中，我们将讨论如何使用 eBPF 技术来分析第 7 层协议的性能瓶颈，以及如何使用网络采样来增强追踪系统。&lt;/p&gt;
+&lt;p&gt;本文将演示如何使用 &lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;Apache SkyWalking&lt;/a&gt; 与 &lt;a href=&#34;https://ebpf.io/what-is-ebpf/&#34;&gt;eBPF&lt;/a&gt; 来增强 HTTP 可观察性中的指标和追踪。&lt;/p&gt;
+&lt;h2 id=&#34;http-协议分析&#34;&gt;HTTP 协议分析&lt;/h2&gt;
+&lt;p&gt;HTTP 是最常用的 7 层协议之一，通常用于为外部方提供服务和进行系统间通信。在下面的章节中，我们将展示如何识别和分析 HTTP/1.x 协议。&lt;/p&gt;
+&lt;h3 id=&#34;协议识别&#34;&gt;协议识别&lt;/h3&gt;
+&lt;p&gt;在 HTTP/1.x 中，客户端和服务器通过两端的单个文件描述符（File Descriptor）进行通信。图 1 显示了涉及以下步骤的通信过程：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Connect/Accept：客户端与 HTTP 服务器建立连接，或者服务器接受客户端的连接。&lt;/li&gt;
+&lt;li&gt;Read/Write（多次）：客户端或服务器读取和写入 HTTPS 请求和响应。单个请求 - 响应对在每边的同一连接内发生。&lt;/li&gt;
+&lt;li&gt;Close：客户端和服务器关闭连接。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为了获取 HTTP 内容，必须从此过程的第二步读取它。根据 &lt;a href=&#34;http://rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC&lt;/a&gt; 定义，内容包含在 4 层协议的数据中，可以通过解析数据来获取。请求和响应对可以相关联，因为它们都在两端的同一连接内发生。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.png&#34; alt=&#34;图 1：HTTP 通信时间线。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1：HTTP 通信时间线。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;http-管线化&#34;&gt;HTTP 管线化&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/HTTP_pipelining&#34;&gt;HTTP 管线化（Pipelining）&lt;/a&gt;是 HTTP/1.1 的一个特性，允许在等待对应的响应的情况下在单个 TCP 连接上发送多个 HTTP 请求。这个特性很重要，因为它确保了服务器端的响应顺序必须与请求的顺序匹配。&lt;/p&gt;
+&lt;p&gt;图 2 说明了这是如何工作的，考虑以下情况：HTTP 客户端向服务器发送多个请求，服务器通过按照请求的顺序发送 HTTP 响应来响应。这意味着客户端发送的第一个请求将收到服务器的第一个响应，第二个请求将收到第二个响应，以此类推。&lt;/p&gt;
+&lt;p&gt;在设计 HTTP 解析时，我们应该遵循这个原则，将请求数据添加到列表中，并在解析响应时删除第一个项目。这可以确保响应按正确的顺序处理。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.png&#34; alt=&#34;图 2： HTTP/1.1 管道。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2： HTTP/1.1 管道。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;指标&#34;&gt;指标&lt;/h3&gt;
+&lt;p&gt;根据前文提到的 HTTP 内容和流程拓扑图的识别，我们可以将这两者结合起来生成进程间的指标数据。&lt;/p&gt;
+&lt;p&gt;图 3 显示了目前支持两个进程间分析的指标。基于 HTTP 请求和响应数据，可以分析以下数据：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;&lt;strong&gt;指标名称&lt;/strong&gt;&lt;/th&gt;
+          &lt;th&gt;类型&lt;/th&gt;
+          &lt;th&gt;单位&lt;/th&gt;
+          &lt;th&gt;描述&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;请求 CPM（Call Per Minute）&lt;/td&gt;
+          &lt;td&gt;计数器&lt;/td&gt;
+          &lt;td&gt;计数&lt;/td&gt;
+          &lt;td&gt;HTTP 请求计数&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;响应状态 CPM (Call Per Minute)&lt;/td&gt;
+          &lt;td&gt;计数器&lt;/td&gt;
+          &lt;td&gt;计数&lt;/td&gt;
+          &lt;td&gt;每个 HTTP 响应状态码的计数&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;请求包大小&lt;/td&gt;
+          &lt;td&gt;计数器 / 直方图&lt;/td&gt;
+          &lt;td&gt;字节&lt;/td&gt;
+          &lt;td&gt;请求包大小&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;响应包大小&lt;/td&gt;
+          &lt;td&gt;计数器 / 直方图&lt;/td&gt;
+          &lt;td&gt;字节&lt;/td&gt;
+          &lt;td&gt;响应包大小&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;客户端持续时间&lt;/td&gt;
+          &lt;td&gt;计数器 / 直方图&lt;/td&gt;
+          &lt;td&gt;毫秒&lt;/td&gt;
+          &lt;td&gt;客户端单个 HTTP 响应的持续时间&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;服务器持续时间&lt;/td&gt;
+          &lt;td&gt;计数器 / 直方图&lt;/td&gt;
+          &lt;td&gt;毫秒&lt;/td&gt;
+          &lt;td&gt;服务器端单个 HTTP 响应的持续时间&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;img src=&#34;f3.png&#34; alt=&#34;图 3：进程到进程指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3：进程到进程指标。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;http-和追踪&#34;&gt;HTTP 和追踪&lt;/h2&gt;
+&lt;p&gt;在 HTTP 过程中，如果我们能够从原始数据中解包 HTTP 请求和响应，就可以使用这些数据与现有的追踪系统进行关联。&lt;/p&gt;
+&lt;h3 id=&#34;追踪上下文标识&#34;&gt;追踪上下文标识&lt;/h3&gt;
+&lt;p&gt;为了追踪多个服务之间的请求流，追踪系统通常在请求进入服务时创建追踪上下文，并在请求 - 响应过程中将其传递给其他服务。例如，当 HTTP 请求发送到另一个服务器时，追踪上下文包含在请求头中。&lt;/p&gt;
+&lt;p&gt;图 4 显示了 Wireshark 拦截的 HTTP 请求的原始内容。由 Zipkin Tracing 系统生成的追踪上下文信息可以通过头中的 “X-B3” 前缀进行标识。通过使用 eBPF 拦截 HTTP 头中的追踪上下文，可以将当前请求与追踪系统连接起来。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.png&#34; alt=&#34;图 4：Wireshark 中的 HTTP Header 视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4：Wireshark 中的 HTTP Header 视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;trace-事件&#34;&gt;Trace 事件&lt;/h3&gt;
+&lt;p&gt;我们已经将事件这个概念加入了追踪中。事件可以附加到跨度上，并包含起始和结束时间、标签和摘要，允许我们将任何所需的信息附加到追踪中。&lt;/p&gt;
+&lt;p&gt;在执行 eBPF 网络分析时，可以根据请求 - 响应数据生成两个事件。图 5 说明了在带分析的情况下执行 HTTP 请求时发生的情况。追踪系统生成追踪上下文信息并将其发送到请求中。当服务在内核中执行时，我们可以通过与内核空间中的请求 - 响应数据和执行时间交互，为相应的追踪跨度生成事件。&lt;/p&gt;
+&lt;p&gt;以前，我们只能观察用户空间的执行状态。现在，通过结合追踪和 eBPF 技术，我们还可以在内核空间获取更多关于当前追踪的信息，如果我们在追踪 SDK 和代理中执行类似的操作，将对目标服务的性能产生较小的影响。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.png&#34; alt=&#34;图 5：分析 HTTP 请求和响应的逻辑视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5：分析 HTTP 请求和响应的逻辑视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;抽样&#34;&gt;抽样&lt;/h3&gt;
+&lt;p&gt;该机制仅在满足特定条件时触发抽样。我们还提供了前 N 条追踪的列表，允许用户快速访问特定追踪的相关请求信息。为了帮助用户轻松识别和分析相关事件，我们提供了三种不同的抽样规则：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;慢速追踪&lt;/strong&gt;：当请求的响应时间超过指定阈值时触发抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应状态 [400,500)&lt;/strong&gt;：当响应状态代码大于或等于 400 且小于 500 时触发抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;响应状态 [500,600)&lt;/strong&gt;：当响应状态代码大于或等于 500 且小于 600 时触发抽样。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;此外，我们认识到分析时可能并不需要所有请求或响应的原始数据。例如，当试图识别性能问题时，用户可能更感兴趣于请求数据，而在解决错误时，他们可能更感兴趣于响应数据。因此，我们还提供了请求或响应事件的配置选项，允许用户指定要抽样的数据类型。&lt;/p&gt;
+&lt;h2 id=&#34;服务网格中的分析&#34;&gt;服务网格中的分析&lt;/h2&gt;
+&lt;p&gt;SkyWalking Rover 项目已经实现了 HTTP 协议的分析和追踪关联。当在服务网格环境中运行时它们的表现如何？&lt;/p&gt;
+&lt;h3 id=&#34;部署&#34;&gt;部署&lt;/h3&gt;
+&lt;p&gt;图 6 演示了 SkyWalking 和 SkyWalking Rover 在服务网格环境中的部署方式。SkyWalking Rover 作为一个 DaemonSet 部署在每台服务所在的机器上，并与 SkyWalking 后端集群通信。它会自动识别机器上的服务并向 SkyWalking 后端集群报告元数据信息。当出现新的网络分析任务时，SkyWalking Rover 会感知该任务并对指定的进程进行分析，在最终将数据报告回 SkyWalking 后端服务之前，收集和聚合网络数据。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.png&#34; alt=&#34;图 6：服务网格中的 SkyWalking rover 部署拓扑。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6：服务网格中的 SkyWalking rover 部署拓扑。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;追踪系统&#34;&gt;追踪系统&lt;/h3&gt;
+&lt;p&gt;从版本 9.3.0 开始，SkyWalking 后端完全支持 Zipkin 服务器中的所有功能。因此，SkyWalking 后端可以收集来自 SkyWalking 和 Zipkin 协议的追踪。同样，SkyWalking Rover 可以在 SkyWalking 和 Zipkin 追踪系统中识别和分析追踪上下文。在接下来的两节中，网络分析结果将分别在 SkyWalking 和 Zipkin UI 中显示。&lt;/p&gt;
+&lt;h4 id=&#34;skywalking&#34;&gt;SkyWalking&lt;/h4&gt;
+&lt;p&gt;当 SkyWalking 执行网络分析时，与&lt;a href=&#34;/zh/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;前文中&lt;/a&gt;的 TCP 指标类似，SkyWalking UI 会首先显示进程间的拓扑图。当打开代表进程间流量指标的线的仪表板时，您可以在 “HTTP/1.x” 选项卡中看到 HTTP 流量的指标，并在 “HTTP Requests” 选项卡中看到带追踪的抽样的 HTTP 请求。&lt;/p&gt;
+&lt;p&gt;如图 7 所示，选项卡中有三个列表，每个列表对应事件抽样规则中的一个条件。每个列表显示符合预先规定条件的追踪。当您单击追踪列表中的一个项目时，就可以查看完整的追踪。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.png&#34; alt=&#34;图 7：Tracing 上下文中的采样 HTTP 请求。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7：Tracing 上下文中的采样 HTTP 请求。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您单击追踪列表中的一个项目时，就可以快速查看指定的追踪。在图 8 中，我们可以看到在当前的服务相关的跨度中，有一个带有数字的标签，表示与该追踪跨度相关的 HTTP 事件数。&lt;/p&gt;
+&lt;p&gt;由于我们在服务网格环境中，每个服务都涉及与 Envoy 交互。因此，当前的跨度包括 Envoy 的请求和响应信息。此外，由于当前的服务有传入和传出的请求，因此相应的跨度中有事件。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.png&#34; alt=&#34;图 8：Tracing 详细信息中的事件。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 8：Tracing 详细信息中的事件。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当单击跨度时，将显示跨度的详细信息。如果当前跨度中有事件，则相关事件信息将在时间轴上显示。如图 9 所示，当前跨度中一共有 6 个相关事件。每个事件代表一个 HTTP 请求 / 响应的数据样本。其中一个事件跨越多个时间范围，表示较长的系统调用时间。这可能是由于系统调用被阻塞，具体取决于不同语言中的 HTTP 请求的实现细节。这也可以帮助我们查询错误的可能原因。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.png&#34; alt=&#34;图 9：一个 Tracing 范围内的事件。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 9：一个 Tracing 范围内的事件。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;最后，我们可以单击特定的事件查看它的完整信息。如图 10 所示，它显示了一个请求的抽样信息，包括从 HTTP 原始数据中的请求头中包含的 SkyWalking 追踪上下文协议。原始请求数据允许您快速重新请求以解决任何问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.png&#34; alt=&#34;图 10：事件的详细信息。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 10：事件的详细信息。&lt;/em&gt;&lt;/p&gt;
+&lt;h4 id=&#34;zipkin&#34;&gt;Zipkin&lt;/h4&gt;
+&lt;p&gt;Zipkin 是世界上广泛使用的分布式追踪系统。SkyWalking 可以作为&lt;a href=&#34;https://zipkin.io/pages/extensions_choices.html&#34;&gt;替代服务器&lt;/a&gt;，提供高级功能。在这里，我们使用这种方式将功能无缝集成到 Zipkin 生态系统中。新事件也将被视为 Zipkin 的标签和注释的一种。&lt;/p&gt;
+&lt;p&gt;为 Zipkin 跨度添加事件，需要执行以下操作：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;将每个事件的开始时间和结束时间分别拆分为两个具有规范名称的注释。&lt;/li&gt;
+&lt;li&gt;将抽样的 HTTP 原始数据从事件添加到 Zipkin 跨度标签中，使用相同的事件名称用于相应的目的。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;图 11 和图 12 显示了同一跨度中的注释和标签。在这些图中，我们可以看到跨度包含至少两个具有相同事件名称和序列后缀的事件（例如，图中的 “Start/Finished HTTP Request/Response Sampling-x”）。这两个事件均具有单独的时间戳，用于表示其在跨度内的相对时间。在标签中，对应事件的数据内容分别由事件名称和序列号表示。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.png&#34; alt=&#34;图 11：Zipkin span 注释中的事件时间戳。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 11：Zipkin span 注释中的事件时间戳。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.png&#34; alt=&#34;图 12：Zipkin span 标签中的事件原始数据。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 12：Zipkin span 标签中的事件原始数据。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;演示&#34;&gt;演示&lt;/h2&gt;
+&lt;p&gt;在本节中，我们将演示如何在服务网格中执行网络分析，并完成指标收集和 HTTP 原始数据抽样。要进行操作，您需要一个运行中的 Kubernetes 环境。&lt;/p&gt;
+&lt;h3 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase 包含一套完整的示例服务，可以使用 SkyWalking 进行监控。有关详细信息，请参阅&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在本演示中，我们只部署了服务、最新发布的 SkyWalking OAP 和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_OAP_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;apache/skywalking-oap-server:9.3.0
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_UI_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;apache/skywalking-ui:9.3.0
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;SW_ROVER_IMAGE&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;apache/skywalking-rover:0.4.0
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;mesh-with-agent,single-node,elasticsearch,rover
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;make deploy.kubernetes
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，运行下面的脚本启动 SkyWalking UI：&lt;a href=&#34;http://localhost:8080/&#34;&gt;http://localhost:8080/&lt;/a&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;启动网络分析任务&#34;&gt;启动网络分析任务&lt;/h3&gt;
+&lt;p&gt;目前，我们可以通过单击服务网格面板中的 &lt;strong&gt;Data Plane&lt;/strong&gt; 项和 &lt;strong&gt;Kubernetes&lt;/strong&gt; 面板中的 &lt;strong&gt;Service&lt;/strong&gt; 项来选择要监视的特定实例。&lt;/p&gt;
+&lt;p&gt;在图 13 中，我们已在网络分析选项卡中选择了一个具有任务列表的实例。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f13.png&#34; alt=&#34;图 13：数据平面中的网络分析选项卡。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 13：数据平面中的网络分析选项卡。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当我们单击 “开始” 按钮时，如图 14 所示，我们需要为分析任务指定抽样规则。抽样规则由一个或多个规则组成，每个规则都由不同的 URI 正则表达式区分。当 HTTP 请求的 URI 与正则表达式匹配时，将使用该规则。如果 URI 正则表达式为空，则使用默认规则。使用多个规则可以帮助我们为不同的请求配置不同的抽样配置。&lt;/p&gt;
+&lt;p&gt;每个规则都有三个参数来确定是否需要抽样：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;最小请求持续时间（毫秒）&lt;/strong&gt;：响应时间超过指定时间的请求将被抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 400 和 499 之间的抽样响应状态代码&lt;/strong&gt;：范围 [400-499) 中的所有状态代码将被抽样。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;在 500 和 599 之间的抽样响应状态代码&lt;/strong&gt;：范围 [500-599) 中的所有状态码将被抽样。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;抽样配置完成后，我们就可以创建任务了。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f14.png&#34; alt=&#34;图 14：创建网络分析任务页面。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 14：创建网络分析任务页面。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;完成&#34;&gt;完成&lt;/h3&gt;
+&lt;p&gt;几秒钟后，你会看到页面的右侧出现进程拓扑结构。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f15.png&#34; alt=&#34;图 15：网络分析任务中的流程拓扑。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 15：网络分析任务中的流程拓扑。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您单击进程之间的线时，您可以查看两个过程之间的数据，它被分为三个选项卡：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;TCP&lt;/strong&gt;：显示与 TCP 相关的指标。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/1.x&lt;/strong&gt;：显示 HTTP 1 协议中的指标。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP 请求&lt;/strong&gt;：显示已分析的请求，并根据抽样规则保存到列表中。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&#34;f16.png&#34; alt=&#34;图 16：网络分析任务中的 TCP 指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 16：网络分析任务中的 TCP 指标。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f17.png&#34; alt=&#34;图 17：网络分析任务中的 HTTP/1.x 指标。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 17：网络分析任务中的 HTTP/1.x 指标。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f18.png&#34; alt=&#34;图 18：网络分析任务中的 HTTP 采样请求。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 18：网络分析任务中的 HTTP 采样请求。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结&lt;/h2&gt;
+&lt;p&gt;在本文中，我们详细介绍了如何在网络分析中分析 7 层 HTTP/1.x 协议，以及如何将其与现有追踪系统相关联。这使我们能够将我们能够观察到的数据从用户空间扩展到内核空间数据。&lt;/p&gt;
+&lt;p&gt;在未来，我们将进一步探究内核数据的分析，例如收集 TCP 包大小、传输频率、网卡等信息，并从另一个角度提升分布式追踪。&lt;/p&gt;
+&lt;h2 id=&#34;其他资源&#34;&gt;其他资源&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking&#34;&gt;SkyWalking Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover Github Repo ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-rover/v0.3.0/readme/&#34;&gt;SkyWalking Rover Documentation ›&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/blog/diagnose-service-mesh-network-performance-with-ebpf/&#34;&gt;Diagnose Service Mesh Network Performance with eBPF blog post &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/profiling/&#34;&gt;SkyWalking Profiling Documentation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/api/x-process-propagation-headers-v3/&#34;&gt;SkyWalking Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/openzipkin/b3-propagation&#34;&gt;Zipkin Trace Context Propagation &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.rfc-editor.org/rfc/rfc2068.html&#34;&gt;RFC - Hypertext Transfer Protocol – HTTP/1.1 &amp;gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Boost Root Cause Analysis Quickly With SkyWalking’s New Trace-Metrics Association Feature</title>
       <link>/blog/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</link>
       <pubDate>Mon, 19 Dec 2022 00:00:00 +0000</pubDate>
@@ -2412,6 +3176,89 @@ If you&amp;rsquo;re interested in learning which frameworks the SkyWalking Go ag
 &lt;p&gt;Click the dots on any metric graph, and you will see a &lt;em&gt;View Related Traces&lt;/em&gt; item pop-out if this metric has logical mapping traces.&lt;/p&gt;
 &lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
 &lt;p&gt;In this blog, we took a look at the newly-added association feature between metrics and traces. With this new visualization, it&amp;rsquo;s now much easier to find key traces to identify root cause of issues.Associations in SkyWalking can go even deeper. Associations from metrics to traces is not the end of diagnosing system bottleneck. In the next post, we will introduce an eBPF powered trace enhancement where you’ll be able to see HTTP request and response details associated with tracing spans from network profiling. Stay tuned.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: SkyWalking 推出 trace-metric 关联功能助力快速根源问题排查</title>
+      <link>/zh/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</link>
+      <pubDate>Mon, 19 Dec 2022 00:00:00 +0000</pubDate>
+      <guid>/zh/boost-root-cause-analysis-quickly-with-skywalking-new-trace-metrics-association-feature/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;img src=&#34;banner.jpg&#34; alt=&#34;Banner&#34;&gt;&lt;/p&gt;
+&lt;p&gt;现代分布式应用程序工作的可观测性对于了解它们在各种条件下的行为方式以及在出现问题时进行故障排除和解决至关重要。追踪、指标和日志被视为可观测性堆栈的基本部分。Trace 是分布式系统执行的足迹，而 metric 则是用时间轴上的数字衡量系统性能。本质上，它们从两个维度衡量性能。能够快速可视化追踪和相应指标之间的联系，可以快速诊断哪些流程与潜在的异常相关。&lt;a href=&#34;https://skywalking.apache.org/events/release-apache-skywalking-apm-9.3.0/&#34;&gt;SkyWalking 9.3.0&lt;/a&gt; 现在提供了这一强大的新功能。&lt;/p&gt;
+&lt;p&gt;SkyWalking 项目从 tracing 开始，从 2018 年开始专注于 100% 基于采样的指标和拓扑分析。当用户面对时间序列指标的异常趋势时，比如折线图上的峰值，或者直方图显示 p95 和 p95 之间的差距较大，直接的问题是，为什么会出现这种情况？SkyWalking 的最新功能之一，trace 与 metric 关联，使得回答这个问题和解决根本原因更加容易。&lt;/p&gt;
+&lt;h2 id=&#34;指标是如何生成的&#34;&gt;指标是如何生成的？&lt;/h2&gt;
+&lt;p&gt;SkyWalking 提供了三种计算指标的方式：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;根据追踪跨度构建的指标，具体取决于跨度的层、种类和标签。&lt;/li&gt;
+&lt;li&gt;从日志中提取指标—— 一种基于关键词和标签的指标提取。&lt;/li&gt;
+&lt;li&gt;从成熟和主流的指标 / 仪表系统报告的指标，例如 OpenTelemetry、Prometheus 和 Zabbix。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Tracing 追踪应用程序服务之间的请求过程。大多数生成流量和性能相关指标的系统也会生成追踪数据，这些数据来自服务器端基于追踪的聚合或通过客户端 SDK。&lt;/p&gt;
+&lt;h2 id=&#34;使用-skywalking-降低追踪索引的传统成本&#34;&gt;使用 SkyWalking 降低追踪索引的传统成本&lt;/h2&gt;
+&lt;p&gt;Trace 数据和可视化对于开发人员和运维人员来说都是至关重要的故障排除工具，因为它们在定位问题边界方面非常有帮助。但是，由于传统上很难找到指标和痕迹之间的关联，团队已经将越来越多的标签添加到跨度中，并搜索各种组合。这种增加仪器和搜索的趋势需要增加基础设施投资来支持这种搜索。SkyWalking 的指标和追踪关联功能有助于降低索引和搜索该数据的成本。&lt;/p&gt;
+&lt;h2 id=&#34;查找关联的-trace&#34;&gt;查找关联的 trace&lt;/h2&gt;
+&lt;p&gt;在寻找 metric 和 trace 之间的关联时，我们处理的指标类型决定了它们与 trace 的关系。让我们回顾一下标准请求*率、错误和持续时间（RED）*指标，看看它是如何工作的。&lt;/p&gt;
+&lt;h3 id=&#34;成功率指标&#34;&gt;成功率指标&lt;/h3&gt;
+&lt;p&gt;成功率由返回码、RPC 响应码或进程异常决定。当成功率下降时，在这个服务或 Pod 的 trace 中寻找错误是第一个寻找线索的地方。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f1.jpg&#34; alt=&#34;图 1：SkyWalking 9.3.0 仪表板的成功率图表，带有在特定时间查看相关追踪的选项。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 1：SkyWalking 9.3.0 仪表板的成功率图表，带有在特定时间查看相关 trace 的选项。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;从成功率的峰值向下探索，SkyWalking 列出了在这一特定分钟内收集的所有 trace 及其错误状态（图 2）：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f2.jpg&#34; alt=&#34;图 2：SkyWalking 显示具有错误状态的相关追踪。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 2：SkyWalking 显示具有错误状态的相关追踪。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;可以从 trace 中找到对 &lt;code&gt;/test&lt;/code&gt; 的请求，并且 span 的标记指示 HTTP 请求的 404 响应代码。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f3.jpg&#34; alt=&#34;图 3：显示 URI 不存在的 http://frontend/test 请求的详细视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 3：显示 URI 不存在的 http://frontend/test 请求的详细视图。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;通过查看 trace 数据，很明显成功率的下降是由对不存在的 URI 的请求引起的。&lt;/p&gt;
+&lt;h3 id=&#34;平均响应时间&#34;&gt;平均响应时间&lt;/h3&gt;
+&lt;p&gt;平均响应时间指标提供了服务性能的一般概览。当平均响应时间不稳定时，这通常意味着系统面临严重的性能影响。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f4.jpg&#34; alt=&#34;图 4：SkyWalking 用于搜索相关追踪的查询 UI，显示超过特定持续时间阈值的请求的追踪。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 4：SkyWalking 用于搜索相关 trace 的查询 UI，显示超过特定持续时间阈值的请求的 trace。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您从该指标向下探索时，该查询条件（图 4）将揭示该特定分钟内服务的最慢 trace。请注意，至少 168ms 作为条件自动添加，以避免扫描数据库中的大量行。&lt;/p&gt;
+&lt;h3 id=&#34;apdex&#34;&gt;Apdex&lt;/h3&gt;
+&lt;p&gt;Apdex（应用程序性能指数）是根据设定的阈值衡量响应时间的指标。它测量令人满意的响应时间与不令人满意的响应时间的比率（图 5）。响应时间是从资产请求到完成交付回请求者的时间。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f5.jpg&#34; alt=&#34;图 5：Apdex 公式&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 5：Apdex 公式&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;用户定义响应时间容忍阈值 &lt;em&gt;T&lt;/em&gt;。在 &lt;em&gt;T&lt;/em&gt; 或更短时间内处理的所有响应都使用户满意。&lt;/p&gt;
+&lt;p&gt;例如，如果 &lt;em&gt;T&lt;/em&gt; 为 1.2 秒，响应在 0.5 秒内完成，则用户会感到满意。所有大于 1.2 秒的响应都会让用户不满意。超过 4.8 秒的响应会让用户感到沮丧。&lt;/p&gt;
+&lt;p&gt;当 Apdex 分数下降时，我们需要从两个角度寻找相关的 trace：慢速和错误状态的 trace。SkyWalking 的新相关追踪功能提供了一种直接从 Apdex 图表查看两者（图 6）的快速方法。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f6.jpg&#34; alt=&#34;图 6：显示 Apdex 图中的慢速追踪和错误状态追踪&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 6：显示 Apdex 图中的慢速 trace 和错误状态 trace&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;服务响应时间&#34;&gt;服务响应时间&lt;/h3&gt;
+&lt;p&gt;百分位指标百分位图（图 7）提供 p50、p75、p90、p95 和 p99 延迟排名，以衡量服务性能的长尾问题。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f7.jpg&#34; alt=&#34;图 7：服务响应时间百分位图有助于突出服务性能的长尾问题。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 7：服务响应时间百分位图有助于突出服务性能的长尾问题。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这个百分位数图显示了一个典型的长尾问题。P99 延迟比 P95 慢四倍。当我们使用关联时，我们会看到 P95 - P99 和 P99 - Infinity 之间具有延迟的 trace。&lt;/p&gt;
+&lt;p&gt;造成这种长尾现象的请求 trace，就是从那里自动列出来的。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f8.jpg&#34; alt=&#34;图 8：用于根据延迟搜索追踪的查询参数。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 8：用于根据延迟搜索 trace 的查询参数。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;是否有更多关联可用&#34;&gt;是否有更多关联可用？&lt;/h2&gt;
+&lt;p&gt;SkyWalking 提供的不仅仅是 trace 和 metric 之间的关联，还可以帮助您找到可能的因果关系，避免大海捞针。&lt;/p&gt;
+&lt;p&gt;目前，SkyWalking 9.3.0 提供了两种关联：&lt;strong&gt;metric-to-metric&lt;/strong&gt; 关联和 &lt;strong&gt;event-to-metric&lt;/strong&gt; 关联。&lt;/p&gt;
+&lt;h3 id=&#34;metric-to-metric-关联&#34;&gt;Metric-to-metric 关联&lt;/h3&gt;
+&lt;p&gt;仪表板上有许多指标 —— 这对于全面了解应用程序行为非常有用。在典型的性能问题中，多个指标的峰值会同时受到影响。但是，尝试关联所有这些图表中的峰值可能很困难……&lt;/p&gt;
+&lt;p&gt;现在在 SkyWalking 9.3.0 中，当你点击一个图表的峰值时，弹出框可以让你看到相关的指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f9.jpg&#34; alt=&#34;图 9：SkyWalking 用于查看相关指标的选项。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 9：SkyWalking 用于查看相关指标的选项。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;当您选择该选项时，所有关联的指标图表将在所有关联的图表中显示轴指针（垂直虚线），如图 10 所示。这使得将不同图表中的峰值相互关联起来变得更加容易。通常，这些相关的峰值具有相同的根本原因。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f10.jpg&#34; alt=&#34;图 10：轴指针（垂直虚线）显示多个指标图中峰值之间的关联。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 10：轴指针（垂直虚线）显示多个指标图中峰值之间的关联。&lt;/em&gt;&lt;/p&gt;
+&lt;h3 id=&#34;event-to-metric-关联&#34;&gt;Event-to-metric 关联&lt;/h3&gt;
+&lt;p&gt;SkyWalking 提供了事件概念来关联可能受基础设施影响的服务性能，例如来自 Kubernetes 的新部署。或者，已通过警报或集成 AIOps 引擎检测到异常。&lt;/p&gt;
+&lt;p&gt;事件到指标的关联也是自动的，它可以覆盖指标图上事件的时间范围（蓝色区域）。如果事件区域和峰值匹配，则很可能该事件覆盖了该异常。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f11.jpg&#34; alt=&#34;图 11：SkyWalking 的事件与指标关联视图。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 11：SkyWalking 的事件与指标关联视图。&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;skywalking-使查找根本原因变得更加容易和快速&#34;&gt;SkyWalking 使查找根本原因变得更加容易和快速&lt;/h2&gt;
+&lt;p&gt;SkyWalking 现在可以轻松找到指标、事件和追踪之间的关联，最终可以确定根本原因并快速解决问题。我们在本文中讨论的关联在 SkyWalking 9.3.0 版本中开箱即用。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;f12.jpg&#34; alt=&#34;图 12：只需单击圆点即可查看相关追踪和指标关联。&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;图 12：只需单击圆点即可查看相关 trace 和 metric 关联。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;单击任何指标图上的点，如果该指标具有逻辑映射，您将看到一个&lt;em&gt;查看相关 trace&lt;/em&gt; 弹出窗口。&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;在这篇博客中，我们了解了 metric 和 trace 之间新增的关联功能。有了这个新的可视化，现在可以更容易地找到关键 trace 来识别问题的根本原因。SkyWalking 中的关联可以更深入。从 metric 到 trace 的关联并不是诊断系统瓶颈的终点。在下一篇文章中，我们将介绍 eBPF 支持的追踪增强功能，您将看到与网络分析中的追踪跨度相关的 HTTP 请求和响应详细信息。敬请关注。&lt;/p&gt;
 
       </description>
     </item>

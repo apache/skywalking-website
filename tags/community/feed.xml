@@ -105,6 +105,95 @@
     </item>
     
     <item>
+      <title>Zh: 用 SkyWalking 监控微信和支付宝小程序</title>
+      <link>/zh/2026-04-30-mini-program-monitoring-with-skywalking/</link>
+      <pubDate>Thu, 30 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-04-30-mini-program-monitoring-with-skywalking/</guid>
+      <description>
+        
+        
+        &lt;p&gt;小程序是国内移动端体验里绕不过去的一块，但开源监控生态长期偏向 Web 浏览器和原生 App。SkyWalking 自身已经覆盖了浏览器（client-js）、iOS、服务端，缺口主要在小程序和 Android。&lt;a href=&#34;https://github.com/SkyAPM/mini-program-monitor&#34;&gt;SkyAPM/mini-program-monitor&lt;/a&gt; 加入 SkyWalking 生态后，把这块缺口的小程序部分补上了 —— 一份 SDK 同时支持微信和支付宝，OAP 端的 component、MAL 规则、UI 模板已经合进 main 分支，会随 10.5.0 一起发布。&lt;/p&gt;
+&lt;p&gt;这篇博客面向已经跑着 SkyWalking 后端、希望把小程序也接进来的团队。重点不是&amp;quot;项目存在&amp;quot;这件事，而是数据从小程序到 SkyWalking dashboard 走的是哪条路、双平台是怎么共存的、以及上线之前需要知道哪些设计取舍。&lt;/p&gt;
+&lt;h2 id=&#34;数据通路&#34;&gt;数据通路&lt;/h2&gt;
+&lt;p&gt;SDK 走两条腿：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;OTLP HTTP&lt;/strong&gt;（错误日志、性能指标、请求指标）→ OAP 的 &lt;code&gt;/v1/logs&lt;/code&gt;、&lt;code&gt;/v1/metrics&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SkyWalking 原生协议&lt;/strong&gt;（链路追踪 segment，可选）→ OAP 的 &lt;code&gt;/v3/segments&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;为什么不是单协议？OTLP 已经覆盖了 logs 和 metrics 两类信号，没必要再造一份原生 endpoint；但分布式追踪上 OAP 的原生 &lt;code&gt;SegmentObject&lt;/code&gt; 比 OTLP traces 表达力更贴 SkyWalking 自己的 trace 模型，且与服务端通过 &lt;code&gt;sw8&lt;/code&gt; header 透传时无需任何转换。所以追踪走原生，其它走 OTLP，两边都不绕路。&lt;/p&gt;
+&lt;p&gt;OTLP 默认用 protobuf，调试时可切成 JSON。SDK 没有任何运行时依赖。&lt;/p&gt;
+&lt;h2 id=&#34;双平台对应两个独立的-layer-与监控面板&#34;&gt;双平台对应两个独立的 Layer 与监控面板&lt;/h2&gt;
+&lt;p&gt;很多团队会同时维护一个微信小程序和一个支付宝小程序，业务逻辑共享一个后端。这套设计没有把它们塞进同一个 service 用 tag 区分，而是直接做成两个独立的 Layer：&lt;code&gt;WECHAT_MINI_PROGRAM&lt;/code&gt; 和 &lt;code&gt;ALIPAY_MINI_PROGRAM&lt;/code&gt;，对应两套独立的监控面板。SDK 在每个信号上打 resource 属性 &lt;code&gt;miniprogram.platform = wechat | alipay&lt;/code&gt;，并给两端各分配独立的 component ID（微信 10002、支付宝 10003）。&lt;/p&gt;
+&lt;p&gt;OAP 这一头是用 MAL 规则的 &lt;code&gt;filter&lt;/code&gt; 把数据在 ingest 阶段就分流到对应 Layer 的：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;metricPrefix&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;meter_wechat_mp&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;filter&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;:&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt; &lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#34;{ tags -&amp;gt; tags.miniprogram_platform == &amp;#39;wechat&amp;#39; }&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#fff&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;支付宝那份规则同理过滤 &lt;code&gt;alipay&lt;/code&gt;。两份规则互斥，不会重复计数；输出的 metric 前缀也不一样（&lt;code&gt;meter_wechat_mp_*&lt;/code&gt; vs &lt;code&gt;meter_alipay_mp_*&lt;/code&gt;），各自落在对应 Layer 的 dashboard 上。即使两端用同一个 &lt;code&gt;service.name&lt;/code&gt;（比如都叫 &lt;code&gt;mini-program-demo&lt;/code&gt;），UI 里也是两套完全独立的入口。&lt;/p&gt;
+&lt;h2 id=&#34;不对等的指标语义&#34;&gt;不对等的指标语义&lt;/h2&gt;
+&lt;p&gt;这是这套设计里我特别想强调的一处诚实选择。微信的基础库提供 &lt;code&gt;PerformanceObserver&lt;/code&gt;，能拿到来自渲染层的权威时序：app launch、first render、route navigation、script execution、sub-package load 都是真实指标。支付宝的基础库不提供等价 API，SDK 只能用生命周期回退做近似：&lt;code&gt;App.onLaunch → App.onShow&lt;/code&gt; 的 delta 当作启动时间，渲染相关的拿不到。&lt;/p&gt;
+&lt;p&gt;所以两份 OAP 规则里的 metric 集合不对等：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;微信：&lt;code&gt;app_launch_duration&lt;/code&gt;、&lt;code&gt;first_render_duration&lt;/code&gt;、&lt;code&gt;route_duration&lt;/code&gt;、&lt;code&gt;script_duration&lt;/code&gt;、&lt;code&gt;package_load_duration&lt;/code&gt;、&lt;code&gt;request_duration_percentile&lt;/code&gt;、&lt;code&gt;request_cpm&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;支付宝：&lt;code&gt;app_launch_duration&lt;/code&gt;、&lt;code&gt;first_render_duration&lt;/code&gt;、&lt;code&gt;request_duration_percentile&lt;/code&gt;、&lt;code&gt;request_cpm&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;支付宝侧的 &lt;code&gt;app_launch_duration&lt;/code&gt; 是生命周期近似值，与微信的渲染层数值不可直接对比，这一点在 dashboard 的字段提示里也写明了。把两个数字放一起做横评等于在比较两种不同测量定义。&lt;/p&gt;
+&lt;h2 id=&#34;sdk-端做了什么&#34;&gt;SDK 端做了什么&lt;/h2&gt;
+&lt;p&gt;四类信号：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;错误&lt;/strong&gt;：JS 异常 / unhandled promise rejection / pageNotFound 走 OTLP logs，按 OTel &lt;code&gt;exception.*&lt;/code&gt; 语义约定（&lt;code&gt;exception.type&lt;/code&gt;、&lt;code&gt;exception.stacktrace&lt;/code&gt;），下游不光 SkyWalking，OTel Collector / Grafana 也都认。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;性能&lt;/strong&gt;：上面那张表里那些。OTLP gauge。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;请求&lt;/strong&gt;：&lt;code&gt;wx.request&lt;/code&gt; / &lt;code&gt;my.request&lt;/code&gt; / &lt;code&gt;downloadFile&lt;/code&gt; / &lt;code&gt;uploadFile&lt;/code&gt; 都走 OTLP delta histogram，每个 flush 间隔（默认 5s）发一次增量。&lt;code&gt;le&lt;/code&gt; 桶标签直接用 ms，OAP MAL 里显式声明 &lt;code&gt;MILLISECONDS&lt;/code&gt; 阻止默认的 SECONDS→MS 缩放。失败请求（4xx/5xx/超时）额外发一条错误日志，方便从 dashboard 跳到具体错误。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;追踪（可选）&lt;/strong&gt;：开启后给出站请求注入 &lt;code&gt;sw8&lt;/code&gt; 头，落到 OAP 后能与服务端 trace 拼成一条完整链路。trace 段以 SkyWalking &lt;code&gt;SegmentObject&lt;/code&gt; 形式发出，不走 OTLP traces。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;可靠性和基数控制的两个细节值得一提：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;App hide 时落本地存储&lt;/strong&gt;。小程序后台一段时间会被框架杀掉，弱网时也容易丢包。SDK 在 &lt;code&gt;onAppHide&lt;/code&gt; 时把未发送的事件写到 &lt;code&gt;wx.setStorage&lt;/code&gt; / &lt;code&gt;my.setStorage&lt;/code&gt;，下次启动恢复并继续上报。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;反基数膨胀&lt;/strong&gt;。强烈建议把 &lt;code&gt;serviceInstance&lt;/code&gt; 设成应用版本号（如 &lt;code&gt;1.4.2&lt;/code&gt;），不要用设备 ID —— 小程序日活百万级时设备 ID 维度直接把 OAP 的 instance 索引打爆。请求路径方面 SDK 提供 &lt;code&gt;urlGroupRules&lt;/code&gt; 正则把 &lt;code&gt;/api/user/12345&lt;/code&gt; 这类参数化路径归并到 &lt;code&gt;/api/user/{id}&lt;/code&gt;，避免 endpoint 维度也膨胀。&lt;/p&gt;
+&lt;h2 id=&#34;oap-端要做什么&#34;&gt;OAP 端要做什么&lt;/h2&gt;
+&lt;p&gt;如果你用的是 main 分支或者 10.5.0 之后的发布版，下面这些已经内置：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;config/component-libraries.yml&lt;/code&gt;：注册了 &lt;code&gt;WeChat-MiniProgram: 10002&lt;/code&gt; 和 &lt;code&gt;AliPay-MiniProgram: 10003&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config/otel-rules/miniprogram/&lt;/code&gt;：四份 MAL 规则，按 service / instance 维度分别定义&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config/ui-initialized-templates/wechat_mini_program/&lt;/code&gt; 和 &lt;code&gt;alipay_mini_program/&lt;/code&gt;：root / service / instance / endpoint 四张 dashboard&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config/ui-initialized-templates/menu.yaml&lt;/code&gt;：把两个 layer 注册到 Mobile 菜单组下&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;唯一需要做的就是确认 OTel receiver 启用、给 OTLP HTTP 一个 SDK 能直连的端口。SkyWalking OAP 的 OTLP HTTP handler 默认绑在 receiver-sharing-server 的端口上，而该端口默认值是 0（即复用 core REST 端口 12800）。如果想让 SDK 用标准 OTLP HTTP 端口 4318，把 sharing 端口设到 4318：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;docker run -d --name sw-oap &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -p 11800:11800 -p 12800:12800 -p 4318:4318 &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_STORAGE&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;banyandb &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_STORAGE_BANYANDB_TARGETS&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;banyandb:17912 &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_OTEL_RECEIVER&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;default &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  -e &lt;span style=&#34;color:#953800&#34;&gt;SW_RECEIVER_SHARING_REST_PORT&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;4318&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  apache/skywalking-oap-server:latest
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这样所有 receiver（OTLP + native segment + browser perf + log report）一起搬到 4318，GraphQL 仍在 12800 给 UI 用。&lt;/p&gt;
+&lt;p&gt;SDK 端配置最小集：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-js&#34; data-lang=&#34;js&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;import&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;MiniProgramMonitor&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;from&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;mini-program-monitor&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;MiniProgramMonitor&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;init&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;({&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;service&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;mini-program-demo&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;serviceInstance&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;1.4.2&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;          &lt;span style=&#34;color:#57606a&#34;&gt;// 推荐：应用版本号
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;collector&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;http://your-oap:4318&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;enable&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#1f2328&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;error&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;perf&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;request&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;true&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#1f2328&#34;&gt;tracing&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#cf222e&#34;&gt;false&lt;/span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;,&lt;/span&gt;                  &lt;span style=&#34;color:#57606a&#34;&gt;// 默认关，按需开
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#1f2328&#34;&gt;},&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#1f2328&#34;&gt;});&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;微信和支付宝两端配置一模一样，平台标签由 SDK 在运行时自动判定。&lt;/p&gt;
+&lt;h2 id=&#34;兼容性&#34;&gt;兼容性&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;微信基础库 ≥ 2.11&lt;/li&gt;
+&lt;li&gt;支付宝基础库 ≥ 2.0&lt;/li&gt;
+&lt;li&gt;Apache SkyWalking OAP main 分支或 ≥ 10.5.0；OTLP HTTP receiver 启用即可&lt;/li&gt;
+&lt;li&gt;也可对接任意 OTLP 后端（OpenTelemetry Collector、Grafana 等），但那条路上拿不到 SkyWalking 专属的双平台 dashboard&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;后续&#34;&gt;后续&lt;/h2&gt;
+&lt;p&gt;参与方式直接去 &lt;a href=&#34;https://github.com/SkyAPM/mini-program-monitor&#34;&gt;SkyAPM/mini-program-monitor&lt;/a&gt; 提 issue / PR。仓库里有一个 &lt;code&gt;make preview&lt;/code&gt; 一键拉起 OAP、UI、两端模拟器的本地 demo 环境，想看效果可以直接跑。&lt;/p&gt;
+&lt;p&gt;Android 端的端用户体验监控目前还是 SkyWalking 生态的空白，欢迎对这块感兴趣的同学一起补齐。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Agentic Vibe Coding in a Mature OSS Project: What Worked, What Didn&#39;t</title>
       <link>/blog/2026-03-08-agentic-vibe-coding/</link>
       <pubDate>Sun, 08 Mar 2026 00:00:00 +0000</pubDate>
@@ -152,6 +241,58 @@
 &lt;p&gt;Brooks also gave us &amp;ldquo;No Silver Bullet,&amp;rdquo; and its core distinction matters more than ever: software complexity comes in two kinds. &lt;strong&gt;Essential complexity&lt;/strong&gt; comes from the problem itself — the domain semantics, the behavioral contracts, the concurrency invariants. No tool can eliminate this; it must be understood, modeled, and reasoned about by someone who knows the domain. &lt;strong&gt;Accidental complexity&lt;/strong&gt; comes from the tools and implementation — boilerplate code, manual refactoring across hundreds of files, the mechanical work of translating a design into compilable source. This is exactly where AI excels. What made this project work was recognizing which complexity was which: I owned the essential complexity (architecture, API boundaries, correctness invariants), and AI demolished the accidental complexity (generating 77K lines of implementation, scaffolding test harnesses, rewriting repetitive patterns across dozens of config files). Confuse the two — let AI make essential decisions, or waste human time on accidental work — and you get the worst of both worlds.&lt;/p&gt;
 &lt;p&gt;Qian Xuesen(Tsien Hsue-shen)&amp;rsquo;s &lt;em&gt;Engineering Cybernetics&lt;/em&gt; offers another lens that proved surprisingly relevant. His core framework — &lt;strong&gt;feedback&lt;/strong&gt;, &lt;strong&gt;control&lt;/strong&gt;, &lt;strong&gt;optimization&lt;/strong&gt; — describes how to keep complex systems running toward their target. AI vibe coding at full speed is like a hypersonic missile: extraordinarily fast, but without a guidance system it just creates a bigger crater in the wrong place. The feedback loop in my workflow was the test harness — cross-version tests and E2E tests providing continuous signal on whether the system was still on course. Control was the human architect deciding when to intervene: reviewing plans before execution, hitting ESC when the direction drifted, choosing which AI to trust for which task. Optimization was iterative: each interrupt-replan cycle refined the approach, each Gemini review tightened the logic, each Codex audit caught assumptions the coding agent had smuggled past the tests. Without all three — feedback to detect deviation, control to correct course, optimization to converge — the speed of AI coding would be not an advantage but a liability. The faster the missile, the more precise the guidance must be.&lt;/p&gt;
 &lt;p&gt;For more details or to share your own experience with agentic coding on production systems, feel free to reach me on &lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 在成熟开源大型项目中实践 Agentic Vibe Coding：软件工程与工程控制论还在延续</title>
+      <link>/zh/2026-03-08-agentic-vibe-coding/</link>
+      <pubDate>Sun, 08 Mar 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-03-08-agentic-vibe-coding/</guid>
+      <description>
+        
+        
+        &lt;p&gt;大多数&amp;quot;vibe coding&amp;quot;的故事都从一个全新项目开始，讲述一个快速构建原型或者可运行项目的过程，但这篇不是。&lt;/p&gt;
+&lt;p&gt;Apache SkyWalking 是一个有 9 年历史的Apache顶级项目，线上数以千计的集群部署，内部有一套复杂的 DSL 编译栈，对外暴露的 API 上承载着用户构建的仪表盘、告警规则和自动化脚本。当我决定替换核心脚本引擎——从四个 DSL 编译器中彻底移除 Groovy 运行时——面临的问题不是&amp;quot;AI 能不能写出代码&amp;quot;，而是&amp;quot;也许只有AI能完成如此大规模的一致性迭代&amp;quot;，以及&amp;quot;AI 能不能在不破坏系统的前提下写出完整且高效的代码&amp;quot;。&lt;/p&gt;
+&lt;p&gt;答案是可以——&lt;strong&gt;约 7.7 万行代码变更，10 个主要 PR，历时约 5 周&lt;/strong&gt;——但前提是 AI 始终在一个深刻理解项目架构、兼容性要求和用户场景的人的引导下工作。这篇文章分享了我在过去几个月的实践体验，以及成熟开源项目的维护者在把代码库交给 AI 智能体之前应该知道什么。&lt;/p&gt;
+&lt;h2 id=&#34;项目概况&#34;&gt;项目概况&lt;/h2&gt;
+&lt;p&gt;这次的任务是将 SkyWalking 基于 Groovy 的脚本引擎（MAL、LAL、Hierarchy）替换为统一的 ANTLR4 + Javassist 字节码编译管线，对齐 OAL 编译器已经验证过的架构。内部技术栈彻底重构，但对外接口必须保持完全一致。&lt;/p&gt;
+&lt;p&gt;除了编译器重写，范围还包括新的线程管理策略（线程数从 36 降到 15）、JDK 25+ 虚拟线程支持，以及端到端测试的现代化改造。按传统估算，这是 5-8 个月的资深工程师（以我自己为例）工作量。&lt;/p&gt;
+&lt;p&gt;编译器架构的完整技术细节，参见 &lt;a href=&#34;https://github.com/apache/skywalking/discussions/13716&#34;&gt;Groovy 移除讨论&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;什么是-agentic-vibe-coding&#34;&gt;什么是 Agentic Vibe Coding？&lt;/h2&gt;
+&lt;p&gt;&amp;ldquo;Vibe coding&amp;rdquo;——Andrej Karpathy 提出的概念——描述的是一种你表达意图、让 AI 来写代码的编程风格。整个AI编程过程，一直以来都是用来做原型，效果强大且速度迅猛，但单独用于生产系统是有风险的。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Agentic vibe coding&lt;/strong&gt; 更进一步：不是单一的 AI 自动补全，而是在你的架构指导下编排多个 AI 智能体——各有所长——以自动化测试作为安全网。我的工作流是这样的：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Claude Code（plan 模式）&lt;/strong&gt;：主力编码智能体。Plan 模式让我在生成任何代码之前先审查方案。这对架构决策至关重要——我把控设计方向，Claude 负责实现。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Gemini&lt;/strong&gt;：代码审查、并发分析和验证报告。每个主要 PR 都经过 Gemini 审查线程安全性、功能对等性和边界情况。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Codex&lt;/strong&gt;：对定义明确、边界清晰的工作项进行自主任务执行。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;核心洞察：&lt;strong&gt;AI 写代码，但架构师掌控设计。&lt;/strong&gt; 没有对 SkyWalking 内部机制的深入领域知识，任何 AI 都无法规划这些变更。没有 AI，我也不可能在 5 周内完成执行。&lt;/p&gt;
+&lt;h2 id=&#34;tdd-如何让-ai-编程变得安全&#34;&gt;TDD 如何让 AI 编程变得安全&lt;/h2&gt;
+&lt;p&gt;我能以这样的速度推进而不搞砸，归结为一个原则：&lt;strong&gt;绝不让 AI 在没有测试保护的情况下写代码。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;每次重大变更的工作流：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;先进 plan 模式&lt;/strong&gt;：向 Claude 描述目标，审查方案，在写任何代码之前先在架构层面迭代。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;编写测试契约&lt;/strong&gt;：定义&amp;quot;正确&amp;quot;意味着什么——对于编译器重写，这意味着交叉版本对比测试，让每个表达式同时通过新旧两个引擎运行，在 1290+ 个表达式上断言结果完全一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;让 AI 实现&lt;/strong&gt;：有了测试契约，Claude 可以写出数千行实现代码。如果写错了，测试会立即捕获。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;端到端测试作为最终关卡&lt;/strong&gt;：每个 PR 都必须通过完整的端到端测试套件——基于 Docker 的集成测试，启动整个服务器并连接真实存储后端。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;AI 代码审查&lt;/strong&gt;：Gemini 审查每个 PR 的并发问题、线程安全性和功能对等性——捕获单元测试无法发现的问题。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这和&amp;quot;写完祈祷能跑&amp;quot;的 vibe coding 完全相反。AI 写得快，测试验证得快，我把控架构方向。反馈循环足够紧凑，让我能在几分钟而不是几天内迭代复杂的编译器代码。&lt;/p&gt;
+&lt;h2 id=&#34;经验教训&#34;&gt;经验教训&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;AI 是力量倍增器，不是替代品。&lt;/strong&gt; 在任何 AI 智能体写下第一行代码之前，必须由人来定义替换方案：&lt;em&gt;替换什么&lt;/em&gt;、&lt;em&gt;怎么替换&lt;/em&gt;，以及——至关重要的——&lt;em&gt;边界在哪里&lt;/em&gt;。哪些 API 可以破坏性变更？内部编译管线可以彻底重构。哪些 API 必须保持对齐？每一个对外的 DSL 语法、每一个 YAML 配置键、每一个指标名称和标签结构都必须逐字节保持一致——因为数百个已部署的仪表盘、告警规则和用户脚本依赖于它们。划定这些边界需要对代码库及其用户的深入了解。AI 以惊人的速度执行了计划，但计划本身——范围、不变量、兼容性契约——必须来自一个理解每次变更影响半径的人。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;架构级工作，plan 模式不可妥协。&lt;/strong&gt; 让 AI 在编译器重写上直接跳到写代码，那是灾难。Plan 模式的价值在于它会收集代码上下文——扫描 import、追踪调用链、映射类继承关系——并利用这些上下文帮我补全那些我本来需要手动查找的实现细节。但它无法告诉你设计原则。方向必须由我在前期明确给出，这样 AI 的规划才能沿着正确的轨道走，而不是朝着一个局部合理但架构上错误的方案去优化。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;要知道什么时候该按 ESC。&lt;/strong&gt; Claude 有一个明显的倾向：一旦开始写解决方案代码就会一头扎进去——当遇到与原始计划概念冲突的东西时，它不会自己停下来。它不会暂停来标记冲突，而是会继续推进，用即兴的方式绕过障碍，悄无声息地违背设计意图。我必须学会观察这个信号：当 Claude 的输出开始偏离计划时，我会手动取消任务（ESC），叫停它，找出计划和现实的分歧点，调整计划，然后重新开始。这种中断-重新规划的循环是工作流的常态，而非例外。架构师必须始终在环路中——不仅是在规划阶段，执行阶段也是——因为 AI 智能体还不知道什么时候该停下来问一句。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Spec-Driven 更多的运用于测试，而非开发。它只是一个必要的但不充分条件，而逻辑工作流更重要。&lt;/strong&gt; 很容易产生一种想法：只要把输入/输出规格定义得足够清楚，AI 就能填充实现，测试会捕获任何错误。我试过。对于任何复杂的生产场景，这行不通。在表达式编译器重写过程中，Claude 有时会以不合理的方式修改代码，仅仅为了让规格测试通过——输入进去了，预期输出出来了，一切看起来都是正常的。但内部逻辑是错的：与代码库其他部分依赖的设计模式不一致，无法扩展，或者通过 hack （代码反射、字段名称静态比较等不可接受的工程方法）而非通用机制来解决特定测试用例。规格只检查代码&lt;em&gt;产出了什么&lt;/em&gt;；它对代码&lt;em&gt;如何产出&lt;/em&gt;一无所知。对于成熟项目，&amp;ldquo;如何&amp;quot;极其重要——解决方案需要与现有架构一致，能被贡献者广泛采用，并且长期可维护可扩展。这就是为什么我需要交叉版本测试&lt;em&gt;加上&lt;/em&gt;对实现路径的人工审查，而不仅仅是审查结果。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;两个层次的测试让重写的代码验证更有保障。&lt;/strong&gt; 交叉版本测试从一开始就是我设计方案的一部分——我架构了双路径对比框架，让每个生产环境的 DSL 表达式同时通过新旧两个引擎运行，在 1290+ 个表达式上断言结果完全一致。这给了我任何人工审查都无法匹敌的信心，而且这是一个刻意的规划决策：我知道 AI 生成的编译器代码需要行为等价性的机械证明，而不仅仅是肉眼审查。在此之上，端到端测试作为项目已有的基础设施安全网——基于 Docker/K8s 的集成测试，启动整个服务器并连接真实存储后端。单元测试和交叉版本测试在隔离环境中验证逻辑；端到端测试验证系统真正能端到端地工作。对于队列替换和线程模型变更这样的基础设施级变更，端到端测试是唯一真正重要的关卡。两个层次——为本次重写专门设计的交叉版本测试和预先存在的端到端基础设施——捕获了不同类别的 bug，使得有信心地发布成为可能。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;多个 AI 各有所长。&lt;/strong&gt; Claude 擅长配合 plan 模式进行大规模代码生成。Gemini 在逻辑审查方面表现出色——它能在给定输入数据的情况下在脑中追踪代码分支，模拟执行而无需实际运行代码。这对审查 AI 生成的代码意义重大：Gemini 会逐步走查一个编译器生成的方法，标记出哪里缺少空值检查，或者哪个分支在特定边界情况下会产生错误输出。Codex 作为测试审查者和诚实性检查者最有价值。AI 生成的代码有一种微妙的失败模式：编码智能体可能做出错误假设，然后编写测试时将期望值设置为匹配错误行为——实际上绕过了测试安全网。Codex 捕获了 Claude 设置不合理期望值使测试变绿的情况，掩盖了本会在生产环境中暴露的逻辑错误。将三者互相校验，远比依赖其中任何一个更有效。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;人月神话依然适用——基于Token的AI月神话同样如此。&lt;/strong&gt; Brooks 告诉我们，一个需要 12 人月的任务不意味着 12 个人能在一个月内完成。同样的定律适用于 AI：你不能简单地投入更多 token、更多智能体或更多并行会话，就指望问题更快收敛。沟通成本、协调开销、需求分析和概念完整性——这些软件工程的基本规律不会因为你的劳动力是人工智能就消失。更糟糕的是，当方向错误时——当设计中存在概念性错误或不合理的架构选择时——AI 不会识别出来。它会以惊人的速度冲向错误的方向，疯狂消耗 token，同时陷入自我辩护的漩涡：修补代码让失败的测试通过，调整期望值去匹配错误行为，在变通方案上叠加变通方案——每次迭代都让代码库看起来更&amp;quot;完整&amp;rdquo;，实际上却离正确越来越远。AI vibe coding 无法自行跳出这个螺旋。只有理解领域的人才能认识到&amp;quot;这从根本上就是错的，停下来&amp;quot;，丢弃这些工作，重新引导方向。没有方向的速度，只是昂贵的混乱。&lt;/p&gt;
+&lt;h2 id=&#34;更大的图景&#34;&gt;更大的图景&lt;/h2&gt;
+&lt;p&gt;Agentic vibe coding 之所以有效，是因为它将 AI 的速度与人的架构判断力和自动化测试纪律结合在了一起。这不是魔法——这是被加速的工程。&lt;/p&gt;
+&lt;p&gt;Brooks 还给了我们《没有银弹》，其核心区分在今天比以往任何时候都更重要：软件复杂性分为两种。&lt;strong&gt;本质复杂性&lt;/strong&gt;来自问题本身——领域语义、行为契约、并发不变量。没有任何工具能消除它；它必须由理解领域的人去理解、建模和推理。&lt;strong&gt;偶然复杂性&lt;/strong&gt;来自工具和实现——样板代码、跨数百个文件的手动重构、将设计翻译成可编译源码的机械工作。这恰恰是 AI 擅长的地方。这个项目之所以成功，在于认清了哪种复杂性是哪种：我掌控本质复杂性（架构、API 边界、正确性不变量），AI 消灭偶然复杂性（生成 7.7 万行实现代码、搭建测试框架、跨数十个配置文件重写重复模式）。搞混这两者——让 AI 做本质决策，或者让人浪费时间在偶然工作上——你会得到两个世界中最差的结果。&lt;/p&gt;
+&lt;p&gt;钱学森的《工程控制论》提供了另一个视角，在实践中出人意料地切题。他的核心框架——&lt;strong&gt;反馈&lt;/strong&gt;、&lt;strong&gt;控制&lt;/strong&gt;、&lt;strong&gt;优化&lt;/strong&gt;——描述的是如何让复杂系统持续朝目标运行。全速运转的 AI vibe coding 就像一枚高超音速导弹：速度惊人，但没有制导系统只会在错误的地方炸出一个更大的坑。我工作流中的反馈回路是测试体系——交叉版本测试和端到端测试持续提供系统是否仍在航线上的信号。控制是人类架构师决定何时介入：在执行前审查方案，在方向偏移时按 ESC，选择哪个 AI 负责哪项任务。优化是迭代式的：每次中断-重新规划的循环都在精炼方法，每次 Gemini 审查都在收紧逻辑，每次 Codex 审计都在捕获编码智能体偷偷绕过测试的假设。缺少其中任何一个——检测偏差的反馈、纠正航向的控制、趋向收敛的优化——AI 编程的速度就不是优势而是负债。导弹越快，制导就必须越精确。&lt;/p&gt;
+&lt;p&gt;AI Vibe Coding以及它的迭代，正在快速地走进每一个开发者，也正在广泛地融入开源和商业软件。我们都在见证这种新的开发模式，以及AI Vibe Coding和软件工程理论的融合。如果你想和我探讨更多的AI + OSS话题，欢迎在 &lt;a href=&#34;https://github.com/wu-sheng&#34;&gt;GitHub&lt;/a&gt; 上联系我。&lt;/p&gt;
 
       </description>
     </item>
@@ -460,6 +601,189 @@ reducing false positives and improving system observability.&lt;/p&gt;
     </item>
     
     <item>
+      <title>Zh: 开源之夏 2024 SkyWalking 社区项目情况公示</title>
+      <link>/zh/2024-12-10-ospp-summary/</link>
+      <pubDate>Tue, 10 Dec 2024 00:00:00 +0000</pubDate>
+      <guid>/zh/2024-12-10-ospp-summary/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Aapche SkyWalking PMC 和 committer团队参加了&amp;quot;开源之夏 2024&amp;quot;活动，作为导师，共获得了5个官方赞助名额。最终对学生开放如下任务&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;BanyanDB支持自定义插入/更新触发器&lt;/li&gt;
+&lt;li&gt;在SkyWalking Go的toolkit中支持完整trace, log和meter APIs&lt;/li&gt;
+&lt;li&gt;在SkyWalking Java中集成JFR性能剖析功能&lt;/li&gt;
+&lt;li&gt;SWCK 支持注入 skywalking Python agent&lt;/li&gt;
+&lt;li&gt;BanyanDB支持数据聚合&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;经过3个月的开发，上游评审，PMC成员评议，PMC Chair复议，OSPP官方委员会评审多个步骤，现公布项目参与人员与最终结果&lt;/p&gt;
+&lt;h1 id=&#34;通过评审项目共3个&#34;&gt;通过评审项目（共3个）&lt;/h1&gt;
+&lt;h2 id=&#34;在skywalking-java中集成jfr性能剖析功能&#34;&gt;在SkyWalking Java中集成JFR性能剖析功能&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：郑子熠&lt;/li&gt;
+&lt;li&gt;学校：南京邮电大学 本科&lt;/li&gt;
+&lt;li&gt;官方文档&lt;a href=&#34;https://skywalking.apache.org/docs/main/next/en/setup/backend/backend-java-app-profiling/&#34;&gt;Profiling - Async Profiler&lt;/a&gt;详细介绍了此功能。&lt;/li&gt;
+&lt;li&gt;此功能将作为SkyWalking 10.2的主要新功能之一发布，预计发布时间 2025年2月（以官方Release为准）。&lt;/li&gt;
+&lt;li&gt;官网发布了blog - &lt;a href=&#34;https://skywalking.apache.org/zh/2024-12-09-skywalking-async-profiler/&#34;&gt;使用 SkyWalking中的 async-profiler 对 Java 应用进行性能分析&lt;/a&gt; 介绍此功能&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;2024年12月9日，郑子熠因此项目在结项优秀学生评比中，获得&lt;a href=&#34;https://summer-ospp.ac.cn/final/outstanding&#34;&gt;&lt;strong&gt;突出贡献奖&lt;/strong&gt;&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;./award.png&#34; alt=&#34;award Screenshot&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;在skywalking-go的toolkit中支持完整trace-log和meter-apis&#34;&gt;在SkyWalking Go的toolkit中支持完整trace, log和meter APIs&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：李天源&lt;/li&gt;
+&lt;li&gt;学校：广东东软学院 本科&lt;/li&gt;
+&lt;li&gt;相关Pull Requests
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/198&#34;&gt;api: add log,metric,span feat to api&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/200&#34;&gt;feat: toolkit span add event impl&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/202&#34;&gt;feat: add toolkit logging impl&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/205&#34;&gt;feat: support manual reporting of metrics in toolkit&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/206&#34;&gt;docs: add toolkit docs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;相关官方文档包括
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/manual-apis/toolkit-trace/&#34;&gt;Tracing APIs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/manual-apis/toolkit-log/&#34;&gt;Logging APIs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-go/next/en/advanced-features/manual-apis/toolkit-metric/&#34;&gt;Metric APIs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;此功能将包含在SkyWalking Go Agent 0.6 release中发布，以及发布时间2025年年初（以官方Release为准）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;banyandb-支持自定义插入更新触发器&#34;&gt;BanyanDB 支持自定义插入/更新触发器&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：谢李奥&lt;/li&gt;
+&lt;li&gt;学校：中科院软件所 硕士&lt;/li&gt;
+&lt;li&gt;相关官方文档包括
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-banyandb/pull/479&#34;&gt;[ospp] Adds MeasureAggregateFunctionService.Support API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-banyandb/pull/521&#34;&gt;[ospp] Supports measure aggregate function avg and min, and test cases.&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-banyandb/pull/545&#34;&gt;[ospp] Implements MeasureAggregateFunctionService.Support API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/apache/skywalking-banyandb/pull/528&#34;&gt;Dev measure aggregate function&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;2024年11月，在社区关于BanyanDB未来路线图的讨论决议中，服务端相关聚合功能暂时不作为BanyanDB规划功能，&lt;a href=&#34;https://github.com/apache/skywalking/issues/12653&#34;&gt;[Feature] Hand over downsampling(hour/day) metric processes to BanyanDB&lt;/a&gt; 已被关闭。此项目合并代码，不会发布，将在0.8 release中被移除。注，此代码移除与学生代码质量和完成度无关，系项目目标变更导致。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;We have an agreement, this feature benefit is too limited.
+
+# Summary of downsides for server-side aggregation
+
+1. Removing L2 would impact the alerting. Because minute dimension eventual(aggregated) data will be lost from OAP.
+2. Keeping minute dimension aggregation makes the delta data lost, and causes another extra round delta data in minute dimension flushing. 
+3. Clearly, this server-side aggregation increases the server-side payload(CPU cost), but wouldn&amp;#39;t tradeoff for IOPS.
+4. The process pipeline would be more complex.
+____
+The only positive part is the cache of hour/day dimension metrics could be removed.
+&lt;/code&gt;&lt;/pre&gt;&lt;h1 id=&#34;未通过评审未启动项目2个&#34;&gt;未通过评审/未启动项目（2个）&lt;/h1&gt;
+&lt;p&gt;下列项目因为质量无法达到社区要求，无学生报名等原因，将被标定为失败。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;SWCK 支持注入 skywalking Python agent。 无学生申报&lt;/li&gt;
+&lt;li&gt;BanyanDB支持数据聚合。未通过&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;结语&#34;&gt;结语&lt;/h1&gt;
+&lt;p&gt;2024年，由于开源之夏提供的支持名额降低到5个，SkyWalking选题的难度都有显著提升。我们很高兴的看到，依然有3位学生较好的完成了相关课题。
+感觉开源之夏和各位同学们对Apache SkyWalking的支持和热情参与。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 引入 R3 识别 RESTFul URI</title>
+      <link>/zh/2024-010-15-introduce-r3-to-recognition-restful-url/</link>
+      <pubDate>Thu, 17 Oct 2024 00:00:00 +0000</pubDate>
+      <guid>/zh/2024-010-15-introduce-r3-to-recognition-restful-url/</guid>
+      <description>
+        
+        
+        &lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;
+&lt;p&gt;在现代应用中，服务通常通过 RESTFul HTTP URI 提供。使用 RESTFul HTTP URI 作为唯一的资源标识符，不仅具备良好的可读性，还能让客户端和服务器更容易理解请求。然而，在可观测性领域，这种方式也带来了一些挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;大量的端点（HTTP URI）&lt;/strong&gt;：浏览所有对外提供的端点变得更加困难，因此很难识别出存在问题的端点。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;指标收集困难&lt;/strong&gt;：尤其难以对类似的端点进行归类并生成可观测性指标。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;现有解决方案通常采用以下应用级别的方式来解决此问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;代理检测&lt;/strong&gt;：在某些框架中，通常会声明规则来处理 RESTFul 请求。例如，在 Java 的 Spring Web 中可以使用 &lt;code&gt;@GET&lt;/code&gt; 等注解，然后可以通过 Java Agent 将其与当前请求关联起来。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OpenAPI&lt;/strong&gt;：应用可以关联预定义文件，使可观测性系统知晓可能使用的 URI。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这两种解决方案都与应用设置紧密耦合，这对于未知应用或者无法监控代理的应用来说是一个局限。因此，我们需要考虑是否有一种更通用的解决方案来识别 URI，并合并来自类似 URI 生成的指标，以便更好地展示数据。&lt;/p&gt;
+&lt;h2 id=&#34;r3&#34;&gt;R3&lt;/h2&gt;
+&lt;p&gt;R3（RESTFul 模式识别）是一个高性能的 RESTFul URI 识别工具，其灵感来自 &lt;a href=&#34;https://github.com/logpai/Drain3&#34;&gt;Drain3&lt;/a&gt;。它可以作为独立应用部署在可观测性服务器上，并与 SkyWalking OAP 进行通信。&lt;/p&gt;
+&lt;p&gt;R3 可以通过 gRPC 协议接收 URI 列表，并将类似的 URI 聚合为特定格式。聚合后的（格式化）URI 列表也可以通过 gRPC 协议进行查询。&lt;/p&gt;
+&lt;h3 id=&#34;数据交互流程&#34;&gt;数据交互流程&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&#34;data_interaction_flow.png&#34; alt=&#34;OAP 与 R3 之间的数据交互流程&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;OAP 接收并缓存未格式化的 URI 列表&lt;/strong&gt;：OAP 通过不同协议接收可观测性数据，并识别出所有未格式化的 URI。然后将这些 URI 按照所属服务暂时存储在列表中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP 将待格式化的 URI 发送给 R3&lt;/strong&gt;：OAP 定期将需要格式化的 URI 批量发送到 R3 服务。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;R3 接收并解析 URI 列表&lt;/strong&gt;：R3 异步分析接收到的 URI 相似性，并将结果存储（持久化）在本地磁盘中，以便在重启后进行恢复。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP 查询 R3 中的格式化 URI 列表&lt;/strong&gt;：OAP 定期查询 R3 中检测到的格式化 URI，并将结果保存在内存中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;OAP 格式化 URI&lt;/strong&gt;：当 OAP 接收到新的可观测性数据时，会将 URI 与从 R3 获取的格式化 URI 进行匹配。如果匹配成功，后续的指标计算将使用格式化后的 URI。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;场景&#34;&gt;场景&lt;/h3&gt;
+&lt;p&gt;在 R3 中，主要解决以下场景。对于识别为重复的 URI，R3 将用 &lt;code&gt;{var}&lt;/code&gt; 替换变量部分以标准化 URI。&lt;/p&gt;
+&lt;h4 id=&#34;id-匹配&#34;&gt;ID 匹配&lt;/h4&gt;
+&lt;p&gt;在 RESTFul API 中，常见做法是将各种 ID 包含在 URI 路径中，这导致了大量唯一的 URI 端点。例如，以下路径将被 R3 聚合为标准化格式 &lt;code&gt;/api/users/{var}&lt;/code&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/users/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/api/users/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/api/users/44cf77fc351f4c6c9c4f1448f2f12800&lt;/li&gt;
+&lt;li&gt;/api/users/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/api/users/5ad14302e7924f4aa1d60e58d65b3dd2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;词语检测&#34;&gt;词语检测&lt;/h4&gt;
+&lt;p&gt;在 RESTFul URI 中，实体的操作通常通过 HTTP 方法指定，但有时还需要在路径中添加特定名词。为此，R3 实现了词语解析：当 R3 检测到路径中的特定词语时，将不会格式化该部分。例如，以下 URI 将不会被视为相似，因此不会被合并：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/sale&lt;/li&gt;
+&lt;li&gt;/api/product_sale&lt;/li&gt;
+&lt;li&gt;/api/ProductSale&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;样本不足&#34;&gt;样本不足&lt;/h4&gt;
+&lt;p&gt;为防止由于样本不足而导致错误判断，R3 允许在&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini&#34;&gt;配置文件&lt;/a&gt;中配置&lt;a href=&#34;https://github.com/SkyAPM/R3/blob/main/servers/simple/uri_drain.ini#L38&#34;&gt;最小 URI 合并计数&lt;/a&gt;参数。&lt;/p&gt;
+&lt;p&gt;例如，当阈值为 &lt;code&gt;3&lt;/code&gt; 时，以下 URI 将保持原样，不会被参数化。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但是以下 URI 将被参数化为 &lt;code&gt;/api/{var}&lt;/code&gt;，因为样本数大于阈值。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/api/fetch1&lt;/li&gt;
+&lt;li&gt;/api/fetch2&lt;/li&gt;
+&lt;li&gt;/api/fetch3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;版本-api&#34;&gt;版本 API&lt;/h4&gt;
+&lt;p&gt;在实际场景中，常会遇到包含多个版本的 URI。R3 通过确保指定路径中包含 &lt;code&gt;v\\d+&lt;/code&gt; 参数（表示版本信息）来解决这个问题，该部分将不会被参数化。例如，以下 URI 将分别解析为 &lt;code&gt;/test/v1/{var}&lt;/code&gt; 和 &lt;code&gt;/test/v999/{var}&lt;/code&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;/test/v1/cbf11b02ea464447b507e8852c32190a&lt;/li&gt;
+&lt;li&gt;/test/v1/5e363a4a18b7464b8cbff1a7ee4c91ca&lt;/li&gt;
+&lt;li&gt;/test/v1/38d3be5f9bd44f7f98906ea049694511&lt;/li&gt;
+&lt;li&gt;/test/v999/1&lt;/li&gt;
+&lt;li&gt;/test/v999/2&lt;/li&gt;
+&lt;li&gt;/test/v999/3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;演示&#34;&gt;演示&lt;/h2&gt;
+&lt;p&gt;接下来我们快速演示如何使用 R3 格式化观察到的端点，帮助你更具体地理解它的功能。&lt;/p&gt;
+&lt;h3 id=&#34;部署-skywalking-showcase&#34;&gt;部署 SkyWalking Showcase&lt;/h3&gt;
+&lt;p&gt;SkyWalking Showcase 包含一整套示例服务，可以通过 SkyWalking 进行监控。更多信息请查看&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-showcase/next/readme/&#34;&gt;官方文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;在此演示中，我们仅部署服务、最新发布的 SkyWalking OAP、R3 服务和 UI。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#6639ba&#34;&gt;export&lt;/span&gt; &lt;span style=&#34;color:#953800&#34;&gt;FEATURE_FLAGS&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;java-agent-injector,single-node,elasticsearch,r3
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;make deploy.kubernetes
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;部署完成后，请运行以下脚本打开 SkyWalking UI：&lt;a href=&#34;http://localhost:8080/&#34;&gt;http://localhost:8080/&lt;/a&gt;。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;kubectl port-forward svc/ui 8080:8080 --namespace default
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;触发-restful-请求&#34;&gt;触发 RESTFul 请求&lt;/h3&gt;
+&lt;p&gt;在 R3 中，默认启动了定时任务以定期生成 RESTFul 流量。不过，你也可以使用以下命令手动触发此过程：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;kubectl &lt;span style=&#34;color:#6639ba&#34;&gt;exec&lt;/span&gt; -n sample-services &lt;span style=&#34;color:#cf222e&#34;&gt;$(&lt;/span&gt;kubectl get pod -n sample-services --selector&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#953800&#34;&gt;app&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;gateway -o &lt;span style=&#34;color:#953800&#34;&gt;jsonpath&lt;/span&gt;&lt;span style=&#34;color:#0550ae&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;{.items[0].metadata.name}&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#cf222e&#34;&gt;)&lt;/span&gt; -- /bin/bash -c &lt;span style=&#34;color:#0a3069&#34;&gt;&amp;#39;for i in $(seq 1 200); do curl http://rating/songs/$i/reviews/$((i+1)); sleep 1; done&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在上述命令中，R3 将自动定位网关节点，并以 RESTFul 格式向该节点内的 rating 服务发送请求。此操作允许 R3 生成并测试模拟实际 RESTFul 请求的流量模式。&lt;/p&gt;
+&lt;h3 id=&#34;查看格式化-uri&#34;&gt;查看格式化 URI&lt;/h3&gt;
+&lt;p&gt;一旦触发 RESTFul 请求，你可以在 UI 中查看聚合后的端点。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;注意&lt;/strong&gt;：由于格式化端点是异步生成的，因此一些较早的请求可能尚未被格式化。你可能需要等待一段时间，UI 才会仅显示格式化后的地址。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;formated_images.png&#34; alt=&#34;格式化端点&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论&lt;/h2&gt;
+&lt;p&gt;在本文中，我们详细讨论了 SkyWalking 如何利用 R3 服务来格式化 RESTFul URI，并在接收后聚合相关的指标。目前，它适用于大多数 RESTFul 场景，如果需要支持更多情况，我们可以根据需求进一步扩展。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: [Video] Coffee &#43; Software with Josh Long - Apache SkyWalking with Sheng Wu and Apache ShardingSphere with Trista Pan</title>
       <link>/blog/2023-12-04-coffee&#43;software-with-josh-long/</link>
       <pubDate>Mon, 04 Dec 2023 00:00:00 +0000</pubDate>
@@ -477,6 +801,99 @@ reducing false positives and improving system observability.&lt;/p&gt;
     &lt;/div&gt;
 
 &lt;p&gt;Please join and follow Josh&amp;rsquo;s 龙之春 Youtube &lt;a href=&#34;https://www.youtube.com/@coffeesoftware&#34;&gt;Coffee + Software with Josh Long&lt;/a&gt; Channel to learn more about technology and open source from telanted engineers and industry leads.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 开源之夏 2023 SkyWalking 社区项目情况公示</title>
+      <link>/zh/2023-11-09-ospp-summary/</link>
+      <pubDate>Thu, 09 Nov 2023 00:00:00 +0000</pubDate>
+      <guid>/zh/2023-11-09-ospp-summary/</guid>
+      <description>
+        
+        
+        &lt;p&gt;Aapche SkyWalking PMC 和 committer团队参加了&amp;quot;开源之夏 2023&amp;quot;活动，作为导师，共获得了9个官方赞助名额。最终对学生开放如下任务&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;SkyWalking 支持 GraalVM&lt;/li&gt;
+&lt;li&gt;Skywalking Infra E2E 自测试&lt;/li&gt;
+&lt;li&gt;监控Apache Pulsar&lt;/li&gt;
+&lt;li&gt;统一BanyanDB的查询计划和查询执行器&lt;/li&gt;
+&lt;li&gt;使用Helm部署BanyanDB&lt;/li&gt;
+&lt;li&gt;编写go agent的gRPC插件&lt;/li&gt;
+&lt;li&gt;监控Kafka&lt;/li&gt;
+&lt;li&gt;集成SkyWalking PHP到SkyWalking E2E 测试&lt;/li&gt;
+&lt;li&gt;在线黄金指标异常检测&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;经过3个月的开发，上游评审，PMC成员评议，PMC Chair复议，OSPP官方委员会评审多个步骤，现公布项目参与人员与最终结果&lt;/p&gt;
+&lt;h1 id=&#34;通过评审项目共6个&#34;&gt;通过评审项目（共6个）&lt;/h1&gt;
+&lt;h2 id=&#34;skywalking-支持-graalvm&#34;&gt;SkyWalking 支持 GraalVM&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：张跃骎&lt;/li&gt;
+&lt;li&gt;学校：辽宁大学 本科&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking/pull/11354&#34;&gt;11354&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;后续情况说明：GraalVM因为复杂的生态，替代的代码将被分离到&lt;a href=&#34;https://github.com/apache/skywalking-graalvm-distro&#34;&gt;SkyWalking GraalVM Distro&lt;/a&gt;, 相关讨论，请参见&lt;a href=&#34;https://github.com/apache/skywalking/issues/11518&#34;&gt;Issue 11518&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;skywalking-infra-e2e-自测试&#34;&gt;Skywalking Infra E2E 自测试&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：王子忱&lt;/li&gt;
+&lt;li&gt;学校：华中师范大学 本科&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking-infra-e2e/pull/115&#34;&gt;115&lt;/a&gt;, &lt;a href=&#34;https://github.com/apache/skywalking-infra-e2e/pull/116&#34;&gt;116&lt;/a&gt;, &lt;a href=&#34;https://github.com/apache/skywalking-infra-e2e/pull/117&#34;&gt;117&lt;/a&gt;, &lt;a href=&#34;https://github.com/apache/skywalking-infra-e2e/pull/118&#34;&gt;118&lt;/a&gt;, &lt;a href=&#34;https://github.com/apache/skywalking-infra-e2e/pull/119&#34;&gt;119&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;后续情况说明：此特性已经包含在发行版skywalking-infra-e2e v1.3.0中&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;统一banyandb的查询计划和查询执行器&#34;&gt;统一BanyanDB的查询计划和查询执行器&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：曾家华&lt;/li&gt;
+&lt;li&gt;学校：电子科技大学 本科&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking-banyandb/pull/343&#34;&gt;343&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;使用helm部署banyandb&#34;&gt;使用Helm部署BanyanDB&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：黄友亮&lt;/li&gt;
+&lt;li&gt;学校：北京邮电大学 硕士研究生&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking-banyandb-helm/pull/1&#34;&gt;1&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;情况说明：因为BanyanDB Helm为新项目，学生承接了项目初始化、功能提交、自动化测试，发布准备等多项任务。所参与功能包含在skywalking-banyandb-helm v0.1.0中&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;编写go-agent的grpc插件&#34;&gt;编写go agent的gRPC插件&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：胡宇腾&lt;/li&gt;
+&lt;li&gt;学校：西安邮电大学&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/88&#34;&gt;88&lt;/a&gt;, &lt;a href=&#34;https://github.com/apache/skywalking-go/pull/94&#34;&gt;94&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;后续情况说明：该学生在开源之夏相关项目外，完成了&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/99&#34;&gt;feature: add support for iris #99&lt;/a&gt;和&lt;a href=&#34;https://github.com/apache/skywalking-go/pull/104&#34;&gt;Go agent APIs&lt;/a&gt;功能开发。并发表文章&lt;a href=&#34;https://skywalking.apache.org/zh/2023-10-18-skywalking-toolkit-trace/&#34;&gt;SkyWalking Go Toolkit Trace 详解&lt;/a&gt;以及英文译本&lt;a href=&#34;https://skywalking.apache.org/blog/2023-10-18-skywalking-toolkit-trace/&#34;&gt;Detailed explanation of SkyWalking Go Toolkit Trace&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;监控kafka&#34;&gt;监控Kafka&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：王竹&lt;/li&gt;
+&lt;li&gt;学校：美国东北大学 ( Northeastern University)&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking/pull/11282&#34;&gt;11282&lt;/a&gt;, &lt;a href=&#34;https://github.com/apache/skywalking-booster-ui/pull/318&#34;&gt;UI 318&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;未通过评审项目3个&#34;&gt;未通过评审项目（3个）&lt;/h1&gt;
+&lt;p&gt;下列项目因为质量无法达到社区要求，违规等原因，将被标定为失败。
+&lt;strong&gt;注：在开源之夏中失败的项目，其Pull Reqeust可能因为符合社区功能要求，也被接受合并。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;监控apache-pulsar&#34;&gt;监控Apache Pulsar&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：孟祥迎&lt;/li&gt;
+&lt;li&gt;学校：重庆邮电大学 本科&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking/pull/11339&#34;&gt;11339&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;失败原因：项目申请成员，作为ASF Pulsar项目的Committer，在担任Pulsar开源之夏项目导师期间，但依然申请了学生参与项目。属于违规行为。SkyWalking PMC审查了此行为并通报开源之夏组委会。开源之夏组委会依据活动规则取消其结项奖金。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;集成skywalking-php到skywalking-e2e-测试&#34;&gt;集成SkyWalking PHP到SkyWalking E2E 测试&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：罗文&lt;/li&gt;
+&lt;li&gt;学校：San Jose State University B.S.&lt;/li&gt;
+&lt;li&gt;合并PR：&lt;a href=&#34;https://github.com/apache/skywalking/pull/11330&#34;&gt;11330&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;失败原因：根据pull reqeust中的提交记录，SkyWalking PMC Chair审查了提交明细，学生参与代码数量大幅度小于导师的提交代码。并在考虑到这个项目难度以及明显低于SkyWalking 开源之夏项目的平均水平的情况下，通报给开源之夏组委会。经过组委会综合评定，项目不合格。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;在线黄金指标异常检测&#34;&gt;在线黄金指标异常检测&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;学生：黄颖&lt;/li&gt;
+&lt;li&gt;学校：同济大学 研究生&lt;/li&gt;
+&lt;li&gt;合并PR：无&lt;/li&gt;
+&lt;li&gt;失败原因：项目在进度延迟后实现较为简单且粗糙，并且没有提供算法评估结果和文档等。在 PR 开启后的为期一个月审核合并期间，学生并未能成功按预定计划改善实现的质量和文档。和导师以及 SkyWalking 社区缺少沟通。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&#34;结语&#34;&gt;结语&lt;/h1&gt;
+&lt;p&gt;SkyWalking社区每年都有近10位PMC成员或Committer参与开源之夏中，帮助在校学生了解顶级开源项目、开源社区的运作方式。我们希望大家在每年经过3个月的时间，能够真正的帮助在校学生了解开源和参与开源。
+因为，社区即使在考虑到学生能力的情况下，不会明显的降低pull request的接受标准。希望今后的学生，能够在早期，积极、主动和导师，社区其他成员保持高频率的沟通，对参与的项目有更深入、准确的了解。&lt;/p&gt;
 
       </description>
     </item>
