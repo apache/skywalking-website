@@ -4,9 +4,8 @@ date: 2023-06-05
 author: "刘晗"
 description: "本文演示如何将Dubbo Go应用程序与 SkyWalking Go 集成，并在 SkyWalking UI 中查看结果。"
 tags:
-- Golang
-- Agent
-- Tracing
+  - Agents
+  - Tracing
 ---
 
 本文演示如何将 [Dubbo-Go](https://github.com/apache/dubbo-go) 应用程序与 SkyWalking Go 集成，并在 SkyWalking UI 中查看结果。

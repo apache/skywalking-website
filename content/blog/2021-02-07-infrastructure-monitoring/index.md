@@ -4,7 +4,7 @@ date: 2021-02-08
 author: Kai Wan, Sheng Wu. tetrate.io
 description: In this tutorial, learn how to use Apache SkyWalking for infrastructure monitoring 
 tags:
-- Metrics
+  - Metrics
 ---
 
 ![](apache-skywalking.jpeg)

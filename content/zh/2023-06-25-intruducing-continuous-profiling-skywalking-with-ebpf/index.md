@@ -4,9 +4,8 @@ date: 2023-06-25
 author: "刘晗"
 description: "介绍并演示 SkyWalking 如何在很少的人工参与下实现基于 ebpf 的进程监控。在预设条件的驱动下，剖析可以自动激活。"
 tags:
-- eBPF
-- Profiling
-- Tracing
+  - Profiling
+  - Tracing
 ---
 
 # 背景

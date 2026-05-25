@@ -4,7 +4,7 @@ author: "魏翔"
 date: 2023-12-23
 description: "SkyWalking 9.7 引入了新的 Nginx 监控面板，本文将演示该监控面板的使用。"
 tags:
-- Nginx
+  - Agents
 ---
 
 ## 背景介绍

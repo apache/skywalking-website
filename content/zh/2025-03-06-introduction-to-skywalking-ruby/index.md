@@ -4,8 +4,7 @@ date: 2025-03-06
 author: "周梓鑫"
 description: "本文演示如何将应用程序与 SkyWalking Ruby 集成，并对 Ruby 自动探针插件实现机制进行简要解读"
 tags:
-  - Ruby
-  - Agent
+  - Agents
   - Tracing
 ---
 

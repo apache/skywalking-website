@@ -5,8 +5,8 @@ author: "Zixin Zhou"
 description: "This article demonstrates how to integrate applications with SkyWalking Ruby and provides a 
             brief interpretation of the implementation mechanism of Ruby auto-instrumentation plugins."
 tags:
-- Agents
-- Tracing
+  - Agents
+  - Tracing
 ---
 
 ## Background

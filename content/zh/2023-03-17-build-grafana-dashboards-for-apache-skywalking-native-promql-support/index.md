@@ -4,9 +4,7 @@ date: 2023-03-16
 author: "万凯"
 description: "本文介绍什么是 SkyWalking 中的 PromQL 服务，以及如何使用它来构建 Grafana Dashboard。"
 tags:
-- PromQL
-- Metric
-- Grafana
+  - Metrics
 ---
 
 ## 背景

@@ -4,7 +4,7 @@ date: 2020-01-20
 author: Sheng Wu(Tetrate)
 description: " SkyWalking community joins the 200+ contributors open source club."
 tags:
-- Community
+  - Community
 ---
 
 - Author: Wu Sheng, tetrate.io, SkyWalking original creator, SkyWalking V.P.

@@ -4,7 +4,7 @@ author: "Xiang Wei"
 date: 2023-12-23
 description: "SkyWalking 9.7 introduces a new Nginx monitoring dashboard, and this article will demonstrate the usage of this monitoring dashboard."
 tags:
-- Agents
+  - Agents
 ---
 
 ## Background

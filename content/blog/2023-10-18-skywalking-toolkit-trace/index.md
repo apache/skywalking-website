@@ -4,7 +4,7 @@ date: 2023-10-18
 author: "Alipebt"
 description: "This article shows the introduction and usage of toolkit trace provided by Skywalking Go to users."
 tags:
-- Tracing
+  - Tracing
 ---
 
 ## Background

@@ -4,7 +4,7 @@ date: "2021-11-23"
 author: "[Wei Liu](https://github.com/LIU-WEI-git), School of Computer Science, NPU, China"
 description: "This is an introduction to IoTDB Storage Option. It introduces some basic concept about IoTDB and the storage schema design."
 tags:
-- Storage
+  - Storage
 ---
 
 This plugin is one of the outcomes of [Apache IoTDB - Apache SkyWalking Adapter](https://summer.iscas.ac.cn/#/org/prodetail/210070771) in [Summer 2021 of Open Source Promotion Plan](https://summer.iscas.ac.cn/#/homepage). The design and development work is under the guidance of [@jixuan1989](https://github.com/jixuan1989) from IoTDB and [@wu-sheng](https://github.com/wu-sheng) from SkyWalking. Thanks for their guidance and the help from community.

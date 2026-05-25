@@ -4,8 +4,8 @@ date: 2020-10-29
 author: Zhenxu Ke, Sheng Wu, Hongtao Gao, and Tevah Platt. tetrate.io
 description: "Browser Side Monitoring; Query Traces by Tags; Meter Analysis Language; Composite Alert Rules"
 tags:
-- Release
-- Agents
+  - Release
+  - Agents
 ---
 
 ![](0081Kckwly1gkl5m6kv3uj31lb0u0jum.jpg)

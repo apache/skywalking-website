@@ -4,11 +4,9 @@ author: "吴晟"
 date: 2026-04-30
 description: "SkyAPM/mini-program-monitor 与 SkyWalking OAP 配合，把微信和支付宝小程序纳入 SkyWalking 的端用户体验监控。本文聚焦数据通路、双平台抽象与 OAP 端集成。"
 tags:
-- Mini Program
-- WeChat
-- Alipay
-- OTLP
-- End User Monitoring
+  - Agents
+  - Community
+  - Tracing
 ---
 
 小程序是国内移动端体验里绕不过去的一块，但开源监控生态长期偏向 Web 浏览器和原生 App。SkyWalking 自身已经覆盖了浏览器（client-js）、iOS、服务端，缺口主要在小程序和 Android。[SkyAPM/mini-program-monitor](https://github.com/SkyAPM/mini-program-monitor) 加入 SkyWalking 生态后，把这块缺口的小程序部分补上了 —— 一份 SDK 同时支持微信和支付宝，OAP 端的 component、MAL 规则、UI 模板已经合进 main 分支，会随 10.5.0 一起发布。

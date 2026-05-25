@@ -4,7 +4,7 @@ date: 2021-08-04
 author: Sheng Wu, Tetrate.io, Apache SkyWalking Creator. [GitHub](https://github.com/wu-sheng) [Twitter](https://twitter.com/wusheng1108) [Linkedin](https://www.linkedin.com/in/wusheng1108)
 description: "Introduce the concepts of Apache SkyWalking, why we built it, and how we build it."
 tags:
-- Community
+  - Community
 ---
 
 [GOUP](https://www.linkedin.com/company/goupaz/) hosted a webinar, and invited [Sheng Wu](https://twitter.com/wusheng1108) to introduce

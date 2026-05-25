@@ -4,12 +4,9 @@ date: 2026-03-15
 author: 吴晟
 description: "从设计到测试，详解 SkyWalking GraalVM Distro 如何把一个成熟、运行时动态特性很多的 Java 可观测性后端做成原生二进制，并沉淀出可重复的迁移流程。"
 tags:
-- GraalVM
-- Native Image
-- Performance
-- Cloud Native
-- Serverless
-- BanyanDB
+  - Profiling
+  - Storage
+  - Cloud Native
 ---
 
 *这篇文章会完整介绍我们如何把 Apache SkyWalking OAP 迁移到 GraalVM Native Image。目标不是做一次性移植，而是把这件事做成一套能持续跟上上游演进的流程。*

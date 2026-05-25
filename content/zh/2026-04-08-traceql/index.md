@@ -4,11 +4,8 @@ author: "万凯"
 date: 2026-04-08
 description: "SkyWalking 10.4 引入了 TraceQL 支持，实现了 Grafana Tempo 的 HTTP 查询 API，使 Grafana 可以直接查询和可视化 SkyWalking 中存储的链路追踪数据。"
 tags:
-- TraceQL
-- Grafana
-- Tempo
-- Tracing
-- Zipkin
+  - Tracing
+  - Metrics
 ---
 
 # 使用 TraceQL 查询 SkyWalking 和 Zipkin 链路追踪数据并在 Grafana 中可视化

@@ -5,7 +5,7 @@ date: 2022-04-14
 description: "在本文中，我们将介绍开源实时编码平台 Source++ 中的一个新概念,
 其旨在让开发人员更直观地监控生产环境中的应用。"
 tags:
-- Observability
+  - Engineering
 ---
 
 <sub>Read this post in original language: [English](https://skywalking.apache.org/blog/2022-04-14-integrating-skywalking-with-source-code/)</sub>

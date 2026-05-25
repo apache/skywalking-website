@@ -4,7 +4,7 @@ date: 2024-10-20
 author: "ShyunnY"
 description: "This document presents an introduction to and usage of the toolkit Log and Metrics in SkyWalking Go."
 tags:
-- Logging
+  - Logging
 ---
 
 ## Intro

@@ -5,9 +5,9 @@ author: Sheng Wu
 description: "What happens when you apply agentic AI coding to a mature open-source project with real users, real compatibility contracts, and real consequences? 77K lines changed in 5 weeks — here's what I learned."
 endTime: 2026-03-08T23:00:00Z
 tags:
-- AI
-- Engineering
-- Community
+  - AI
+  - Engineering
+  - Community
 ---
 
 Most "vibe coding" stories start with a greenfield project. This one doesn't.

@@ -4,9 +4,8 @@ author: "魏翔"
 date: 2023-10-29
 description: "本篇文章演示如何将 Nginx access log 收集到 SkyWalking 中，并通过 LAL 进行指标分析"
 tags:
-- LAL
-- Logging
-- Nginx
+  - Logging
+  - Agents
 ---
 
 ## 背景介绍

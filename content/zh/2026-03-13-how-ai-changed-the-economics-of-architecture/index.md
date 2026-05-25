@@ -4,13 +4,9 @@ date: 2026-03-15
 author: 吴晟
 description: "以 SkyWalking GraalVM Distro 为例，聊聊 AI Coding 如何让更好的架构方案更容易被验证、打磨并真正落地。"
 tags:
-- GraalVM
-- Native Image
-- Performance
-- Cloud Native
-- Serverless
-- AI
-- Claude
+  - AI
+  - Profiling
+  - Cloud Native
 ---
 
 *以 SkyWalking GraalVM Distro 为例，看 AI Coding 如何把一批探索性 PoC 打磨成一条可重复的迁移流水线。*

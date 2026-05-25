@@ -4,11 +4,9 @@ description: "介绍 SkyWalking 10 的新特性，包括服务层次结构、基
 authors: 万凯，吴晟
 date: 2024-05-13
 tags:
-- Release Blog
-- Service Hierarchy
-- Kubernetes
-- eBPF
-- BanyanDB
+  - Release
+  - Profiling
+  - Storage
 ---
 
 Apache SkyWalking 团队今天宣布发布 SkyWalking 10。SkyWalking 10 提供了一系列突破性的功能和增强功能。Layer 和 Service Hierarchy 的引入通过将服务和指标组织成不同的层次，并提供跨层无缝导航，从而简化了监控。利用 eBPF 技术，Kubernetes 网络监控提供了对网络流量、拓扑和 TCP/HTTP 指标的详细洞察。BanyanDB 作为高性能的原生存储解决方案出现，同时扩展的监控支持包括 Apache RocketMQ、ClickHouse 和 Apache ActiveMQ Classic。对多标签名称的支持增强了指标分析的灵活性，而增强的导出和查询功能简化了数据分发和处理。

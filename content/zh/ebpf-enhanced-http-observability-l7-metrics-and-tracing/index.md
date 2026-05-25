@@ -4,10 +4,9 @@ date: 2023-01-12
 author: "刘晗，吴晟"
 description: "本文将展示如何使用 Apache SkyWalking 与 eBPF 来增强 HTTP 观察性中的度量和追踪。"
 tags:
-- Trace
-- Metric
-- eBPF
-- HTTP
+  - Tracing
+  - Metrics
+  - Profiling
 ---
 
 ![banner](banner.jpg)

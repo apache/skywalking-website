@@ -4,8 +4,8 @@ date: 2018-12-05
 author: Wu Sheng, tetrate
 description: "The integration of SkyWalking and Istio Service Mesh yields an essential open-source tool for resolving the chaos created by the proliferation of siloed, cloud-based services."
 tags:
-- Release
-- Cloud Native
+  - Release
+  - Cloud Native
 ---
 
 Original link, [Tetrate.io blog](https://www.tetrate.io/blog/apache-skywalking-v6/)

@@ -4,9 +4,8 @@ author: "Hongtao Gao && Han Liu"
 date: 2023-10-03
 description: "会议视频，（1）SkyWalking的Golang自动探针实践 刘晗，（2）BanyanDB一个高扩展性的分布式追踪数据库 高洪涛"
 tags:
-- Golang
-- Agent
-- Database
+  - Agents
+  - Storage
 ---
 
 CommunityOverCode (原 ApacheCon) 是 Apache 软件基金会（ASF）的官方全球系列大会。自 1998 年以来--在 ASF 成立之前 -- ApacheCon 已经吸引了各个层次的参与者，在 300 多个 Apache 项目及其不同的社区中探索 "明天的技术"。CommunityOverCode 通过动手实作、主题演讲、实际案例研究、培训、黑客松活动等方式，展示 Apache 项目的最新发展和新兴创新。

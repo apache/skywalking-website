@@ -4,8 +4,8 @@ author: "魏翔"
 date: 2023-09-17
 description: "本篇文章演示如何将 Arthas 集成到 SkyWalking 中，并借此场景讨论 SkyWalking 中的常见扩展点。"
 tags:
-- Agent
-- Arthas
+  - Agents
+  - Profiling
 ---
 
 ## 背景介绍
