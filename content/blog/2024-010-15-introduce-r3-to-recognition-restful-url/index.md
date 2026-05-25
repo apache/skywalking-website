@@ -4,8 +4,8 @@ date: 2024-10-17
 author: Han Liu
 description: "This article will introduce how to use R3 to identify RESTFul URIs and integrate them into SkyWalking."
 tags:
-- Agents
-- Tracing
+  - Agents
+  - Tracing
 ---
 
 ## Background

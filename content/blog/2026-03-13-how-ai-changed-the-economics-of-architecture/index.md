@@ -4,9 +4,9 @@ date: 2026-03-13
 author: Sheng Wu
 description: "A case study in how AI changed the economics of architecture in a mature  project by making better designs cheaper to prototype, validate, and refine."
 tags:
-- Cloud Native
-- Profiling
-- AI
+  - Cloud Native
+  - Profiling
+  - AI
 ---
 
 *SkyWalking GraalVM Distro: A case study in turning runnable PoCs into a repeatable migration pipeline.*

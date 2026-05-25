@@ -4,7 +4,7 @@ date: 2024-04-19
 author: "陈子妍"
 description: "本文将演示 ActiveMQ 监控面板的使用。"
 tags:
-- ActiveMQ
+  - Agents
 ---
 
 ![icon](activemq_logo.png)

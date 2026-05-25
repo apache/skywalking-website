@@ -4,9 +4,9 @@ date: 2022-05-08
 author: hutaishi
 description: This article introduces the principle of ShenYu(incubating) plugin implementation and the observability practice of ShenYu(incubating) gateway
 tags:
-- Agents
-- Tracing
-- Metrics
+  - Agents
+  - Tracing
+  - Metrics
 ---
 
 ### Content

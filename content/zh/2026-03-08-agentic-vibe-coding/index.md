@@ -4,13 +4,9 @@ date: 2026-03-08
 author: 吴晟
 description: "当你把 AI 智能体编程应用到一个有真实用户、广泛运用、API 被充分集成的成熟开源项目时，我在 5 周改了 7.7 万行代码，里面到底用到了哪些方法？这是我的实战总结。"
 tags:
-- AI
-- Agentic Coding
-- Vibe Coding
-- TDD
-- Architecture
-- Engineering Productivity
-- Open Source
+  - AI
+  - Engineering
+  - Community
 endTime: 2026-03-08T23:00:00Z
 ---
 

@@ -4,9 +4,9 @@ date: 2026-04-02
 author: "吴晟"
 description: "基于 Envoy AI Gateway、SkyWalking OAP 10.4.0 和 BanyanDB 0.10.0，搭建面向 AI/LLM 流量的全栈可观测方案。"
 tags:
-- GenAI
-- Envoy
-- Observability
+  - AI
+  - Cloud Native
+  - Engineering
 ---
 
 ## 问题：LLM 流量缺乏统一观测

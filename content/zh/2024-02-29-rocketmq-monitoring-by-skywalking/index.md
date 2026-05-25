@@ -4,7 +4,7 @@ author: "邵一鸣"
 date: 2024-02-29
 description: "SkyWalking 10.0 引入了新的 RocketMQ 监控面板,本文将演示该监控面板的使用。"
 tags:
-- RocketMQ
+  - Agents
 ---
 
 # 背景介绍

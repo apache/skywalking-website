@@ -5,8 +5,8 @@ author: "Binglong Li"
 description: "This post introduces how to propagate context between threads when using ThreadPoolExecutor, 
 which SkyWalking agent should not enhance"
 tags:
-- Agents
-- Tracing
+  - Agents
+  - Tracing
 ---
 
 When using SkyWalking java agent, people usually propagate context easily. They even do not need to change the business 

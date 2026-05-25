@@ -4,9 +4,9 @@ date: 2020-04-13
 author: "Sheng Wu, Adrian Cole and Han Liu"
 description: "This post introduces a way to automatically profile code in production with Apache SkyWalking. We believe the profile method helps reduce maintenance and overhead while increasing the precision in root cause analysis."
 tags:
-- Profiling
-- Agents
-- Tracing
+  - Profiling
+  - Agents
+  - Tracing
 ---
 
 *This post originally appears on [The New Stack](https://thenewstack.io/apache-skywalking-use-profiling-to-fix-the-blind-spot-of-distributed-tracing/)*

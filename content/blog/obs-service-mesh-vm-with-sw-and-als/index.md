@@ -4,7 +4,7 @@ date: 2021-02-21
 author: "[Zhenxu Ke](http://github.com/kezhenxu94) and Hongtao Gao. tetrate.io"
 description: In this tutorial, you can learn how to use Apache SkyWalking for service mesh observability, in Kubernetes and / or in virtual machines.
 tags:
-- Cloud Native
+  - Cloud Native
 ---
 
 ![](stone-arch.jpg)

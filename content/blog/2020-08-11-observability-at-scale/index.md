@@ -4,7 +4,7 @@ date: 2020-08-11
 author: Sheng Wu(Tetrate)
 description: " SkyWalking evolved to address the problem of observability at scale, and grew from a pure tracing system to a feature-rich observability platform that is now used to analyze deployments that collect tens of billions of traces per day. "
 tags:
-- Community
+  - Community
 ---
 
 - Author: Sheng Wu

@@ -4,9 +4,8 @@ date: 2024-06-12
 author: 高洪涛、吴晟（tetrate.io）
 description: "介绍 BanyanDB v0.6 的新功能以及与 Elasticsearch 的基准测试。"
 tags:
-- Release Blog
-- Storage
-- BanyanDB
+  - Release
+  - Storage
 ---
 
 # 引言

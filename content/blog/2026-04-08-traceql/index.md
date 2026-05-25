@@ -4,8 +4,8 @@ author: "Kai Wan"
 date: 2026-04-08
 description: "SkyWalking 10.4 introduces TraceQL support, implementing Grafana Tempo's HTTP query APIs so that Grafana can query and visualize traces stored in SkyWalking."
 tags:
-- Tracing
-- Metrics
+  - Tracing
+  - Metrics
 ---
 
 # Query SkyWalking and Zipkin Traces with TraceQL and Visualize in Grafana

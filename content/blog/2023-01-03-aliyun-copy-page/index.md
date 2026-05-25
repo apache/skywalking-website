@@ -4,7 +4,7 @@ date: 2023-01-03
 author: Apache SkyWalking
 description: "Aliyun's trace analysis service copied SkyWalking's UI design but declares it as their codes, rather than a fork."
 tags:
-- Community
+  - Community
 ---
 
 [Apache SkyWalking](https://skywalking.apache.org) is an open-source APM for a distributed system, Apache Software Foundation top-level project.

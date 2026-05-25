@@ -4,7 +4,7 @@ author: "邵一鸣"
 date: 2025-04-25
 description: "SkyWalking 10.3 引入了新的 Flink 监控面板,本文将演示该监控面板的使用。"
 tags:
-- Flink
+  - Engineering
 ---
 
 # 背景介绍

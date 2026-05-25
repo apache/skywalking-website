@@ -4,8 +4,8 @@ date: "2021-09-12"
 author: "[Ke Zhang](http://github.com/HumbertZhang), Committer; [Sheng Wu](https://github.com/wu-sheng), Tetrate.io, Apache SkyWalking Creator; [Zhenxu Ke](https://github.com/kezhenxu94), Tetrate.io."
 description: "This post introduces how to use profiling in SkyWalking Python Agent and the mechanism of profiling."
 tags:
-- Profiling
-- Agents
+  - Profiling
+  - Agents
 ---
 
 The Java Agent of Apache SkyWalking has supported profiling since [v7.0.0](https://github.com/apache/skywalking/releases/tag/v7.0.0), and it enables users to troubleshoot the root cause of performance issues, and now we bring it into Python Agent.

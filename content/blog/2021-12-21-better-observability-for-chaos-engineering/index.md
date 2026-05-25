@@ -3,7 +3,7 @@ title: 'Chaos Mesh + SkyWalking: Better Observability for Chaos Engineering'
 date: 2021-12-21
 author: Ningxuan Wang
 tags:
-- Cloud Native
+  - Cloud Native
 ---
 
 ![Chaos Mesh + SkyWalking: Better Observability for Chaos Engineering](chaos-mesh-skywalking-banner.png)

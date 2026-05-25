@@ -4,7 +4,17 @@
 {{- else -}}
 {{ $.Scratch.Set "blog-pages" .Pages }}
 {{- end -}}
-{{ $pag := .Paginate (($.Scratch.Get "blog-pages").GroupByDate (i18n "year")) }}
+{{ $pages := ($.Scratch.Get "blog-pages") }}
+{{ $groups := $pages.GroupByDate (i18n "year") }}
+
+{{- /* Tag list derived only from blog posts (Site.Taxonomies.tags would
+       also include docs frontmatter, which is unrelated). */ -}}
+{{ $allTags := slice }}
+{{ range $pages }}{{ range .Params.tags }}{{ $allTags = $allTags | append . }}{{ end }}{{ end }}
+{{ $blogTags := sort (uniq $allTags) }}
+
+{{- /* Topics (name + intro + color) are defined in data/blog_topics.yml. */ -}}
+{{ $topics := .Site.Data.blog_topics.topics }}
 
 <section class="blog-hero">
   <div class="container">
@@ -15,29 +25,52 @@
 </section>
 
 <div class="container blog-wrap">
-  {{ range $pag.PageGroups }}
-  <h2 class="blog-year">{{ T "post_posts_in" }} {{ .Key }}</h2>
-  <div class="blog-grid">
-    {{ range .Pages }}
-    <article class="blog-card">
-      {{ with .Params.tags }}
-      <div class="blog-labels">
-        {{ range . }}<span class="blog-label" data-label="{{ . }}">{{ . }}</span>{{ end }}
+  <div class="blog-layout">
+    <div class="blog-content">
+      {{ range $groups }}
+      <h2 class="blog-year">{{ T "post_posts_in" }} {{ .Key }}</h2>
+      <div class="blog-grid">
+        {{ range .Pages }}
+        <article class="blog-card">
+          {{ with .Params.tags }}
+          <div class="blog-labels">
+            {{ range . }}<a class="blog-label" data-label="{{ . }}" href="{{ printf "/tags/%s/" (. | urlize) | relLangURL }}">{{ . }}</a>{{ end }}
+          </div>
+          {{ end }}
+          <h3 class="blog-card-title"><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></h3>
+          <p class="blog-card-preview">{{ with .Description }}{{ . }}{{ else }}{{ .Plain | safeHTML | truncate 160 }}{{ end }}</p>
+          <div class="blog-card-foot">
+            <span class="blog-date">{{ .Date.Format "Jan 2, 2006" }}</span>
+            {{ with .Params.author }}<span class="blog-author">{{ . | markdownify }}</span>{{ end }}
+          </div>
+        </article>
+        {{ end }}
       </div>
       {{ end }}
-      <h3 class="blog-card-title"><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></h3>
-      <p class="blog-card-preview">{{ with .Description }}{{ . }}{{ else }}{{ .Plain | safeHTML | truncate 160 }}{{ end }}</p>
-      <div class="blog-card-foot">
-        <span class="blog-date">{{ .Date.Format "Jan 2, 2006" }}</span>
-        {{ with .Params.author }}<span class="blog-author">{{ . | markdownify }}</span>{{ end }}
-      </div>
-    </article>
-    {{ end }}
-  </div>
-  {{ end }}
+    </div>
 
-  <div class="blog-pagination">
-    {{ template "_internal/pagination.html" . }}
+    {{- /* Right sidebar: "Browse topics" — one compact card per canonical tag,
+           clicking opens /tags/<term>/. */ -}}
+    <aside class="blog-sidebar">
+      <div class="blog-sidebar-inner">
+        <h2 class="blog-sidebar-head">Browse topics</h2>
+        <div class="album-grid is-sidebar">
+          {{ range $topics }}
+          {{ $t := .name }}
+          {{ $tagged := where $pages ".Params.tags" "intersect" (slice $t) }}
+          {{ if gt (len $tagged) 0 }}
+          <a class="album-card" data-label="{{ $t }}" href="{{ printf "/tags/%s/" ($t | urlize) | relLangURL }}">
+            <div class="album-top">
+              <span class="blog-label" data-label="{{ $t }}">{{ $t }}</span>
+              <span class="album-count">{{ len $tagged }}</span>
+            </div>
+            <p class="album-intro">{{ .intro }}</p>
+          </a>
+          {{ end }}
+          {{ end }}
+        </div>
+      </div>
+    </aside>
   </div>
 </div>
 {{ end }}

@@ -7,7 +7,7 @@ startTime: 2021-07-01T00:00:00Z
 endTime: 2021-08-01T10:00:00Z
 poster: /images/500-mark.png
 tags:
-- Community
+  - Community
 ---
 
 ![](500-mark.png)

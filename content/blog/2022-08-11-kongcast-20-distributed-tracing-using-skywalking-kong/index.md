@@ -4,9 +4,9 @@ date: 2022-08-11
 author: Andrew Kew. QuadCorps Founder [GitHub](https://github.com/andrewgkew) [Linkedin](https://www.linkedin.com/in/andrewgkew) [Website](https://quadcorps.co.uk)
 description: Kongcast Episode 20 - Distributed Tracing on Kubernetes
 tags:
-- Agents
-- Engineering
-- Community
+  - Agents
+  - Engineering
+  - Community
 ---
 
 Observability essential when working with distributed systems. Built on 3 pillars of metrics, logging and 

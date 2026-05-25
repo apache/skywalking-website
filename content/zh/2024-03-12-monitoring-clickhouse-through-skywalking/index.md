@@ -4,7 +4,7 @@ date: 2024-03-12
 author: "陈子妍"
 description: "SkyWalking 10.0 引入了 ClickHouse 监控面板，本文将演示该监控面板的使用。"
 tags:
-- ClickHouse
+  - Storage
 ---
 
 ## 背景介绍

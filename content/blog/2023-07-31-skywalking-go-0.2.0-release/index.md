@@ -4,9 +4,9 @@ date: 2023-07-31
 author: "Han Liu"
 description: "Introduction the new features of SkyWalking Go 0.2.0"
 tags:
-- Agents
-- Metrics
-- Logging
+  - Agents
+  - Metrics
+  - Logging
 ---
 
 # Announcing Apache SkyWalking Go 0.2.0

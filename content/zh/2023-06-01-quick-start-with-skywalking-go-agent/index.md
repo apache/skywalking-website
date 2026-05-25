@@ -4,9 +4,8 @@ date: 2023-06-01
 author: "刘晗"
 description: "本文演示如何将应用程序与 SkyWalking Go 集成，并在 SkyWalking UI 中查看结果。"
 tags:
-- Golang
-- Agent
-- Tracing
+  - Agents
+  - Tracing
 ---
 
 本文演示如何将应用程序与 SkyWalking Go 集成，并在 SkyWalking UI 中查看结果。

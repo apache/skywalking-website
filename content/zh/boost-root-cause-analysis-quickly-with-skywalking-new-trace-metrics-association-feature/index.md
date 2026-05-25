@@ -4,8 +4,8 @@ date: 2022-12-19
 author: "吴晟"
 description: "SkyWalking 9.3.0 引入了新功能，可视化 trace 和相应 metric 之间的联系，帮助您快速实现问题诊断。"
 tags:
-- Trace
-- Metric
+  - Tracing
+  - Metrics
 ---
 
 ![Banner](banner.jpg)

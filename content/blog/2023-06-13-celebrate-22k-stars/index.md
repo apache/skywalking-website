@@ -7,7 +7,7 @@ startTime: 2023-06-13T00:00:00Z
 endTime: 2023-06-30T10:00:00Z
 poster: /blog/2023-06-13-celebrate-22k-stars/skywalking-22k-post.gif
 tags:
-- Community
+  - Community
 ---
 
 # Celebrating 22k Stars!

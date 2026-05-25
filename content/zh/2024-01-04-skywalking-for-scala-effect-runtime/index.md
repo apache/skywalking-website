@@ -4,7 +4,7 @@ author: "jxnu-liguobin"
 date: 2024-01-04
 description: "本篇文章演示了如何使用 SkyWalking 收集 ZIO 应用的 Trace，并通过源码分析，讲述怎样为其开发相关插件。"
 tags:
-- Nginx
+  - Agents
 ---
 
 ## 背景介绍

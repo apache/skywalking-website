@@ -4,7 +4,7 @@ date: 2023-03-16
 author: "Kai Wan"
 description: "Introduce what is PromQL Service in SkyWalking and how to use it to build Grafana dashboards."
 tags:
-- Metrics
+  - Metrics
 ---
 
 ## Background

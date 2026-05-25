@@ -4,9 +4,9 @@ date: 2024-05-13
 author: Kai Wan, Sheng Wu. tetrate.io
 description: "Introduce what's new in SkyWalking 10, including Service Hierarchy, Kubernetes Network Monitoring by eBPF, BanyanDB, and more."
 tags:
-- Release
-- Cloud Native
-- Profiling
+  - Release
+  - Cloud Native
+  - Profiling
 ---
 
 The Apache SkyWalking team today announced the 10 release. SkyWalking 10 provides a host of groundbreaking features and enhancements. 

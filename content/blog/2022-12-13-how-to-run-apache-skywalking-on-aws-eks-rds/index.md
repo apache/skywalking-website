@@ -4,9 +4,9 @@ date: 2022-12-13
 author: "[Zhenxu Ke](https://github.com/kezhenxu94)"
 description: "Introduce how to quickly set up Apache SkyWalking on AWS EKS and RDS/Aurora"
 tags:
-- Cloud Native
-- Storage
-- Engineering
+  - Cloud Native
+  - Storage
+  - Engineering
 ---
 
 ## Introduction

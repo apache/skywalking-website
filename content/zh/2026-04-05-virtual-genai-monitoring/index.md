@@ -4,10 +4,9 @@ author: "邵一鸣"
 date: 2026-04-05
 description: "SkyWalking 10.4 增加了 Virtual GenAI 观测面板,本文将介绍该新特性的使用。"
 tags:
-- GenAI
-- LLM
-- Observability
-- Opentelemetry
+  - AI
+  - Engineering
+  - Tracing
 ---
 
 # 问题：当应用开始“吞噬”大模型，监控却留下了盲区

@@ -4,8 +4,8 @@ date: 2024-10-17
 author: 刘晗
 description: "本文将介绍如何使用 R3 识别 RESTFul URI 并将其集成到 SkyWalking 中。"
 tags:
-- RESTFul
-- R3
+  - Tracing
+  - Community
 ---
 
 ## 背景

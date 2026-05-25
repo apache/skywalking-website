@@ -4,8 +4,8 @@ date: 2023-06-01
 author: "Han Liu"
 description: "Demonstrates how to integrate your application with SkyWalking Go and view the results in the SkyWalking UI."
 tags:
-- Agents
-- Tracing
+  - Agents
+  - Tracing
 ---
 
 # Background

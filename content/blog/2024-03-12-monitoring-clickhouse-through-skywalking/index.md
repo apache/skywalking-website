@@ -4,7 +4,7 @@ date: 2024-03-12
 author: Ziyan Chen
 description: "SkyWalking 10.0 introduces a new ClickHouse server monitoring dashboard, and this article will demonstrate the usage of this monitoring dashboard."
 tags:
-- Storage
+  - Storage
 ---
 
 ## Background
