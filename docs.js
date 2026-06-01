@@ -76,7 +76,11 @@ function replaceMarkdownText(codeTxt, docInfo, filePath) {
     const depth = filePath.split('/docs')[1].match(/\//g).length - 2;
 
     let title = codeTxt.trim().split('\n')[0]
-    title = title.match(/(?<=([ ])).*/g)[0];
+    const titleMatch = title.match(/(?<=([ ])).*/g)
+    // When the first line has no space (a single-word heading, or "#Heading"
+    // with no space after the marker) match() returns null; fall back to the
+    // line with any leading markdown "#" markers stripped instead of crashing.
+    title = titleMatch ? titleMatch[0] : title.replace(/^#+\s*/, '').trim();
     title = title.replace(/:/g, '：')
 
     codeTxt =
