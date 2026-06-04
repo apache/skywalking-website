@@ -1,6 +1,6 @@
 ---
 title: Release Apache SkyWalking Horizon UI 0.6.0
-date: 2026-06-02
+date: 2026-06-04
 author: SkyWalking Team
 description: "Release Apache SkyWalking Horizon UI 0.6.0."
 ---
