@@ -34,7 +34,7 @@ This documentation explains how the system automatically synchronizes Property d
   <meta itemprop="name" content="Property Background Repair Strategy">
   <meta itemprop="description" content="Property Background Repair Strategy In Property, the replicas configuration allows Property data to be stored across multiple data nodes, providing high availability. However, during data updates, some nodes may become temporarily unavailable, which can lead to version inconsistencies of the same data across different machines.
 This documentation explains how the system automatically synchronizes Property data across all data nodes in the background, ensuring that all replicas eventually converge to the same version.">
-  <meta itemprop="wordCount" content="2715">
+  <meta itemprop="wordCount" content="2875">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Property Background Repair Strategy">
   <meta name="twitter:description" content="Property Background Repair Strategy In Property, the replicas configuration allows Property data to be stored across multiple data nodes, providing high availability. However, during data updates, some nodes may become temporarily unavailable, which can lead to version inconsistencies of the same data across different machines.
@@ -1199,6 +1199,14 @@ This documentation explains how the system automatically synchronizes Property d
 
     <li>
         
+            <a href="/docs/skywalking-banyandb/next/concept/storage-and-format">Storage &amp; File Format (by API resource)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-banyandb/next/concept/tsdb">v1.3.0</a>
         
     </li>
@@ -1310,7 +1318,7 @@ This documentation explains how the system automatically synchronizes Property d
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 64983ea</div>
+                  <div class="commit-id">Commit Id: 0856655</div>
                 
 
 
@@ -1343,12 +1351,12 @@ The tree consists of the following three types of nodes:</p>
 <li><strong>Leaf Node</strong>: Store the summary information of each Property data:
 <ol>
 <li><strong>Entity</strong>: The identifier of the Property data, composed of <code>group_name</code> + <code>property_name</code> + <code>id</code>.</li>
-<li><strong>SHA Value</strong>: The SHA512 hash value of the Property source data(<code>sha512(source_json_bytes+property_is_deleted)</code>), used for fast equality comparison to check the consistency of the same entity data</li>
+<li><strong>SHA Value</strong>: The SHA512 hash value of the Property source data(<code>sha512(source_json_bytes + delete_time)</code>, where <code>delete_time</code> is the int64 nanosecond delete timestamp, or <code>0</code> when the property is not deleted), used for fast equality comparison to check the consistency of the same entity data. Encoding the actual delete time (rather than a boolean flag) means two records deleted at different times produce different SHAs.</li>
 </ol>
 </li>
 <li><strong>Slot Node</strong>: Each tree contains a fixed number(such as <code>32</code>) of slot nodes. When the Property data is added into the tree, it is placed in a slot node based on its hash value of Entity(<code>hash(entity) % slot_count</code>).
-The slot node contains the SHA value of the Property data and the number of Property data in that slot.</li>
-<li><strong>Root Node</strong>: The root node of the Merkle Tree, which contains the SHA value of the entire tree and the number of slot nodes.</li>
+The slot node&rsquo;s SHA is computed over the (hex-encoded) SHA values of its leaf nodes, and it records the number of Property data in that slot.</li>
+<li><strong>Root Node</strong>: The root node of the Merkle Tree, whose SHA is computed over the (hex-encoded) SHA values of all slot nodes; it also records the number of slot nodes.</li>
 </ol>
 <p>Therefore, the Merkle Tree has above three structure levels:</p>
 <ul>
@@ -1364,12 +1372,20 @@ The slot node contains the SHA value of the Property data and the number of Prop
 </ol>
 <p>The construction process follows these steps:</p>
 <ol>
-<li><strong>Check for Updates</strong>: The system compares the snapshot ID(<code>XXXXX.snp</code>) of the previously built tree with the current snapshot ID of the shard.
+<li><strong>Check for Updates</strong>: The system compares the snapshot ID recorded from the previous build (persisted in <code>state.json</code> as <code>last_snp_id</code>) with the shard&rsquo;s current latest snapshot ID (the newest <code>.snp</code> file in the shard&rsquo;s Bluge index directory).
 If they differ, it indicates that data has changed, and the process continues. If they match, the tree construction is skipped.</li>
 <li><strong>Snapshot the Shard</strong>: A snapshot of the shard data is taken to avoid blocking ongoing business operations during data traversal.</li>
 <li><strong>Build the Tree</strong>: Using the streaming method, the system scans all data in the snapshot and builds a Merkle Tree for each group individually.</li>
-<li><strong>Save the Snapshot ID</strong>: The snapshot ID used in this build is saved, so it can be used for efficient change detection during the next scheduled run.</li>
+<li><strong>Save the Snapshot ID</strong>: The snapshot ID used in this build is saved (to <code>state.json</code>), so it can be used for efficient change detection during the next scheduled run.</li>
 </ol>
+<h3 id="on-disk-state">On-disk State</h3>
+<p>Repair state is persisted under a dedicated repair base directory (separate from the Bluge data files), laid out per group/shard:</p>
+<ul>
+<li><code>state.json</code> — <code>{last_sync_time, last_snp_id}</code>, the change-detection marker described above.</li>
+<li><code>state-tree.data</code> — the persisted Merkle Tree (a custom self-describing format: a section of leaf nodes, then slot nodes, then the root node, followed by a trailing footer with section offsets).</li>
+<li><code>state-append-&lt;slot&gt;.tmp</code> — transient per-slot spill files used while composing the tree; concatenated into <code>state-tree.data</code> and then removed.</li>
+<li><code>scheduled.json</code> — a marker recording that a build-tree run has occurred (used to disambiguate gossip emptiness).</li>
+</ul>
 <h2 id="gossip-protocol">Gossip Protocol</h2>
 <p>In BanyanDB&rsquo;s typical data communication model, data exchange is primarily handled by <strong>liaison</strong> nodes, which interact with <strong>data nodes</strong> through <strong>broadcasting or publishing</strong> mechanisms.
 However, in the context of Property data repair, involving liaison nodes would introduce unnecessary network overhead.
@@ -1669,6 +1685,7 @@ ensuring consistent data availability even if some nodes are temporarily offline
           <ul>
             <li><a href="#structure">Structure</a></li>
             <li><a href="#timing-and-building-process">Timing and Building Process</a></li>
+            <li><a href="#on-disk-state">On-disk State</a></li>
           </ul>
         </li>
         <li><a href="#gossip-protocol">Gossip Protocol</a>
@@ -10819,6 +10836,8 @@ ensuring consistent data availability even if some nodes are temporarily offline
 
 
 
+
+
 <div class="sky-event-popup">
 
     <div class="sky-pop-modal">
@@ -10883,6 +10902,8 @@ ensuring consistent data availability even if some nodes are temporarily offline
                     
                 </a>
             </div>
+            
+            
             
             
             
