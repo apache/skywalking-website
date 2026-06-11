@@ -32,7 +32,7 @@
 
   <meta itemprop="name" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model">
   <meta itemprop="description" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model Motivation Apache SkyWalking BanyanDB is the native storage for SkyWalking. SkyWalking already ships a “BanyanDB self-observability” feature (Layer: BANYANDB, otel-rules/banyandb/*), but that feature was designed for a single-node BanyanDB and for the layout constraints of the legacy booster UI. It no longer reflects how BanyanDB is built or operated, and it no longer reflects how SkyWalking renders dashboards.">
-  <meta itemprop="wordCount" content="3337">
+  <meta itemprop="wordCount" content="5337">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model">
   <meta name="twitter:description" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model Motivation Apache SkyWalking BanyanDB is the native storage for SkyWalking. SkyWalking already ships a “BanyanDB self-observability” feature (Layer: BANYANDB, otel-rules/banyandb/*), but that feature was designed for a single-node BanyanDB and for the layout constraints of the legacy booster UI. It no longer reflects how BanyanDB is built or operated, and it no longer reflects how SkyWalking renders dashboards.">
@@ -1045,6 +1045,32 @@
     <li>
         
             <a href="/docs/main/next/en/setup/backend/backend-activemq-monitoring">ActiveMQ</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Workflow Scheduler<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/setup/backend/backend-airflow-monitoring">Airflow</a>
         
     </li>
 
@@ -2982,7 +3008,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 3e5cb0c</div>
+                  <div class="commit-id">Commit Id: c9f816a</div>
                 
 
 
@@ -3075,30 +3101,35 @@ complementary boards: a <strong>Nodes</strong> board (per-node health, aggregate
 <p><strong>SkyWalking replaced the bundled booster UI with the Horizon UI.</strong> The OAP backend no longer ships
 dashboard JSON (dropped in #13877); BanyanDB has not yet been ported to Horizon UI at all. Horizon
 UI is config-driven, has a real <strong>Service → Instance → Endpoint</strong> hierarchy, surfaces per-instance
-attributes, and can hide panels that have no data — and, with a small enhancement, can drive panel
-visibility from instance <strong>attributes</strong> (role / tier).</p>
+attributes, and gates widget visibility through structured, server-evaluated <code>visibleWhen</code>
+predicates — data presence and instance-<strong>attribute</strong> equality ship today
+(<a href="https://github.com/apache/skywalking-horizon-ui/pull/46">horizon-ui #46</a>); a small
+extension (membership / negation operators) completes role/tier-driven dashboards.</p>
 </li>
 </ol>
 <p>The current feature does none of this. It models <strong>each node as its own <code>Service</code></strong>
 (<code>service(['host_name'], Layer.BANYANDB)</code>), so a cluster appears as a pile of unrelated services; it
-never models the cluster, the node role, the tier, or the group; and it still references metrics that
-BanyanDB removed (an <code>etcd</code>-era operation rate, a Prometheus <code>up</code>-derived &ldquo;active instances&rdquo;, and the
-pre-refactor <code>queue_sub_total_msg_sent_err</code> family).</p>
+never models the cluster, the node role, the tier, or the group; and it still ships stale or misleading
+metrics (an operation rate still named after the retired <code>etcd</code> registry, a Prometheus <code>up</code>-derived
+&ldquo;active instances&rdquo; that under the FODC proxy would describe the proxy rather than any node, and the
+<code>queue_sub_total_msg_sent_err</code> family, which BanyanDB removed).</p>
 <p><strong>This SWIP proposes to discard that model and rebuild BanyanDB self-observability around the cluster /
 node / group reality</strong>, matching the upstream FODC-proxy metric catalog, and to design the Horizon UI
-side — a net-new BanyanDB layer dashboard whose node view <strong>adapts to the selected node&rsquo;s role and
-tier</strong> — including the one Horizon UI enhancement that makes attribute-driven dashboards possible.</p>
+side — a net-new BanyanDB layer dashboard whose instance view <strong>adapts to the selected container&rsquo;s
+role and tier</strong> — including the small Horizon UI entity-gate extension that completes attribute-driven
+dashboards.</p>
 <h3 id="goals">Goals</h3>
 <ul>
 <li>Model a BanyanDB <strong>cluster</strong> as a single SkyWalking <code>Service</code>.</li>
-<li>Model each <strong>node</strong> as a <code>ServiceInstance</code>, carrying its <strong>role</strong> and <strong>tier</strong> as instance
-attributes, so the UI can show &ldquo;what this node is&rdquo;.</li>
+<li>Model each <strong>container</strong> (<code>pod_name</code> + <code>container_name</code>) as a <code>ServiceInstance</code>, carrying its
+<strong>role</strong> and <strong>tier</strong> as instance attributes, so the UI can show &ldquo;what this container is&rdquo;.</li>
 <li>Model each <strong>group</strong> as an <code>Endpoint</code> of the cluster.</li>
 <li>Mirror the upstream FODC-proxy metric catalog faithfully (the two-dashboard split becomes the
 Instance and Endpoint views).</li>
-<li>Make the <strong>node dashboard dynamic</strong> — a liaison node shows ingestion/queue/publish panels, a data
-node shows storage/index/subscribe panels, and the tier refines the data view — first via the
-data-presence mechanism that already exists, then via a proposed attribute predicate.</li>
+<li>Make the <strong>instance dashboard dynamic</strong> — a liaison container shows ingestion/queue/publish panels, a
+data container shows storage/index/subscribe panels, a lifecycle container shows migration panels, and
+the tier refines the data view — via the structured <code>visibleWhen</code> gates Horizon UI already evaluates
+(data presence + attribute equality), completed by a proposed membership/negation extension.</li>
 </ul>
 <h3 id="non-goals">Non-goals</h3>
 <ul>
@@ -3116,18 +3147,18 @@ out of scope (see <a href="#compatibility">Compatibility</a>).</li>
  ────────────────                         ─────────────                         ──────────
  ┌─ liaison node ─┐  FODC agent ┐                                       BANYANDB layer
  │  :2121 /metrics │ (sidecar)  │                                       ┌───────────────────────┐
- └────────────────┘            │                                       │ Root: cluster list    │
- ┌─ data hot ─────┐  FODC agent ├─► FODC proxy ──► OTel Collector ──►  │ Service: cluster KPIs │
- │  :2121 /metrics │ (sidecar)  │   :17913          (prometheus recv,   │ Instance: node, panels│
- └────────────────┘            │   /metrics         adds `cluster`      │   adapt to role/tier  │
+ └────────────────┘            │                                        │ Root: cluster list    │
+ ┌─ data hot ─────┐  FODC agent ├─► FODC proxy ──► OTel Collector ──►   │ Service: cluster KPIs │
+ │  :2121 /metrics │ (sidecar)  │   :17913          (prometheus recv,   │ Instance: container,  │
+ └────────────────┘            │   /metrics         adds `cluster`      │   adapts to role/tier │
  ┌─ data warm ────┐  FODC agent │   single target,  label) ──OTLP──►    │ Endpoint: group       │
- │  :2121 /metrics │ (sidecar)  │   per-node labels      │              └───────────────────────┘
+ │  :2121 /metrics │ (sidecar)  │   identity labels      │              └───────────────────────┘
  └────────────────┘            ┘   node_role/pod_name/   │                        ▲
  ┌─ data cold ────┐                container_name/        ▼                        │ MQE over
  │  :2121 /metrics │                node_type     receiver-otel ──► MAL            │ GraphQL
  └────────────────┘                              otel-rules/banyandb/*  ───────────┘ execExpression
                                                   ├ banyandb-service.yaml   → Service  (cluster)
-                                                  ├ banyandb-instance.yaml  → Instance (node + attrs)
+                                                  ├ banyandb-instance.yaml  → Instance (container + attrs)
                                                   └ banyandb-endpoint.yaml  → Endpoint (group)
                                                           │
                                                           ▼
@@ -3155,38 +3186,59 @@ identity.</p>
       </tr>
       <tr>
           <td><code>ServiceInstance</code></td>
-          <td>one <strong>node</strong></td>
-          <td><code>pod_name</code> (e.g. <code>banyandb-data-hot-0</code>)</td>
+          <td>one <strong>container</strong> on a node</td>
+          <td><code>pod_name</code> + <code>container_name</code> (composite)</td>
       </tr>
       <tr>
-          <td>  ↳ attribute <code>node_role</code></td>
-          <td>node <strong>role</strong></td>
-          <td><code>container_name</code> (<code>liaison</code> / <code>data</code>)</td>
+          <td>  ↳ attribute <code>container_name</code></td>
+          <td>container <strong>role</strong> (discriminator)</td>
+          <td><code>liaison</code> / <code>data</code> / <code>lifecycle</code></td>
       </tr>
       <tr>
           <td>  ↳ attribute <code>node_type</code></td>
           <td>data-node <strong>tier</strong></td>
-          <td><code>node_type</code> (<code>hot</code> / <code>warm</code> / <code>cold</code>)</td>
+          <td><code>hot</code> / <code>warm</code> / <code>cold</code> (data containers only; <code>n/a</code> elsewhere)</td>
+      </tr>
+      <tr>
+          <td>  ↳ attribute <code>node_role</code></td>
+          <td>role enum (coarse)</td>
+          <td><code>ROLE_LIAISON</code> / <code>ROLE_DATA</code></td>
+      </tr>
+      <tr>
+          <td>  ↳ attribute <code>pod_name</code></td>
+          <td>host pod (sibling key)</td>
+          <td><code>demo-banyandb-data-hot-0</code></td>
       </tr>
       <tr>
           <td><code>Endpoint</code></td>
           <td>one <strong>group</strong> (storage partition)</td>
-          <td><code>group</code> (<code>measure-default</code>, …)</td>
+          <td><code>group</code> (<code>sw_metricsMinute</code>, …)</td>
       </tr>
   </tbody>
 </table>
-<p>A standalone BanyanDB is the degenerate case: one cluster, one node whose role is <code>standalone</code> (all
-roles co-resident) and no tier.</p>
-<p><strong>Why role/tier are instance attributes, not separate services or endpoints.</strong> A node&rsquo;s identity is
-its <code>pod_name</code>; its role and tier are <em>properties of that node</em>, which is exactly what
-<code>InstanceTraffic.properties</code> (the UI &ldquo;Attributes&rdquo; panel) is for. Keeping the cluster as the single
-service means the node list, the group list, and cluster-wide KPIs all live under one entity the
-operator can reason about — and it makes the node dashboard able to adapt to the selected node&rsquo;s
-attributes.</p>
+<p>All four labels are attached as instance attributes <strong>verbatim</strong> (not renamed), because the Horizon UI
+deployment/topology component groups the intra-cluster instance graph by them: <code>clusterBy</code> =
+<code>node_role</code> + <code>node_type</code>, <code>siblingBy</code> = <code>pod_name</code>, <code>roleBy</code> = <code>container_name</code>. Emitting the raw
+label names keeps the OAP attribute bag and the UI grouping config in lockstep.</p>
+<p><strong>Why the instance is a container, not a <code>pod_name</code>.</strong> <code>pod_name</code> is <strong>not unique per metrics
+emitter</strong>: a data hot/warm pod co-hosts a <code>lifecycle</code> migration sidecar that reports under the <em>same</em>
+<code>pod_name</code> (verified on the live cluster — <code>demo-banyandb-data-hot-0</code> emits both <code>container_name=data</code>
+and <code>container_name=lifecycle</code>). Keying the instance on <code>pod_name</code> alone would silently merge the two
+series. The instance identity is therefore <code>pod_name</code> + <code>container_name</code>, and <code>container_name</code> — not
+<code>node_role</code> — is the role discriminator: <code>node_role</code> carries only <code>ROLE_LIAISON</code> / <code>ROLE_DATA</code> on a
+healthy cluster (it stays <code>ROLE_DATA</code> on the lifecycle sidecar, and the FODC agent maps unresolved or
+meta-only nodes to a transient <code>ROLE_UNSPECIFIED</code>), whereas <code>container_name</code> cleanly separates
+<code>liaison</code> / <code>data</code> / <code>lifecycle</code>. A standalone BanyanDB is the degenerate case: one cluster, one node,
+one <code>container_name=standalone</code>, no tier.</p>
+<p><strong>Why container/tier are instance attributes, not separate services or endpoints.</strong> A container&rsquo;s role
+and tier are <em>properties of that instance</em>, which is exactly what <code>InstanceTraffic.properties</code> (the UI
+&ldquo;Attributes&rdquo; panel) is for. Keeping the cluster as the single service means the instance list, the
+group list, and cluster-wide KPIs all live under one entity the operator can reason about — and it
+makes the instance dashboard able to adapt to the selected container&rsquo;s attributes.</p>
 <h3 id="2-scrape-source-and-label-scheme-fodc-proxy-only">2. Scrape source and label scheme (FODC proxy only)</h3>
 <p>SkyWalking scrapes the <strong>FODC proxy <code>/metrics</code></strong> (default <code>:17913</code>) as the single Prometheus target.
-The proxy aggregates every node&rsquo;s metrics and stamps four identity labels onto each sample (verified in
-the FODC agent&rsquo;s <code>ParseWithNodeLabels</code>):</p>
+The proxy aggregates every container&rsquo;s metrics and stamps four identity labels onto each sample
+(verified in the FODC agent&rsquo;s <code>ParseWithNodeLabels</code> and against the live cluster):</p>
 <table>
   <thead>
       <tr>
@@ -3198,30 +3250,36 @@ the FODC agent&rsquo;s <code>ParseWithNodeLabels</code>):</p>
   <tbody>
       <tr>
           <td><code>pod_name</code></td>
-          <td>full node identity, e.g. <code>banyandb-data-hot-0</code></td>
-          <td>instance name</td>
+          <td>node identity, e.g. <code>banyandb-data-hot-0</code></td>
+          <td>instance name (part 1) — <strong>not unique</strong>, see below</td>
       </tr>
       <tr>
           <td><code>container_name</code></td>
-          <td><code>liaison</code> / <code>data</code> (the role discriminator)</td>
-          <td>instance attribute <code>node_role</code></td>
+          <td><code>liaison</code> / <code>data</code> / <code>lifecycle</code></td>
+          <td>instance name (part 2) + attribute <code>container_name</code> (the role discriminator)</td>
       </tr>
       <tr>
           <td><code>node_role</code></td>
-          <td>raw enum <code>ROLE_LIAISON</code> / <code>ROLE_DATA</code></td>
-          <td>(available; <code>container_name</code> preferred for clean values)</td>
+          <td>raw enum <code>ROLE_LIAISON</code> / <code>ROLE_DATA</code> (transiently <code>ROLE_UNSPECIFIED</code>)</td>
+          <td><strong>not</strong> the discriminator — coarser than <code>container_name</code>, stays <code>ROLE_DATA</code> on the lifecycle sidecar</td>
       </tr>
       <tr>
           <td><code>node_type</code></td>
-          <td><code>hot</code> / <code>warm</code> / <code>cold</code> (data nodes only)</td>
+          <td><code>hot</code> / <code>warm</code> / <code>cold</code> (data containers only)</td>
           <td>instance attribute <code>node_type</code> (tier)</td>
       </tr>
   </tbody>
 </table>
+<p><code>pod_name</code> alone does <strong>not</strong> identify an instance: on the live cluster the four data hot/warm pods
+each run two containers (<code>data</code> + <code>lifecycle</code>) under one <code>pod_name</code>, so the instance key is
+<code>pod_name</code> + <code>container_name</code>.</p>
 <p>All original BanyanDB labels are preserved on every sample: <code>group</code>, <code>service</code>, <code>method</code>, <code>operation</code>,
-<code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code>, <code>error_type</code>, <code>kind</code>, <code>path</code>, <code>type</code>, <code>name</code>, <code>le</code>, …. The
-Prometheus-synthesized <code>instance</code> / <code>job</code> / <code>up</code> describe the <strong>proxy</strong>, not individual nodes — node
-liveness is derived from the always-present per-node gauge <code>banyandb_system_up_time</code>, never from <code>up</code>.</p>
+<code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code>, <code>error_type</code>, <code>kind</code>, <code>path</code>, <code>type</code>, <code>seg</code>, <code>shard</code>,
+<code>le</code>, …. Note <code>service</code> is BanyanDB&rsquo;s internal <strong>data-model module</strong> (<code>measure</code> / <code>stream</code> / <code>trace</code> /
+<code>property</code> / <code>group</code>) — a workload facet, <strong>never</strong> a SkyWalking service identity. The
+Prometheus-synthesized <code>instance</code> / <code>job</code> / <code>up</code> describe the <strong>proxy</strong>, not individual containers —
+node liveness is derived from the always-present per-container gauge <code>banyandb_system_up_time</code>, never
+from <code>up</code>.</p>
 <p><strong>Collector scrape job (illustrative — operator configuration, not a shipped file):</strong></p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">receivers</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">prometheus</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -3248,22 +3306,60 @@ liveness is derived from the always-present per-node gauge <code>banyandb_system
 </span></span><span style="display:flex;"><span># banyandb-service.yaml  → cluster
 </span></span><span style="display:flex;"><span>expSuffix: service([&#39;cluster&#39;], Layer.BANYANDB)
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span># banyandb-instance.yaml → node, with role + tier as attributes
+</span></span><span style="display:flex;"><span># banyandb-instance.yaml → container (a node may run &gt;1 container), role + tier as attributes
 </span></span><span style="display:flex;"><span>expSuffix: |-
 </span></span><span style="display:flex;"><span>  service([&#39;cluster&#39;], Layer.BANYANDB)
-</span></span><span style="display:flex;"><span>  .instance([&#39;cluster&#39;], &#39;::&#39;, [&#39;pod_name&#39;], &#39;&#39;, Layer.BANYANDB,
-</span></span><span style="display:flex;"><span>            { tags -&gt; [&#39;node_role&#39;: tags.container_name, &#39;node_type&#39;: tags.node_type ?: &#39;n/a&#39;] })
+</span></span><span style="display:flex;"><span>  .instance([&#39;cluster&#39;], &#39;::&#39;, [&#39;pod_name&#39;, &#39;container_name&#39;], &#39;@&#39;, Layer.BANYANDB,
+</span></span><span style="display:flex;"><span>            { tags -&gt; [&#39;node_role&#39;:      tags.node_role,
+</span></span><span style="display:flex;"><span>                       &#39;node_type&#39;:      tags.node_type ?: &#39;n/a&#39;,
+</span></span><span style="display:flex;"><span>                       &#39;pod_name&#39;:       tags.pod_name,
+</span></span><span style="display:flex;"><span>                       &#39;container_name&#39;: tags.container_name] })
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span># banyandb-endpoint.yaml → group
 </span></span><span style="display:flex;"><span>expSuffix: endpoint([&#39;cluster&#39;], [&#39;group&#39;], Layer.BANYANDB)
-</span></span></code></pre></div><p>The 6-argument <code>.instance(...)</code> overload&rsquo;s properties closure is the standard, precedented mechanism for
+</span></span></code></pre></div><p>The instance key is the pair <code>['pod_name', 'container_name']</code> joined by <code>'@'</code> (signature
+<code>instance(serviceKeys, serviceDelimiter, instanceKeys, instanceDelimiter, layer, propertiesExtractor)</code>),
+so the four <code>data</code> hot/warm pods surface as distinct <code>…@data</code> and <code>…@lifecycle</code> instances rather than
+colliding. The 6-argument overload&rsquo;s properties closure is the standard, precedented mechanism for
 attaching labels as instance attributes (the same shape used by <code>k8s-instance.yaml</code>). The attributes
-ride entirely on the scraped labels — no separate update API.</p>
+ride entirely on the scraped labels — no separate update API. (Two implementation notes: the MAL v2
+grammar supports the Elvis operator inside a map-literal value, but no shipped rule combines the two
+yet — the implementation PR should pin this exact closure shape with a compile test. And <code>language</code> is
+the one reserved property key — the instance query maps it to the language field instead of an
+attribute; none of these four labels collides with it.)</p>
 <h3 id="3-metric-catalog--mal-rules">3. Metric catalog → MAL rules</h3>
 <p>The redesigned rules mirror the upstream FODC-proxy catalog. The two upstream Grafana boards map onto
-two SkyWalking scopes — <strong>Nodes → Instance</strong> (per <code>pod_name</code>), <strong>Workload → Endpoint</strong> (per <code>group</code>) —
-plus a small <strong>Service</strong> summary for cluster KPIs. Source metric names below are verified against
-BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</p>
+two SkyWalking scopes — <strong>Nodes → Instance</strong> (per <code>pod_name</code> + <code>container_name</code>), <strong>Workload →
+Endpoint</strong> (per <code>group</code>) — plus a small <strong>Service</strong> summary for cluster KPIs. Source metric names
+below are verified against the <strong>live demo cluster</strong> — which runs upstream <code>main</code> builds (the
+validation pull used the showcase-pinned <code>main</code> image of 2026-06-09) — and against BanyanDB
+<code>origin/main</code> source. The upstream observability PR
+<a href="https://github.com/apache/skywalking-banyandb/pull/1159">#1159</a> (open; docs and Grafana dashboards
+only, no metric code) documents the same catalog and defines the two boards this design mirrors.</p>
+<blockquote>
+<p><strong>Metric-name prefix (build-critical).</strong> The sketches below drop a common prefix for readability.
+On the wire <strong>every BanyanDB-native family carries the <code>banyandb_</code> prefix</strong> (<code>banyandb_measure_total_written</code>,
+<code>banyandb_liaison_grpc_total_started</code>, <code>banyandb_system_disk</code>, …) — the MAL rules must use the full
+prefixed name. The <strong>only</strong> exceptions are the standard Go-runtime and process exporter families
+<code>go_*</code> / <code>process_*</code>, which are <strong>bare</strong> (no prefix) and are referenced as-is. Every error counter
+this catalog references is lazily registered and emits nothing until the first error fires
+(<code>banyandb_liaison_grpc_total_err</code>, <code>banyandb_liaison_grpc_total_stream_msg_received_err</code>,
+<code>banyandb_queue_pub_total_err</code>, the <code>*_total_sync_loop_err</code> family), and the lifecycle last-run
+gauges (<code>banyandb_lifecycle_last_run_*</code>, BanyanDB #1167) post-date the build the demo pull validated;
+every other cited family was present in that pull.</p>
+<p><strong>Sketch notation (PromQL-flavored).</strong> Source expressions are written PromQL-style for readability;
+the MAL forms differ mechanically. <strong>(1)</strong> No <code>or vector(0)</code> guard exists in MAL — nor is one
+needed: an unfired family resolves to the empty sample family, MAL&rsquo;s <code>+</code> treats an empty operand as
+identity, and a rule is skipped only when <em>all</em> referenced families are absent — so an error sum
+emits as soon as any one term fires, and a fully healthy cluster shows no series at all (dashboards
+should render absent as 0). <strong>(2)</strong> MAL arithmetic joins samples on exact label equality, so each
+term must be aggregated to the same label set (e.g. <code>.sum(['cluster'])</code>) before <code>+</code>. <strong>(3)</strong>
+<code>count(...) by (...)</code> maps to MAL&rsquo;s multi-label <code>count([...])</code>; <code>histogram_quantile(0.99, …_bucket)</code>
+maps to <code>.histogram().histogram_percentile([99])</code> on the <code>le</code>-labeled base family (no <code>_bucket</code>
+suffix remains after OTLP conversion); and <code>time() - &lt;metric&gt;</code> is computed at <strong>ingest</strong> in the MAL
+rule — MAL ships <code>time()</code> (the shipped <code>envoy-ca.yaml</code> cert-staleness metric is the precedent),
+while MQE has no current-time function, so it cannot be computed at query time.</p>
+</blockquote>
 <h4 id="31-service-scope--cluster-summary-banyandb-serviceyaml">3.1 Service scope — cluster summary (<code>banyandb-service.yaml</code>)</h4>
 <table>
   <thead>
@@ -3287,11 +3383,11 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
       <tr>
           <td><code>cluster_error_rate</code></td>
           <td>cluster errors/min</td>
-          <td><code>liaison_grpc_total_err + _stream_msg_received_err + schema_server_grpc_total_err + queue_pub_total_err + Σ *_total_sync_loop_err</code> (×60, each <code>or vector(0)</code>)</td>
+          <td><code>liaison_grpc_total_err + liaison_grpc_total_stream_msg_received_err + schema_server_grpc_total_err + queue_pub_total_err + Σ *_total_sync_loop_err</code> (×60; all lazily registered — see sketch notation above)</td>
       </tr>
       <tr>
-          <td><code>reporting_nodes</code></td>
-          <td>live node count by role</td>
+          <td><code>reporting_instances</code></td>
+          <td>live container count by role</td>
           <td><code>count(system_up_time) by (container_name)</code></td>
       </tr>
       <tr>
@@ -3311,8 +3407,8 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
       </tr>
   </tbody>
 </table>
-<h4 id="32-instance-scope--per-node-banyandb-instanceyaml">3.2 Instance scope — per node (<code>banyandb-instance.yaml</code>)</h4>
-<p><strong>All roles</strong> (every node emits these — the &ldquo;Nodes&rdquo; board):</p>
+<h4 id="32-instance-scope--per-container-banyandb-instanceyaml">3.2 Instance scope — per container (<code>banyandb-instance.yaml</code>)</h4>
+<p><strong>All roles</strong> (every container emits these — the &ldquo;Nodes&rdquo; board):</p>
 <table>
   <thead>
       <tr>
@@ -3363,7 +3459,7 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
       </tr>
   </tbody>
 </table>
-<p><strong>Liaison-only</strong> (front door; hidden on data nodes — see <a href="#4-dynamic-metrics-by-role-and-tier">§4</a>):</p>
+<p><strong>Liaison-only</strong> (front door; hidden on data containers — see <a href="#4-dynamic-metrics-by-role-and-tier">dynamic metrics by role and tier</a>):</p>
 <table>
   <thead>
       <tr>
@@ -3378,7 +3474,7 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
       </tr>
       <tr>
           <td><code>grpc_error_rate</code></td>
-          <td><code>rate(liaison_grpc_total_err) by (service, method)</code> (+ <code>_stream_msg_received_err</code>; both lazily registered)</td>
+          <td><code>rate(liaison_grpc_total_err) by (service, method)</code> (+ <code>liaison_grpc_total_stream_msg_received_err</code>; both lazily registered)</td>
       </tr>
       <tr>
           <td><code>non_query_op_rate</code></td>
@@ -3398,7 +3494,7 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
       </tr>
   </tbody>
 </table>
-<p><strong>Data-only</strong> (backend; hidden on liaison nodes):</p>
+<p><strong>Data-only</strong> (backend; hidden on liaison containers):</p>
 <table>
   <thead>
       <tr>
@@ -3417,7 +3513,7 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
       </tr>
       <tr>
           <td><code>series_write_rate</code> / <code>series_term_search_rate</code> / <code>total_series</code></td>
-          <td><code>measure_inverted_index_total_updates</code> / <code>_term_searchers_started</code> / <code>_doc_count</code>; <code>stream_storage_inverted_index_*</code></td>
+          <td><code>measure_inverted_index_total_updates</code> / <code>_total_term_searchers_started</code> / <code>_total_doc_count</code>; <code>stream_storage_inverted_index_*</code></td>
       </tr>
       <tr>
           <td><code>stream_tst_write_rate</code> / <code>stream_tst_term_search_rate</code> / <code>stream_tst_total_docs</code></td>
@@ -3427,8 +3523,45 @@ BanyanDB <code>origin/main</code> (the base of the upstream observability PR).</
           <td><code>queue_sub_throughput</code> / <code>queue_sub_latency_p99</code> (per <code>operation</code>)</td>
           <td><code>rate(queue_sub_total_started/finished) by (operation)</code> / <code>histogram_quantile(0.99, …queue_sub_total_latency_bucket) by (operation)</code></td>
       </tr>
+      <tr>
+          <td><code>retention_disk_usage_percent</code> / <code>retention_cooldown</code></td>
+          <td><code>storage_retention_{measure,stream,trace}_disk_usage_percent</code> / <code>_forced_retention_cooldown_seconds</code></td>
+      </tr>
   </tbody>
 </table>
+<p><strong>Lifecycle-only</strong> (the tier-migration sidecar co-located on <code>hot</code>/<code>warm</code> data pods; <code>container_name == 'lifecycle'</code>):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric (<code>meter_banyandb_instance_*</code>)</th>
+          <th>Source</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>lifecycle_cycles</code></td>
+          <td><code>lifecycle_cycles_total</code> (cumulative migration cycles)</td>
+      </tr>
+      <tr>
+          <td><code>lifecycle_last_run</code></td>
+          <td><code>lifecycle_last_run_timestamp_seconds</code> — epoch of the last cycle&rsquo;s start; &ldquo;time since last sync&rdquo; = <code>time() - &lt;metric&gt;</code>, computed at ingest in the MAL rule (MQE has no <code>time()</code>)</td>
+      </tr>
+      <tr>
+          <td><code>lifecycle_last_run_success</code></td>
+          <td><code>lifecycle_last_run_success</code> (<code>1</code> = last cycle OK, <code>0</code> = failed)</td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p><strong>Lifecycle last-run signals.</strong> The two gauges above were added in BanyanDB
+<a href="https://github.com/apache/skywalking-banyandb/pull/1167">#1167</a> (merged to <code>main</code> on 2026-06-09,
+post-dating the build the demo pull validated) — both are
+stamped on every cycle end (success, error, or panic-recovered), so they drive a &ldquo;time since last
+sync&rdquo; staleness panel and a &ldquo;last sync OK?&rdquo; status panel directly. They emit only <strong>after the first
+migration runs</strong>, so the staleness panel must guard the never-run case. The same PR also stamps the
+lifecycle&rsquo;s sender identity onto its migration publisher, so a destination data node&rsquo;s <code>queue_sub</code>
+<code>remote_node</code> / <code>remote_role</code> / <code>remote_tier</code> now identify the migration source (were empty before).</p>
+</blockquote>
 <h4 id="33-endpoint-scope--per-group-banyandb-endpointyaml">3.3 Endpoint scope — per group (<code>banyandb-endpoint.yaml</code>)</h4>
 <p>The &ldquo;Workload&rdquo; board&rsquo;s by-<code>group</code> projections become endpoint metrics (aggregated across the cluster&rsquo;s
 nodes per group):</p>
@@ -3458,7 +3591,7 @@ nodes per group):</p>
       </tr>
       <tr>
           <td><code>series_write_rate</code> / <code>total_series</code></td>
-          <td>inverted-index <code>_total_updates</code> / <code>_doc_count</code> <code>by (group)</code></td>
+          <td>inverted-index <code>_total_updates</code> / <code>_total_doc_count</code> <code>by (group)</code></td>
       </tr>
       <tr>
           <td><code>queue_throughput</code> / <code>queue_latency_p99</code></td>
@@ -3478,30 +3611,36 @@ group&rdquo;. Endpoint-only UI affordances that assume RPC semantics (endpoint d
 traces, slow-endpoint lists) are not meaningful here and are intentionally not used.</p>
 </blockquote>
 <h3 id="4-dynamic-metrics-by-role-and-tier">4. Dynamic metrics by role and tier</h3>
-<p>Different roles expose different metrics, so the <strong>node (Instance) dashboard must adapt to the selected
-node</strong>. Two mechanisms, layered:</p>
-<p><strong>(a) Data-presence gating — available today, no UI code.</strong> Horizon UI already supports
-<code>visibleWhen: &quot;&lt;metric&gt; has value&quot;</code> on a widget; a panel whose metric returns all-null self-hides. Each
-MAL rule only produces samples for nodes that emit its source metric, so liaison-only metrics are simply
-absent on data instances and vice-versa. This gives correct adaptive behavior out of the box:</p>
+<p>Different roles expose different metrics, so the <strong>instance dashboard must adapt to the selected
+container</strong>. Horizon UI&rsquo;s widget <code>visibleWhen</code> is a structured, <strong>server-evaluated</strong> gate (the BFF
+resolves it against data presence or the selected instance&rsquo;s attributes and returns gated-out widgets
+as hidden; legacy free-text predicate strings are no longer parsed and degrade to ungated). Two gate
+kinds, layered:</p>
+<p><strong>(a) Data-presence gating — available today, no UI code.</strong> The <code>mqe</code>-kind gate hides a widget whose
+expression returns no data. Each MAL rule only produces samples for containers that emit its source
+metric, so liaison-only metrics are simply absent on data instances and vice-versa. This gives correct
+adaptive behavior out of the box:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-jsonc" data-lang="jsonc"><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;id&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;wqueue&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;title&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;Write Queue (wqueue)&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;type&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;line&#34;</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;expressions&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">[</span><span style="color:#0a3069">&#34;meter_banyandb_instance_wqueue_pending&#34;</span><span style="color:#1f2328">],</span>
-</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;visibleWhen&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;meter_banyandb_instance_wqueue_pending has value&#34;</span> <span style="color:#1f2328">}</span>
-</span></span></code></pre></div><p><strong>(b) Attribute predicate — proposed enhancement (see <a href="#6-horizon-ui-enhancement-entity-attribute-predicate">§6</a>).</strong>
+</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;visibleWhen&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;kind&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;mqe&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;expression&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;meter_banyandb_instance_wqueue_pending&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;op&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;exists&#34;</span> <span style="color:#1f2328">}</span> <span style="color:#1f2328">}</span>
+</span></span></code></pre></div><p><strong>(b) Attribute gating — equality ships today; membership is the proposed extension (see
+<a href="#6-horizon-ui-enhancement-entity-gate-membership-operators">entity-gate membership operators</a>).</strong>
 Data-presence can&rsquo;t distinguish &ldquo;wrong role&rdquo; from &ldquo;idle but right role&rdquo;, and it still issues the query.
-An attribute predicate keys panel visibility directly on the node&rsquo;s <code>node_role</code> / <code>node_type</code>
-attributes:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-jsonc" data-lang="jsonc"><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;id&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;wqueue&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;visibleWhen&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;#entity.node_role == &#39;liaison&#39;&#34;</span> <span style="color:#1f2328">}</span>
-</span></span><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;id&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;cold_tier_note&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;visibleWhen&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;#entity.node_type == &#39;cold&#39;&#34;</span> <span style="color:#1f2328">}</span>
+The <code>entity</code>-kind gate keys panel visibility directly on the selected instance&rsquo;s <code>container_name</code> /
+<code>node_type</code> attributes (meaningful on the Instance scope only):</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-jsonc" data-lang="jsonc"><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;id&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;wqueue&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;visibleWhen&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;kind&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;entity&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;attribute&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;container_name&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;op&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;eq&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;value&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;liaison&#34;</span> <span style="color:#1f2328">}</span> <span style="color:#1f2328">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;id&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;cold_tier_note&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;visibleWhen&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;kind&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;entity&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;attribute&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;node_type&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;op&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;eq&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;value&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;cold&#34;</span> <span style="color:#1f2328">}</span> <span style="color:#1f2328">}</span>
 </span></span></code></pre></div><p>This is the precise, declarative form, and it is the natural way to express tier-specific panels (a
-<code>hot</code> data node merges constantly; a <code>cold</code> node is mostly static).</p>
+<code>hot</code> data container merges constantly; a <code>cold</code> container is mostly static). The landed gate supports
+<code>exists</code> and case-insensitive <code>eq</code>; tier <em>sets</em> need the proposed <code>in</code> operator — until it lands they
+are expressible as duplicated <code>eq</code>-gated widget variants.</p>
 <p>Role/tier scoping of the catalog:</p>
 <table>
   <thead>
       <tr>
           <th>Bucket</th>
           <th>Panels</th>
-          <th>Predicate</th>
+          <th>Entity gate</th>
       </tr>
   </thead>
   <tbody>
@@ -3513,82 +3652,159 @@ attributes:</p>
       <tr>
           <td><strong>Liaison</strong></td>
           <td>gRPC query &amp; errors, non-query ops, write rate, publish throughput &amp; latency, wqueue depth</td>
-          <td><code>#entity.node_role == 'liaison'</code></td>
+          <td><code>container_name eq liaison</code></td>
       </tr>
       <tr>
           <td><strong>Data</strong></td>
-          <td>storage totals, merge/compaction, inverted index, subscribe queue</td>
-          <td><code>#entity.node_role == 'data'</code></td>
+          <td>storage totals, merge/compaction, inverted index, subscribe queue, retention</td>
+          <td><code>container_name eq data</code></td>
       </tr>
       <tr>
           <td><strong>Data + tier</strong></td>
           <td>tier-specific merge/retention hints</td>
-          <td><code>#entity.node_type in (hot,warm)</code></td>
+          <td><code>node_type in (hot, warm)</code> †</td>
+      </tr>
+      <tr>
+          <td><strong>Lifecycle</strong></td>
+          <td>migration cycles, last-run time + status</td>
+          <td><code>container_name eq lifecycle</code></td>
       </tr>
   </tbody>
 </table>
+<p>† <code>in</code> is the proposed extension of <a href="#6-horizon-ui-enhancement-entity-gate-membership-operators">section 6</a>;
+until it lands, two <code>eq</code>-gated widget variants.</p>
 <h3 id="5-dashboards-horizon-ui-banyandb-layer-template">5. Dashboards (Horizon UI BANYANDB layer template)</h3>
 <p>A net-new layer template <code>apps/bff/src/bundled_templates/layers/banyandb.json</code> (config-driven JSON, one
-file per layer, per-scope widget arrays, MQE expression strings). The design mirrors the upstream two
-boards across the SkyWalking hierarchy:</p>
+file per layer keyed by its <code>key</code> field — <code>BANYANDB</code>, filename lowercased — with per-scope widget
+arrays and MQE expression strings). One menu touchpoint exists: Horizon UI currently hard-codes the
+<code>BANYANDB</code> layer out of the sidebar (<code>HIDDEN_LAYERS</code>);
+<a href="https://github.com/apache/skywalking-horizon-ui/pull/47">horizon-ui #47</a> replaces that with a
+config-driven <code>layers.excluded</code> list that un-hides BanyanDB — this SWIP rides on that change (or an
+equivalent one-line un-hide). The design mirrors the upstream two boards across the SkyWalking
+hierarchy:</p>
 <pre tabindex="0"><code>BANYANDB layer
-├─ Root            → cluster list (ServiceList), showGroup=false
+├─ Root            → cluster list (the layer landing&#39;s service-list picker: header columns + sort)
 ├─ Service (cluster)
 │   └─ Overview KPIs + &#34;Cluster Workload Summary&#34; + &#34;Fleet Overview&#34; capacity
 │       (cluster_write_rate, cluster_query_rate, cluster_error_rate,
-│        reporting_nodes by role, total_cpu/memory/disk)
-├─ Instance (node)   ← the &#34;Nodes&#34; board, made dynamic
+│        reporting_instances by role, total_cpu/memory/disk)
+├─ Instance (container)   ← the &#34;Nodes&#34; board, made dynamic; instance = pod_name@container_name
 │   ├─ All roles: Resources (CPU/RSS/mem%/disk%), Disk by Path, Network, Go Runtime
-│   ├─ Liaison (visibleWhen role==liaison): Ingestion/Query, Registry, Errors,
+│   ├─ Liaison (entity gate container_name eq liaison): Ingestion/Query, Registry, Errors,
 │   │     Publish throughput &amp; p99, Write Queue (wqueue) depth
-│   └─ Data (visibleWhen role==data): Storage totals, Merge, Inverted Index,
-│         Subscribe Queue (per operation: query/file-sync/batch-write/control)
+│   ├─ Data (entity gate container_name eq data): Storage totals, Merge, Inverted Index, Retention,
+│   │     Subscribe Queue (per operation: query/file-sync/batch-write/control)
+│   └─ Lifecycle (entity gate container_name eq lifecycle): migration cycles, last-run time + status
 └─ Endpoint (group)  ← the &#34;Workload&#34; board, by group
     └─ Write rate, Query latency, Total data, Merge, Inverted index, Queue, Publish bytes
 </code></pre><p>Panel <strong>types/units</strong> follow the upstream Grafana boards for fidelity (stat for KPIs; timeseries for
-rates/latencies; table for the per-node health row; <code>bytes</code> / <code>percentunit</code> / <code>s</code> / <code>reqps</code> / <code>wps</code>
-units; disk% and memory% turn red at 80%). The per-node &ldquo;health table&rdquo; (uptime, CPU cores, RSS, mem%,
-disk%) becomes the Instance-list columns on the Service view.</p>
+rates/latencies; <code>bytes</code> / <code>percentunit</code> / <code>s</code> / <code>reqps</code> / <code>wps</code> units; disk% and memory% turn red at
+80%). The upstream per-node &ldquo;health table&rdquo; (uptime, CPU cores, RSS, mem%, disk%) maps onto the
+all-roles Resources widgets of the Instance view — Horizon UI&rsquo;s instance list deliberately shows only
+name + attributes (the role/tier chips), and per-instance metric columns are not assumed by this
+design; if embedded health columns prove necessary later, that is an additive Horizon UI enhancement.</p>
 <p>This is <strong>design only</strong> — the production <code>banyandb.json</code> and its exact widget grid are deliberately left
 to the implementation PR in the Horizon UI repository.</p>
-<h3 id="6-horizon-ui-enhancement-entity-attribute-predicate">6. Horizon UI enhancement: <code>#entity</code> attribute predicate</h3>
-<p>Horizon UI&rsquo;s widget <code>visibleWhen</code> already parses two predicate forms but only one is implemented:</p>
+<h3 id="6-horizon-ui-enhancement-entity-gate-membership-operators">6. Horizon UI enhancement: entity-gate membership operators</h3>
+<p>When this SWIP was first drafted, Horizon UI parsed <code>visibleWhen</code> as free text and stubbed the
+entity-attribute form. That is no longer the upstream state: horizon-ui PR #46 (merged 2026-06-08)
+replaced the free-text parser with a structured, <strong>BFF-evaluated</strong> union —</p>
 <ul>
-<li><code>&quot;&lt;metric&gt; has value&quot;</code> — implemented (client-side data-presence gating).</li>
-<li><code>&quot;#entity.&lt;key&gt;&quot;</code> — <strong>parsed but stubbed</strong>: the renderer&rsquo;s <code>isVisible</code> currently returns <code>true</code>
-unconditionally for any <code>#entity.*</code> predicate, with the comment <em>&ldquo;Entity-attribute predicates need an
-attributes feed we don&rsquo;t surface yet. Render the widget unconditionally for now.&rdquo;</em></li>
+<li><code>{ &quot;kind&quot;: &quot;mqe&quot;, &quot;expression&quot;: &quot;&lt;expr&gt;&quot;, &quot;op&quot;: &quot;exists&quot; }</code> — data-presence gating;</li>
+<li><code>{ &quot;kind&quot;: &quot;entity&quot;, &quot;attribute&quot;: &quot;&lt;key&gt;&quot;, &quot;op&quot;: &quot;exists&quot; }</code> /
+<code>{ &quot;kind&quot;: &quot;entity&quot;, &quot;attribute&quot;: &quot;&lt;key&gt;&quot;, &quot;op&quot;: &quot;eq&quot;, &quot;value&quot;: &quot;&lt;v&gt;&quot; }</code> — entity-attribute gating
+against the selected instance&rsquo;s attribute feed (<code>eq</code> compares case-insensitively; meaningful on the
+Instance scope only, a no-op elsewhere)</li>
 </ul>
-<p>The data is already on the wire: the instance list the UI fetches carries each instance&rsquo;s
-<code>attributes [{name,value}]</code>. The enhancement is to <strong>wire those attributes into the predicate
-evaluator</strong> and give the predicate a small comparison grammar:</p>
+<p>— so the attribute feed and the evaluator this section originally proposed <strong>already exist upstream</strong>:
+the BFF fetches the selected instance&rsquo;s <code>attributes [{name,value}]</code> and returns gated-out widgets as
+hidden. Legacy free-text predicates (<code>&quot;&lt;metric&gt; has value&quot;</code>, <code>&quot;#entity.&lt;key&gt;&quot;</code>) are no longer parsed
+and degrade to ungated.</p>
+<p>What remains for this design is only <strong>membership and negation</strong>:</p>
 <table>
   <thead>
       <tr>
-          <th>Predicate form</th>
+          <th>Proposed gate</th>
           <th>Meaning</th>
       </tr>
   </thead>
   <tbody>
       <tr>
-          <td><code>#entity.&lt;key&gt;</code></td>
-          <td>attribute present and truthy</td>
+          <td><code>{ &quot;kind&quot;: &quot;entity&quot;, &quot;attribute&quot;: &quot;&lt;key&gt;&quot;, &quot;op&quot;: &quot;neq&quot;, &quot;value&quot;: &quot;&lt;v&gt;&quot; }</code></td>
+          <td>not-equals a literal</td>
       </tr>
       <tr>
-          <td><code>#entity.&lt;key&gt; == '&lt;v&gt;'</code> / <code>!= '&lt;v&gt;'</code></td>
-          <td>equals / not-equals a literal</td>
-      </tr>
-      <tr>
-          <td><code>#entity.&lt;key&gt; in (&lt;v1&gt;,&lt;v2&gt;)</code></td>
+          <td><code>{ &quot;kind&quot;: &quot;entity&quot;, &quot;attribute&quot;: &quot;&lt;key&gt;&quot;, &quot;op&quot;: &quot;in&quot;, &quot;values&quot;: [&quot;&lt;v1&gt;&quot;, &quot;&lt;v2&gt;&quot;] }</code></td>
           <td>membership</td>
       </tr>
   </tbody>
 </table>
-<p>Scope of the enhancement (design): (1) pass the selected instance&rsquo;s <code>attributes</code> into the
-<code>LayerDashboardsView</code> predicate context; (2) implement the <code>#entity.*</code> branch of <code>isVisible</code> to read
-that context; (3) extend the predicate parser with <code>==</code> / <code>!=</code> / <code>in</code>; (4) document it in the Horizon UI
-layer-template authoring docs. It is generic — any layer (K8s node roles, gateway tiers, …) benefits;
+<p>Scope of the enhancement (design): (1) add the two operator arms to the BFF <code>visibleWhen</code> schema and
+its entity-gate evaluator; (2) document them in the Horizon UI layer-template authoring docs. Until it
+lands, a tier set like <code>node_type in (hot, warm)</code> is expressible as two <code>eq</code>-gated widget variants —
+<code>in</code> removes the duplication. It is generic — any layer (K8s node roles, gateway tiers, …) benefits;
 BanyanDB is the first consumer. The exact code lands in the Horizon UI repository.</p>
+<h3 id="7-intra-cluster-instance-topology-the-deployment-component">7. Intra-cluster instance topology (the &ldquo;deployment&rdquo; component)</h3>
+<p>Beyond the per-instance dashboards, the BanyanDB layer adds a <strong>deployment view</strong>: the
+container-to-container call graph <em>within</em> the single BanyanDB cluster service — liaison↔data writes,
+the hot→warm→cold lifecycle migration chain, and inter-liaison gossip. The legacy booster UI only ever
+drew instance topology <em>between two services</em>; this is a net-new Horizon UI component for the
+<strong>one-service</strong> case (landing via horizon-ui PR #47).</p>
+<p><strong>Data path — no query API change.</strong> The component calls
+<code>getServiceInstanceTopology(clientServiceId, serverServiceId, duration)</code> with the <strong>same</strong> service id
+on both sides. OAP&rsquo;s relation filter is symmetric, so <code>client == server == svc</code> collapses to
+<code>source_service_id == dest_service_id == svc</code>, returning exactly the intra-cluster instance relations
+(verified across the BanyanDB / JDBC / ES topology DAOs). Per-node metrics evaluate under
+<code>{ scope: ServiceInstance }</code>; per-edge metrics under <code>ServiceInstanceRelation</code> (server + client
+families) — both ordinary MQE.</p>
+<p><strong>Grouping contract.</strong> The component lays the graph out from the instance attributes this SWIP emits
+(<a href="#1-entity-model">entity model</a>):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Config key</th>
+          <th>Attribute(s)</th>
+          <th>Effect</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>clusterBy</code></td>
+          <td><code>node_role</code> + <code>node_type</code></td>
+          <td>one box per role/tier — liaison, data hot/warm/cold</td>
+      </tr>
+      <tr>
+          <td><code>siblingBy</code></td>
+          <td><code>pod_name</code></td>
+          <td>a pod = main container + sibling containers (data + lifecycle)</td>
+      </tr>
+      <tr>
+          <td><code>roleBy</code></td>
+          <td><code>container_name</code></td>
+          <td>per-role node metrics (<code>liaison</code> / <code>data</code> / <code>lifecycle</code>)</td>
+      </tr>
+  </tbody>
+</table>
+<p>Per-role node MQE binds to the <code>meter_banyandb_instance_*</code> metrics from the catalog above — e.g.
+liaison → <code>query_rate_by_service</code>, data → <code>write_rate</code> / <code>disk_usage_percent</code>, lifecycle →
+<code>lifecycle_cycles</code> / <code>lifecycle_last_run_success</code>. Only <code>container_name</code> ∈
+{<code>liaison</code>, <code>data</code>, <code>lifecycle</code>} exists on the wire — there is <strong>no <code>fodc</code> container</strong> (the FODC agent
+publishes no self-metrics through the proxy), so a <code>fodc</code> role is not modeled.</p>
+<p><strong>Open dependency — a MAL <code>SERVICE_INSTANCE_RELATION</code> scope.</strong> This feature is MAL-only: every BanyanDB
+entity, metric, and attribute here is produced by the <code>banyandb/*</code> MAL rules. MAL builds relations
+through <code>MeterEntity</code> / <code>ScopeType</code>, which ships <code>SERVICE_RELATION</code> and <code>PROCESS_RELATION</code> (the latter
+already powers the eBPF process topology via <code>network-profiling.yaml</code>) — but it has <strong>no
+<code>SERVICE_INSTANCE_RELATION</code> scope</strong> and no <code>SampleFamily.instanceRelation(...)</code> builder. So MAL cannot
+emit the instance-relation metric that <code>getServiceInstanceTopology</code> reads, and on a metrics-only
+BanyanDB the deployment graph is <strong>empty</strong> — the Horizon UI component (horizon-ui PR #47) renders that empty
+state by design until the scope lands (its earlier preview mock has been dropped).
+Closing the gap means adding that third relation scope (a <code>SERVICE_INSTANCE_RELATION</code> <code>ScopeType</code> +
+<code>MeterEntity</code> factory + <code>instanceRelation(...)</code> builder + entity description, mirroring the two that
+ship), fed by the queue <code>remote_node</code> / <code>remote_role</code> / <code>remote_tier</code> labels (now carrying the
+lifecycle sender identity per BanyanDB #1167). That is MAL-<strong>engine</strong> code (<code>server-core</code> +
+<code>meter-analyzer</code>), which exceeds this SWIP&rsquo;s <a href="#non-goals">config-only non-goals</a>; it is tracked under
+<a href="#future-work">future work</a>. The component, the query path, and the grouping contract above are ready
+the moment that scope lands.</p>
 <h2 id="feasibility-and-precedent">Feasibility and precedent</h2>
 <p>Verified against the OAP and Horizon UI source — <strong>no OAP core / MAL / receiver change is required</strong>:</p>
 <ul>
@@ -3601,19 +3817,34 @@ BanyanDB is the first consumer. The exact code lands in the Horizon UI repositor
 <code>EndpointTraffic</code> whenever the endpoint name is non-empty; <code>EndpointTraffic</code> is <code>supportUpdate=true</code>
 and is listed by GraphQL <code>findEndpoint</code> (empty keyword ⇒ list all), which the BanyanDB metadata DAO
 serves from the traffic table without touching any trace data.</li>
-<li><strong>Layer.</strong> <code>Layer.BANYANDB</code> (ordinal 43) already exists; layer dashboards are auto-discovered by the
-UI from the template&rsquo;s own <code>layer</code> field — no menu code change.</li>
+<li><strong>Layer.</strong> <code>Layer.BANYANDB</code> (ordinal 43) already exists; layer dashboards are auto-discovered from
+the template&rsquo;s own <code>key</code> field. The one menu touchpoint: Horizon UI&rsquo;s hard-coded hidden-layers set
+currently drops <code>BANYANDB</code> from the sidebar — un-hidden by horizon-ui PR #47&rsquo;s config-driven
+<code>layers.excluded</code> (see <a href="#5-dashboards-horizon-ui-banyandb-layer-template">Dashboards</a>).</li>
 </ul>
 <h2 id="live-validation">Live validation</h2>
 <p>The entity scheme and the metric catalog above were validated against a <strong>live 7-node BanyanDB
 cluster</strong> — the public SkyWalking demo&rsquo;s FODC proxy <code>/metrics</code> (2 liaison + 5 data: <code>hot×2</code>, <code>warm×2</code>,
-<code>cold×1</code>). Findings:</p>
+<code>cold×1</code>), running an upstream <code>main</code> build (the showcase-pinned image of 2026-06-09; upstream PR
+<a href="https://github.com/apache/skywalking-banyandb/pull/1159">#1159</a> — open, docs and Grafana dashboards
+only — documents the same catalog). The live <code>/metrics</code> pull is the authoritative wire reference.
+393 metric families. Findings:</p>
 <ul>
-<li><strong>All four identity labels are present and exactly as designed.</strong> Every sample carries <code>pod_name</code>
-(e.g. <code>demo-banyandb-data-hot-0</code>), <code>node_role</code> (<code>ROLE_LIAISON</code> / <code>ROLE_DATA</code>), <code>container_name</code>
-(<code>liaison</code> / <code>data</code>), and — on <strong>data nodes only</strong> — <code>node_type</code> (<code>hot</code> / <code>warm</code> / <code>cold</code>). Liaison
-nodes carry no <code>node_type</code>, so the instance closure defaults the tier attribute (<code>tags.node_type ?: 'n/a'</code>). This validates Service = <code>cluster</code>, Instance = <code>pod_name</code>, attributes <code>node_role</code> /
-<code>node_type</code>.</li>
+<li><strong>Instance must be <code>pod_name</code> + <code>container_name</code>, not <code>pod_name</code>.</strong> Every sample carries <code>pod_name</code>,
+<code>node_role</code> (<code>ROLE_LIAISON</code> / <code>ROLE_DATA</code> observed; the FODC agent stamps a transient
+<code>ROLE_UNSPECIFIED</code> for unresolved or meta-only nodes), <code>container_name</code>
+(<code>liaison</code> / <code>data</code> / <strong><code>lifecycle</code></strong>), and — on <strong>data containers only</strong> — <code>node_type</code>
+(<code>hot</code> / <code>warm</code> / <code>cold</code>). Crucially, the four <code>data</code> hot/warm pods each run <strong>two containers under
+one <code>pod_name</code></strong> (<code>…@data</code> and <code>…@lifecycle</code>), so <code>pod_name</code> is not a unique instance key and
+<code>node_role</code> is not the discriminator (it reads <code>ROLE_DATA</code> on the lifecycle sidecar). This validates
+Service = <code>cluster</code>, Instance = <code>pod_name</code> + <code>container_name</code>, attributes <code>container_name</code> / <code>node_type</code>.</li>
+<li><strong>The <code>lifecycle</code> migrator surfaces as its own container instance.</strong> It co-locates on the <code>hot</code>/<code>warm</code>
+data pods and emits <code>banyandb_lifecycle_cycles_total</code> plus the shared <code>system_*</code> / <code>go_*</code> /
+<code>process_*</code> runtime families — 50 families under <code>container_name=lifecycle</code> in the demo pull. The
+<code>last_run_timestamp_seconds</code> / <code>last_run_success</code> gauges (BanyanDB #1167) post-date the demo&rsquo;s
+deployed build, so they were absent from that pull but are present on <code>main</code> and emit once a migration
+cycle runs (the showcase has since pinned the BanyanDB #1167 merge SHA, so a redeployed demo will
+expose them).</li>
 <li><strong>The queue model is confirmed verbatim.</strong> <code>banyandb_queue_sub_*</code> / <code>queue_pub_*</code> carry
 <code>operation</code> ∈ {<code>batch-write</code>, <code>control</code>, <code>file-sync</code>, <code>query</code>}, plus <code>group</code>, <code>remote_node</code>,
 <code>remote_role</code> (<code>liaison</code> / <code>data</code>) and <code>remote_tier</code> (<code>hot</code> / …); <code>total_latency</code> is a histogram. The
@@ -3623,16 +3854,23 @@ nodes carry no <code>node_type</code>, so the instance closure defaults the tier
 <code>liaison_grpc_total_started{group,method,service}</code>, <code>*_total_written{group}</code>,
 <code>*_inverted_index_*{group,seg,node_type}</code>. Data-node metrics also carry <code>node_type</code>, so the by-group
 endpoint view can be refined by tier.</li>
-<li><strong>One reconciliation vs. the upstream doc.</strong> Schema/registry operations are <strong>not</strong> exposed as
-<code>banyandb_liaison_grpc_total_registry_*</code> (those series do not exist on the live cluster) — they are a
-<strong>separate <code>banyandb_schema_server_grpc_*</code> scope</strong> (<code>total_started{method}</code>, <code>_finished</code>, <code>_latency</code>,
-<code>_err</code>), running on the nodes hosting the metadata/schema server. The tables above use the
-<code>schema_server_grpc_*</code> names accordingly.</li>
+<li><strong>Two registry/schema scopes coexist (corrected).</strong> The live cluster exposes <strong>both</strong>
+<code>banyandb_liaison_grpc_total_registry_*</code> (<code>group</code>, <code>service</code>, <code>method</code>; on liaison containers) <strong>and</strong>
+a separate <code>banyandb_schema_server_grpc_*</code> scope (<code>total_started{method}</code>, <code>_finished</code>, <code>_latency</code>,
+<code>_err</code>; on the data container hosting the metadata/schema server). The <code>cluster_error_rate</code> and
+registry panels should pick one deliberately — they are different layers, not aliases. (An earlier
+draft claimed the <code>liaison_grpc_total_registry_*</code> series were absent; BanyanDB <code>main</code> has emitted
+them since BanyanDB #517.)</li>
+<li><strong><code>storage_retention_*</code> is a real data-only family</strong> not in earlier drafts:
+<code>storage_retention_{measure,stream,trace}_disk_usage_percent{service}</code> and
+<code>_forced_retention_cooldown_seconds{service}</code> — the source for the data-container retention panels.</li>
 <li><strong>Error counters are absent on a healthy cluster, by design.</strong> <code>liaison_grpc_total_err</code>,
-<code>*_total_sync_loop_err</code> and <code>queue_pub_total_err</code> are label-dimensioned counters that emit no series
-until the first error — so the rules must guard each error term with <code>or vector(0)</code>, exactly as the
-upstream &ldquo;Error Rate&rdquo; panel does. Their non-error siblings (<code>_started</code> / <code>_finished</code> / <code>_latency</code> /
-<code>_bytes</code>) are all present.</li>
+<code>liaison_grpc_total_stream_msg_received_err</code>, <code>*_total_sync_loop_err</code> and <code>queue_pub_total_err</code> are
+label-dimensioned counters that emit no series until the first error. The upstream Grafana &ldquo;Error
+Rate&rdquo; panel guards each term with PromQL&rsquo;s <code>or vector(0)</code>; the MAL rules need no guard — an absent
+family is the identity for MAL&rsquo;s <code>+</code> (see the sketch-notation note in the metric catalog, section 3)
+— the summed metric simply has no series until the first error fires. Their non-error siblings
+(<code>_started</code> / <code>_finished</code> / <code>_latency</code> / <code>_bytes</code>) are all present.</li>
 </ul>
 <h2 id="imported-dependencies-libs-and-their-licenses">Imported Dependencies libs and their licenses</h2>
 <p>None. The design reuses the existing OpenTelemetry receiver, the MAL engine, the <code>BANYANDB</code> layer, and
@@ -3644,10 +3882,11 @@ No new third-party dependency is introduced.</p>
 feature, not a public protocol/storage contract):</p>
 <ul>
 <li><strong>Entity model.</strong> A BanyanDB cluster that previously appeared as <em>N</em> services (one per node) now
-appears as <em>one</em> service with <em>N</em> instances. Old per-node <code>Service</code> entities and their
-<code>meter_banyandb_*</code> / <code>meter_banyandb_instance_*</code> metric series are superseded; the new series use the
-cluster/node/group identities and a partly new metric set. Historical data under the old model is not
-migrated.</li>
+appears as <em>one</em> service with one instance <strong>per container</strong> (<code>pod_name</code> + <code>container_name</code>, so a
+data hot/warm pod yields both a <code>data</code> and a <code>lifecycle</code> instance). Old per-node <code>Service</code> entities
+and their <code>meter_banyandb_*</code> / <code>meter_banyandb_instance_*</code> metric series are superseded; the new
+series use the cluster/container/group identities and a partly new metric set. Historical data under
+the old model is not migrated.</li>
 <li><strong>Scrape target.</strong> Cluster deployments must scrape the <strong>FODC proxy <code>:17913</code></strong> (single target) and
 inject a <code>cluster</code> label. The legacy per-pod <code>:2121</code> collector config is replaced. Direct per-pod
 scraping is <strong>out of scope</strong> for this redesign (a standalone node still reports through its FODC
@@ -3659,9 +3898,9 @@ exposition.</li>
 Horizon UI bundle.</li>
 <li><strong>OAP rule loading</strong> is unchanged: <code>enabledOtelMetricsRules</code> already globs <code>banyandb/*</code>, so the new
 <code>banyandb-endpoint.yaml</code> is picked up without an <code>application.yml</code> change.</li>
-<li><strong>Horizon UI predicate enhancement is backward compatible</strong> — <code>#entity.*</code> only ever returned <code>true</code>
-before, so implementing it can only <em>add</em> hiding behavior to templates that opt in; existing templates
-are unaffected.</li>
+<li><strong>The Horizon UI entity-gate extension is backward compatible</strong> — <code>neq</code> / <code>in</code> are additive arms of
+the structured <code>visibleWhen</code> union (horizon-ui #46); templates that don&rsquo;t use them are unaffected,
+and legacy free-text predicates already degrade to ungated rather than erroring.</li>
 </ul>
 <h2 id="general-usage-docs">General usage docs</h2>
 <p>This is a preliminary usage sketch to help reviewers; the final operator docs (replacing
@@ -3678,17 +3917,25 @@ are unaffected.</li>
 <p><strong>What the operator sees</strong></p>
 <ul>
 <li>A <strong>cluster</strong> as a single service, with cluster-wide write/query/error rates and capacity.</li>
-<li>A <strong>node list</strong> where each node shows its <strong>role</strong> (<code>liaison</code> / <code>data</code>) and <strong>tier</strong>
-(<code>hot</code> / <code>warm</code> / <code>cold</code>) as attributes; selecting a node shows a dashboard <strong>scoped to what that node
-actually does</strong> — ingestion/queue/publish for liaison, storage/index/subscribe for data, refined by
-tier.</li>
+<li>An <strong>instance (container) list</strong> where each entry shows its <strong>container</strong> role
+(<code>liaison</code> / <code>data</code> / <code>lifecycle</code>) and <strong>tier</strong> (<code>hot</code> / <code>warm</code> / <code>cold</code>) as attributes; selecting one
+shows a dashboard <strong>scoped to what that container actually does</strong> — ingestion/queue/publish for
+liaison, storage/index/subscribe/retention for data, migration cycles + last-run time/status for
+lifecycle, refined by tier.</li>
 <li>A <strong>group list</strong> (Endpoints) with per-group throughput, latency, storage, index and queue health.</li>
 </ul>
 <h2 id="future-work">Future work</h2>
 <ul>
-<li><strong>Topology / lifecycle.</strong> Fuse FODC <code>/cluster/topology</code> (node inventory + roles + tiers) and the queue
-<code>remote_node</code> / <code>remote_role</code> / <code>remote_tier</code> labels into a node-to-node call graph, and surface FODC
-<code>/cluster/lifecycle</code> group settings (shards / segment interval / TTL) on the Endpoint view.</li>
+<li><strong>A MAL <code>SERVICE_INSTANCE_RELATION</code> scope for the deployment component.</strong> Add the third relation scope
+(<code>ScopeType</code> + <code>MeterEntity</code> factory + <code>SampleFamily.instanceRelation(...)</code> + entity description,
+mirroring the shipping <code>serviceRelation</code> / <code>processRelation</code>) so the
+<a href="#7-intra-cluster-instance-topology-the-deployment-component">intra-cluster instance topology</a> renders
+live instead of mock-backed, fed by the queue <code>remote_node</code> / <code>remote_role</code> / <code>remote_tier</code> labels
+(verified reconstructable from the live data; BanyanDB #1167 also populates the lifecycle migration
+sender identity, so hot→warm→cold tier-migration edges are distinguishable). This is MAL-engine code,
+beyond this SWIP&rsquo;s config-only scope. Also
+surface FODC <code>/cluster/topology</code> and <code>/cluster/lifecycle</code> group settings (shards / segment interval /
+TTL) on the Endpoint view.</li>
 <li><strong>Alerting.</strong> Ship default alarm rules for the upstream &ldquo;Key Signals to Watch&rdquo; (query p99, error rate,
 disk &gt; 85%, memory near the protector limit, sustained wqueue / <code>queue_pub</code> backlog).</li>
 <li><strong>Direct-scrape variant</strong> for standalone / non-FODC deployments, if demand warrants.</li>
@@ -3741,7 +3988,8 @@ disk &gt; 85%, memory near the protector limit, sustained wqueue / <code>queue_p
             <li><a href="#3-metric-catalog--mal-rules">3. Metric catalog → MAL rules</a></li>
             <li><a href="#4-dynamic-metrics-by-role-and-tier">4. Dynamic metrics by role and tier</a></li>
             <li><a href="#5-dashboards-horizon-ui-banyandb-layer-template">5. Dashboards (Horizon UI BANYANDB layer template)</a></li>
-            <li><a href="#6-horizon-ui-enhancement-entity-attribute-predicate">6. Horizon UI enhancement: <code>#entity</code> attribute predicate</a></li>
+            <li><a href="#6-horizon-ui-enhancement-entity-gate-membership-operators">6. Horizon UI enhancement: entity-gate membership operators</a></li>
+            <li><a href="#7-intra-cluster-instance-topology-the-deployment-component">7. Intra-cluster instance topology (the &ldquo;deployment&rdquo; component)</a></li>
           </ul>
         </li>
         <li><a href="#feasibility-and-precedent">Feasibility and precedent</a></li>
@@ -3866,6 +4114,12 @@ disk &gt; 85%, memory near the protector limit, sustained wqueue / <code>queue_p
 
     </div>
     
+
+
+
+
+
+
 
 
 
