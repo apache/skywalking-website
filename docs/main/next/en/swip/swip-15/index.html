@@ -32,7 +32,7 @@
 
   <meta itemprop="name" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model">
   <meta itemprop="description" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model Motivation Apache SkyWalking BanyanDB is the native storage for SkyWalking. SkyWalking already ships a “BanyanDB self-observability” feature (Layer: BANYANDB, otel-rules/banyandb/*), but that feature was designed for a single-node BanyanDB and for the layout constraints of the legacy booster UI. It no longer reflects how BanyanDB is built or operated, and it no longer reflects how SkyWalking renders dashboards.">
-  <meta itemprop="wordCount" content="5337">
+  <meta itemprop="wordCount" content="6136">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model">
   <meta name="twitter:description" content="SWIP-15 Redesign BanyanDB Self-Observability around the Cluster / Node / Group Model Motivation Apache SkyWalking BanyanDB is the native storage for SkyWalking. SkyWalking already ships a “BanyanDB self-observability” feature (Layer: BANYANDB, otel-rules/banyandb/*), but that feature was designed for a single-node BanyanDB and for the layout constraints of the legacy booster UI. It no longer reflects how BanyanDB is built or operated, and it no longer reflects how SkyWalking renders dashboards.">
@@ -3008,7 +3008,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 75d9433</div>
+                  <div class="commit-id">Commit Id: b4bc7ea</div>
                 
 
 
@@ -3133,9 +3133,16 @@ the tier refines the data view — via the structured <code>visibleWhen</code> g
 </ul>
 <h3 id="non-goals">Non-goals</h3>
 <ul>
-<li>No change to OAP core, the MAL engine, the OTel receiver, or the <code>Layer.BANYANDB</code> registration —
-every primitive this design needs already ships and is precedented (see
-<a href="#feasibility-and-precedent">Feasibility</a>).</li>
+<li>No change to the OTel receiver or the <code>Layer.BANYANDB</code> registration, and no change to OAP core or the
+MAL engine <strong>beyond one addition</strong>: the entity, instance-attribute and per-group/per-node metric
+surface is config-only (MAL rule YAML + Horizon UI template), reusing primitives that already ship and
+are precedented (see <a href="#feasibility-and-precedent">Feasibility</a>). The <strong>one</strong> MAL-engine addition this
+SWIP required is the <code>SERVICE_INSTANCE_RELATION</code> scope — the <code>ScopeType</code>, the
+<code>MeterEntity.newServiceInstanceRelation(...)</code> factory, the <code>SampleFamily.serviceInstanceRelation(...)</code>
+builder and its entity description (<code>server-core</code> + <code>meter-analyzer</code>), mirroring the
+<code>SERVICE_RELATION</code> / <code>PROCESS_RELATION</code> scopes that already shipped — without which the intra-cluster
+<a href="#7-intra-cluster-instance-topology-the-deployment-component">deployment topology</a> could not be
+emitted. That scope landed with this SWIP.</li>
 <li>No FODC on-demand profiling / heap-dump / topology integration. This SWIP is about the <strong>metrics</strong>
 surface (FODC <code>/metrics</code>). The FODC <code>/cluster/topology</code>, <code>/cluster/lifecycle</code> and <code>/diagnostics</code>
 APIs are noted as <a href="#future-work">future work</a>.</li>
@@ -3157,9 +3164,10 @@ out of scope (see <a href="#compatibility">Compatibility</a>).</li>
  ┌─ data cold ────┐                container_name/        ▼                        │ MQE over
  │  :2121 /metrics │                node_type     receiver-otel ──► MAL            │ GraphQL
  └────────────────┘                              otel-rules/banyandb/*  ───────────┘ execExpression
-                                                  ├ banyandb-service.yaml   → Service  (cluster)
-                                                  ├ banyandb-instance.yaml  → Instance (container + attrs)
-                                                  └ banyandb-endpoint.yaml  → Endpoint (group)
+                                                  ├ banyandb-service.yaml           → Service  (cluster)
+                                                  ├ banyandb-instance.yaml          → Instance (container + attrs)
+                                                  ├ banyandb-endpoint.yaml          → Endpoint (group)
+                                                  └ banyandb-instance-relation.yaml → ServiceInstanceRelation (deployment edges)
                                                           │
                                                           ▼
                                                   metrics storage (Layer: BANYANDB)
@@ -3309,7 +3317,7 @@ from <code>up</code>.</p>
 </span></span><span style="display:flex;"><span># banyandb-instance.yaml → container (a node may run &gt;1 container), role + tier as attributes
 </span></span><span style="display:flex;"><span>expSuffix: |-
 </span></span><span style="display:flex;"><span>  service([&#39;cluster&#39;], Layer.BANYANDB)
-</span></span><span style="display:flex;"><span>  .instance([&#39;cluster&#39;], &#39;::&#39;, [&#39;pod_name&#39;, &#39;container_name&#39;], &#39;@&#39;, Layer.BANYANDB,
+</span></span><span style="display:flex;"><span>  .instance([&#39;cluster&#39;], &#39;::&#39;, [&#39;container_name&#39;, &#39;pod_name&#39;], &#39;@&#39;, Layer.BANYANDB,
 </span></span><span style="display:flex;"><span>            { tags -&gt; [&#39;node_role&#39;:      tags.node_role,
 </span></span><span style="display:flex;"><span>                       &#39;node_type&#39;:      tags.node_type ?: &#39;n/a&#39;,
 </span></span><span style="display:flex;"><span>                       &#39;pod_name&#39;:       tags.pod_name,
@@ -3317,15 +3325,15 @@ from <code>up</code>.</p>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span># banyandb-endpoint.yaml → group
 </span></span><span style="display:flex;"><span>expSuffix: endpoint([&#39;cluster&#39;], [&#39;group&#39;], Layer.BANYANDB)
-</span></span></code></pre></div><p>The instance key is the pair <code>['pod_name', 'container_name']</code> joined by <code>'@'</code> (signature
+</span></span></code></pre></div><p>The instance key is the pair <code>['container_name', 'pod_name']</code> joined by <code>'@'</code> (signature
 <code>instance(serviceKeys, serviceDelimiter, instanceKeys, instanceDelimiter, layer, propertiesExtractor)</code>),
-so the four <code>data</code> hot/warm pods surface as distinct <code>…@data</code> and <code>…@lifecycle</code> instances rather than
-colliding. The 6-argument overload&rsquo;s properties closure is the standard, precedented mechanism for
+so each pod&rsquo;s containers surface as distinct <code>data@…</code> / <code>lifecycle@…</code> / <code>liaison@…</code> instances rather than
+colliding, and the role (<code>container_name</code>) leads the instance name. The 6-argument overload&rsquo;s properties closure is the standard, precedented mechanism for
 attaching labels as instance attributes (the same shape used by <code>k8s-instance.yaml</code>). The attributes
-ride entirely on the scraped labels — no separate update API. (Two implementation notes: the MAL v2
-grammar supports the Elvis operator inside a map-literal value, but no shipped rule combines the two
-yet — the implementation PR should pin this exact closure shape with a compile test. And <code>language</code> is
-the one reserved property key — the instance query maps it to the language field instead of an
+ride entirely on the scraped labels — no separate update API. (Two notes: the MAL v2
+grammar supports the Elvis operator inside a map-literal value, and <code>banyandb-instance.yaml</code> ships exactly
+this closure (<code>'node_type': tags.node_type ?: 'n/a'</code>), compile-tested at boot by <code>DSLClassGeneratorTest</code>.
+And <code>language</code> is the one reserved property key — the instance query maps it to the language field instead of an
 attribute; none of these four labels collides with it.)</p>
 <h3 id="3-metric-catalog--mal-rules">3. Metric catalog → MAL rules</h3>
 <p>The redesigned rules mirror the upstream FODC-proxy catalog. The two upstream Grafana boards map onto
@@ -3408,7 +3416,15 @@ while MQE has no current-time function, so it cannot be computed at query time.<
   </tbody>
 </table>
 <h4 id="32-instance-scope--per-container-banyandb-instanceyaml">3.2 Instance scope — per container (<code>banyandb-instance.yaml</code>)</h4>
-<p><strong>All roles</strong> (every container emits these — the &ldquo;Nodes&rdquo; board):</p>
+<p>The instance scope is <strong>role-separated by a metric-name prefix</strong>: the scope is still a single
+<code>instance()</code> identity, but each rule&rsquo;s <code>name</code> carries a role prefix so the UI layer template can select
+the panel set by <code>container_name</code> (<code>liaison</code> / <code>data</code> / <code>lifecycle</code>) and a human can read a metric name
+and know which role it belongs to. The shared resource/runtime block stays <strong>unprefixed</strong> (it resolves
+on whatever container emits the family); front-door rules carry <code>liaison_*</code>, storage/index/queue rules
+carry <code>data_*</code>, and the migration-sidecar health triple carries <code>lifecycle_*</code>. The same wire family
+read under two prefixes (e.g. <code>*_total_file_parts</code> on a liaison buffer vs. a data storage part) is
+disambiguated by <code>container_name</code> — each role rule reads only its own container&rsquo;s series.</p>
+<p><strong>All roles</strong> (unprefixed; every container emits these — the &ldquo;Nodes&rdquo; board):</p>
 <table>
   <thead>
       <tr>
@@ -3431,15 +3447,19 @@ while MQE has no current-time function, so it cannot be computed at query time.<
       </tr>
       <tr>
           <td><code>system_memory_percent</code></td>
-          <td><code>system_memory_state{kind='used_percent'}</code></td>
+          <td><code>system_memory_state{kind='used_percent'} * 100</code> (the gauge is a 0-1 fraction; <code>*100</code> → 0-100 %)</td>
       </tr>
       <tr>
           <td><code>disk_usage_percent</code></td>
-          <td><code>system_disk{kind='used'} / system_disk{kind='total'}</code></td>
+          <td><code>avg(system_disk{kind='used_percent'}) * 100</code> (per node; the data paths share one filesystem, so <code>avg</code> collapses them)</td>
       </tr>
       <tr>
-          <td><code>disk_used_by_path</code> / <code>disk_total_by_path</code> / <code>disk_used_percent_by_path</code></td>
-          <td><code>system_disk{...} by (path)</code></td>
+          <td><code>disk_used_by_path</code> / <code>disk_total_by_path</code></td>
+          <td><code>system_disk{kind='used'/'total'} by (path)</code> (bytes)</td>
+      </tr>
+      <tr>
+          <td><code>disk_used_percent_by_path</code></td>
+          <td><code>system_disk{kind='used_percent'} * 100 by (path)</code></td>
       </tr>
       <tr>
           <td><code>network_recv</code> / <code>network_sent</code></td>
@@ -3459,7 +3479,7 @@ while MQE has no current-time function, so it cannot be computed at query time.<
       </tr>
   </tbody>
 </table>
-<p><strong>Liaison-only</strong> (front door; hidden on data containers — see <a href="#4-dynamic-metrics-by-role-and-tier">dynamic metrics by role and tier</a>):</p>
+<p><strong>Liaison-only</strong> (<code>liaison_*</code> prefix; front door, hidden on data containers — see <a href="#4-dynamic-metrics-by-role-and-tier">dynamic metrics by role and tier</a>):</p>
 <table>
   <thead>
       <tr>
@@ -3469,32 +3489,36 @@ while MQE has no current-time function, so it cannot be computed at query time.<
   </thead>
   <tbody>
       <tr>
-          <td><code>query_rate_by_service</code></td>
+          <td><code>liaison_query_rate</code></td>
           <td><code>rate(liaison_grpc_total_started{method='query'}) by (service)</code></td>
       </tr>
       <tr>
-          <td><code>grpc_error_rate</code></td>
-          <td><code>rate(liaison_grpc_total_err) by (service, method)</code> (+ <code>liaison_grpc_total_stream_msg_received_err</code>; both lazily registered)</td>
+          <td><code>liaison_grpc_error_rate</code></td>
+          <td><code>(rate(liaison_grpc_total_err) + rate(liaison_grpc_total_registry_err) + rate(liaison_grpc_total_stream_msg_received_err)) × 60</code> (all lazily registered)</td>
       </tr>
       <tr>
-          <td><code>non_query_op_rate</code></td>
-          <td><code>rate(liaison_grpc_total_started{method!='query'}) by (method)</code></td>
+          <td><code>liaison_registry_op_rate</code></td>
+          <td><code>rate(liaison_grpc_total_registry_started)</code> (schema-registry ops on the front door)</td>
       </tr>
       <tr>
-          <td><code>write_rate</code></td>
+          <td><code>liaison_write_rate</code></td>
           <td><code>rate({measure,stream_tst,trace_tst}_total_written)</code></td>
       </tr>
       <tr>
-          <td><code>publish_throughput</code> / <code>publish_latency_p99</code></td>
-          <td><code>rate(queue_pub_total_finished) by (operation)</code> / <code>histogram_quantile(0.99, …queue_pub_total_latency_bucket)</code></td>
+          <td><code>liaison_publish_throughput</code> / <code>liaison_publish_bytes</code> / <code>liaison_publish_latency_p99</code></td>
+          <td><code>rate(queue_pub_total_finished) by (operation)</code> / <code>rate(queue_pub_sent_bytes)</code> / <code>histogram_quantile(0.99, …queue_pub_total_latency_bucket)</code></td>
       </tr>
       <tr>
-          <td><code>wqueue_file_parts</code> / <code>wqueue_mem_part</code> / <code>wqueue_pending</code></td>
-          <td><code>{measure,stream_tst,trace_tst}_total_file_parts</code> / <code>_total_mem_part</code> / <code>_pending_data_count</code></td>
+          <td><code>liaison_publish_batch_throughput</code> / <code>liaison_publish_batch_latency_p99</code></td>
+          <td><code>rate(queue_pub_total_batch_finished) by (operation)</code> / <code>histogram_quantile(0.99, …queue_pub_total_batch_latency_bucket)</code> (batch granularity, BanyanDB #1169; build-gated)</td>
+      </tr>
+      <tr>
+          <td><code>liaison_wqueue_pending</code></td>
+          <td><code>{measure,stream_tst,trace_tst}_pending_data_count</code> (front-door write-queue depth)</td>
       </tr>
   </tbody>
 </table>
-<p><strong>Data-only</strong> (backend; hidden on liaison containers):</p>
+<p><strong>Data-only</strong> (<code>data_*</code> prefix; backend, hidden on liaison containers):</p>
 <table>
   <thead>
       <tr>
@@ -3504,32 +3528,40 @@ while MQE has no current-time function, so it cannot be computed at query time.<
   </thead>
   <tbody>
       <tr>
-          <td><code>total_data</code></td>
+          <td><code>data_total_data</code></td>
           <td><code>{measure,stream_tst,trace_tst}_total_file_elements</code></td>
       </tr>
       <tr>
-          <td><code>merge_file_rate</code> / <code>merge_file_latency</code> / <code>merge_file_partitions</code></td>
-          <td><code>rate(*_total_merge_loop_started)</code> / <code>…_merge_latency{type='file'}</code> / <code>…_merged_parts{type='file'}</code></td>
+          <td><code>data_wqueue_file_parts</code> / <code>data_wqueue_mem_part</code> / <code>data_wqueue_pending</code></td>
+          <td><code>{measure,stream_tst,trace_tst}_total_file_parts</code> / <code>_total_mem_part</code> / <code>_pending_data_count</code> (on-disk write-queue storage parts)</td>
       </tr>
       <tr>
-          <td><code>series_write_rate</code> / <code>series_term_search_rate</code> / <code>total_series</code></td>
-          <td><code>measure_inverted_index_total_updates</code> / <code>_total_term_searchers_started</code> / <code>_total_doc_count</code>; <code>stream_storage_inverted_index_*</code></td>
+          <td><code>data_merge_file_rate</code> / <code>data_merge_file_partitions</code> / <code>data_merge_file_latency</code></td>
+          <td><code>rate(*_total_merge_loop_started)</code> / <code>rate(*_total_merged_parts{type='file'}) / rate(*_merge_loop_started)</code> / <code>*_total_merge_latency{type='file'}</code> (×1000 ms)</td>
       </tr>
       <tr>
-          <td><code>stream_tst_write_rate</code> / <code>stream_tst_term_search_rate</code> / <code>stream_tst_total_docs</code></td>
-          <td><code>stream_tst_inverted_index_*</code></td>
+          <td><code>data_series_write_rate</code> / <code>data_series_term_search_rate</code> / <code>data_total_series</code></td>
+          <td>inverted-index <code>_total_updates</code> / <code>_total_term_searchers_started</code> / <code>_total_doc_count</code>, summed across <code>measure_inverted_index_*</code>, <code>stream_storage_inverted_index_*</code> <strong>and <code>trace_storage_inverted_index_*</code></strong> (the trace series index, previously dropped, is now included)</td>
       </tr>
       <tr>
-          <td><code>queue_sub_throughput</code> / <code>queue_sub_latency_p99</code> (per <code>operation</code>)</td>
-          <td><code>rate(queue_sub_total_started/finished) by (operation)</code> / <code>histogram_quantile(0.99, …queue_sub_total_latency_bucket) by (operation)</code></td>
+          <td><code>data_stream_tst_write_rate</code> / <code>data_stream_tst_term_search_rate</code> / <code>data_stream_tst_total_docs</code></td>
+          <td><code>stream_tst_inverted_index_*</code> (the stream tst-scope index, distinct from its storage-scope series index)</td>
       </tr>
       <tr>
-          <td><code>retention_disk_usage_percent</code> / <code>retention_cooldown</code></td>
-          <td><code>storage_retention_{measure,stream,trace}_disk_usage_percent</code> / <code>_forced_retention_cooldown_seconds</code></td>
+          <td><code>data_queue_sub_throughput</code> / <code>data_queue_sub_latency_p99</code> (per <code>operation</code>)</td>
+          <td><code>rate(queue_sub_total_finished) by (operation)</code> / <code>histogram_quantile(0.99, …queue_sub_total_latency_bucket) by (operation)</code></td>
+      </tr>
+      <tr>
+          <td><code>data_queue_sub_message_throughput</code> (per <code>operation</code>)</td>
+          <td><code>rate(queue_sub_total_message_finished) by (operation)</code> (per-message dispatch path, BanyanDB #1169)</td>
+      </tr>
+      <tr>
+          <td><code>data_retention_{measure,stream,trace}_disk_usage_percent</code></td>
+          <td><code>storage_retention_{measure,stream,trace}_disk_usage_percent</code> (kept per scope — a sum of three percentages is meaningless)</td>
       </tr>
   </tbody>
 </table>
-<p><strong>Lifecycle-only</strong> (the tier-migration sidecar co-located on <code>hot</code>/<code>warm</code> data pods; <code>container_name == 'lifecycle'</code>):</p>
+<p><strong>Lifecycle-only</strong> (<code>lifecycle_*</code> prefix; the tier-migration sidecar co-located on <code>hot</code>/<code>warm</code> data pods; <code>container_name == 'lifecycle'</code>):</p>
 <table>
   <thead>
       <tr>
@@ -3539,7 +3571,7 @@ while MQE has no current-time function, so it cannot be computed at query time.<
   </thead>
   <tbody>
       <tr>
-          <td><code>lifecycle_cycles</code></td>
+          <td><code>lifecycle_migration_cycles</code></td>
           <td><code>lifecycle_cycles_total</code> (cumulative migration cycles)</td>
       </tr>
       <tr>
@@ -3564,7 +3596,18 @@ lifecycle&rsquo;s sender identity onto its migration publisher, so a destination
 </blockquote>
 <h4 id="33-endpoint-scope--per-group-banyandb-endpointyaml">3.3 Endpoint scope — per group (<code>banyandb-endpoint.yaml</code>)</h4>
 <p>The &ldquo;Workload&rdquo; board&rsquo;s by-<code>group</code> projections become endpoint metrics (aggregated across the cluster&rsquo;s
-nodes per group):</p>
+nodes per group). The catalog is <strong>type-separated</strong>: a BanyanDB <code>group</code> carries exactly one data-model
+type, and each type emits a <em>different</em> family namespace, so the rule <code>name</code> carries a
+<code>measure_*</code> / <code>stream_*</code> / <code>stream_tst_*</code> / <code>trace_*</code> / <code>property_*</code> prefix and each rule reads <strong>only</strong>
+the families its type genuinely emits. The earlier design summed <code>measure + stream + trace</code> into one
+unified rule per concept — but MAL&rsquo;s <code>+</code> is an <strong>inner-join on exact label equality</strong>, so two
+disjoint groups (one all-<code>measure</code>, one all-<code>stream</code>) never share a label set and cannot be unioned;
+the unified rule (a) rendered an <strong>all-empty</strong> panel for a <code>property</code> group (property emits none of
+<code>*_total_written</code> / <code>*_tst_*</code>) and (b) silently dropped the trace inverted index from
+<code>series_write_rate</code> / <code>total_series</code>. The per-type split fixes both — the UI selects the panel set by
+the group&rsquo;s data-type, and the <code>property</code> data type (below) is now modeled. The queue/publish metrics
+stay <strong>type-agnostic</strong> (keyed on <code>group</code> + <code>operation</code>, not data-model type) and keep their bare names.</p>
+<p><strong>Per data-model type</strong> (<code>measure_*</code> / <code>stream_*</code> / <code>stream_tst_*</code> / <code>trace_*</code>; <code>… by (group)</code>):</p>
 <table>
   <thead>
       <tr>
@@ -3574,28 +3617,98 @@ nodes per group):</p>
   </thead>
   <tbody>
       <tr>
-          <td><code>write_rate</code></td>
-          <td><code>rate({measure,stream_tst,trace_tst}_total_written) by (group)</code></td>
+          <td><code>{measure,stream,trace}_write_rate</code></td>
+          <td><code>rate({measure,stream_tst,trace_tst}_total_written)</code></td>
       </tr>
       <tr>
-          <td><code>query_latency</code></td>
-          <td><code>rate(liaison_grpc_total_latency{method='query'}) / rate(…_started{method='query'}) by (group)</code></td>
+          <td><code>{measure,stream,trace}_query_latency</code></td>
+          <td><code>rate(liaison_grpc_total_latency{method='query',service=&lt;type&gt;}) / rate(…_finished{…})</code> (×1000 ms)</td>
       </tr>
       <tr>
-          <td><code>total_data</code></td>
-          <td><code>{measure,stream_tst,trace_tst}_total_file_elements by (group)</code></td>
+          <td><code>{measure,stream,trace}_total_data</code></td>
+          <td><code>{measure,stream_tst,trace_tst}_total_file_elements</code></td>
       </tr>
       <tr>
-          <td><code>merge_file_rate</code> / <code>merge_file_latency</code> / <code>merge_file_partitions</code></td>
-          <td>the merge family <code>by (group)</code></td>
+          <td><code>{measure,stream,trace}_merge_file_rate</code> / <code>_merge_file_latency</code> / <code>_merge_file_partitions</code></td>
+          <td>the per-type merge family (<code>*_total_merge_loop_started</code> / <code>_merge_latency{type='file'}</code> / <code>_merged_parts{type='file'}</code>)</td>
       </tr>
       <tr>
-          <td><code>series_write_rate</code> / <code>total_series</code></td>
-          <td>inverted-index <code>_total_updates</code> / <code>_total_doc_count</code> <code>by (group)</code></td>
+          <td><code>{measure,stream,trace}_series_write_rate</code></td>
+          <td>inverted-index <code>_total_updates</code> — <code>measure_inverted_index_*</code> (no <code>_storage_</code>), <code>stream_storage_inverted_index_*</code>, <code>trace_storage_inverted_index_*</code></td>
       </tr>
       <tr>
-          <td><code>queue_throughput</code> / <code>queue_latency_p99</code></td>
-          <td><code>queue_sub</code> / <code>queue_pub</code> <code>by (operation, group)</code></td>
+          <td><code>stream_tst_index_write_rate</code></td>
+          <td><code>stream_tst_inverted_index_total_updates</code> (stream&rsquo;s tst-scope index, distinct from its storage series index)</td>
+      </tr>
+      <tr>
+          <td><code>{measure,stream,trace}_series_term_search_rate</code></td>
+          <td>inverted-index <code>_total_term_searchers_started</code> (per-type index read pressure)</td>
+      </tr>
+      <tr>
+          <td><code>{measure,stream,trace}_total_series</code></td>
+          <td>inverted-index <code>_total_doc_count</code></td>
+      </tr>
+      <tr>
+          <td><code>stream_tst_total_series</code></td>
+          <td><code>stream_tst_inverted_index_total_doc_count</code></td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Property type</strong> (<code>property_*</code>; the data type that was previously unmodeled):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric (<code>meter_banyandb_endpoint_*</code>)</th>
+          <th>Source (<code>… by (group)</code>)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>property_index_write_rate</code></td>
+          <td><code>rate(property_inverted_index_total_updates)</code></td>
+      </tr>
+      <tr>
+          <td><code>property_index_merge_rate</code> / <code>property_index_merge_latency</code></td>
+          <td><code>rate(property_inverted_index_total_merge_started)</code> (×60) / <code>rate(_merge_latency)/rate(_merge_started)</code> (×1000 ms)</td>
+      </tr>
+      <tr>
+          <td><code>property_series_term_search_rate</code></td>
+          <td><code>rate(property_inverted_index_total_term_searchers_started)</code> — property&rsquo;s <strong>real read-load</strong> signal (property is queried via the registry/term-search path, not the liaison <code>query</code> method)</td>
+      </tr>
+      <tr>
+          <td><code>property_total_series</code></td>
+          <td><code>property_inverted_index_total_doc_count</code></td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p><strong>Why property gets its own set.</strong> <code>property</code> has no <code>*_total_written</code>, no <code>_tst_</code> storage table, and
+no <code>stream_storage</code> scope: its &ldquo;writes&rdquo; are inverted-index updates and it is read via the
+registry/term-search path, so <code>write_rate</code> / <code>query_latency</code> / <code>total_data</code> / tst-merge are genuinely
+N/A for property and are intentionally not modeled. Modeling property as a dedicated
+<code>property_inverted_index_*</code> set is what stops the <code>sw_property</code> groups from rendering an <strong>all-empty</strong>
+dashboard (every panel in the old unified catalog resolved to no data for a property group).</p>
+</blockquote>
+<p><strong>Type-agnostic</strong> (keyed on <code>group</code> + <code>operation</code>; bare names):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric (<code>meter_banyandb_endpoint_*</code>)</th>
+          <th>Source (<code>… by (group, operation)</code>)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>queue_throughput</code></td>
+          <td><code>rate(queue_sub_total_finished)</code></td>
+      </tr>
+      <tr>
+          <td><code>queue_latency_p99</code></td>
+          <td><code>histogram_quantile(0.99, queue_pub_total_latency_bucket)</code></td>
+      </tr>
+      <tr>
+          <td><code>queue_batch_throughput</code> / <code>queue_message_throughput</code></td>
+          <td><code>rate(queue_sub_total_batch_finished)</code> / <code>rate(queue_sub_total_message_finished)</code> (BanyanDB #1169)</td>
       </tr>
       <tr>
           <td><code>publish_bytes</code></td>
@@ -3612,7 +3725,13 @@ traces, slow-endpoint lists) are not meaningful here and are intentionally not u
 </blockquote>
 <h3 id="4-dynamic-metrics-by-role-and-tier">4. Dynamic metrics by role and tier</h3>
 <p>Different roles expose different metrics, so the <strong>instance dashboard must adapt to the selected
-container</strong>. Horizon UI&rsquo;s widget <code>visibleWhen</code> is a structured, <strong>server-evaluated</strong> gate (the BFF
+container</strong>. Role/type separation is carried <strong>two ways that complement each other</strong>: by the
+<strong>metric-name prefix</strong> (<code>liaison_*</code> / <code>data_*</code> / <code>lifecycle_*</code> on the Instance scope,
+<code>measure_*</code> / <code>stream_*</code> / <code>trace_*</code> / <code>property_*</code> on the Endpoint scope — see
+<a href="#32-instance-scope--per-container-banyandb-instanceyaml">Instance scope</a> and
+<a href="#33-endpoint-scope--per-group-banyandb-endpointyaml">Endpoint scope</a>), which lets the layer template select
+a whole panel set by prefix; and by the structured, <strong>server-evaluated</strong> <code>visibleWhen</code> gate below,
+which hides individual widgets. Horizon UI&rsquo;s widget <code>visibleWhen</code> is a structured gate (the BFF
 resolves it against data presence or the selected instance&rsquo;s attributes and returns gated-out widgets
 as hidden; legacy free-text predicate strings are no longer parsed and degrade to ungated). Two gate
 kinds, layered:</p>
@@ -3688,7 +3807,7 @@ hierarchy:</p>
 │   └─ Overview KPIs + &#34;Cluster Workload Summary&#34; + &#34;Fleet Overview&#34; capacity
 │       (cluster_write_rate, cluster_query_rate, cluster_error_rate,
 │        reporting_instances by role, total_cpu/memory/disk)
-├─ Instance (container)   ← the &#34;Nodes&#34; board, made dynamic; instance = pod_name@container_name
+├─ Instance (container)   ← the &#34;Nodes&#34; board, made dynamic; instance = container_name@pod_name
 │   ├─ All roles: Resources (CPU/RSS/mem%/disk%), Disk by Path, Network, Go Runtime
 │   ├─ Liaison (entity gate container_name eq liaison): Ingestion/Query, Registry, Errors,
 │   │     Publish throughput &amp; p99, Write Queue (wqueue) depth
@@ -3756,7 +3875,9 @@ on both sides. OAP&rsquo;s relation filter is symmetric, so <code>client == serv
 <code>source_service_id == dest_service_id == svc</code>, returning exactly the intra-cluster instance relations
 (verified across the BanyanDB / JDBC / ES topology DAOs). Per-node metrics evaluate under
 <code>{ scope: ServiceInstance }</code>; per-edge metrics under <code>ServiceInstanceRelation</code> (server + client
-families) — both ordinary MQE.</p>
+families) — both ordinary MQE. <strong>The relation edges are now emitted by a shipped rule file</strong> —
+<code>banyandb-instance-relation.yaml</code> (below) — so <code>getServiceInstanceTopology</code> renders the live deployment
+graph instead of an empty state.</p>
 <p><strong>Grouping contract.</strong> The component lays the graph out from the instance attributes this SWIP emits
 (<a href="#1-entity-model">entity model</a>):</p>
 <table>
@@ -3785,26 +3906,31 @@ families) — both ordinary MQE.</p>
       </tr>
   </tbody>
 </table>
-<p>Per-role node MQE binds to the <code>meter_banyandb_instance_*</code> metrics from the catalog above — e.g.
-liaison → <code>query_rate_by_service</code>, data → <code>write_rate</code> / <code>disk_usage_percent</code>, lifecycle →
-<code>lifecycle_cycles</code> / <code>lifecycle_last_run_success</code>. Only <code>container_name</code> ∈
-{<code>liaison</code>, <code>data</code>, <code>lifecycle</code>} exists on the wire — there is <strong>no <code>fodc</code> container</strong> (the FODC agent
-publishes no self-metrics through the proxy), so a <code>fodc</code> role is not modeled.</p>
-<p><strong>Open dependency — a MAL <code>SERVICE_INSTANCE_RELATION</code> scope.</strong> This feature is MAL-only: every BanyanDB
+<p>Per-role node MQE binds to the prefixed <code>meter_banyandb_instance_*</code> metrics from the catalog above —
+e.g. liaison → <code>liaison_query_rate</code> / <code>liaison_write_rate</code>, data → <code>data_total_data</code> /
+<code>disk_usage_percent</code>, lifecycle → <code>lifecycle_migration_cycles</code> / <code>lifecycle_last_run_success</code>. Only
+<code>container_name</code> ∈ {<code>liaison</code>, <code>data</code>, <code>lifecycle</code>} exists on the wire — there is <strong>no <code>fodc</code>
+container</strong> (the FODC agent publishes no self-metrics through the proxy), so a <code>fodc</code> role is not
+modeled.</p>
+<p><strong>The MAL <code>SERVICE_INSTANCE_RELATION</code> scope shipped.</strong> This feature is MAL-only: every BanyanDB
 entity, metric, and attribute here is produced by the <code>banyandb/*</code> MAL rules. MAL builds relations
-through <code>MeterEntity</code> / <code>ScopeType</code>, which ships <code>SERVICE_RELATION</code> and <code>PROCESS_RELATION</code> (the latter
-already powers the eBPF process topology via <code>network-profiling.yaml</code>) — but it has <strong>no
-<code>SERVICE_INSTANCE_RELATION</code> scope</strong> and no <code>SampleFamily.instanceRelation(...)</code> builder. So MAL cannot
-emit the instance-relation metric that <code>getServiceInstanceTopology</code> reads, and on a metrics-only
-BanyanDB the deployment graph is <strong>empty</strong> — the Horizon UI component (horizon-ui PR #47) renders that empty
-state by design until the scope lands (its earlier preview mock has been dropped).
-Closing the gap means adding that third relation scope (a <code>SERVICE_INSTANCE_RELATION</code> <code>ScopeType</code> +
-<code>MeterEntity</code> factory + <code>instanceRelation(...)</code> builder + entity description, mirroring the two that
-ship), fed by the queue <code>remote_node</code> / <code>remote_role</code> / <code>remote_tier</code> labels (now carrying the
-lifecycle sender identity per BanyanDB #1167). That is MAL-<strong>engine</strong> code (<code>server-core</code> +
-<code>meter-analyzer</code>), which exceeds this SWIP&rsquo;s <a href="#non-goals">config-only non-goals</a>; it is tracked under
-<a href="#future-work">future work</a>. The component, the query path, and the grouping contract above are ready
-the moment that scope lands.</p>
+through <code>MeterEntity</code> / <code>ScopeType</code>, which already shipped <code>SERVICE_RELATION</code> and <code>PROCESS_RELATION</code>
+(the latter powers the eBPF process topology via <code>network-profiling.yaml</code>). This SWIP <strong>added the third
+relation scope</strong>: a <code>SERVICE_INSTANCE_RELATION</code> <code>ScopeType</code>, the <code>MeterEntity.newServiceInstanceRelation(...)</code>
+factory, the <code>SampleFamily.serviceInstanceRelation(...)</code> builder, and the
+<code>ServiceInstanceRelationEntityDescription</code> — in <code>server-core</code> and <code>meter-analyzer</code>, mirroring the two
+relation scopes that already shipped — plus the <code>Analyzer</code> server/client-side relation-traffic emission.
+With it, <code>banyandb-instance-relation.yaml</code> emits <strong>twelve per-edge metrics</strong>
+(<code>publish_*</code> from the liaison&rsquo;s CLIENT-side <code>queue_pub_*</code>, <code>queue_sub_*</code> from each peer&rsquo;s SERVER-side
+<code>queue_sub_*</code>, and <code>migration_*</code> from the lifecycle sidecar&rsquo;s CLIENT-side <code>lifecycle_migration_*</code> — each
+in <code>_throughput</code> / <code>_latency_p99</code> / <code>_error_throughput</code> / <code>_bytes_throughput</code> forms), keyed by the queue
+<code>remote_node</code> / <code>remote_role</code> labels (the lifecycle sender identity now arrives per BanyanDB #1167). The
+peer&rsquo;s <code>remote_node</code> address is split to its <code>remote_pod_name</code> (first segment) so the relation endpoints
+resolve to the same <code>container_name '@' pod_name</code> instances <code>banyandb-instance.yaml</code> emits.
+<code>getServiceInstanceTopology</code> therefore renders the intra-cluster deployment graph live — the component,
+the query path, and the grouping contract above are all in place. (The lifecycle&rsquo;s last-run timestamp /
+status stay instance-scope: they are label-less per-instance gauges with no <code>remote_node</code>, so they
+cannot key a per-edge relation metric until BanyanDB stamps the destination labels on them.)</p>
 <h2 id="feasibility-and-precedent">Feasibility and precedent</h2>
 <p>Verified against the OAP and Horizon UI source — <strong>no OAP core / MAL / receiver change is required</strong>:</p>
 <ul>
@@ -3835,7 +3961,7 @@ only — documents the same catalog). The live <code>/metrics</code> pull is the
 <code>ROLE_UNSPECIFIED</code> for unresolved or meta-only nodes), <code>container_name</code>
 (<code>liaison</code> / <code>data</code> / <strong><code>lifecycle</code></strong>), and — on <strong>data containers only</strong> — <code>node_type</code>
 (<code>hot</code> / <code>warm</code> / <code>cold</code>). Crucially, the four <code>data</code> hot/warm pods each run <strong>two containers under
-one <code>pod_name</code></strong> (<code>…@data</code> and <code>…@lifecycle</code>), so <code>pod_name</code> is not a unique instance key and
+one <code>pod_name</code></strong> (<code>data@…</code> and <code>lifecycle@…</code>), so <code>pod_name</code> is not a unique instance key and
 <code>node_role</code> is not the discriminator (it reads <code>ROLE_DATA</code> on the lifecycle sidecar). This validates
 Service = <code>cluster</code>, Instance = <code>pod_name</code> + <code>container_name</code>, attributes <code>container_name</code> / <code>node_type</code>.</li>
 <li><strong>The <code>lifecycle</code> migrator surfaces as its own container instance.</strong> It co-locates on the <code>hot</code>/<code>warm</code>
@@ -3926,16 +4052,17 @@ lifecycle, refined by tier.</li>
 </ul>
 <h2 id="future-work">Future work</h2>
 <ul>
-<li><strong>A MAL <code>SERVICE_INSTANCE_RELATION</code> scope for the deployment component.</strong> Add the third relation scope
-(<code>ScopeType</code> + <code>MeterEntity</code> factory + <code>SampleFamily.instanceRelation(...)</code> + entity description,
-mirroring the shipping <code>serviceRelation</code> / <code>processRelation</code>) so the
+<li><strong>A MAL <code>SERVICE_INSTANCE_RELATION</code> scope for the deployment component — done.</strong> The third relation
+scope (<code>ScopeType</code> + <code>MeterEntity.newServiceInstanceRelation(...)</code> factory +
+<code>SampleFamily.serviceInstanceRelation(...)</code> builder + <code>ServiceInstanceRelationEntityDescription</code>,
+mirroring the shipping <code>serviceRelation</code> / <code>processRelation</code>) <strong>shipped with this SWIP</strong>, so the
 <a href="#7-intra-cluster-instance-topology-the-deployment-component">intra-cluster instance topology</a> renders
-live instead of mock-backed, fed by the queue <code>remote_node</code> / <code>remote_role</code> / <code>remote_tier</code> labels
-(verified reconstructable from the live data; BanyanDB #1167 also populates the lifecycle migration
-sender identity, so hot→warm→cold tier-migration edges are distinguishable). This is MAL-engine code,
-beyond this SWIP&rsquo;s config-only scope. Also
-surface FODC <code>/cluster/topology</code> and <code>/cluster/lifecycle</code> group settings (shards / segment interval /
-TTL) on the Endpoint view.</li>
+live from <code>banyandb-instance-relation.yaml</code>, fed by the queue <code>remote_node</code> / <code>remote_role</code> labels
+(BanyanDB #1167 also populates the lifecycle migration sender identity, so hot→warm→cold tier-migration
+edges are distinguishable). Remaining: model the lifecycle&rsquo;s last-migration timestamp / status as
+per-edge relation metrics once BanyanDB stamps destination labels on those gauges, and surface FODC
+<code>/cluster/topology</code> and <code>/cluster/lifecycle</code> group settings (shards / segment interval / TTL) on the
+Endpoint view.</li>
 <li><strong>Alerting.</strong> Ship default alarm rules for the upstream &ldquo;Key Signals to Watch&rdquo; (query p99, error rate,
 disk &gt; 85%, memory near the protector limit, sustained wqueue / <code>queue_pub</code> backlog).</li>
 <li><strong>Direct-scrape variant</strong> for standalone / non-FODC deployments, if demand warrants.</li>
