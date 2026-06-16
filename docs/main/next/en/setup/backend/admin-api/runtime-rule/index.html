@@ -34,7 +34,7 @@ For the consistency contract, the three workflows (boot / on-demand / periodic s
   <meta itemprop="name" content="Runtime Rule Hot-Update API">
   <meta itemprop="description" content="Runtime Rule Hot-Update API The runtime rule receiver plugin lets operators add, override, inactivate, and delete MAL and LAL rule files at runtime without restarting OAP. Changes are saved in the configured storage backend (JDBC, Elasticsearch, or BanyanDB) and propagate across every node in an OAP cluster within 30 s by default.
 For the consistency contract, the three workflows (boot / on-demand / periodic scan), the lifecycle, and how cluster failures are handled, see Runtime Rule Hot-Update — Architecture. This page focuses on the REST API surface.">
-  <meta itemprop="wordCount" content="4412">
+  <meta itemprop="wordCount" content="4624">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Runtime Rule Hot-Update API">
   <meta name="twitter:description" content="Runtime Rule Hot-Update API The runtime rule receiver plugin lets operators add, override, inactivate, and delete MAL and LAL rule files at runtime without restarting OAP. Changes are saved in the configured storage backend (JDBC, Elasticsearch, or BanyanDB) and propagate across every node in an OAP cluster within 30 s by default.
@@ -3011,7 +3011,7 @@ For the consistency contract, the three workflows (boot / on-demand / periodic s
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c94b4e0</div>
+                  <div class="commit-id">Commit Id: fe6f04e</div>
                 
 
 
@@ -3213,6 +3213,11 @@ server returns <code>400 compile_failed</code>.</p>
           <td>GET</td>
           <td><code>/runtime/rule/dump[/&lt;catalog&gt;]</code></td>
           <td>Downloads a tar.gz of stored runtime rules plus <code>manifest.yaml</code>. The server has no bulk import endpoint; the CLI restore command replays individual <code>addOrUpdate</code> and <code>inactivate</code> calls.</td>
+      </tr>
+      <tr>
+          <td>GET</td>
+          <td><code>/runtime/rule/status?catalog=&amp;name=[&amp;applyId=][&amp;contentHash=]</code></td>
+          <td>Reports the progress of a structural <code>/addOrUpdate</code> apply, served by the cluster main. Query by the <code>applyId</code> returned in the <code>structural_applied</code> response, or by <code>catalog</code>+<code>name</code> (+ optional <code>contentHash</code>) once the handle is gone (page refresh / main restart). Always <code>200</code> with a JSON status <code>{found, phase, applyId, contentHash, failureReason?, fenceLaggards?, startedAtMs, updatedAtMs, servedBy}</code>; <code>phase</code> is one of <code>PENDING</code>, <code>DDL</code>, <code>FENCING</code>, <code>ROLLING_OUT</code>, <code>APPLIED</code>, <code>DEGRADED</code>, <code>FAILED</code>, <code>UNKNOWN</code>. The <code>/addOrUpdate</code> response returns at <code>FENCING</code> with the <code>applyId</code> — <strong>accepted, not yet durable</strong>: the DDL has fired but the rule row is persisted only after the fence confirms. Dispatch for that rule stays paused while the background fence waits for cluster-wide schema propagation (an un-propagated write is silently dropped); once it confirms, the row is persisted (the durable commit point) and the apply advances to <code>ROLLING_OUT</code> (finalize commit, resume + notify peers) and <code>APPLIED</code>. A persist failure → <code>FAILED</code> (rolled back, nothing durable); a laggard → <code>DEGRADED</code> with <code>fenceLaggards</code> (data-node ids that did not confirm within <code>deferredFenceTimeoutSeconds</code>), resuming dispatch anyway. Because the row is persisted only after the fence, any durable row is propagation-confirmed — so when the live status is gone (or the main is unreachable) the query safely degrades to the durable rule row: a matching <code>ACTIVE</code> row reports <code>phase=APPLIED</code> with <code>derivedFrom=durable-dao</code>.</td>
       </tr>
   </tbody>
 </table>
@@ -4020,6 +4025,8 @@ design — the schema is moving and in-flight samples have no valid landing.</li
 
     </div>
     
+
+
 
 
 
