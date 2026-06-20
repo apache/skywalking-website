@@ -21,7 +21,7 @@ set -e
 SW_STORAGE=
 
 SW_VERSION=${SW_VERSION:-10.4.0}
-SW_BANYANDB_VERSION=${SW_BANYANDB_VERSION:-0.10.2}
+SW_BANYANDB_VERSION=${SW_BANYANDB_VERSION:-0.10.3}
 
 usage() {
   echo "Usage: quickstart-docker.sh [-f]"
