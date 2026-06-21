@@ -69,9 +69,12 @@ Figure 5: One cursor moves across every line chart on the page, so you read the 
 ![Figure 6: A Slow Statements record widget — each sampled row with a jump-to-trace icon (where the sample has a trace id), the statement text click-to-copy, one row showing the "copied" flash.](/screenshots/horizon-0.7.0/p02-dashboards-06-record-jump-to-trace.png)
 Figure 6: From a slow statement to the trace that ran it — resolved by trace id, so it works even on a virtual layer with no traces tab of its own.</br>
 
-## Pin and compare entities *(preview)*
+## Pin and compare entities
 
-Sometimes one entity isn't enough. Horizon 0.7.0 ships an opt-in preview that lets you **lock several services, instances, or endpoints — even ones from different services — and compare them in place**. The entity you're viewing is always part of the cohort (tagged `CURRENT`), and each pin adds its own hue; every widget then compares inline — line widgets overlay one series per entity, cards show a row each, `top` and `record` widgets get per-entity tabs, tables gain an Entity column. It loads per-entity, so one slow entity never blanks the others. It's behind a feature flag while it settles (`VITE_FF_ENTITY_COMPARE=1`, or `localStorage['horizon:ff:entity-compare']='1'`), so it's not on by default yet — but it's the direction the dashboards are heading.
+Sometimes one entity isn't enough. Horizon lets you **lock several services, instances, or endpoints — even ones from different services — and compare them in place**. Pin entities from the picker or the instance/endpoint list; the one you're viewing is always part of the cohort (tagged `CURRENT`) and still drives the header, and each pin adds its own hue. Every widget then compares inline — line widgets overlay one series per entity, cards show a row each, `top` and `record` widgets get per-entity tabs, tables gain an Entity column. A persistent comparison bar holds the cohort no matter how the underlying list paginates or which entity you're currently viewing, and each entity loads as its own request, so one slow one never blanks the others.
+
+![Figure 7: Comparing two instances from different services — app (tagged CURRENT) and rating — overlaid hue-by-hue across the Load, Latency and Success Rate line widgets, with the comparison bar above.](/screenshots/horizon-0.7.0/p02-dashboards-07-pinned-entities.png)
+Figure 7: Lock entities — even across services — and every line widget overlays them hue-by-hue; the comparison bar holds the cohort while the CURRENT entity still drives the header.</br>
 
 ## The time picker moves the *whole* dashboard
 
