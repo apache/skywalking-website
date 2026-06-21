@@ -14,7 +14,7 @@
     
     
     <item>
-      <title>Blog: Meet Horizon UI: SkyWalking&#39;s New Observability Console</title>
+      <title>Blog: Meet Horizon UI · 1/16: SkyWalking&#39;s New Observability Console</title>
       <link>/blog/2026-06-21-skywalking-horizon-ui-introduction/</link>
       <pubDate>Sun, 21 Jun 2026 00:00:00 +0000</pubDate>
       <guid>/blog/2026-06-21-skywalking-horizon-ui-introduction/</guid>
@@ -131,6 +131,69 @@ Figure 5: Fold the sidebar to a thin icon rail when you want the canvas to have 
 &lt;li&gt;&lt;strong&gt;It&amp;rsquo;s Apache-licensed and community-built.&lt;/strong&gt; Horizon UI lives at &lt;a href=&#34;https://github.com/apache/skywalking-horizon-ui&#34;&gt;apache/skywalking-horizon-ui&lt;/a&gt;. Try it against your cluster, and tell us what&amp;rsquo;s missing — issues and pull requests are welcome.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;Next up in the series: the dashboards — and why a widget can decide, on the server, that it shouldn&amp;rsquo;t even run its query for the entity you&amp;rsquo;re looking at.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Blog: Meet Horizon UI · 2/16: Dashboards That Adapt — MQE, Smart Widgets, and Numbers Humans Can Read</title>
+      <link>/blog/2026-06-21-horizon-ui-dashboards-and-mqe/</link>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-06-21-horizon-ui-dashboards-and-mqe/</guid>
+      <description>
+        
+        
+        &lt;p&gt;This is the second post in the &lt;a href=&#34;/blog/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Apache SkyWalking Horizon UI&lt;/a&gt; series. The first one introduced the console and its layered navigation; this one is about the surface you spend most of your day on — the &lt;strong&gt;dashboards&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Every dashboard in Horizon is the same machine: a grid of widgets, each one an &lt;strong&gt;MQE expression&lt;/strong&gt; the BFF resolves against OAP. What makes the surface worth a post of its own is what that machine does &lt;em&gt;around&lt;/em&gt; the numbers — it hides the widgets that don&amp;rsquo;t apply to the entity you&amp;rsquo;re looking at (and skips their queries entirely), it renders coded values and raw byte counts as things a human can read, it ties every chart on the page to one cursor, and it drops you from a slow-SQL row straight into the trace that produced it. Let&amp;rsquo;s walk through it.&lt;/p&gt;
+&lt;h2 id=&#34;every-widget-is-one-mqe-expression&#34;&gt;Every widget is one MQE expression&lt;/h2&gt;
+&lt;p&gt;A layer dashboard is a dense &lt;strong&gt;12-column grid&lt;/strong&gt; (120px rows, gaps backfilled so a wall of tiles has no holes, collapsing to one column under ~1100px). Each tile is one of five widget types, and the type follows the &lt;em&gt;shape&lt;/em&gt; of its MQE expression:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;card&lt;/code&gt;&lt;/strong&gt; — the expression collapses to a single scalar (&lt;code&gt;latest(...)&lt;/code&gt;, &lt;code&gt;avg(...)&lt;/code&gt;, &lt;code&gt;service_sla/100&lt;/code&gt;). One big number.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;line&lt;/code&gt;&lt;/strong&gt; — a time series; one line per expression, optional dual y-axis for mixed units (throughput on the left, latency on the right).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;top&lt;/code&gt;&lt;/strong&gt; — a ranked list from &lt;code&gt;top_n(endpoint_cpm, 20, des)&lt;/code&gt;, with a small tab switcher to flip the ranking between Traffic / Slow / Successful Rate.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;record&lt;/code&gt;&lt;/strong&gt; — record-shaped output like slow database statements or slow cache commands: rows of text + value.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;table&lt;/code&gt;&lt;/strong&gt; — a labeled &lt;code&gt;latest(...)&lt;/code&gt; metric, one row per label combination (pod phase per service, node condition, replicas per deployment).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;You don&amp;rsquo;t pick the chart; you write the MQE and the right widget renders it. And it&amp;rsquo;s the &lt;em&gt;same&lt;/em&gt; grid system at every altitude — the &lt;code&gt;dashboards.&amp;lt;scope&amp;gt;&lt;/code&gt; map on a layer template carries a different widget set for the &lt;strong&gt;service&lt;/strong&gt;, &lt;strong&gt;instance&lt;/strong&gt;, and &lt;strong&gt;endpoint&lt;/strong&gt; pages, so drilling down swaps the whole dashboard to the right scope. (All of these run on the BFF tier introduced in &lt;a href=&#34;/blog/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;part 1&lt;/a&gt; — the browser never talks to OAP directly.)&lt;/p&gt;
+&lt;h2 id=&#34;a-dashboard-that-adapts-to-the-entity-in-front-of-you&#34;&gt;A dashboard that adapts to the entity in front of you&lt;/h2&gt;
+&lt;p&gt;Here&amp;rsquo;s the feature that changes how a dashboard &lt;em&gt;feels&lt;/em&gt;. A widget can carry a &lt;strong&gt;&lt;code&gt;visibleWhen&lt;/code&gt;&lt;/strong&gt; gate, and when the gate doesn&amp;rsquo;t hold, the widget doesn&amp;rsquo;t render — and, crucially, &lt;strong&gt;its query never runs&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;There are two kinds of gate:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;MQE metric&lt;/strong&gt; — show the widget only when an expression &lt;em&gt;has value&lt;/em&gt; (&lt;code&gt;op: exists&lt;/code&gt;), or when its value crosses a threshold (&lt;code&gt;gt&lt;/code&gt; / &lt;code&gt;lt&lt;/code&gt;). Point a widget at its own metric and it self-gates: the JVM widgets carry &lt;code&gt;&amp;quot;visibleWhen&amp;quot;: { &amp;quot;kind&amp;quot;: &amp;quot;mqe&amp;quot;, &amp;quot;expression&amp;quot;: &amp;quot;instance_jvm_cpu&amp;quot;, &amp;quot;op&amp;quot;: &amp;quot;exists&amp;quot; }&lt;/code&gt;, so they appear on a Java instance and vanish on a Go one.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Entity attribute&lt;/strong&gt; — on the Instance scope, gate on the selected instance&amp;rsquo;s attributes (&lt;code&gt;language eq JAVA&lt;/code&gt;, or an attribute simply being present).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Because the gate is evaluated &lt;strong&gt;server-side&lt;/strong&gt;, a non-JVM instance doesn&amp;rsquo;t just hide the JVM tiles — the BFF never sends their queries to OAP at all. Open the same Instance dashboard for a JVM service and a non-JVM one and you&amp;rsquo;re looking at one template adapting itself, not two hand-built pages:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-01-instance-jvm.png&#34; alt=&#34;Figure 1: A Java service&amp;rsquo;s Instance dashboard — the JVM widget group (CPU, heap, GC, threads, classes) is present because instance_jvm_cpu returns data.&#34;&gt;
+Figure 1: On a JVM instance the JVM widgets render — their &lt;code&gt;visibleWhen&lt;/code&gt; gate holds.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-02-instance-go.png&#34; alt=&#34;Figure 2: The same Instance dashboard on the Go &amp;ldquo;rating&amp;rdquo; service — the JVM group is simply absent and the grid has reflowed; those widgets&amp;rsquo; queries were never sent to OAP.&#34;&gt;
+Figure 2: The same dashboard on a Go instance — the JVM widgets aren&amp;rsquo;t there, and their queries never ran. One template, adapting to the entity.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;numbers-humans-can-read&#34;&gt;Numbers humans can read&lt;/h2&gt;
+&lt;p&gt;Raw metrics are not always readable metrics. Horizon&amp;rsquo;s widgets format three cases that used to make operators do math in their heads:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;enum&lt;/code&gt;&lt;/strong&gt; — a value→label map turns a coded gauge into words: a &lt;code&gt;1/0&lt;/code&gt; success metric renders &lt;strong&gt;&lt;code&gt;OK&lt;/code&gt;&lt;/strong&gt; / &lt;strong&gt;&lt;code&gt;Failed&lt;/code&gt;&lt;/strong&gt; instead of the bare number. The labels are translatable per locale.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;duration&lt;/code&gt;&lt;/strong&gt; — a metric in seconds renders as a human time-ago: &lt;strong&gt;&lt;code&gt;5m 20s ago&lt;/code&gt;&lt;/strong&gt;, compact to &lt;code&gt;5m&lt;/code&gt; / &lt;code&gt;2h&lt;/code&gt; on an axis.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SI suffixes&lt;/strong&gt; — large magnitudes on chart axes and tooltips read as &lt;strong&gt;&lt;code&gt;45.1k&lt;/code&gt;&lt;/strong&gt;, &lt;strong&gt;&lt;code&gt;1.34M&lt;/code&gt;&lt;/strong&gt;, &lt;strong&gt;&lt;code&gt;2.5G&lt;/code&gt;&lt;/strong&gt; rather than &lt;code&gt;4.51e4&lt;/code&gt;, with the axis tick and its hovered value sharing one notation.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-03-si-suffix-axis.png&#34; alt=&#34;Figure 3: A line chart whose y-axis and crosshair tooltip both read in compact SI suffixes (45.1k, 1.34M) — the tick and the hovered value in one notation.&#34;&gt;
+Figure 3: Dense byte and count series get compact SI suffixes, axis and tooltip in step.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-04-enum-duration-cards.png&#34; alt=&#34;Figure 4: Two BanyanDB cards — &amp;ldquo;Last Sync&amp;rdquo; showing OK (from a coded 1 via an enum map) and &amp;ldquo;Time Since Last Sync&amp;rdquo; showing &amp;ldquo;5m 20s ago&amp;rdquo; (from a seconds metric via the duration format).&#34;&gt;
+Figure 4: The &lt;code&gt;enum&lt;/code&gt; and &lt;code&gt;duration&lt;/code&gt; formats in action on BanyanDB&amp;rsquo;s lifecycle cards — &lt;code&gt;OK&lt;/code&gt; instead of &lt;code&gt;1&lt;/code&gt;, &amp;ldquo;5m 20s ago&amp;rdquo; instead of a seconds count.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;read-the-whole-grid-as-one-timeline&#34;&gt;Read the whole grid as one timeline&lt;/h2&gt;
+&lt;p&gt;Every &lt;code&gt;line&lt;/code&gt; chart on a page shares &lt;strong&gt;one hover cursor&lt;/strong&gt;. Point at minute 32 on the throughput chart and minute 32 lights up on the latency chart, the error-rate chart, and every sparkline tile. The contract is enforced at the chart-wrapper level — no widget can opt out — so the page reads as a single coordinated view of one moment, not a dozen independent charts. The multi-series tooltip is a fixed, aligned table that shows each series&amp;rsquo; &lt;strong&gt;title&lt;/strong&gt; (never the raw MQE), with values in one right-aligned column.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-05-synced-crosshair.png&#34; alt=&#34;Figure 5: The synced crosshair sweeping across the throughput, error-rate and latency panels — one cursor, one moment, every chart aligned.&#34;&gt;
+Figure 5: One cursor moves across every line chart on the page, so you read the same instant everywhere at once.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;from-a-slow-row-to-its-trace-in-one-click&#34;&gt;From a slow row to its trace, in one click&lt;/h2&gt;
+&lt;p&gt;&lt;code&gt;record&lt;/code&gt; widgets — Slow Statements, Slow Commands, Slow Database Statements — are lists of sampled records, and each row that carries a trace id gets a &lt;strong&gt;jump-to-trace&lt;/strong&gt; icon at its head that opens the originating trace&amp;rsquo;s waterfall. It resolves the trace &lt;strong&gt;by id, not by layer&lt;/strong&gt;, which matters: the Slow Statements on a Virtual Database / Cache / MQ service belong to the &lt;em&gt;caller&lt;/em&gt; on another layer, and a virtual-target layer has no traces tab of its own — yet the jump still lands. The statement text itself is &lt;strong&gt;click-to-copy&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-06-record-jump-to-trace.png&#34; alt=&#34;Figure 6: A Slow Statements record widget — each sampled row with a jump-to-trace icon (where the sample has a trace id), the statement text click-to-copy, one row showing the &amp;ldquo;copied&amp;rdquo; flash.&#34;&gt;
+Figure 6: From a slow statement to the trace that ran it — resolved by trace id, so it works even on a virtual layer with no traces tab of its own.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;pin-and-compare-entities-preview&#34;&gt;Pin and compare entities &lt;em&gt;(preview)&lt;/em&gt;&lt;/h2&gt;
+&lt;p&gt;Sometimes one entity isn&amp;rsquo;t enough. Horizon 0.7.0 ships an opt-in preview that lets you &lt;strong&gt;lock several services, instances, or endpoints — even ones from different services — and compare them in place&lt;/strong&gt;. The entity you&amp;rsquo;re viewing is always part of the cohort (tagged &lt;code&gt;CURRENT&lt;/code&gt;), and each pin adds its own hue; every widget then compares inline — line widgets overlay one series per entity, cards show a row each, &lt;code&gt;top&lt;/code&gt; and &lt;code&gt;record&lt;/code&gt; widgets get per-entity tabs, tables gain an Entity column. It loads per-entity, so one slow entity never blanks the others. It&amp;rsquo;s behind a feature flag while it settles (&lt;code&gt;VITE_FF_ENTITY_COMPARE=1&lt;/code&gt;, or &lt;code&gt;localStorage[&#39;horizon:ff:entity-compare&#39;]=&#39;1&#39;&lt;/code&gt;), so it&amp;rsquo;s not on by default yet — but it&amp;rsquo;s the direction the dashboards are heading.&lt;/p&gt;
+&lt;h2 id=&#34;the-time-picker-moves-the-whole-dashboard&#34;&gt;The time picker moves the &lt;em&gt;whole&lt;/em&gt; dashboard&lt;/h2&gt;
+&lt;p&gt;The topbar time range drives everything on the page — the header KPI strip, the widget body, and (on BanyanDB&amp;rsquo;s tiered hot/warm/cold storage) the &lt;strong&gt;Cold&lt;/strong&gt; pill flow end-to-end. Earlier the landing and topology routes were pinned to the last 60 minutes, so picking &amp;ldquo;12 days ago&amp;rdquo; quietly kept showing recent numbers; now the picker is honored everywhere, and when an upstream control changes, each dependent tile visibly resets and shows a &amp;ldquo;Reading data…&amp;rdquo; hint rather than leaving a stale value under a spinner.&lt;/p&gt;
+&lt;h2 id=&#34;where-to-go-next&#34;&gt;Where to go next&lt;/h2&gt;
+&lt;p&gt;It&amp;rsquo;s worth stressing that this is &lt;em&gt;one&lt;/em&gt; system. The same five widgets, the same MQE, the same gating render every layer&amp;rsquo;s dashboard — the JVM panels above, BanyanDB&amp;rsquo;s lifecycle cards, the percentile latency on a mesh service, and purpose-built panels for things like an Envoy AI Gateway (token throughput, time-to-first-token) or a GenAI virtual layer (per-model estimated cost). What changes from layer to layer is the MQE, not the machinery.&lt;/p&gt;
+&lt;p&gt;Everything above is the &lt;em&gt;reading&lt;/em&gt; experience. Each widget&amp;rsquo;s MQE, its &lt;code&gt;visibleWhen&lt;/code&gt; gate, its format, and the per-scope grids are all editable from the &lt;strong&gt;Layer dashboards&lt;/strong&gt; admin — but that authoring story (draft → preview → publish, with the inline-and-expand MQE editor) is its own post later in the series. For the field-level reference, see the docs on &lt;a href=&#34;https://skywalking.apache.org/docs/&#34;&gt;dashboard widgets&lt;/a&gt; and charts.&lt;/p&gt;
+&lt;p&gt;Next up: &lt;strong&gt;topology and service dependency&lt;/strong&gt; — the same data Horizon charts here, drawn as a map you can walk.&lt;/p&gt;
 
       </description>
     </item>
@@ -8731,60 +8794,6 @@ We could use &lt;code&gt;limit&lt;/code&gt; and &lt;code&gt;offset&lt;/code&gt; 
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ol&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: Extending Apache SkyWalking with non-breaking breakpoints</title>
-      <link>/blog/2021-12-06-extend-skywalking-with-nbb/</link>
-      <pubDate>Mon, 06 Dec 2021 00:00:00 +0000</pubDate>
-      <guid>/blog/2021-12-06-extend-skywalking-with-nbb/</guid>
-      <description>
-        
-        
-        &lt;p&gt;Non-breaking breakpoints are breakpoints specifically designed for live production environments. With non-breaking breakpoints, reproducing production bugs locally or in staging is conveniently replaced with capturing them directly in production.&lt;/p&gt;
-&lt;p&gt;Like regular breakpoints, non-breaking breakpoints can be:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;placed almost anywhere&lt;/li&gt;
-&lt;li&gt;added and removed at will&lt;/li&gt;
-&lt;li&gt;set to fire on specific conditions&lt;/li&gt;
-&lt;li&gt;expose internal application state&lt;/li&gt;
-&lt;li&gt;persist as long as desired (even between application reboots)&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;The last feature is especially useful given non-breaking breakpoints can be left in production for days, weeks, and even months at a time while waiting to capture behavior that happens rarely and unpredictably.&lt;/p&gt;
-&lt;h4 id=&#34;how-do-non-breaking-breakpoints-work&#34;&gt;How do non-breaking breakpoints work?&lt;/h4&gt;
-&lt;p&gt;If you&amp;rsquo;re familiar with general distributed tracing concepts, such as &amp;ldquo;traces&amp;rdquo; and &amp;ldquo;spans&amp;rdquo;, then you&amp;rsquo;re already broadly familiar with how non-breaking breakpoints work. Put simply, non-breaking breakpoints are small fragments of code added during runtime that, upon the proper conditions, save a portion of the application&amp;rsquo;s current state, and resume normal execution. In SkyWalking, this can be implemented by simply opening a new local span, adding some tags, and closing the local span.&lt;/p&gt;
-&lt;p&gt;While this process is relatively simple, the range of functionality that can be achieved through this technique is quite impressive.
-Save the current and global variables to create a non-breaking breakpoint; add the ability to format log messages to create just-in-time logging; add the ability to trigger metric telemetry to create real-time KPI monitoring. If you keep moving in this direction, you eventually enter the realm of live debugging/coding, and this is where Source++ comes in.&lt;/p&gt;
-&lt;h4 id=&#34;live-coding-platform&#34;&gt;Live Coding Platform&lt;/h4&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/sourceplusplus&#34;&gt;Source++&lt;/a&gt; is an open-source live coding platform designed for production environments, powered by Apache SkyWalking. Using Source++, developers can add breakpoints, logs, metrics, and distributed tracing to live production software in real-time on-demand, right from their IDE or CLI. While capable of stand-alone deployment, the latest version of Source++ makes it easier than ever to integrate into existing Apache SkyWalking installations. This process can be completed in a few minutes and is easy to customize for your specific needs.&lt;/p&gt;
-&lt;p&gt;For a better idea of how Source++ works, take a look at the following diagram:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;./enhanced_sw_setup.svg&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;In this diagram, blue components represent existing SkyWalking architecture, black components represent new Source++ architecture, and the red arrows show how non-breaking breakpoints make their way from production to IDEs. A process that is facilitated by Source++ components: Live Probe, Live Processors, Live Platform, and Live Interface.&lt;/p&gt;
-&lt;h4 id=&#34;live-probe&#34;&gt;Live Probe&lt;/h4&gt;
-&lt;p&gt;The Live Probe is currently available for &lt;a href=&#34;https://github.com/sourceplusplus/probe-jvm&#34;&gt;JVM&lt;/a&gt; and &lt;a href=&#34;https://github.com/sourceplusplus/probe-python&#34;&gt;Python&lt;/a&gt; applications. It runs alongside the SkyWalking agent and is responsible for dynamically adding and removing code fragments based on valid instrumentation requests from developers. These code fragments in turn make use of the SkyWalking agent&amp;rsquo;s internal APIs to facilitate production instrumentation.&lt;/p&gt;
-&lt;h4 id=&#34;live-processors&#34;&gt;Live Processors&lt;/h4&gt;
-&lt;p&gt;Live Processors are responsible for finding, extracting, and transforming data found in distributed traces produced via live probes. They run alongside SkyWalking collectors and implement additional post-processing logic, such as PII redaction. Live processors work via uniquely identifiable tags (prefix &lt;code&gt;spp.&lt;/code&gt;) added previously by live probes.&lt;/p&gt;
-&lt;p&gt;One could easily view a non-breaking breakpoint ready for processing using Rocketbot, however, it will look like this:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;./rocketbot_nbb.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;Even though the above does not resemble what&amp;rsquo;s normally thought of as a breakpoint, the necessary information is there. With live processors added to your SkyWalking installation, this data is refined and may be viewed more traditionally via live interfaces.&lt;/p&gt;
-&lt;h4 id=&#34;live-platform&#34;&gt;Live Platform&lt;/h4&gt;
-&lt;p&gt;The &lt;a href=&#34;https://github.com/sourceplusplus/live-platform&#34;&gt;Live Platform&lt;/a&gt; is the core part of the Source++ architecture. Unlike the live probe and processors, the live platform does not have a direct correlation with SkyWalking components. It is a standalone server responsible for validating and distributing production breakpoints, logs, metrics, and traces. Each component of the Source++ architecture (probes, processors, interfaces) communicates with each other through the live platform. It is important to ensure the live platform is accessible to all of these components.&lt;/p&gt;
-&lt;h4 id=&#34;live-interface&#34;&gt;Live Interface&lt;/h4&gt;
-&lt;p&gt;Finally, with all the previous parts installed, we&amp;rsquo;re now at the component software developers will find the most useful. A Live Interface is what developers use to create, manage, and view non-breaking breakpoints, and so on. There are a few live interfaces available:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains&#34;&gt;JetBrains Plugin&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/interface-cli&#34;&gt;CLI&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;With the &lt;a href=&#34;https://github.com/sourceplusplus/processor-live-instrument&#34;&gt;Live Instrument Processor&lt;/a&gt; enabled, and the &lt;a href=&#34;https://github.com/sourceplusplus/interface-jetbrains&#34;&gt;JetBrains Plugin&lt;/a&gt; installed, non-breaking breakpoints appear as such:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;./ide_breakpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;The above should be a sight far more familiar to software developers. Beyond the fact that you can&amp;rsquo;t step through execution, non-breaking breakpoints look and feel just like regular breakpoints.&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;For more details and complete setup instructions, please visit:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/sourceplusplus/deploy-skywalking&#34;&gt;https://github.com/sourceplusplus/deploy-skywalking&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
 
       </description>
     </item>
