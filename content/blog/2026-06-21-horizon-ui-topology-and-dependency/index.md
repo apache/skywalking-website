@@ -14,16 +14,18 @@ The call data behind a SkyWalking topology is one thing; the *views* Horizon dra
 
 ## One topology engine, repainted per layer
 
-Open any layer's **Topology** tab and you get a left-to-right hierarchical service map: `User` (when present) seeds the left, and each service sits in a column by its call depth — within a column, nodes keep the order the graph walk reached them, so the dominant chain reads top-down. Each service is a **hexagonal node** with three template-driven metric channels, none of them hardcoded:
+Open any layer's **Topology** tab and you get a left-to-right hierarchical service map: `User` (when present) seeds the left, and each service sits in a column by its call depth — within a column, nodes keep the order the graph walk reached them, so the dominant chain reads top-down. Each service is a **hexagonal node**, and everything it shows is driven by the layer's config — nothing is hardcoded:
 
-- a **center** metric printed inside the hex (with its unit),
-- a **ring** metric painted as an SLA-style colour band around its border (green → red),
-- a **secondary** metric surfaced in the node's tooltip and detail panel.
+- the hexagon's **border** carries the node's **ring** metric as an SLA-style health band (green → red);
+- the component **icon** sits inside the hex — the same icon set the trace waterfall uses, so a PostgreSQL node looks like PostgreSQL, a Kafka node like Kafka;
+- the node's headline number — its **center** metric — prints just **above** the hex, with its unit;
+- the service **name** prints **below** it, and a **secondary** metric (latency, by default) sits beneath the name;
+- each **edge** carries the call's throughput as an **RPM chip** (the server-side metric, falling back to the client side).
 
-Edges carry the call's throughput as an **RPM chip**, also pulled from the template (the server-side metric, falling back to the client side). Swap the `mqe`, `unit`, or `role` in the layer's `topology` JSON and the map repaints — same engine, different meaning per layer. Each node also wears the **icon of its detected component** — the same icon set the trace waterfall uses, so a PostgreSQL node actually looks like PostgreSQL, a Kafka node like Kafka.
+Here's the part worth stressing: every one of those is just the **General layer's bundled default**. The node's center / ring / secondary metrics and the edge metrics each live in the **Layer dashboards admin → Topology scope** as an MQE expression with a unit and a role — so you can point any slot at a different metric, and the same engine paints a different map for a different layer, or for this one your way. (The choices travel with the layer template's export/import, like everything else.)
 
-![Figure 1: A per-layer service map — hexagonal nodes with an SLA health-ring border, the center metric inside, an RPM chip on each edge, and component icons on the nodes.](/screenshots/horizon-0.7.0/p03-topology-01-service-map.png)
-Figure 1: One template-driven topology engine — health-ring hex nodes, RPM-chipped edges, real component icons.</br>
+![Figure 1: A per-layer service map — hexagonal nodes whose border is an SLA health band, with the headline metric above each node, the component icon inside, the name below, and an RPM chip on every edge.](/screenshots/horizon-0.7.0/p03-topology-01-service-map.png)
+Figure 1: One template-driven topology engine — health-banded hex nodes, RPM-chipped edges, real component icons; every metric on it is configured per layer.</br>
 
 ## Cut the noise
 
