@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI: SkyWalking's New Observability Console"
+title: "Meet Horizon UI · 1/16: SkyWalking's New Observability Console"
 date: 2026-06-21
 author: Sheng Wu
 description: "Introducing Apache SkyWalking Horizon UI — the next-generation web UI. A greenfield rewrite on the same OAP backend that you can observe, operate, govern, and customize, starting with a sidebar that mirrors your whole estate."
