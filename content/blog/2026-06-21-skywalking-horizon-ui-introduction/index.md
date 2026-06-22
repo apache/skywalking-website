@@ -138,7 +138,7 @@ auth:
 
 Open `http://<host>:8081/`, log in, and the first stop is **Cluster Status** to confirm Horizon and OAP are talking. From there, the sidebar fills in with your estate.
 
-For the full setup path — binary tarball, Kubernetes, LDAP, TLS, and the production checklist — see the [Horizon UI documentation](https://skywalking.apache.org/docs/), which covers setup, compatibility, access control, customization, components, and operations from its left-side menu.
+For the full setup path — binary tarball, Kubernetes, LDAP, TLS, and the production checklist — see the [Horizon UI documentation](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/readme/), which covers setup, compatibility, access control, customization, components, and operations from its left-side menu.
 
 ## Other notable points
 
