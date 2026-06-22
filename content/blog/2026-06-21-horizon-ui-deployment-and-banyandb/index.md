@@ -43,20 +43,20 @@ Each scope is a purpose-built dashboard:
 - The **Container** dashboard **adapts to the selected container's role**. Every container shows CPU / memory / Go-runtime resources; a **liaison** adds ingestion, query, gRPC errors and the tier-2 publish pipeline and write-queue depth; a **data** node adds storage totals, merge / compaction, the inverted index, the subscribe queue and retention; a **lifecycle** sidecar shows migration cycles and last-run time / status. The role-specific panels are gated on the container's role attribute, so you only ever see what applies to the node in front of you.
 - The **Group** dashboard splits **per data-model** — measure, stream, trace, property — and because a BanyanDB group stores exactly one catalog, only the matching model's panels render: a `measure` group shows write-rate / query-latency / merge panels, a `property` group its index-write / term-search / series panels, and so on.
 
-![Figure 2: The BanyanDB Cluster dashboard — write/query/error KPIs, CPU/memory/disk capacity, and the Containers by Role table.](/screenshots/horizon-0.7.0/p04-deployment-02-cluster-dashboard.png)
+<img src="/screenshots/horizon-0.7.0/p04-deployment-02-cluster-dashboard.png" alt="Figure 2: The BanyanDB Cluster dashboard — write/query/error KPIs, CPU/memory/disk capacity, and the Containers by Role table." style="display:block;margin:0 auto;max-height:560px;width:auto;">
 Figure 2: The Cluster scope — the whole database at a glance, with a roll-call of containers by role.</br>
 
 The role-gating is easiest to see by opening the *same* Container dashboard on two different roles:
 
-![Figure 3: A Container dashboard for a data/liaison node — the role-specific ingestion / storage panels gated on top of the shared CPU / memory / Go-runtime resources.](/screenshots/horizon-0.7.0/p04-deployment-03-container-dashboard.png)
+<img src="/screenshots/horizon-0.7.0/p04-deployment-03-container-dashboard.png" alt="Figure 3: A Container dashboard for a data/liaison node — the role-specific ingestion / storage panels gated on top of the shared CPU / memory / Go-runtime resources." style="display:block;margin:0 auto;max-height:560px;width:auto;">
 Figure 3: A data/liaison Container — ingestion, query, storage and compaction panels on top of the shared resource panels.</br>
 
-![Figure 4: The same Container dashboard opened on the lifecycle sidecar — only its migration-cycle and last-run panels show, because the rest are gated to roles this node doesn't have.](/screenshots/horizon-0.7.0/p04-deployment-03-container-lifecycle-dashboard.png)
+<img src="/screenshots/horizon-0.7.0/p04-deployment-03-container-lifecycle-dashboard.png" alt="Figure 4: The same Container dashboard opened on the lifecycle sidecar — only its migration-cycle and last-run panels show, because the rest are gated to roles this node doesn't have." style="display:block;margin:0 auto;max-height:560px;width:auto;">
 Figure 4: The same dashboard on the lifecycle node — just the migration panels. Same template, gated by role.</br>
 
 And the **Group** scope gives each storage catalog its own page:
 
-![Figure 5: The Group dashboard — the per-data-model panels for one storage catalog; because a group holds a single data model (measure / stream / trace / property), only that model's panels render.](/screenshots/horizon-0.7.0/p04-deployment-04-group-dashboard.png)
+<img src="/screenshots/horizon-0.7.0/p04-deployment-04-group-dashboard.png" alt="Figure 5: The Group dashboard — the per-data-model panels for one storage catalog; because a group holds a single data model (measure / stream / trace / property), only that model's panels render." style="display:block;margin:0 auto;max-height:560px;width:auto;">
 Figure 5: The Group scope — one storage catalog at a time, its panels gated to the group's data model.</br>
 
 ### Edges that know their role pair, and a Flows table
