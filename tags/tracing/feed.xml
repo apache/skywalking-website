@@ -5,7 +5,7 @@
     <description>Recent content in Tracing on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Sun, 21 Jun 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 22 Jun 2026 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/tracing/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -14,6 +14,72 @@
         
       
     
+    
+    <item>
+      <title>Blog: Meet Horizon UI · 6/16: The Trace Explorer</title>
+      <link>/blog/2026-06-22-horizon-ui-trace-explorer/</link>
+      <pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-06-22-horizon-ui-trace-explorer/</guid>
+      <description>
+        
+        
+        &lt;p&gt;This is the sixth post in the &lt;a href=&#34;/blog/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; series. The last few were maps — &lt;a href=&#34;/blog/2026-06-21-horizon-ui-topology-and-dependency/&#34;&gt;topology&lt;/a&gt; between services, the &lt;a href=&#34;/blog/2026-06-21-horizon-ui-deployment-and-banyandb/&#34;&gt;deployment&lt;/a&gt; inside one, the &lt;a href=&#34;/blog/2026-06-22-horizon-ui-3d-infrastructure-map/&#34;&gt;3D view&lt;/a&gt; of the whole estate. Those answer &amp;ldquo;what does my system look like.&amp;rdquo; This post is about the opposite move: from an aggregate down to &lt;em&gt;one request&lt;/em&gt; — its spans, its timing, the exact hop that went slow. That&amp;rsquo;s the &lt;strong&gt;Traces&lt;/strong&gt; tab.&lt;/p&gt;
+&lt;h2 id=&#34;built-for-triage-not-tailing&#34;&gt;Built for triage, not tailing&lt;/h2&gt;
+&lt;p&gt;The Traces tab is a distributed-trace explorer that lives &lt;strong&gt;inside a layer&lt;/strong&gt;: pick a service, set your conditions, and read a single trace&amp;rsquo;s span timeline. And it behaves differently from the rest of the console on purpose — because traces are triage data, not a live feed.&lt;/p&gt;
+&lt;p&gt;It &lt;strong&gt;owns its own time range and conditions&lt;/strong&gt;. It does &lt;em&gt;not&lt;/em&gt; follow the global topbar time picker, and it does &lt;em&gt;not&lt;/em&gt; auto-refresh. You stage what you&amp;rsquo;re looking for and press &lt;strong&gt;Run query&lt;/strong&gt;; nothing is fetched until you do. Before the first run the list simply says &lt;em&gt;&amp;ldquo;Pick your conditions, then click Run query.&amp;rdquo;&lt;/em&gt; When you&amp;rsquo;re chasing one bad trace from twenty minutes ago, the last thing you want is the page sliding forward under you every few seconds — so it doesn&amp;rsquo;t.&lt;/p&gt;
+&lt;h2 id=&#34;conditions-not-a-query-language&#34;&gt;Conditions, not a query language&lt;/h2&gt;
+&lt;p&gt;The whole filter surface is structured form controls — selects, number ranges, and tag chips — staged in a toolbar that only takes effect on &lt;strong&gt;Run query&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Instance&lt;/strong&gt; and &lt;strong&gt;Endpoint&lt;/strong&gt; narrow within the service (the endpoint dropdown lists the service&amp;rsquo;s own endpoints).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Status&lt;/strong&gt; — &lt;code&gt;ALL&lt;/code&gt; / &lt;code&gt;SUCCESS&lt;/code&gt; / &lt;code&gt;ERROR&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Order&lt;/strong&gt; — Newest (by start time) or Slowest (by duration).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Limit&lt;/strong&gt; — how many rows to pull (30 by default); the BFF caps the page size server-side so a client can&amp;rsquo;t ask OAP for the world.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Time range&lt;/strong&gt; — a rolling preset (last 15 minutes through 24 hours) or a custom absolute window, evaluated at &lt;strong&gt;second precision&lt;/strong&gt; so a trace that &lt;em&gt;just&lt;/em&gt; finished still falls inside it instead of being rounded off the minute.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace ID&lt;/strong&gt; — paste one to look it up directly.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Duration range&lt;/strong&gt; — a min–max in milliseconds.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tag&lt;/strong&gt; — free-form span tags as &lt;code&gt;key=value&lt;/code&gt; (e.g. &lt;code&gt;http.status_code=500&lt;/code&gt;), added with Enter as removable chips and AND-joined; keys and values get typeahead from the backend.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;One thing this is &lt;em&gt;not&lt;/em&gt;: a query language. There&amp;rsquo;s no TraceQL box anywhere in Horizon — the structured conditions above are the entire surface. (TraceQL is a separate path: SkyWalking&amp;rsquo;s backend can &lt;em&gt;serve&lt;/em&gt; traces to Grafana over TraceQL, which is &lt;a href=&#34;/blog/2026-04-08-traceql/&#34;&gt;its own story&lt;/a&gt;. Horizon&amp;rsquo;s explorer is forms, not a DSL.)&lt;/p&gt;
+&lt;h2 id=&#34;a-distribution-you-can-box-select&#34;&gt;A distribution you can box-select&lt;/h2&gt;
+&lt;p&gt;When the results come back, the toolbar is joined by a &lt;strong&gt;Distribution&lt;/strong&gt; chart: one dot per trace, plotted with start time on the X axis and duration as its height — slower traces sit higher. Dots are colored by &lt;strong&gt;status&lt;/strong&gt; — errors in red, successes in the accent color — so a cluster of red high up is exactly the &amp;ldquo;slow &lt;em&gt;and&lt;/em&gt; failing&amp;rdquo; corner you came to find.&lt;/p&gt;
+&lt;p&gt;The chart is also a filter. Click a dot to pick it, or &lt;strong&gt;drag a box across a band&lt;/strong&gt; of them, and the result list narrows to just that selection — the header switches to an &lt;em&gt;&amp;ldquo;N picked&amp;rdquo;&lt;/em&gt; count with a Reset. This is a client-side filter over what&amp;rsquo;s already loaded; it never issues a new query. Dragging a band across the slow-and-erroring corner and reading only those rows is the fastest way to go from &amp;ldquo;200 traces&amp;rdquo; to &amp;ldquo;these six.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-01-explorer.webp&#34; alt=&#34;Figure 1: The Traces explorer — the staged condition toolbar, the Distribution chart (one dot per trace, height = duration, red = error) with a band box-selected (8 picked), and the result list below.&#34;&gt;
+Figure 1: Stage conditions, run the query, then box-select a band of the distribution to whittle the list down to the traces worth opening.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;Each result row shows the trace&amp;rsquo;s root endpoint, an OK/ERR flag, the duration, and a bar sized against the slowest trace in the set. What a row &lt;em&gt;represents&lt;/em&gt; depends on the storage backend, and Horizon detects it for you: a banner reads either &lt;em&gt;&amp;ldquo;Full traces are returned inline&amp;rdquo;&lt;/em&gt; (the backend returns whole traces with their spans, so a click opens immediately) or &lt;em&gt;&amp;ldquo;Each row is a trace segment — click one to fetch its full trace.&amp;rdquo;&lt;/em&gt; You never configure this; the banner just tells you which you&amp;rsquo;re looking at.&lt;/p&gt;
+&lt;h2 id=&#34;three-ways-to-read-one-trace&#34;&gt;Three ways to read one trace&lt;/h2&gt;
+&lt;p&gt;Click a row and the trace opens with a three-way view toggle — &lt;strong&gt;Default&lt;/strong&gt;, &lt;strong&gt;Tree&lt;/strong&gt;, and &lt;strong&gt;Statistics&lt;/strong&gt; — over the same spans:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Default&lt;/strong&gt; is the span waterfall: one indented row per span, each carrying a service-colored bar positioned and sized by the span&amp;rsquo;s start offset and duration on a shared timeline, a span-kind glyph, the component&amp;rsquo;s icon (the same icon set the topology map uses), the endpoint or peer name, and the span&amp;rsquo;s own duration. Errored spans are highlighted, and a flag marks any span carrying attached events. Crucially, the waterfall &lt;strong&gt;stitches spans across segments&lt;/strong&gt; using their parent references, so a request that crossed five services renders as one connected timeline rather than five disjoint ones.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tree&lt;/strong&gt; draws those same spans as a zoomable, pannable node graph — root on the left, callees flowing right — for when you care about the &lt;em&gt;shape&lt;/em&gt; of the call tree more than the exact timing.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Statistics&lt;/strong&gt; rolls the spans up &lt;strong&gt;by name&lt;/strong&gt;: a sortable table of count and total / average / maximum duration per operation, so &amp;ldquo;which span am I spending all my time in, across every occurrence in this trace&amp;rdquo; is one sort away.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-02-waterfall.webp&#34; alt=&#34;Figure 2: The Default view — the span waterfall, each span a service-colored bar on a shared timeline with its kind glyph, component icon, and duration; errored spans highlighted, cross-service spans stitched into one timeline.&#34;&gt;
+Figure 2: The waterfall (Default) — one connected timeline across every service the request touched.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-03-tree.webp&#34; alt=&#34;Figure 3: The Tree view — the same trace as a zoomable node graph, root on the left and callees flowing right.&#34;&gt;
+Figure 3: The Tree view — the same spans as the call tree&amp;rsquo;s shape, zoom and pan to explore.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;inside-a-span&#34;&gt;Inside a span&lt;/h2&gt;
+&lt;p&gt;Click any span and a detail panel opens beside it. &lt;strong&gt;Meta&lt;/strong&gt; lays out the essentials — service, instance, endpoint, kind (entry / exit / local / producer / consumer), component, peer, layer, start time, duration, and the error flag. Below it, when they apply:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Cross-trace refs&lt;/strong&gt; — when a span&amp;rsquo;s parent lives in a &lt;em&gt;different&lt;/em&gt; trace (an async hop, a message consumed later), the reference is listed with the parent&amp;rsquo;s trace id, segment, and span — and the trace id is a &lt;strong&gt;link that swaps you straight into that other trace&lt;/strong&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tags&lt;/strong&gt;, &lt;strong&gt;Logs&lt;/strong&gt; (timestamped per-span entries), and &lt;strong&gt;Attached Events&lt;/strong&gt; (named events with start/end times and summary key/values).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The detail header reports the trace&amp;rsquo;s start, total duration, span count, and how many distinct services it touched; from there you can copy the trace id or a shareable link. Opening a shared &lt;code&gt;?traceId=…&lt;/code&gt; URL lands you directly on that trace in an overlay — which is what makes a trace something you can paste into an incident channel and have a teammate land on the exact same view.&lt;/p&gt;
+&lt;h2 id=&#34;native-and-zipkin-side-by-side&#34;&gt;Native and Zipkin, side by side&lt;/h2&gt;
+&lt;p&gt;Not every layer&amp;rsquo;s traces come from SkyWalking&amp;rsquo;s own agents. A layer template carries a &lt;code&gt;traces.source&lt;/code&gt; setting — &lt;code&gt;native&lt;/code&gt;, &lt;code&gt;zipkin&lt;/code&gt;, or &lt;code&gt;both&lt;/code&gt; — and Horizon routes accordingly. Agent-instrumented layers (like General Service) use the &lt;strong&gt;native&lt;/strong&gt; explorer above; service-mesh and Kubernetes-flavored layers, where spans arrive as Zipkin/OpenTelemetry data, use the &lt;strong&gt;Zipkin&lt;/strong&gt; explorer; and a layer set to &lt;code&gt;both&lt;/code&gt; simply gets &lt;strong&gt;two sidebar tabs&lt;/strong&gt;, since native and Zipkin spans have genuinely different shapes and conditions.&lt;/p&gt;
+&lt;p&gt;The Zipkin tab queries an upstream Zipkin store &lt;strong&gt;through OAP&amp;rsquo;s Zipkin query API&lt;/strong&gt; (the same compatibility surface OAP exposes for any Zipkin client — not a GraphQL or TraceQL path). Because Zipkin organizes data by its own service universe (the &lt;code&gt;serviceName&lt;/code&gt; on each span, which can drift from SkyWalking&amp;rsquo;s service list), the tab carries its own service controls instead of binding to the page&amp;rsquo;s service picker — with Zipkin-native conditions like &lt;em&gt;Remote service&lt;/em&gt;, &lt;em&gt;Span name&lt;/em&gt;, and an &lt;em&gt;Annotations&lt;/em&gt; query (&lt;code&gt;error&lt;/code&gt; or &lt;code&gt;key=value&lt;/code&gt;). The two stores fail independently: if Zipkin is unreachable, the native traces are unaffected, and vice versa.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-04-zipkin.webp&#34; alt=&#34;Figure 4: The Zipkin trace tab on a mesh layer — its own service / remote-service / span-name / annotations conditions, with a Zipkin trace open in its waterfall, querying the upstream Zipkin store through OAP.&#34;&gt;
+Figure 4: A layer set to Zipkin gets its own tab and its own service universe, querying the upstream Zipkin store through OAP.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;Open a Zipkin span and its detail keeps that Zipkin shape — the &lt;code&gt;CLIENT&lt;/code&gt; / &lt;code&gt;SERVER&lt;/code&gt; kind, the local and remote endpoints, and the raw Zipkin/OpenTelemetry tags (the &lt;code&gt;istio.*&lt;/code&gt; set, &lt;code&gt;http.status_code&lt;/code&gt;, the sidecar &lt;code&gt;node_id&lt;/code&gt;) exactly as Zipkin recorded them, with no translation into SkyWalking&amp;rsquo;s span model.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-04-zipkin-span.webp&#34; alt=&#34;Figure 5: A Zipkin span&amp;rsquo;s detail panel — its Meta (Kind CLIENT, peer, duration) and the raw Zipkin/OTel tags, including the Istio sidecar set, kept in their native shape.&#34;&gt;
+Figure 5: A Zipkin span keeps its native fields — the kind, the endpoints, and the raw &lt;code&gt;istio.*&lt;/code&gt; / HTTP tags.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;from-a-slow-row-to-the-trace-behind-it&#34;&gt;From a slow row to the trace behind it&lt;/h2&gt;
+&lt;p&gt;There&amp;rsquo;s a second way into a trace that doesn&amp;rsquo;t go through the explorer at all. A trace overlay is mounted once for the whole app, and several things open it by &lt;strong&gt;trace id&lt;/strong&gt;: a &lt;code&gt;?traceId=&lt;/code&gt; link, a cross-trace ref, a log line, and — as &lt;a href=&#34;/blog/2026-06-21-horizon-ui-dashboards-and-mqe/&#34;&gt;Part 2&lt;/a&gt; showed — the &lt;strong&gt;jump-to-trace&lt;/strong&gt; icon on a record widget&amp;rsquo;s slow-statement row. Because it resolves by id rather than by layer, it works even when the trace belongs to a &lt;em&gt;different&lt;/em&gt; layer than the one you&amp;rsquo;re looking at: a Virtual Database, Cache, or MQ service has no traces tab of its own, yet its slow statement still lands you on the originating trace. And when the jump carries a timestamp (a log row knows when its line was written), the lookup widens around that moment — so a trace that has already aged into cold storage still resolves instead of quietly missing.&lt;/p&gt;
+&lt;h2 id=&#34;where-to-go-next&#34;&gt;Where to go next&lt;/h2&gt;
+&lt;p&gt;The Traces tab is one request in full detail; the dashboards and maps from the earlier posts are where you notice something&amp;rsquo;s wrong in the first place. For the field reference — every condition, the native-vs-Zipkin split, the span detail panel — see the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/traces/&#34;&gt;Traces docs&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Next up: &lt;strong&gt;the Log Explorer&lt;/strong&gt; — the same triage instincts, applied to log streams instead of spans.&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: Meet Horizon UI · 3/16: Topology &amp; Service Dependency</title>
