@@ -18,7 +18,7 @@ Horizon is built around four verbs. You **observe** — topology, traces, logs, 
 
 Open Horizon and the left sidebar is not a hand-built menu — it is a live reflection of what your OAP is actually reporting. Horizon asks OAP which layers exist and which of them have services, and renders exactly those, refreshing on a 60-second cadence. A layer starts reporting, it shows up; it goes quiet, it falls away. The menu can't drift from reality because the menu *is* reality, polled.
 
-![Figure 1: Horizon's home — the estate on the left (layers grouped into Virtual Targets, Istio, Kubernetes and MQ, with a live "13 with services" count) and the cross-layer Services overview on the right.](/screenshots/horizon-0.7.0/p01-intro-01-sidebar-is-the-estate.png)
+![Figure 1: Horizon's home — the estate on the left (layers grouped into Virtual Targets, Istio, Kubernetes and MQ, with a live "13 with services" count) and the cross-layer Services overview on the right.](/screenshots/horizon-0.7.0/p01-intro-01-sidebar-is-the-estate.webp)
 Figure 1: Horizon's home — the live estate on the left, the cross-layer Services overview on the right.</br>
 
 A few things are happening in that sidebar:
@@ -35,7 +35,7 @@ service → instance → endpoint → topology → trace → logs → profiling
 
 The slot names follow the layer. The General Service layer in Figure 2 labels its endpoint slot **API**, adds an **API dependency** view, and fans **Profiling** into the engines it actually has — Trace, eBPF, pprof (Go), and Async. Tabs a layer can't support are simply turned off in its template, so you never land on an empty page. Pick a service and its dashboard fills the canvas to the right — a header strip of KPIs (RPM, Apdex, error rate, each with its own sparkline) over a widget grid scoped to exactly that entity.
 
-![Figure 2: Expand a layer and it fans out into its full workflow — here General Service shows Service, Instances, API, Topology, API dependency, Traces, Logs and four profiling engines, with the selected service's dashboard filling the canvas.](/screenshots/horizon-0.7.0/p01-intro-02-layer-drilldown.png)
+![Figure 2: Expand a layer and it fans out into its full workflow — here General Service shows Service, Instances, API, Topology, API dependency, Traces, Logs and four profiling engines, with the selected service's dashboard filling the canvas.](/screenshots/horizon-0.7.0/p01-intro-02-layer-drilldown.webp)
 Figure 2: Expand a layer and it fans out into its full workflow — the tab spine on the left, the selected service's dashboard on the right.</br>
 
 ## Never a blank page
@@ -44,7 +44,7 @@ A console that follows live data has to handle the moments when there isn't any 
 
 Open the app at `/` and Horizon cascades to a real destination: the first available public overview dashboard, or failing that the first layer with services, and only if neither exists, the empty landing. When it does land on the empty page, it tells you which problem you have in plain language — **"No data is flowing yet"** (nothing is reporting) versus **"No dashboard configured yet"** (services exist, but no overview is set up) — and points you at your operations team rather than dropping you on a blank grid. As soon as a service reports or an operator publishes a dashboard, the next 60-second refresh replaces the empty page with the real one.
 
-![Figure 3: The empty landing names the actual situation — here "No dashboard configured yet" (services are reporting, but no overview is set up) — instead of showing a blank dashboard.](/screenshots/horizon-0.7.0/p01-intro-03-empty-no-dashboard-configured.png)
+![Figure 3: The empty landing names the actual situation — here "No dashboard configured yet" (services are reporting, but no overview is set up) — instead of showing a blank dashboard.](/screenshots/horizon-0.7.0/p01-intro-03-empty-no-dashboard-configured.webp)
 Figure 3: The empty landing names the actual situation — here, services are reporting but no overview is configured — instead of a blank dashboard.</br>
 
 The same instinct shows up when OAP itself blips. If the backend goes briefly unreachable, Horizon keeps the last known sidebar shape on screen and raises an "OAP unreachable" banner, with service counts marked unknown until it recovers — so a short outage never looks like your configuration vanished.
@@ -53,10 +53,10 @@ When data *is* flowing, that landing is the war-room you already saw in Figure 1
 
 And because long layer names and deep namespaces happen, the shell gets out of the way: drag the divider to resize the sidebar (double-click to reset), or fold it to a thin icon rail to give the canvas every horizontal pixel — and the width is remembered per browser.
 
-![Figure 4: Drag the divider to widen the sidebar so long layer and namespace names stop truncating.](/screenshots/horizon-0.7.0/p01-intro-04-resize.png)
+![Figure 4: Drag the divider to widen the sidebar so long layer and namespace names stop truncating.](/screenshots/horizon-0.7.0/p01-intro-04-resize.webp)
 Figure 4: Drag the divider to widen the sidebar — long names stop truncating, and the width is remembered per browser.</br>
 
-![Figure 5: Fold the sidebar to a thin icon rail to give the canvas every horizontal pixel.](/screenshots/horizon-0.7.0/p01-intro-04-fold-rail.png)
+![Figure 5: Fold the sidebar to a thin icon rail to give the canvas every horizontal pixel.](/screenshots/horizon-0.7.0/p01-intro-04-fold-rail.webp)
 Figure 5: Fold the sidebar to a thin icon rail when you want the canvas to have every pixel.</br>
 
 ## One new tier makes the rest possible

@@ -24,45 +24,45 @@ Open any layer's **Topology** tab and you get a left-to-right hierarchical servi
 
 Here's the part worth stressing: every one of those is just the **General layer's bundled default**. The node's center / ring / secondary metrics and the edge metrics each live in the **Layer dashboards admin → Topology scope** as an MQE expression with a unit and a role — so you can point any slot at a different metric, and the same engine paints a different map for a different layer, or for this one your way. (The choices travel with the layer template's export/import, like everything else.)
 
-![Figure 1: A per-layer service map — hexagonal nodes whose border is an SLA health band, with the headline metric above each node, the component icon inside, the name below, and an RPM chip on every edge.](/screenshots/horizon-0.7.0/p03-topology-01-service-map.png)
+![Figure 1: A per-layer service map — hexagonal nodes whose border is an SLA health band, with the headline metric above each node, the component icon inside, the name below, and an RPM chip on every edge.](/screenshots/horizon-0.7.0/p03-topology-01-service-map.webp)
 Figure 1: One template-driven topology engine — health-banded hex nodes, RPM-chipped edges, real component icons; every metric on it is configured per layer.</br>
 
 ## Cut the noise
 
 Real topologies are noisy — a dense map fills with conjectured peers OAP couldn't fully resolve (a bare `rcmd:80`, an un-instrumented address). Horizon's **Filter** control turns those off without hiding your real dependencies. It derives one facet automatically — **by layer** — and presents it exactly as the sidebar does: each row carries the layer's own icon and localized name (*Virtual Database*, *Java Agent*, …), plus an **Others** bucket for nodes OAP couldn't classify and a standalone **User** toggle. Uncheck *Others* and the uninstrumented clutter — and its dangling edges — disappears, while your databases, caches and queues (separated by their own `VIRTUAL_*` rows) stay on the map. Filtering is client-side and the rows re-derive on every refresh, so it never goes stale.
 
-![Figure 2: The topology Filter — one auto-derived by-layer facet (each row with its layer icon and name), an Others bucket, and a User toggle — cutting the conjectured peers out of a dense map.](/screenshots/horizon-0.7.0/p03-topology-02-filter-denoise.png)
+![Figure 2: The topology Filter — one auto-derived by-layer facet (each row with its layer icon and name), an Others bucket, and a User toggle — cutting the conjectured peers out of a dense map.](/screenshots/horizon-0.7.0/p03-topology-02-filter-denoise.webp)
 Figure 2: De-noise in one click — drop the unresolved "Others" peers and keep your real dependencies.</br>
 
 When a layer's services fall into OAP service groups, the map's service-focus selector groups by them too, and clicking a group header **batch-selects or clears every service in that group** — so you can focus a whole team's slice of a busy map at once.
 
-![Figure 3: The group-aware service selector — services grouped by OAP `Service.group`, with a group header that focuses or clears the whole group in one click.](/screenshots/horizon-0.7.0/p03-topology-03-group-selector.png)
+![Figure 3: The group-aware service selector — services grouped by OAP `Service.group`, with a group header that focuses or clears the whole group in one click.](/screenshots/horizon-0.7.0/p03-topology-03-group-selector.webp)
 Figure 3: Focus a whole service group at once from the map's selector.</br>
 
 ## Drill from a call into its instances
 
 A service-to-service edge is an aggregate — behind it are real instances talking to real instances. Click a call on the map and choose **Instance map →**, and Horizon draws exactly that: the client service's instances in the left column, the server service's in the right, with the instance-level calls between them, animated client→server. It reuses everything from the service map — the health-ring nodes, the per-call client/server metric sidebar, a node popover with **Open instance dashboard** — and labels the columns in the layer's own vocabulary (*Pods* on Kubernetes, *Sidecars* on the data plane). The two service pickers are **relationship-aware**: the server list is the chosen client's callees, the client list is the chosen server's callers, each re-deriving as you change the other.
 
-![Figure 4: The instance map — the client service's instances (left) and the server service's (right) with the instance-level calls between them, plus the per-call metric sidebar.](/screenshots/horizon-0.7.0/p03-topology-04-instance-map.png)
+![Figure 4: The instance map — the client service's instances (left) and the server service's (right) with the instance-level calls between them, plus the per-call metric sidebar.](/screenshots/horizon-0.7.0/p03-topology-04-instance-map.webp)
 Figure 4: Drill from an aggregate call into the instance-to-instance traffic behind it.</br>
 
 ## Walk the request chain, endpoint by endpoint
 
 Service topology answers "which services call this one." The **API dependency** tab answers the sharper question — "which *endpoints* call this endpoint, and which does it call." Pick an endpoint and it lays out in columns by direction: callers on the left, the focus endpoint in the centre, callees on the right, with the same SLA-coloured node border, the RPM and latency on every edge, and the heaviest edge labeled. A selected node shows a single **+** handle that pulls in *its* own callers and callees in one click, so you walk the chain one hop at a time instead of drowning in the whole graph; drag nodes apart, and the drill-out links (**Open endpoint**, **Service →**) open in a new tab so you keep the graph you're exploring.
 
-![Figure 5: The API-dependency graph — callers left, the focus endpoint centre, callees right, expanded one hop with the + handle, latency and SLA-coloured RPM on every edge.](/screenshots/horizon-0.7.0/p03-topology-05-api-dependency.png)
+![Figure 5: The API-dependency graph — callers left, the focus endpoint centre, callees right, expanded one hop with the + handle, latency and SLA-coloured RPM on every edge.](/screenshots/horizon-0.7.0/p03-topology-05-api-dependency.webp)
 Figure 5: Walk the endpoint call chain a hop at a time, latency on every edge.</br>
 
 ## One service, every layer it reports through
 
 A single logical service often reports through several layers at once — a General agent, a Service Mesh sidecar, the mesh data plane, a Kubernetes pod. SkyWalking has modeled that cross-layer hierarchy since OAP 10; what Horizon adds is making it **one click from anywhere on the map**. Select a node and Horizon lazily probes its hierarchy — if the service has cross-layer peers, a small **chevron-stack chip** clips to the node.
 
-![Figure 6: A selected service node carrying the chevron-stack chip — the cue that this service also reports through other layers.](/screenshots/horizon-0.7.0/p03-topology-06-smartscape.png)
+![Figure 6: A selected service node carrying the chevron-stack chip — the cue that this service also reports through other layers.](/screenshots/horizon-0.7.0/p03-topology-06-smartscape.webp)
 Figure 6: The chevron-stack chip on a selected node — lazily probed on selection, it shows only when the service has cross-layer peers.</br>
 
 Click the chip and the topology dims under a **Smartscape** overlay: the focused node re-renders bright in place, and its peers fan out vertically by OAP's layer order — request-near layers above, infra-near below. From there a two-step click opens any peer in its own layer, pre-selected. (Auto-refresh pauses while the overlay is open so nothing shifts under you.)
 
-![Figure 7: The Smartscape overlay — one logical service projected across its layers (General agent, Service Mesh, mesh data plane, Kubernetes), fanned by layer order, each peer one click from its own layer.](/screenshots/horizon-0.7.0/p03-topology-06-smartscape-expand.png)
+![Figure 7: The Smartscape overlay — one logical service projected across its layers (General agent, Service Mesh, mesh data plane, Kubernetes), fanned by layer order, each peer one click from its own layer.](/screenshots/horizon-0.7.0/p03-topology-06-smartscape-expand.webp)
 Figure 7: One service, every layer it reports through — the cross-layer hierarchy as a one-click overlay on the map.</br>
 
 ## Where to go next
