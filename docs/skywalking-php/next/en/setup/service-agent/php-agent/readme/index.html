@@ -34,7 +34,7 @@ Notice: Because the source code toolchain is override by rust-toolchain.toml, so
   <meta itemprop="name" content="Setup PHP Agent">
   <meta itemprop="description" content="Setup PHP Agent Agent is available for PHP 7.2 - 8.x. Build from source. Configure php.ini. Requirements GCC / Clang Rustc 1.85&#43; Cargo Libclang 9.0&#43; Make Protoc Install dependencies For Debian-base OS sudo apt install gcc make llvm-13-dev libclang-13-dev protobuf-c-compiler protobuf-compiler For Alpine Linux apk add gcc make musl-dev llvm15-dev clang15-dev protobuf-c-compiler Install Rust globally The officially recommended way to install Rust is via rustup.
 Notice: Because the source code toolchain is override by rust-toolchain.toml, so if you don’t need multi version Rust, we recommend to install Rust by these way:">
-  <meta itemprop="wordCount" content="425">
+  <meta itemprop="wordCount" content="670">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Setup PHP Agent">
   <meta name="twitter:description" content="Setup PHP Agent Agent is available for PHP 7.2 - 8.x. Build from source. Configure php.ini. Requirements GCC / Clang Rustc 1.85&#43; Cargo Libclang 9.0&#43; Make Protoc Install dependencies For Debian-base OS sudo apt install gcc make llvm-13-dev libclang-13-dev protobuf-c-compiler protobuf-compiler For Alpine Linux apk add gcc make musl-dev llvm15-dev clang15-dev protobuf-c-compiler Install Rust globally The officially recommended way to install Rust is via rustup.
@@ -533,7 +533,7 @@ Notice: Because the source code toolchain is override by rust-toolchain.toml, so
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 5a09c4b</div>
+                  <div class="commit-id">Commit Id: de311c9</div>
                 
 
 
@@ -648,6 +648,72 @@ because skywalking agent will modify the hook function and fork a new process to
 Enabling it by default will cause extra meaningless consumption when skywalking agent is not
 needed (such as simply executing a php script).</p>
 </blockquote>
+<h3 id="php-health-metrics-phm">PHP Health Metrics (PHM)</h3>
+<blockquote>
+<p><strong>Platform:</strong> PHM process meters are <strong>Linux only</strong>. The forked reporter worker reads the
+parent PHP process via <code>/proc</code> (<code>/proc/{pid}/status</code>, <code>stat</code>, and <code>fd</code>). They are not available
+on macOS or Windows. Trace and other agent features are unchanged.</p>
+</blockquote>
+<p>When <code>reporter_type</code> is <code>grpc</code> or <code>kafka</code>, the forked reporter worker boots
+<code>skywalking::metrics::Metricer</code> in <code>start_worker</code>, alongside heartbeat reporting. A background
+collector samples <code>/proc</code> for the parent PHP process (<code>getppid()</code>), updates Gauges, and <code>Metricer</code>
+reports meter data to OAP through the same path as traces and logs. PHM does not run when
+<code>reporter_type = standalone</code>.</p>
+<p>PHM reports PHP runtime meters through the native Meter protocol (MeterReportService), without
+requiring HTTP traffic, similar to Python PVM and Ruby runtime meters.
+<strong>PHM is enabled by default on Linux</strong> when the agent is active (<code>skywalking_agent.enable = On</code>).
+To disable it or tune the interval, use <code>php.ini</code>:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-ini" data-lang="ini"><span style="display:flex;"><span><span style="color:#57606a">; Disable PHM if not needed (default is On on Linux).</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a">; skywalking_agent.metrics_enable = Off</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a">; Report interval in seconds (default 30).</span>
+</span></span><span style="display:flex;"><span><span style="color:#1f2328">skywalking_agent.metrics_report_period</span> <span style="color:#0550ae">=</span> <span style="color:#0a3069">30</span>
+</span></span></code></pre></div><p>PHM reports six process meters (aligned with OAP <code>php-runtime.yaml</code> and Horizon UI widgets):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Agent meter name</th>
+          <th>OAP / UI expression</th>
+          <th>Source</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>instance_php_process_cpu_utilization</code></td>
+          <td><code>meter_instance_php_process_cpu_utilization</code></td>
+          <td><code>/proc/{pid}/stat</code> utime+stime delta</td>
+      </tr>
+      <tr>
+          <td><code>instance_php_memory_used_mb</code></td>
+          <td><code>meter_instance_php_memory_used_mb</code></td>
+          <td><code>/proc/{pid}/status</code> VmRSS</td>
+      </tr>
+      <tr>
+          <td><code>instance_php_memory_peak_mb</code></td>
+          <td><code>meter_instance_php_memory_peak_mb</code></td>
+          <td><code>/proc/{pid}/status</code> VmHWM</td>
+      </tr>
+      <tr>
+          <td><code>instance_php_virtual_memory_mb</code></td>
+          <td><code>meter_instance_php_virtual_memory_mb</code></td>
+          <td><code>/proc/{pid}/status</code> VmSize</td>
+      </tr>
+      <tr>
+          <td><code>instance_php_thread_count</code></td>
+          <td><code>meter_instance_php_thread_count</code></td>
+          <td><code>/proc/{pid}/status</code> Threads</td>
+      </tr>
+      <tr>
+          <td><code>instance_php_open_fd_count</code></td>
+          <td><code>meter_instance_php_open_fd_count</code></td>
+          <td><code>/proc/{pid}/fd</code> count</td>
+      </tr>
+  </tbody>
+</table>
+<p>On the OAP side, activate the <code>php-runtime</code> entry in
+<code>agent-analyzer.default.meterAnalyzerActiveFiles</code>. Horizon UI shows the widgets on the <strong>General
+Service → Instance</strong> dashboard when data is available.</p>
+<p>See <a href="../../../../configuration/ini-settings">INI Settings</a> for all PHM options.</p>
 <h2 id="run">Run</h2>
 <p>Start <code>php-fpm</code> server:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>php-fpm -F -d <span style="color:#0a3069">&#34;skywalking_agent.enable=On&#34;</span>
@@ -705,7 +771,11 @@ process immediately exit.</p>
             <li><a href="#install-from-the-source-codes">Install from the source codes</a></li>
           </ul>
         </li>
-        <li><a href="#configure">Configure</a></li>
+        <li><a href="#configure">Configure</a>
+          <ul>
+            <li><a href="#php-health-metrics-phm">PHP Health Metrics (PHM)</a></li>
+          </ul>
+        </li>
         <li><a href="#run">Run</a></li>
       </ul>
     </li>
