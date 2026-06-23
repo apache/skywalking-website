@@ -13,7 +13,7 @@ This is the seventh post in the [Meet Horizon UI](/blog/2026-06-21-skywalking-ho
 - The **Logs** tab queries the logs SkyWalking has already **collected and stored** — indexed, filterable, correlated with traces.
 - The **Pod Logs** tab **live-tails** a Kubernetes pod's container logs *on demand* — these aren't stored logs at all: OAP reads them straight from the **Kubernetes API server** (the `kubectl logs` path), Horizon shows the window, and it's discarded. Nothing is persisted, and SkyWalking's log storage is never involved.
 
-Which tabs a layer shows is up to its template: the **Logs** tab appears on layers that enable it (General, Mesh, Nginx, the Envoy AI Gateway, the mobile and mini-program layers); the **Pod Logs** tab appears only on the Kubernetes-aware layers (Kubernetes Service, Mesh, Mesh data plane). Browser JavaScript errors are a separate stream with their own de-obfuscation — that's [its own post](/blog/2026-06-21-skywalking-horizon-ui-introduction/) later in the series.
+Which tabs a layer shows is up to its template: the **Logs** tab appears on layers that enable it (General, Mesh, Nginx, the Envoy AI Gateway, the mobile and mini-program layers); the **Pod Logs** tab appears only on the Kubernetes-aware layers (Kubernetes Service, Mesh, Mesh data plane). Browser JavaScript errors are a different thing again — not service logs but client-side error events the browser agent reports, with their own categories and their own **source-map de-obfuscation** (turning a minified `app.min.js:1:…` frame back into your original `file:line`). That's a separate tab on the Browser layer, and its own post later in the series.
 
 ## The stored log stream
 
