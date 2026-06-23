@@ -36,7 +36,7 @@ Tag Points at Use case &lt;40-char-sha&gt; Exact commit. Immutable. Production. 
   <meta itemprop="description" content="Container Image Horizon UI ships a single multi-arch container image (linux/amd64 &#43; linux/arm64). The image bundles both the BFF and the built UI — there is no separate frontend container.
 Where to get it Registry: GitHub Container Registry (GHCR) at ghcr.io/apache/skywalking-horizon-ui.
 Tag Points at Use case &lt;40-char-sha&gt; Exact commit. Immutable. Production. Pin to a SHA so deploys are reproducible. X.Y.Z Tagged release, produced from git tag vX.Y.Z. Stable release. Same image as the SHA it was built from. X.Y Latest patch on a minor line. Moves over time. Track a minor release line. latest Newest git vX.Y.Z tag. Moves. Demos / dev only — do not pin production to latest. main Head of main. Moves on every merge. Smoke-test the development branch. docker pull ghcr.io/apache/skywalking-horizon-ui:0.7.0 docker pull ghcr.io/apache/skywalking-horizon-ui:&lt;sha&gt; The full commit SHA is the canonical, immutable identifier. Moving tags are conveniences that point at the same SHA-built image.">
-  <meta itemprop="wordCount" content="2305">
+  <meta itemprop="wordCount" content="2468">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Container Image">
   <meta name="twitter:description" content="Container Image Horizon UI ships a single multi-arch container image (linux/amd64 &#43; linux/arm64). The image bundles both the BFF and the built UI — there is no separate frontend container.
@@ -1193,7 +1193,7 @@ Tag Points at Use case &lt;40-char-sha&gt; Exact commit. Immutable. Production. 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 17360c1</div>
+                  <div class="commit-id">Commit Id: 6fded53</div>
                 
 
 
@@ -1404,7 +1404,18 @@ Tag Points at Use case &lt;40-char-sha&gt; Exact commit. Immutable. Production. 
 </table>
 <p>The four <code>HORIZON_*_FILE</code> env vars seed the <strong>defaults</strong> the config schema uses when <code>horizon.yaml</code> doesn&rsquo;t supply a value. An explicit value in <code>horizon.yaml</code> always wins. The intent: an operator who runs the published image with only a minimal <code>horizon.yaml</code> (no <code>audit/setup/alarms/debugLog</code> blocks) gets state files routed to <code>/data/</code> automatically, no manual path overrides needed.</p>
 <p><code>server.host</code> and <code>server.port</code> come from the YAML when present. If they are omitted, the image supplies defaults via <code>HORIZON_SERVER_HOST=0.0.0.0</code> and <code>HORIZON_SERVER_PORT=8081</code>. The image sets <code>EXPOSE 8081</code>; if you change <code>server.port</code>, also publish the new port.</p>
-<h2 id="how-to-load-horizonyaml-into-the-container">How to load <code>horizon.yaml</code> into the container</h2>
+<h2 id="memory--sizing">Memory &amp; sizing</h2>
+<p>The BFF holds its <strong>source-map cache in the Node heap</strong> — uploaded Browser-Logs maps live in process memory, not in OAP — so the container&rsquo;s memory limit and Node&rsquo;s heap limit must be sized together with the source-map budget.</p>
+<ul>
+<li>Set <strong><code>NODE_OPTIONS=--max-old-space-size=&lt;MB&gt;</code></strong> to match the container memory limit (leave headroom for the rest of the process — a value somewhat below the container limit, e.g. <code>1536</code> for a 2 GiB container). <code>--max-old-space-size</code> is a <strong>process flag read by V8 before any config loads</strong>, so it is <strong>not</strong> a <code>horizon.yaml</code> field — pass it via <code>NODE_OPTIONS</code> (env), not in the YAML.</li>
+<li>Size <strong><code>sourceMaps.maxTotalBytes</code></strong> to fit comfortably inside that heap. A few recently-resolved maps are also kept <em>parsed</em> (larger than the raw file), so budget roughly 2× headroom above <code>maxTotalBytes</code>. Mounted (static) maps are disk-backed and don&rsquo;t count against the heap. See <a href="../../operate/browser-source-maps">Browser Logs &amp; Source Maps</a>.</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>docker run -d --name horizon <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  -p 8081:8081 <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  -e <span style="color:#953800">NODE_OPTIONS</span><span style="color:#0550ae">=</span>--max-old-space-size<span style="color:#0550ae">=</span><span style="color:#0550ae">1536</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  -v <span style="color:#0a3069">&#34;</span><span style="color:#953800">$PWD</span><span style="color:#0a3069">/horizon.yaml:/app/horizon.yaml:ro&#34;</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  ghcr.io/apache/skywalking-horizon-ui:0.7.0
+</span></span></code></pre></div><h2 id="how-to-load-horizonyaml-into-the-container">How to load <code>horizon.yaml</code> into the container</h2>
 <p>Three common approaches.</p>
 <h3 id="1-bind-mount-from-the-host">1. Bind-mount from the host</h3>
 <p>Simplest for single-host deployments. Mount your <code>horizon.yaml</code> at <code>/app/horizon.yaml</code>:</p>
@@ -1722,6 +1733,7 @@ Tag Points at Use case &lt;40-char-sha&gt; Exact commit. Immutable. Production. 
         <li><a href="#where-to-get-it">Where to get it</a></li>
         <li><a href="#image-layout">Image layout</a></li>
         <li><a href="#environment-variables">Environment variables</a></li>
+        <li><a href="#memory--sizing">Memory &amp; sizing</a></li>
         <li><a href="#how-to-load-horizonyaml-into-the-container">How to load <code>horizon.yaml</code> into the container</a>
           <ul>
             <li><a href="#1-bind-mount-from-the-host">1. Bind-mount from the host</a></li>
@@ -1859,6 +1871,8 @@ Tag Points at Use case &lt;40-char-sha&gt; Exact commit. Immutable. Production. 
 
     </div>
     
+
+
 
 
 
