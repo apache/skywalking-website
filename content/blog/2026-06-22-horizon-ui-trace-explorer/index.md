@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI · 6/16: The Trace Explorer"
+title: "Meet Horizon UI · 6/17: The Trace Explorer"
 date: 2026-06-22
 author: Sheng Wu
 description: "Part 6 of the Meet Horizon UI series: a per-layer distributed-trace explorer — staged conditions, a duration-distribution chart you can box-select, three ways to read one trace, and a Zipkin tab beside the native one."

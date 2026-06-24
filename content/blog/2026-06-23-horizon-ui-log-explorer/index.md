@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI · 7/16: The Log Explorer"
+title: "Meet Horizon UI · 7/17: The Log Explorer"
 date: 2026-06-23
 author: Sheng Wu
 description: "Part 7 of the Meet Horizon UI series: two log surfaces — a stored, indexed, trace-correlated log stream with a level histogram, and an on-demand live tail of a Kubernetes pod's container logs."

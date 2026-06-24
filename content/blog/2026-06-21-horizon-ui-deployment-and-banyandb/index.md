@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI · 4/16: The Deployment Tab & BanyanDB Self-Observability"
+title: "Meet Horizon UI · 4/17: The Deployment Tab & BanyanDB Self-Observability"
 date: 2026-06-21
 author: Sheng Wu
 description: "Part 4 of the Meet Horizon UI series: the Deployment tab turns the topology map inward to show one clustered service's own instances, and BanyanDB is modeled as the role- and tier-aware cluster it is — SkyWalking finally watching its own database the way it watches everything else."
