@@ -114,7 +114,7 @@ Property banyandb/property/v1/rpc.proto
 ApplyRequest
 ApplyResponse
 DeleteRequest">
-  <meta itemprop="wordCount" content="11004">
+  <meta itemprop="wordCount" content="12563">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Protocol Documentation">
   <meta name="twitter:description" content="Protocol Documentation Table of Contents banyandb/common/v1/trace.proto
@@ -1501,7 +1501,7 @@ DeleteRequest">
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c6183d7</div>
+                  <div class="commit-id">Commit Id: 5604682</div>
                 
 
 
@@ -2478,6 +2478,65 @@ DeleteRequest">
 </li>
 <li>
 <p><a href="#banyandb-measure-v1-measureservice">MeasureService</a></p>
+</li>
+</ul>
+</li>
+<li>
+<p><a href="#banyandb_pipeline_v1_trace_pipeline-proto">banyandb/pipeline/v1/trace_pipeline.proto</a></p>
+<ul>
+<li>
+<p><a href="#banyandb-pipeline-v1-plugin">Plugin</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-samplerplugin">SamplerPlugin</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-stagerule">StageRule</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineconfig">TracePipelineConfig</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicecreaterequest">TracePipelineRegistryServiceCreateRequest</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicecreateresponse">TracePipelineRegistryServiceCreateResponse</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicedeleterequest">TracePipelineRegistryServiceDeleteRequest</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicedeleteresponse">TracePipelineRegistryServiceDeleteResponse</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceexistrequest">TracePipelineRegistryServiceExistRequest</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceexistresponse">TracePipelineRegistryServiceExistResponse</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicegetrequest">TracePipelineRegistryServiceGetRequest</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicegetresponse">TracePipelineRegistryServiceGetResponse</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicelistrequest">TracePipelineRegistryServiceListRequest</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservicelistresponse">TracePipelineRegistryServiceListResponse</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceupdaterequest">TracePipelineRegistryServiceUpdateRequest</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceupdateresponse">TracePipelineRegistryServiceUpdateResponse</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-pipelineevent">PipelineEvent</a></p>
+</li>
+<li>
+<p><a href="#banyandb-pipeline-v1-tracepipelineregistryservice">TracePipelineRegistryService</a></p>
 </li>
 </ul>
 </li>
@@ -12227,6 +12286,573 @@ Registered on the internal gRPC server so FODC agent can access it.</p>
       </tr>
   </tbody>
 </table>
+<p><a name="banyandb_pipeline_v1_trace_pipeline-proto"></a></p>
+<p align="right"><a href="#top">Top</a></p>
+<h2 id="banyandbpipelinev1trace_pipelineproto">banyandb/pipeline/v1/trace_pipeline.proto</h2>
+<p><a name="banyandb-pipeline-v1-Plugin"></a></p>
+<h3 id="plugin">Plugin</h3>
+<p>Plugin is one link in a pipeline's processing chain — a generic, kind-tagged
+envelope around a user-supplied native Go plugin. The set oneof arm selects
+the kind; today the only kind is a sampler (SamplerPlugin). Adding a new kind
+is purely additive: define its payload message and add a new arm to <code>kind</code>,
+leaving existing arms and field numbers untouched.</p>
+<p>A chain of Plugin (TracePipelineConfig.plugins, StageRule.plugins) is a
+sequential pipe: links run in declared order, each link processes the traces
+the previous link kept, and a link that fails is bypassed (its input passes
+through unchanged). The plugin↔engine contract for each kind (the vectorized
+batch, the projection handshake, the verdict) lives in the pinned Go SDK
+module <code>pkg/pipeline/sdk</code>, not in this proto.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>name</td>
+          <td><a href="#string">string</a></td>
+          <td></td>
+          <td>Operator-facing identity for this link, used in diagnostics and admission errors. Must be non-empty; cross-element uniqueness within a chain is enforced server-side.</td>
+      </tr>
+      <tr>
+          <td>sampler</td>
+          <td><a href="#banyandb-pipeline-v1-samplerplugin">SamplerPlugin</a></td>
+          <td></td>
+          <td>Sampler kind: owns a keep/drop verdict over a vectorized batch of traces.</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-SamplerPlugin"></a></p>
+<h3 id="samplerplugin">SamplerPlugin</h3>
+<p>SamplerPlugin configures a user-supplied native Go plugin (a .so loaded
+in-process via the Go <code>plugin</code> package) that owns a keep/drop verdict over a
+vectorized batch of traces. It is the sampler kind of Plugin (Plugin.sampler)
+and is the keep/drop link wherever a chain runs: in a TracePipelineConfig
+chain it gates at the enabled PipelineEvent(s) (merge / finalization); in a
+StageRule chain it is per-stage retention at a stage's migration-out boundary.</p>
+<p>The full plugin↔engine contract (the vectorized batch type, the projection
+handshake, and the verdict shape) lives in the pinned Go SDK module
+<code>pkg/pipeline/sdk</code>, not in this proto; this message only locates and admits
+the plugin. Three properties of that contract:</p>
+<ul>
+<li>Strong compatibility: the boundary exchanges only stdlib/primitive types
+defined in the pinned SDK, so no third-party struct version is pinned
+across the .so boundary. The plugin must be built with the SAME Go
+toolchain, build tags, and flags (-trimpath, CGO) and the SAME pinned SDK
+as the running data node; <code>abi_version</code> is checked at load.</li>
+<li>Vectorized input: the plugin's Decide is called once per columnar batch of
+traces, not once per trace.</li>
+<li>Projection: the plugin declares the columns it needs (SDK Project →
+Projection{Tags, SpanIDs, Spans}); the engine materializes only those tag
+columns and, only when requested, the spans stream — like a query
+projection.</li>
+</ul>
+<p>Operational constraints (Go <code>plugin</code>): Linux/macOS only; plugins cannot be
+unloaded, so changing one requires a node restart (no hot-reload); a plugin
+panic is contained with recover() and fails open (the whole batch is
+retained). Loading arbitrary code is operator-only and gated behind a server
+flag plus a trusted plugin directory.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>path</td>
+          <td><a href="#string">string</a></td>
+          <td></td>
+          <td>Plugin .so filename, resolved within the data node's trusted plugin directory. The engine rejects any path that escapes that directory.</td>
+      </tr>
+      <tr>
+          <td>symbol</td>
+          <td><a href="#string">string</a></td>
+          <td></td>
+          <td>Constructor symbol the engine looks up; defaults to &quot;NewSampler&quot; if empty.</td>
+      </tr>
+      <tr>
+          <td>abi_version</td>
+          <td><a href="#uint32">uint32</a></td>
+          <td></td>
+          <td>ABI version the plugin was built against. The engine refuses to load the plugin unless this equals its own compiled sdk.ABIVersion.</td>
+      </tr>
+      <tr>
+          <td>config</td>
+          <td><a href="#google-protobuf-struct">google.protobuf.Struct</a></td>
+          <td></td>
+          <td>Plugin-defined configuration, set directly in the pipeline config as a structured object. The engine does not interpret its keys: it serializes the Struct to canonical JSON and hands the bytes to the plugin's constructor (SDK NewSampler([]byte)), which unmarshals them into the plugin's own typed config and validates them — a malformed config fails the load. Optional: a plugin that needs no configuration leaves it unset.</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-StageRule"></a></p>
+<h3 id="stagerule">StageRule</h3>
+<p>StageRule binds the pipeline to one lifecycle stage of the targeted Group
+and declares that stage's retention plugin chain. The rule fires at the
+stage's migration-out boundary (i.e. when a segment migrates from this stage
+to the next stage); routine compaction is governed by PIPELINE_EVENT_MERGE on
+TracePipelineConfig, not by StageRule.</p>
+<p>Per-stage retention uses the SAME chain mechanism as gating: each stage's
+<code>plugins</code> chain owns the keep/drop verdict for traces leaving that stage. A
+StageRule with an empty <code>plugins</code> chain has no filtering effect — every trace
+at this stage migrates unchanged. The &quot;rising bar&quot; across stages (Hot keeps
+more, Cold keeps less) is expressed by each stage's plugin config (see §4.2
+of the design doc), not by a fixed predicate vocabulary.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>stage</td>
+          <td><a href="#string">string</a></td>
+          <td></td>
+          <td>Stage name from the Group's ResourceOpts.stages (e.g. &quot;hot&quot;, &quot;warm&quot;, &quot;cold&quot;). Must be non-empty; an empty stage name cannot match any lifecycle stage.</td>
+      </tr>
+      <tr>
+          <td>plugins</td>
+          <td><a href="#banyandb-pipeline-v1-plugin">Plugin</a></td>
+          <td>repeated</td>
+          <td>Per-stage retention chain: the ordered plugins (a sequential pipe) that decide keep/drop for traces leaving this stage at its migration-out boundary. Empty means no per-stage drop (every trace migrates). Same contract and composition as the gating chain (see Plugin).</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineConfig"></a></p>
+<h3 id="tracepipelineconfig">TracePipelineConfig</h3>
+<p>TracePipelineConfig is the root configuration for a storage-node trace pipeline.
+It reuses existing catalog identifiers (group via metadata, stage names, schema
+names) for targeting instead of declaring a parallel metadata model.</p>
+<p>The pipeline has up to three filter points:</p>
+<ol>
+<li>PIPELINE_EVENT_MERGE — in-merge filter during Hot-phase LSM compaction (default).</li>
+<li>PIPELINE_EVENT_FINALIZE — tail-sampling gate at Hot-phase finalization.</li>
+<li>Per-stage retention via StageRule.plugins, applied at the stage's
+migration-out boundary (when the segment migrates to the next stage).
+Always implicit when any StageRule carries a plugin chain.
+Events 1 and 2 are toggleable via <code>enabled_events</code>. The gating policy those
+events evaluate is the <code>plugins</code> chain (a sequential pipe of native Go
+plugins; today each link is a sampler).</li>
+</ol>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>metadata</td>
+          <td><a href="#banyandb-common-v1-metadata">banyandb.common.v1.Metadata</a></td>
+          <td></td>
+          <td>Identity and revision tracking; metadata.group is the Group this pipeline lives in and applies to, consistent with every other schema resource. Required: every config needs a name/group for registry handling.</td>
+      </tr>
+      <tr>
+          <td>enabled</td>
+          <td><a href="#bool">bool</a></td>
+          <td></td>
+          <td>Active status of the pipeline.</td>
+      </tr>
+      <tr>
+          <td>stages</td>
+          <td><a href="#banyandb-pipeline-v1-stagerule">StageRule</a></td>
+          <td>repeated</td>
+          <td>Per-stage retention rules: which lifecycle stages this pipeline acts on, with the retention plugin chain for each. Each rule fires at its stage's migration-out boundary regardless of <code>enabled_events</code>. Empty means the only filters are the <code>enabled_events</code> events (no per-stage drop).</td>
+      </tr>
+      <tr>
+          <td>schema_names</td>
+          <td><a href="#string">string</a></td>
+          <td>repeated</td>
+          <td>Explicit schema names to target within the Group (exact match on Metadata.name). Each entry must be non-empty; cross-element uniqueness is enforced server-side.</td>
+      </tr>
+      <tr>
+          <td>schema_name_regex</td>
+          <td><a href="#string">string</a></td>
+          <td></td>
+          <td>RE2 regular expression matched against schema names. A schema is targeted if it is listed in schema_names OR matches this pattern. When both are empty, every schema in the Group is targeted.</td>
+      </tr>
+      <tr>
+          <td>plugins</td>
+          <td><a href="#banyandb-pipeline-v1-plugin">Plugin</a></td>
+          <td>repeated</td>
+          <td>Gating policy: an ordered chain of plugins (a sequential pipe) evaluated by any enabled event (PIPELINE_EVENT_MERGE and/or PIPELINE_EVENT_FINALIZE). Links run in declared order, each processing the traces the previous link kept; a link that fails is bypassed (fail-open). Today every link is a sampler, so the chain is the conjunction of the links' keep/drop verdicts. Empty means the only retention is the per-stage StageRule plugin chain(s) at migration-out.</td>
+      </tr>
+      <tr>
+          <td>enabled_events</td>
+          <td><a href="#banyandb-pipeline-v1-pipelineevent">PipelineEvent</a></td>
+          <td>repeated</td>
+          <td>Pipeline-wide events to run. Empty defaults to [PIPELINE_EVENT_MERGE] — the in-merge filter is on, the finalization gate is off. To enable the finalization gate, include PIPELINE_EVENT_FINALIZE; to disable the merge filter, list only [PIPELINE_EVENT_FINALIZE]; the explicit empty default value is also acceptable to mean &quot;merge only&quot;. Each element must be a defined, non-UNSPECIFIED value; duplicates are normalized to a set server-side.</td>
+      </tr>
+      <tr>
+          <td>merge_grace</td>
+          <td><a href="#google-protobuf-duration">google.protobuf.Duration</a></td>
+          <td></td>
+          <td>Per-trace maturity window for the in-merge filter (§7.1). A trace is eligible for dropping during an LSM compaction merge only once its latest span timestamp is older than <code>now - merge_grace</code>; younger traces pass through the merge unchanged. Bounds the expected intra-trace span arrival spread (typically seconds). Used iff <code>enabled_events</code> contains PIPELINE_EVENT_MERGE. Strictly positive if set; engine default 30s if unset.</td>
+      </tr>
+      <tr>
+          <td>finalize_grace</td>
+          <td><a href="#google-protobuf-duration">google.protobuf.Duration</a></td>
+          <td></td>
+          <td>Per-segment settling window for the scheduled finalization pass (§7.3). A segment is treated as settled, and the authoritative final filter runs, once the event-time watermark exceeds <code>segment.End &amp;#43; finalize_grace</code>. Bounds segment-wide late arrival (typically minutes). Used iff <code>enabled_events</code> contains PIPELINE_EVENT_FINALIZE. Strictly positive if set; engine default 5m if unset.</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceCreateRequest"></a></p>
+<h3 id="tracepipelineregistryservicecreaterequest">TracePipelineRegistryServiceCreateRequest</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>trace_pipeline_config</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineconfig">TracePipelineConfig</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceCreateResponse"></a></p>
+<h3 id="tracepipelineregistryservicecreateresponse">TracePipelineRegistryServiceCreateResponse</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>mod_revision</td>
+          <td><a href="#int64">int64</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceDeleteRequest"></a></p>
+<h3 id="tracepipelineregistryservicedeleterequest">TracePipelineRegistryServiceDeleteRequest</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>metadata</td>
+          <td><a href="#banyandb-common-v1-metadata">banyandb.common.v1.Metadata</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceDeleteResponse"></a></p>
+<h3 id="tracepipelineregistryservicedeleteresponse">TracePipelineRegistryServiceDeleteResponse</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>deleted</td>
+          <td><a href="#bool">bool</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>delete_time</td>
+          <td><a href="#int64">int64</a></td>
+          <td></td>
+          <td>delete_time is the server-assigned tombstone timestamp in unix nanos.</td>
+      </tr>
+      <tr>
+          <td>mod_revision</td>
+          <td><a href="#int64">int64</a></td>
+          <td></td>
+          <td>mod_revision is the etcd revision of the tombstone; zero if the server did not record one.</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceExistRequest"></a></p>
+<h3 id="tracepipelineregistryserviceexistrequest">TracePipelineRegistryServiceExistRequest</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>metadata</td>
+          <td><a href="#banyandb-common-v1-metadata">banyandb.common.v1.Metadata</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceExistResponse"></a></p>
+<h3 id="tracepipelineregistryserviceexistresponse">TracePipelineRegistryServiceExistResponse</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>has_group</td>
+          <td><a href="#bool">bool</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>has_trace_pipeline_config</td>
+          <td><a href="#bool">bool</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceGetRequest"></a></p>
+<h3 id="tracepipelineregistryservicegetrequest">TracePipelineRegistryServiceGetRequest</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>metadata</td>
+          <td><a href="#banyandb-common-v1-metadata">banyandb.common.v1.Metadata</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceGetResponse"></a></p>
+<h3 id="tracepipelineregistryservicegetresponse">TracePipelineRegistryServiceGetResponse</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>trace_pipeline_config</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineconfig">TracePipelineConfig</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceListRequest"></a></p>
+<h3 id="tracepipelineregistryservicelistrequest">TracePipelineRegistryServiceListRequest</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>group</td>
+          <td><a href="#string">string</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceListResponse"></a></p>
+<h3 id="tracepipelineregistryservicelistresponse">TracePipelineRegistryServiceListResponse</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>trace_pipeline_config</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineconfig">TracePipelineConfig</a></td>
+          <td>repeated</td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceUpdateRequest"></a></p>
+<h3 id="tracepipelineregistryserviceupdaterequest">TracePipelineRegistryServiceUpdateRequest</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>trace_pipeline_config</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineconfig">TracePipelineConfig</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryServiceUpdateResponse"></a></p>
+<h3 id="tracepipelineregistryserviceupdateresponse">TracePipelineRegistryServiceUpdateResponse</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Label</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>mod_revision</td>
+          <td><a href="#int64">int64</a></td>
+          <td></td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-PipelineEvent"></a></p>
+<h3 id="pipelineevent">PipelineEvent</h3>
+<p>PipelineEvent identifies a pipeline-wide event that can be independently
+enabled. Per-stage retention (StageRule.plugins) fires implicitly at the
+stage's migration-out boundary and is not toggleable via this enum.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Name</th>
+          <th>Number</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>PIPELINE_EVENT_UNSPECIFIED</td>
+          <td>0</td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>PIPELINE_EVENT_MERGE</td>
+          <td>1</td>
+          <td>In-merge filter during Hot-phase LSM compaction merges (Warm/Cold compactions stay lossless). Per-trace drops are gated by <code>merge_grace</code> so partial traces are not destroyed prematurely. Cheap, runs often; verdicts wait for trace maturity (see §7.1).</td>
+      </tr>
+      <tr>
+          <td>PIPELINE_EVENT_FINALIZE</td>
+          <td>2</td>
+          <td>Tail-sampling gate at Hot-phase segment finalization, after the segment has settled (event-time watermark past <code>segment.End &amp;#43; finalize_grace</code>). Heavy but authoritative; sees the complete trace (see §7.3).</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-pipeline-v1-TracePipelineRegistryService"></a></p>
+<h3 id="tracepipelineregistryservice">TracePipelineRegistryService</h3>
+<p>TracePipelineRegistryService manages TracePipelineConfig resources, mirroring
+the registry services of every other schema resource. Create/Update run the
+admission and conflict checks of §2.3/§2.4 of the design.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Method Name</th>
+          <th>Request Type</th>
+          <th>Response Type</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Create</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicecreaterequest">TracePipelineRegistryServiceCreateRequest</a></td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicecreateresponse">TracePipelineRegistryServiceCreateResponse</a></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>Update</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceupdaterequest">TracePipelineRegistryServiceUpdateRequest</a></td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceupdateresponse">TracePipelineRegistryServiceUpdateResponse</a></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>Delete</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicedeleterequest">TracePipelineRegistryServiceDeleteRequest</a></td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicedeleteresponse">TracePipelineRegistryServiceDeleteResponse</a></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>Get</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicegetrequest">TracePipelineRegistryServiceGetRequest</a></td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicegetresponse">TracePipelineRegistryServiceGetResponse</a></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>List</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicelistrequest">TracePipelineRegistryServiceListRequest</a></td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryservicelistresponse">TracePipelineRegistryServiceListResponse</a></td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>Exist</td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceexistrequest">TracePipelineRegistryServiceExistRequest</a></td>
+          <td><a href="#banyandb-pipeline-v1-tracepipelineregistryserviceexistresponse">TracePipelineRegistryServiceExistResponse</a></td>
+          <td>Exist doesn't expose an HTTP endpoint. Please use HEAD method to touch Get instead.</td>
+      </tr>
+  </tbody>
+</table>
 <p><a name="banyandb_property_v1_gossip-proto"></a></p>
 <p align="right"><a href="#top">Top</a></p>
 <h2 id="banyandbpropertyv1gossipproto">banyandb/property/v1/gossip.proto</h2>
@@ -14135,6 +14761,28 @@ Registered on the internal gRPC server so FODC agent can access it.</p>
             <li><a href="#measureservice">MeasureService</a></li>
           </ul>
         </li>
+        <li><a href="#banyandbpipelinev1trace_pipelineproto">banyandb/pipeline/v1/trace_pipeline.proto</a>
+          <ul>
+            <li><a href="#plugin">Plugin</a></li>
+            <li><a href="#samplerplugin">SamplerPlugin</a></li>
+            <li><a href="#stagerule">StageRule</a></li>
+            <li><a href="#tracepipelineconfig">TracePipelineConfig</a></li>
+            <li><a href="#tracepipelineregistryservicecreaterequest">TracePipelineRegistryServiceCreateRequest</a></li>
+            <li><a href="#tracepipelineregistryservicecreateresponse">TracePipelineRegistryServiceCreateResponse</a></li>
+            <li><a href="#tracepipelineregistryservicedeleterequest">TracePipelineRegistryServiceDeleteRequest</a></li>
+            <li><a href="#tracepipelineregistryservicedeleteresponse">TracePipelineRegistryServiceDeleteResponse</a></li>
+            <li><a href="#tracepipelineregistryserviceexistrequest">TracePipelineRegistryServiceExistRequest</a></li>
+            <li><a href="#tracepipelineregistryserviceexistresponse">TracePipelineRegistryServiceExistResponse</a></li>
+            <li><a href="#tracepipelineregistryservicegetrequest">TracePipelineRegistryServiceGetRequest</a></li>
+            <li><a href="#tracepipelineregistryservicegetresponse">TracePipelineRegistryServiceGetResponse</a></li>
+            <li><a href="#tracepipelineregistryservicelistrequest">TracePipelineRegistryServiceListRequest</a></li>
+            <li><a href="#tracepipelineregistryservicelistresponse">TracePipelineRegistryServiceListResponse</a></li>
+            <li><a href="#tracepipelineregistryserviceupdaterequest">TracePipelineRegistryServiceUpdateRequest</a></li>
+            <li><a href="#tracepipelineregistryserviceupdateresponse">TracePipelineRegistryServiceUpdateResponse</a></li>
+            <li><a href="#pipelineevent">PipelineEvent</a></li>
+            <li><a href="#tracepipelineregistryservice">TracePipelineRegistryService</a></li>
+          </ul>
+        </li>
         <li><a href="#banyandbpropertyv1gossipproto">banyandb/property/v1/gossip.proto</a>
           <ul>
             <li><a href="#propagationcontext">PropagationContext</a></li>
@@ -14329,6 +14977,8 @@ Registered on the internal gRPC server so FODC agent can access it.</p>
 
     </div>
     
+
+
 
 
 
