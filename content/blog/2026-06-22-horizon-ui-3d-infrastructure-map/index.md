@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI · 5/16: The 3D Infrastructure Map"
+title: "Meet Horizon UI · 5/17: The 3D Infrastructure Map"
 date: 2026-06-22
 author: Sheng Wu
 description: "Part 5 of the Meet Horizon UI series: a single WebGL view of your whole deployment — every layer's services as cubes stacked on tiers, with live traffic, alarm beacons, and the calls between them."

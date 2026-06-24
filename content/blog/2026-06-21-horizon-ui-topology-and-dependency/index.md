@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI · 3/16: Topology & Service Dependency"
+title: "Meet Horizon UI · 3/17: Topology & Service Dependency"
 date: 2026-06-21
 author: Sheng Wu
 description: "Part 3 of the Meet Horizon UI series: one template-driven topology engine that repaints for every layer, a filter to cut the noise, drill-down from a call into instances, the endpoint-dependency graph, and the cross-layer Smartscape overlay."

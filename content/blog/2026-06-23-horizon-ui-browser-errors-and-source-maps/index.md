@@ -1,5 +1,5 @@
 ---
-title: "Meet Horizon UI · 8/16: Browser Errors & Source Maps"
+title: "Meet Horizon UI · 8/17: Browser Errors & Source Maps"
 date: 2026-06-23
 author: Sheng Wu
 description: "Part 8 of the Meet Horizon UI series: the browser agent's JavaScript-error feed, and the capability that makes it useful — resolving a minified production stack back to your original file, line, column, symbol and source, frame by frame."
