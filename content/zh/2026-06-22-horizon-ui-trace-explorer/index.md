@@ -2,7 +2,7 @@
 title: "认识 Horizon UI · 6/17：Trace 探索器"
 date: 2026-06-22
 author: 吴晟
-description: "Horizon UI 系列第六篇：按 Layer 使用的分布式 Trace 探索器，支持分阶段条件、可框选的时延分布图、三种阅读同一条 Trace 的方式，以及与原生 Trace 并列的 Zipkin 标签页。"
+description: "Horizon UI 系列第六篇：按 Layer 使用的分布式 Trace 探索器：先配置条件再查询，在时延分布图上框选异常 Trace，并用瀑布图、调用树和统计表阅读同一条 Trace。"
 tags:
   - Tracing
   - Cloud Native
@@ -10,17 +10,17 @@ tags:
 
 *本文翻译自英文原文：[Meet Horizon UI · 6/17: The Trace Explorer](/blog/2026-06-22-horizon-ui-trace-explorer/)，发布日期沿用原文日期。*
 
-这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第六篇。前几篇都在讲地图：服务之间的[拓扑](/zh/2026-06-21-horizon-ui-topology-and-dependency/)、单个服务内部的 [deployment](/zh/2026-06-21-horizon-ui-deployment-and-banyandb/)，以及整个系统全貌的 [3D view](/zh/2026-06-22-horizon-ui-3d-infrastructure-map/)。它们回答“我的系统长什么样”。这一篇换一个方向：回到 *一个请求*，看它的 spans、时序，以及到底是哪一跳变慢了。这就是 **Traces** 标签页。
+这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第六篇。前几篇都在讲地图：服务之间的[拓扑](/zh/2026-06-21-horizon-ui-topology-and-dependency/)、单个服务内部的 [deployment](/zh/2026-06-21-horizon-ui-deployment-and-banyandb/)，以及整个系统全貌的 [3D view](/zh/2026-06-22-horizon-ui-3d-infrastructure-map/)。它们回答“我的系统长什么样”。这一篇把视角缩到 *一个请求*，看它的 spans、时序，以及到底是哪一跳变慢了。这就是 **Traces** 标签页。
 
-## 为排查设计，而不是为 tailing 设计
+## 为排查设计，不是用来实时 tail
 
 Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：选择服务，设置条件，然后阅读单条 Trace 的 span 时间线。它有意和控制台其他部分不一样，因为 Trace 是排查数据，不是实时流。
 
-它 **拥有自己的时间范围和条件**。它不跟随全局顶栏时间选择器，也不会自动刷新。你先把要找的条件摆好，再按 **Run query**；按之前不会取任何数据。第一次运行前，列表只显示 *"Pick your conditions, then click Run query."*。当你在追二十分钟前的一条坏 Trace 时，最不需要的就是页面每几秒自己往前滑，所以它不会这么做。
+它使用 **独立的时间范围和条件**。它不跟随全局顶栏时间选择器，也不会自动刷新。你先配置要找的条件，再按 **Run query**；按之前不会取任何数据。第一次运行前，列表只显示 *"Pick your conditions, then click Run query."*。当你在追二十分钟前的一条坏 Trace 时，最不需要的就是窗口每几秒自动往前滚，所以它不会这么做。
 
 ## 条件表单，不是查询语言
 
-整个过滤界面都是结构化表单控件：select、数字范围、tag 标签。条件会暂存在工具栏里，只在点击 **Run query** 后生效：
+过滤条件全部通过结构化表单配置：select、数字范围、tag 标签。条件会暂存在工具栏里，只在点击 **Run query** 后生效：
 
 - **Instance** 和 **Endpoint**：在服务内部收窄范围，endpoint 下拉框只列出这个服务自己的 endpoints。
 - **Status**：`ALL` / `SUCCESS` / `ERROR`。
@@ -40,15 +40,15 @@ Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：
 这张图本身也是过滤器。点击一个点可以选中它，或者 **拖一个矩形框选一片点**，结果列表会收窄到这批选择；标题区切换成 *"N picked"* 计数，并提供 Reset。这是基于已加载结果的客户端过滤，不会发起新查询。直接框住慢且失败的角落，只读那几行，是从“200 条 Trace”缩到“这 6 条值得打开”的最快路径。
 
 ![图 1：Traces 探索器。分阶段条件工具栏、Distribution 图（每点一条 Trace，高度表示 duration，红色表示 error）和被框选的区域（8 picked），下方是结果列表。](/screenshots/horizon-0.7.0/p06-traces-01-explorer.webp)
-图 1：先摆条件、执行查询，再在分布图上框选一片区域，把列表缩到真正值得打开的 Trace。</br>
+图 1：先配置条件、执行查询，再在分布图上框选一片区域，把列表缩到真正值得打开的 Trace。</br>
 
 每条结果行会显示 Trace 的 root endpoint、OK/ERR 标记、duration，以及按当前结果中最慢 Trace 归一化后的长度条。每一行 *代表什么* 取决于存储后端，Horizon 会自动检测：横幅会显示 *"Full traces are returned inline"*，表示后端返回的是带 spans 的完整 Trace，点击即可打开；或者显示 *"Each row is a trace segment — click one to fetch its full trace."*。你不需要配置这个，横幅只是告诉你当前看到的是什么。
 
-## 三种方式读同一条 Trace
+## 同一条 Trace 的三种读法
 
 点击一行后，Trace 会打开，并在同一组 spans 上提供三种视图切换：**Default**、**Tree** 和 **Statistics**。
 
-- **Default** 是 span 瀑布图：每个 span 一行缩进展示，带一个按服务着色的条形，条形在共享时间线上按 span 起始偏移和耗时定位；同时显示 span-kind glyph、组件图标（和拓扑地图共用同一套图标）、endpoint 或 peer 名称，以及 span 自身耗时。错误 span 会高亮，带 attached events 的 span 会有标记。关键点在于，瀑布图会用 parent references **把跨 segment 的 spans 缝起来**，所以一个跨过五个服务的请求会渲染成一条连贯时间线，而不是五段互不相干的内容。
+- **Default** 是 span 瀑布图：每个 span 一行缩进展示，带一个按服务着色的条形，条形在共享时间线上按 span 起始偏移和耗时定位；同时显示 span-kind glyph、组件图标（和拓扑地图共用同一套图标）、endpoint 或 peer 名称，以及 span 自身耗时。错误 span 会高亮，带 attached events 的 span 会有标记。关键点在于，瀑布图会用 parent references **把跨 segment 的 spans 串起来**，所以一个跨过五个服务的请求会渲染成一条连贯时间线，而不是五段互不相干的内容。
 - **Tree** 把同一批 spans 画成可缩放、可平移的节点图：root 在左，callees 向右流动。适合你更关心调用树形状，而不是精确时序的时候。
 - **Statistics** 按 **name** 聚合 spans：一张可排序表，展示每个 operation 的 count、total / average / maximum duration。所以“这条 Trace 里到底哪个 span 名称累计耗时最多”只需要点一次排序。
 
@@ -69,7 +69,7 @@ Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：
 
 ## Native 和 Zipkin 并排
 
-并不是每个 Layer 的 Trace 都来自 SkyWalking 自己的 agent。Layer 模板带一个 `traces.source` 设置，可以是 `native`、`zipkin` 或 `both`，Horizon 据此路由。由 agent 接入的 Layer（比如 General Service）使用上面讲的 **native** 探索器；service-mesh 和 Kubernetes 风格的 Layer 中，spans 以 Zipkin/OpenTelemetry 数据进入，则使用 **Zipkin** 探索器；设置为 `both` 的 Layer 会简单地得到 **两个侧边栏标签页**，因为 native 和 Zipkin spans 的形状和条件确实不同。
+并不是每个 Layer 的 Trace 都来自 SkyWalking 自己的 agent。Layer 模板带一个 `traces.source` 设置，可以是 `native`、`zipkin` 或 `both`，Horizon 据此路由。由 agent 接入的 Layer（比如 General Service）使用上面讲的 **native** 探索器；service-mesh 和 Kubernetes 风格的 Layer 中，spans 以 Zipkin/OpenTelemetry 数据进入，则使用 **Zipkin** 探索器；设置为 `both` 的 Layer 会得到 **两个标签页**，因为 native 和 Zipkin spans 的形状和条件确实不同。
 
 Zipkin 标签页通过 **OAP 的 Zipkin query API** 查询上游 Zipkin store。这是 OAP 向任何 Zipkin client 暴露的兼容接口，不是 GraphQL，也不是 TraceQL。Zipkin 按自己的服务集合组织数据（每个 span 上的 `serviceName`，可能和 SkyWalking 的服务列表不同），所以这个标签页有自己的服务控件，不绑定页面上的 service picker；它也带 Zipkin 原生条件，比如 *Remote service*、*Span name* 和 *Annotations* 查询（`error` 或 `key=value`）。两个存储路径独立失败：Zipkin 不可达时，native traces 不受影响，反之亦然。
 

@@ -10,16 +10,16 @@ tags:
 
 *本文翻译自英文原文：[Meet Horizon UI · 7/17: The Log Explorer](/blog/2026-06-23-horizon-ui-log-explorer/)，发布日期沿用原文日期。*
 
-这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第七篇。[第六篇](/zh/2026-06-22-horizon-ui-trace-explorer/)讲的是一个请求的 spans；这一篇讲它周围的日志行。Horizon 通过 **两个不同标签页** 展示日志，因为它们回答的是两个不同问题：*“这个服务过去半小时打了什么日志？”* 以及 *“这个 pod 现在正在向 stdout 打什么？”*
+这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第七篇。[第六篇](/zh/2026-06-22-horizon-ui-trace-explorer/)讲的是一个请求的 spans；这一篇讲它周围的日志行。Horizon 用 **两个标签页** 展示日志，对应两类排查问题：*“这个服务过去半小时打了什么日志？”* 以及 *“这个 pod 现在正在向 stdout 打什么？”*
 
 - **Logs** 标签页查询 SkyWalking 已经 **采集并存储** 的日志：已索引、可过滤、可与 Trace 关联。
-- **Pod Logs** 标签页按需 **实时 tail** Kubernetes pod 的容器日志。这些不是存储日志：OAP 直接从 **Kubernetes API server** 读取它们（也就是 `kubectl logs` 那条路径），Horizon 展示窗口，然后丢弃。不会持久化，也不会进入 SkyWalking 日志存储。
+- **Pod Logs** 标签页按需 **实时 tail** Kubernetes pod 的容器日志。这类日志不走 SkyWalking 的日志存储：OAP 直接从 **Kubernetes API server** 读取它们（也就是 `kubectl logs` 那条路径），Horizon 只展示当前窗口，然后丢弃，不会持久化。
 
-某个 Layer 展示哪些标签页由模板决定：启用日志的 Layer（General、Mesh、Nginx、Envoy AI Gateway、mobile 和 mini-program Layer）会显示 **Logs** 标签页；只有感知 Kubernetes 的 Layer（Kubernetes Service、Mesh、Mesh data plane）会显示 **Pod Logs** 标签页。Browser JavaScript 错误又是另一类数据：它不是服务日志，而是 browser agent 上报的客户端错误事件，有自己的分类，也有自己的 **source-map de-obfuscation**，可以把混淆后的 `app.min.js:1:...` frame 还原到原始 `file:line`。这是 Browser Layer 上的独立标签页，会在这个系列的另一篇文章里讲。
+某个 Layer 展示哪些标签页由模板决定：启用日志的 Layer（General、Mesh、Nginx、Envoy AI Gateway、mobile 和 mini-program Layer）会显示 **Logs** 标签页；只有感知 Kubernetes 的 Layer（Kubernetes Service、Mesh、Mesh data plane）会显示 **Pod Logs** 标签页。Browser JavaScript 错误又是另一类数据：它不是服务日志，而是浏览器端 agent 上报的客户端错误事件，有自己的分类，也有自己的 **source-map 反混淆**，可以把混淆后的 `app.min.js:1:...` frame 还原到原始 `file:line`。这是 Browser Layer 上的独立标签页，会在这个系列的另一篇文章里讲。
 
 ## 存储日志流
 
-打开一个有 **Logs** 标签页的 Layer，先在顶部选择服务，最新日志流会按 newest-first 加载。和 Trace 探索器一样，这个标签页 **拥有自己的时间范围**。当你在这里排查时，全局顶栏时间选择器会暂停，自动刷新不会把窗口从你脚下移走。可以选择滚动预设（最近 15 分钟到 24 小时，默认 30 分钟），也可以选择自定义绝对窗口；查询按 **秒级精度** 执行，所以最新日志不会被分钟取整吞掉。
+打开一个有 **Logs** 标签页的 Layer，先在顶部选择服务，最新日志流会按 newest-first 加载。和 Trace 探索器一样，这个标签页使用 **独立的时间范围**。当你在这里排查时，全局顶栏时间选择器会暂停，自动刷新不会把你正在看的窗口不断往前推。可以选择滚动预设（最近 15 分钟到 24 小时，默认 30 分钟），也可以选择自定义绝对窗口；查询按 **秒级精度** 执行，所以最新日志不会被分钟取整吞掉。
 
 条件栏用来收窄日志流，每个过滤条件都是可选的，多个条件按 AND 连接：
 
@@ -29,15 +29,15 @@ tags:
 - **Tags**：单个 `key=value` 字段，带 autocomplete；输入 key 可看建议，输入 `=` 后切换到已知 value，按 Enter 提交。提交后的 tags 以可删除标签形式保留。
 - **Level**：日志流上方的 **Levels** 条也可以当过滤器用。点击 `error`、`warn`、`info` 或 `debug` 只保留该级别，再点一次清除。
 
-这里没有日志查询语言，不需要学习 LogQL。上面的条件就是完整界面，并且 **编辑时会立即刷新日志流**；**Run query** 只是显式告诉系统“我改完了，现在刷新”，同时回到第一页。
+这里不提供单独的日志查询语言，也不需要学习 LogQL。上面的条件就是完整界面，并且 **编辑时会立即刷新日志流**；**Run query** 只是显式告诉系统“我改完了，现在刷新”，同时回到第一页。
 
 ## 怎么读日志流
 
-日志视图的目标不是 *列出* 行，而是帮你找到形状，所以日志流上方有两个定位信息。
+日志视图的目标不只是 *列出* 行，还要帮你看出分布和异常，所以日志流上方有两个定位信息。
 
-**Density histogram** 按时间画出日志数量，每个柱按 legend 颜色 **堆叠 level**；hover 柱子可以看到该 bucket 的时间范围和每个 level 的计数。它基于当前页面上可见数据绘制，所以展示的是你正在看的内容形状。**Levels** 条则保留每个 level 在窗口内的运行计数。这个计数跨整个查询窗口采样，而不只是当前可见页，所以 error/warn/info 比例反映的是整个窗口。
+**Density histogram** 按时间展示日志量，每个柱按 legend 颜色 **堆叠 level**；hover 柱子可以看到该 bucket 的时间范围和每个 level 的计数。它基于当前页面上可见数据绘制，所以展示的是你正在看的日志分布。**Levels** 条则保留每个 level 在窗口内的累计计数。这个计数跨整个查询窗口采样，而不只是当前可见页，所以 error/warn/info 比例反映的是整个窗口。
 
-每行日志会显示 timestamp、level（行颜色跟随 level）、service、存在 Trace 关联时的 **↗ trace** 链接、**`JSON` / `YAML` / `TEXT` 格式标记**，以及内容的一行预览。Horizon 按日志内容本身决定这个标记：OAP 会标注日志 body 是 JSON 还是 plain text，在此基础上 Horizon 还会嗅探 JSON 和 YAML 结构，所以即使一行没有被标注但内容是结构化的，也会得到正确处理。JSON 在预览里压平成一行，YAML 保留 key，plain text 会折叠空白。
+日志行会展示 timestamp、level（行颜色跟随 level）、service、存在 Trace 关联时的 **↗ trace** 链接、**`JSON` / `YAML` / `TEXT` 格式标记**，以及内容的一行预览。Horizon 按日志内容本身决定这个标记：OAP 会标注日志 body 是 JSON 还是 plain text，在此基础上 Horizon 还会嗅探 JSON 和 YAML 结构，所以即使一行没有被标注但内容是结构化的，也会得到正确处理。JSON 在预览里压平成一行，YAML 保留 key，plain text 会折叠空白。
 
 ![图 1：存储 Logs 流。条件栏、按 level 堆叠的 density histogram 和 Levels 条在上方，下面是日志行，每行带 level 颜色、service、格式标记和 ↗ trace 链接。](/screenshots/horizon-0.7.0/p07-logs-01-stream.webp)
 图 1：某个服务的存储日志流：窗口上的 level histogram 和 level 计数，下面是每行日志，带 JSON / YAML / TEXT 标记并可跳到 Trace。</br>

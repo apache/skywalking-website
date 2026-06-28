@@ -2,7 +2,7 @@
 title: "认识 Horizon UI · 3/17：拓扑与服务依赖"
 date: 2026-06-21
 author: 吴晟
-description: "Horizon UI 系列第三篇：一套由模板驱动、可为每个 Layer 重绘的拓扑引擎，降噪过滤器，从调用下钻到实例，endpoint 依赖图，以及跨 Layer 的 Smartscape 叠加视图。"
+description: "Horizon UI 系列第三篇：由模板驱动的拓扑引擎、拓扑降噪、从服务调用下钻到实例、endpoint 依赖图，以及跨 Layer 的 Smartscape 视图。"
 tags:
   - Cloud Native
   - Tracing
@@ -12,7 +12,7 @@ tags:
 
 这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第三篇。[第二篇](/zh/2026-06-21-horizon-ui-dashboards-and-mqe/)讲的是如何从仪表盘数字里理解服务；这一篇讲如何把服务关系画成一张 **地图**：谁调用谁，调用有多重，以及同一个逻辑服务在不同上报 Layer 中是什么样子。
 
-SkyWalking 拓扑背后的调用数据是一份，但 Horizon 从中画出的 *视图* 不止一种。它有每个 Layer 自己的服务地图，可以从单条调用下钻到背后的实例，可以看 endpoint 级依赖图，也可以用跨 Layer 叠加视图把一个服务的多张面孔连起来。它们共用同一套引擎，只是回答的问题不同。（Deployment 标签页，也就是单个集群服务 *内部* 实例的地图，以及 WebGL 3D 地图，都足够大，会在接下来的文章里单独讲。）
+SkyWalking 拓扑背后的调用数据是一份，但 Horizon 不只画一种图。它有每个 Layer 自己的服务地图，可以从单条调用下钻到背后的实例，可以看 endpoint 级依赖图，也可以用跨 Layer 叠加视图把一个服务在不同 Layer 中的形态连起来。它们共用同一套引擎，只是回答的问题不同。（Deployment 标签页，也就是单个集群服务 *内部* 实例的地图，以及 WebGL 3D 地图，都足够大，会在接下来的文章里单独讲。）
 
 ## 一套拓扑引擎，按 Layer 重绘
 
@@ -31,7 +31,7 @@ SkyWalking 拓扑背后的调用数据是一份，但 Horizon 从中画出的 *�
 
 ## 削掉噪声
 
-真实拓扑通常很吵。一张密集地图里会混入 OAP 没法完整识别的推测节点，比如裸露的 `rcmd:80`、未接入探针的地址。Horizon 的 **Filter** 控件可以关掉这些噪声，同时保留真实依赖。它会自动生成一个 **按 Layer 分组** 的过滤维度，展示方式和侧边栏一致。每一行都有 Layer 自己的图标和本地化名称，比如 *Virtual Database*、*Java Agent*，还会有一个 **Others** 分组，用来收纳 OAP 无法分类的节点，以及一个独立的 **User** 开关。取消勾选 *Others* 后，未接入探针的杂点和悬空边会消失，而数据库、缓存和队列（各自的 `VIRTUAL_*` 行）仍然留在图上。过滤在客户端执行，行会在每次刷新时重新推导，所以不会陈旧。
+真实拓扑通常很嘈杂。一张密集地图里会混入 OAP 没法完整识别的推测节点，比如裸露的 `rcmd:80`、未接入探针的地址。Horizon 的 **Filter** 控件可以关掉这些噪声，同时保留真实依赖。它会自动生成一个 **按 Layer 分组** 的过滤维度，展示方式和侧边栏一致。每一行都有 Layer 自己的图标和本地化名称，比如 *Virtual Database*、*Java Agent*，还会有一个 **Others** 分组，用来收纳 OAP 无法分类的节点，以及一个独立的 **User** 开关。取消勾选 *Others* 后，未接入探针的杂点和悬空边会消失，而数据库、缓存和队列（各自的 `VIRTUAL_*` 行）仍然留在图上。过滤在客户端执行，行会在每次刷新时重新推导，所以不会陈旧。
 
 ![图 2：拓扑 Filter。一个自动推导出的按 Layer 分组过滤器（每行带 Layer 图标和名称）、一个 Others 分组，以及 User 开关，用来从密集地图里去掉推测节点。](/screenshots/horizon-0.7.0/p03-topology-02-filter-denoise.webp)
 图 2：快速降噪，去掉无法解析的 "Others" 节点，同时保留真实依赖。</br>
@@ -43,14 +43,14 @@ SkyWalking 拓扑背后的调用数据是一份，但 Horizon 从中画出的 *�
 
 ## 从一条调用下钻到实例
 
-服务到服务的边是一条聚合调用；它背后是真实实例在和真实实例通信。点击地图上的一条调用并选择 **Instance map →**，Horizon 会画出这层关系：客户端服务的实例在左列，服务端服务的实例在右列，中间是实例级调用，并带有客户端→服务端方向动画。它复用服务地图上的所有能力：健康 ring 节点、每条调用的 client/server 指标侧栏、带 **Open instance dashboard** 的节点 popover，并且按 Layer 自己的词汇标注列名，比如 Kubernetes 上叫 *Pods*，data plane 上叫 *Sidecars*。两个服务选择器是 **感知关系** 的：server 列表来自当前 client 的 callees，client 列表来自当前 server 的 callers；每次改动其中一个，另一个都会重新推导。
+服务到服务的边是一条聚合调用；它背后是真实实例在和真实实例通信。点击地图上的一条调用并选择 **Instance map →**，Horizon 会画出这层关系：客户端服务的实例在左列，服务端服务的实例在右列，中间是实例级调用，并带有客户端→服务端方向动画。它复用服务地图上的所有能力：健康 ring 节点、每条调用的 client/server 指标侧栏、带 **Open instance dashboard** 的节点 popover，并且按 Layer 自己的词汇标注列名，比如 Kubernetes 上叫 *Pods*，data plane 上叫 *Sidecars*。两个服务选择器会根据关系联动：server 列表来自当前 client 的 callees，client 列表来自当前 server 的 callers；每次改动其中一个，另一个都会重新推导。
 
 ![图 4：Instance map。客户端服务实例在左，服务端服务实例在右，中间是实例级调用，并带每条调用的指标侧栏。](/screenshots/horizon-0.7.0/p03-topology-04-instance-map.webp)
 图 4：从一条聚合调用下钻到背后的实例到实例流量。</br>
 
 ## 按 endpoint 走完整请求链
 
-服务拓扑回答“哪些服务调用了这个服务”。**API dependency** 标签页回答更具体的问题：“哪些 *endpoint* 调用了这个 endpoint，它又调用了哪些 endpoint”。选择一个 endpoint 后，图会按方向分列：callers 在左，焦点 endpoint 在中间，callees 在右。它同样用 SLA 色边框、每条边上的 RPM 和时延，以及最重边标签。选中节点后会出现一个 **+** handle，点击后拉入 *它自己* 的 callers 和 callees，所以你可以一跳一跳走完整链路，而不是一次淹没在整张图里。拖开节点后，外跳链接（**Open endpoint**、**Service →**）会在新标签页打开，保留你正在探索的图。
+服务拓扑回答“哪些服务调用了这个服务”。**API dependency** 标签页回答更具体的问题：“哪些 *endpoint* 调用了这个 endpoint，它又调用了哪些 endpoint”。选择一个 endpoint 后，图会按方向分列：callers 在左，焦点 endpoint 在中间，callees 在右。它同样用 SLA 色边框、每条边上的 RPM 和时延，以及最重边标签。选中节点后会出现一个 **+** handle，点击后拉入 *它自己* 的 callers 和 callees。这样你可以一跳一跳追链路，不需要一次展开整张图。拖开节点后，外跳链接（**Open endpoint**、**Service →**）会在新标签页打开，保留你正在探索的图。
 
 ![图 5：API dependency 图。callers 在左，焦点 endpoint 在中间，callees 在右，通过 + handle 扩展一跳，每条边带时延和 SLA 着色 RPM。](/screenshots/horizon-0.7.0/p03-topology-05-api-dependency.webp)
 图 5：按 endpoint 一跳一跳走请求链，每条边都有时延。</br>
@@ -71,4 +71,4 @@ SkyWalking 拓扑背后的调用数据是一份，但 Horizon 从中画出的 *�
 
 这些地图上的每个指标、阈值和边权重，都位于 Layer template 的 `topology` 块里。换句话说，你会用和仪表盘一样的配置驱动方式调整它们，这也是后续文章的主题。字段参考可以看 [layer-template](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/layer-templates/) 里的 topology 文档。
 
-下一篇：**Deployment 标签页和 BanyanDB 自观测**。同样的地图技术会转向 *内部*，展示一个集群服务自身实例是如何部署、如何相互通信的。
+下一篇：**Deployment 标签页和 BanyanDB 自观测**。同样的地图技术会用到服务 *内部*，展示一个集群服务自身实例是如何部署、如何相互通信的。
