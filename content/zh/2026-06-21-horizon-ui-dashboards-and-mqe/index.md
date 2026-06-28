@@ -1,5 +1,5 @@
 ---
-title: "认识 Horizon UI · 2/17：会适配实体的仪表盘"
+title: "认识 Horizon UI · 2/17：自适应仪表盘、MQE 与可读数字"
 date: 2026-06-21
 author: 吴晟
 description: "Horizon UI 系列第二篇：它的仪表盘如何由 MQE 表达式驱动，如何隐藏不适用于当前实体的组件并在服务端跳过查询，以及如何把 1 显示成 OK、把 4.51e4 显示成 45.1k。"
@@ -26,7 +26,7 @@ Layer 仪表盘是一个紧凑的 **12 列网格**：行高 120px，空隙会自
 
 你不需要手工选择图表类型；写好 MQE，合适的组件会自己渲染。而且每个层级都使用同一套网格系统。Layer 模板里的 `dashboards.<scope>` map 会为 **service**、**instance** 和 **endpoint** 页面携带不同的组件集合，所以向下钻取时，整个仪表盘会换成正确的 scope。（这些都运行在[第一篇](/zh/2026-06-21-skywalking-horizon-ui-introduction/)介绍的 BFF 层；浏览器不直接访问 OAP。）
 
-## 会适配当前实体的仪表盘
+## 自适应当前实体的仪表盘
 
 这里有一个会改变仪表盘使用感受的能力。组件可以带一个 **`visibleWhen`** 条件。如果条件不成立，组件不渲染；更关键的是，**它的查询也不会执行**。
 
@@ -35,13 +35,13 @@ Layer 仪表盘是一个紧凑的 **12 列网格**：行高 120px，空隙会自
 - **MQE metric**：只有表达式 *有值* 时展示组件（`op: exists`），或者只有值超过阈值时展示（`gt` / `lt`）。组件可以拿自己的指标做自我开关：JVM 组件带 `"visibleWhen": { "kind": "mqe", "expression": "instance_jvm_cpu", "op": "exists" }`，所以它们会出现在 Java 实例上，在 Go 实例上消失。
 - **Entity attribute**：在 Instance scope 上，根据选中实例的属性开关，比如 `language eq JAVA`，或者某个属性是否存在。
 
-因为条件在 **服务端** 计算，非 JVM 实例不只是把 JVM 格子藏起来；BFF 根本不会把这些查询发给 OAP。用同一个 Instance 仪表盘打开一个 JVM 服务和一个非 JVM 服务，你看到的是一个模板在适配当前实体，而不是两套手工维护的页面。
+因为条件在 **服务端** 计算，非 JVM 实例不只是把 JVM 格子藏起来；BFF 根本不会把这些查询发给 OAP。用同一个 Instance 仪表盘打开一个 JVM 服务和一个非 JVM 服务，你看到的是同一个模板按当前实体自动调整，而不是两套手工维护的页面。
 
 ![图 1：Java 服务的 Instance 仪表盘，因为 `instance_jvm_cpu` 有数据，JVM 组件组（CPU、heap、GC、threads、classes）会展示。](/screenshots/horizon-0.7.0/p02-dashboards-01-instance-jvm.webp)
 图 1：JVM 实例上会渲染 JVM 组件，因为它们的 `visibleWhen` 条件成立。</br>
 
 ![图 2：同一个 Instance 仪表盘打开在 Go 的 rating 服务上，JVM 组件组不存在，网格已经重排；这些组件的查询没有发往 OAP。](/screenshots/horizon-0.7.0/p02-dashboards-02-instance-go.webp)
-图 2：同一个仪表盘打开在 Go 实例上，JVM 组件不存在，查询也没有执行。一个模板，按实体适配。</br>
+图 2：同一个仪表盘打开在 Go 实例上，JVM 组件不存在，查询也没有执行。同一个模板，随实体自动调整。</br>
 
 ## 数字要让人看得懂
 
