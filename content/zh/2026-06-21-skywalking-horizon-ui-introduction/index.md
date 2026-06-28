@@ -10,7 +10,7 @@ tags:
 
 *本文翻译自英文原文：[Meet Horizon UI · 1/17: SkyWalking's New Observability Console](/blog/2026-06-21-skywalking-horizon-ui-introduction/)，发布日期沿用原文日期。*
 
-Apache SkyWalking Horizon UI 是 SkyWalking 的新一代 Web 控制台。它仍然连接你已经在运行的 OAP 后端：同样的 GraphQL 查询协议，同样的 admin REST 接口，同样的 MQE 语言，同样的 `Layer` 概念。所以你可以直接把 Horizon 指向一个正在运行的 OAP，然后登录使用，不需要改后端。变化发生在这个契约之前的整个用户界面。
+Apache SkyWalking Horizon UI 是 SkyWalking 的新一代 Web 控制台。它仍然连接你已经在运行的 OAP 后端：同样的 GraphQL 查询协议，同样的 admin REST 接口，同样的 MQE 语言，同样的 `Layer` 概念。所以你可以直接把 Horizon 指向一个正在运行的 OAP，然后登录使用，不需要改后端。真正变化的是这些后端协议之上的整套交互体验。
 
 这是这个系列的第一篇。后续文章会依次介绍仪表盘和指标查询语言、拓扑视图、整个部署的 WebGL 3D 地图、链路和日志探索器、性能剖析、运维界面、访问控制，以及把这些能力串起来的配置化定制。本篇先交代背景：Horizon 是什么，整个 UI 围绕哪一个核心想法构建，以及今天如何把它接到你的 OAP 前面。
 
@@ -18,7 +18,7 @@ Horizon 围绕四个动词展开。你先 **observe**：拓扑、链路、日志
 
 ## 侧边栏就是你的系统全貌
 
-打开 Horizon，左侧边栏不是手工写死的菜单，而是 OAP 当前上报内容的实时映射。Horizon 会向 OAP 查询有哪些 Layer、哪些 Layer 里有服务，然后只渲染这些内容，并每 60 秒刷新一次。某个 Layer 开始上报，它就出现；安静下来，它就消失。菜单不会和现实漂移，因为菜单本身就是轮询出来的现实。
+打开 Horizon，左侧边栏不是手工写死的菜单，而是 OAP 当前上报内容的实时映射。Horizon 会向 OAP 查询有哪些 Layer、哪些 Layer 里有服务，然后只渲染这些内容，并每 60 秒刷新一次。某个 Layer 开始上报，它就出现；安静下来，它就消失。菜单不会和真实状态脱节，因为它直接来自 OAP 当前状态。
 
 ![图 1：Horizon 首页，左侧是系统全貌（Layer 分组为 Virtual Targets、Istio、Kubernetes 和 MQ，并显示实时的 "13 with services" 计数），右侧是跨 Layer 的 Services 概览。](/screenshots/horizon-0.7.0/p01-intro-01-sidebar-is-the-estate.webp)
 图 1：Horizon 首页，左侧是实时系统全貌，右侧是跨 Layer 的 Services 概览。</br>
@@ -29,31 +29,31 @@ Horizon 围绕四个动词展开。你先 **observe**：拓扑、链路、日志
 - **按组组织，而不是平铺列表。** Layer 会放在自己的分组下，比如 *Virtual Targets*、*Istio*、*Kubernetes*、*MQ*。顶部是 **Overviews** 和 **Alarms**，运维和管理区域（Cluster Status、Alerting rules、DSL Management、Users、Roles & permissions）放在更靠下的位置，并且只对有权限打开它们的角色展示。访问控制直接织进了菜单，而不是事后再补一层。
 - **不会静默隐藏内容。** OAP 上报的每个 Layer 现在都会出现。即使没有内置模板，也会回退到一个普通的 Service 页面。过去有一份写死的 "hidden layers" 列表，会悄悄隐藏 `BanyanDB` 这样的 Layer；现在这件事被移除了。想隐藏某个 Layer，需要在 `horizon.yaml` 里通过 `layers.excluded` 明确配置。默认值是 `FAAS` 和 `VIRTUAL_GATEWAY`；清空列表就可以展示所有 Layer。
 
-点击任意 Layer，Horizon 会打开它的第一个可用标签页。所有 Layer 都沿用同一条脊柱：
+点击任意 Layer，Horizon 会打开它的第一个可用标签页。所有 Layer 都沿用同一条固定路径：
 
 ```text
 service → instance → endpoint → topology → trace → logs → profiling
 ```
 
-槽位名称会跟随 Layer 的语义变化。图 2 中的 General Service Layer 会把 endpoint 槽位命名为 **API**，增加一个 **API dependency** 视图，并把 **Profiling** 展开成它实际拥有的引擎：Trace、eBPF、pprof（Go）和 Async。某个 Layer 不支持的标签页会在模板里直接关掉，所以你不会落到空页面上。选中一个服务后，右侧画布就是这个服务的仪表盘：上方是一排 KPI（RPM、Apdex、错误率，每个都有自己的 sparkline），下方是只针对这个实体的组件网格。
+槽位名称会跟随 Layer 的语义变化。图 2 中的 General Service Layer 会把 endpoint 槽位命名为 **API**，增加一个 **API dependency** 视图，并把 **Profiling** 展开成它实际拥有的引擎：Trace、eBPF、pprof（Go）和 Async。某个 Layer 不支持的标签页会在模板里直接关掉，所以你不会打开一个空页面。选中一个服务后，右侧画布就是这个服务的仪表盘：上方是一排 KPI（RPM、Apdex、错误率，每个都有自己的 sparkline），下方是只针对这个实体的组件网格。
 
 ![图 2：展开一个 Layer 后，它会展开成完整操作路径。这里 General Service 显示 Service、Instances、API、Topology、API dependency、Traces、Logs 和四个 profiling 引擎，右侧画布显示选中服务的仪表盘。](/screenshots/horizon-0.7.0/p01-intro-02-layer-drilldown.webp)
-图 2：展开一个 Layer 后进入完整流程，左侧是标签脊柱，右侧是选中服务的仪表盘。</br>
+图 2：展开一个 Layer 后进入完整流程，左侧是标签路径，右侧是选中服务的仪表盘。</br>
 
 ## 不再给你一个空白页
 
 一个跟随实时数据变化的控制台，必须能处理“没有数据”的时刻：全新安装、配置不完整的部署，或者刚刚重启的 OAP。Horizon 把这些都当成一等状态，而不是死胡同。
 
-打开 `/` 时，Horizon 会逐级落到一个真实目的地：第一个可用的公共 overview 仪表盘；如果没有，就进入第一个有服务的 Layer；只有两者都不存在时，才展示空落地页。真的进入空页面时，它会用明确语言告诉你问题在哪里：**"No data is flowing yet"** 表示还没有任何内容上报，**"No dashboard configured yet"** 表示已经有服务，但没有配置 overview。它会指向运维团队，而不是把你丢在一个空网格上。只要有服务开始上报，或者运维人员发布了仪表盘，下一次 60 秒刷新就会把空页面替换成真实页面。
+打开 `/` 时，Horizon 会按顺序跳到一个真实可用的页面：第一个可用的公共 overview 仪表盘；如果没有，就进入第一个有服务的 Layer；只有两者都不存在时，才展示空落地页。真的进入空页面时，它会用明确语言告诉你问题在哪里：**"No data is flowing yet"** 表示还没有任何内容上报，**"No dashboard configured yet"** 表示已经有服务，但没有配置 overview。它会指向运维团队，而不是把你丢在一个空网格上。只要有服务开始上报，或者运维人员发布了仪表盘，下一次 60 秒刷新就会把空页面替换成真实页面。
 
 ![图 3：空落地页明确说明当前状态。这里是 "No dashboard configured yet"（服务已经上报，但没有配置 overview），而不是显示空仪表盘。](/screenshots/horizon-0.7.0/p01-intro-03-empty-no-dashboard-configured.webp)
 图 3：空落地页说明真实原因。这里是服务已经上报，但没有配置 overview，而不是给出一个空仪表盘。</br>
 
 OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间连不上，Horizon 会保留最后一次已知的侧边栏结构，并显示 "OAP unreachable" 横幅，服务计数标记为未知，直到恢复为止。短暂故障不会看起来像配置突然消失。
 
-当数据正常流入时，落地页就是图 1 里看到的战情室：跨 Layer 概览、按类型拆分的服务卡片（General services、Virtual databases、caches、MQs、GenAI）、实时拓扑和活跃告警栏。每个 Layer 自己的落地页会按你选择的列真正计算 top-N 服务，不再先截取任意前 25 个再排序；页面还会告诉你 "top N of M"，所以截断不会悄悄发生。
+当数据正常流入时，落地页就是图 1 里看到的总览页：跨 Layer 概览、按类型拆分的服务卡片（General services、Virtual databases、caches、MQs、GenAI）、实时拓扑和活跃告警栏。每个 Layer 自己的落地页会按你选择的列真正计算 top-N 服务，不再先截取任意前 25 个再排序；页面还会告诉你 "top N of M"，所以截断不会悄悄发生。
 
-长 Layer 名称和深命名空间也很常见，所以 shell 会主动让出空间：拖动分隔线可以调整侧边栏宽度，双击重置；也可以折叠成一条窄图标栏，把水平空间尽量交给画布。宽度会按浏览器记住。
+长 Layer 名称和深命名空间很常见，所以页面框架需要给内容让出空间：拖动分隔线可以调整侧边栏宽度，双击重置；也可以折叠成一条窄图标栏，把水平空间尽量交给画布。宽度会按浏览器记住。
 
 ![图 4：拖动分隔线加宽侧边栏，长 Layer 名称和命名空间不再被截断。](/screenshots/horizon-0.7.0/p01-intro-04-resize.webp)
 图 4：拖动分隔线加宽侧边栏，长名称不再被截断，宽度会按浏览器记住。</br>
@@ -70,13 +70,13 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 后续文章里很多能力都依赖这一层。认证、基于角色的访问控制和审计都在服务端执行，伪造请求绕不过去。BFF 启动时会探测一次 OAP 的 GraphQL schema，某个能力不存在时就优雅降级；Horizon 能用同一个构建支持两代 OAP，靠的就是这个机制。它还会每分钟缓存一次服务目录，让整个 UI 对系统全貌持有同一份视图。运维、安全和定制相关的文章会分别展开这些内容；这里先记住一点：现在这里有一个服务端，它承担了实实在在的工作。
 
-## 用 3D 看完整部署
+## 用 3D 看整个部署
 
 有一个界面值得先提前看，因为它最能表达“后退一步，一次看清全局”的想法：**3D Infrastructure Map**。每个 Layer 的服务都会变成立方体，堆叠到按请求流向排列的层级上，实时流量、告警和调用关系都画在它们之间。拖动即可旋转：
 
 {{< map3d poster="/images/home/horizon-3d-map.png" badge="交互演示 · 示例数据" >}}
 
-后续有一篇专门拆解 3D 地图：层级、告警信标、让健康对象变成幽影而只突出告警对象的 "Beacon mode"，以及配置它的结构化编辑器。现在先把它当成 Horizon 目标的一个缩影：整个部署放在一个视图里，而且是活的。
+后续有一篇专门拆解 3D 地图：层级、告警信标、让健康对象变暗、只突出告警对象的 "Beacon mode"，以及配置它的结构化编辑器。现在先把它当成 Horizon 目标的一个缩影：整个部署放在一个视图里，而且是活的。
 
 ## 这个系列会讲什么
 
@@ -87,9 +87,9 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 1. **Dashboards & MQE**：只查询当前实体相关数据的组件、人类可读的数值格式、同步十字线和多实体对比。
 2. **Topology & service dependency**：一套可为每个 Layer 重绘的拓扑引擎、降噪过滤器和多跳 API dependency 图。
 3. **The Deployment tab & BanyanDB self-observability**：深入单个集群服务内部的视图，以及 SkyWalking 终于像观测其他对象一样观测自己的数据库。
-4. **The 3D Infrastructure Map**：完整展开上面这个 3D 视图。
+4. **The 3D Infrastructure Map**：详细展开上面这个 3D 视图。
 5. **Trace explorer**：在时延散点图上框选慢 Trace，然后用三种方式阅读同一条 Trace。
-6. **Log explorer**：类似 Loki 的日志流，带 facets、top patterns 和结构化 payload。
+6. **Log explorer**：类似 Loki 的日志流，带 facets、top patterns 和结构化内容。
 7. **Browser & RUM monitoring**：前端错误日志，以及把混淆后的栈恢复到原始源码行。
 8. **Five profilers, one flame graph**：trace、async-profiler、eBPF、Go pprof 和 network profiling，统一到同一套工作方式里。
 

@@ -1,5 +1,5 @@
 ---
-title: "认识 Horizon UI · 6/17：Trace Explorer"
+title: "认识 Horizon UI · 6/17：Trace 探索器"
 date: 2026-06-22
 author: 吴晟
 description: "Horizon UI 系列第六篇：按 Layer 使用的分布式 Trace 探索器，支持分阶段条件、可框选的时延分布图、三种阅读同一条 Trace 的方式，以及与原生 Trace 并列的 Zipkin 标签页。"
@@ -10,17 +10,17 @@ tags:
 
 *本文翻译自英文原文：[Meet Horizon UI · 6/17: The Trace Explorer](/blog/2026-06-22-horizon-ui-trace-explorer/)，发布日期沿用原文日期。*
 
-这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第六篇。前几篇都在讲地图：服务之间的[拓扑](/zh/2026-06-21-horizon-ui-topology-and-dependency/)、单个服务内部的 [deployment](/zh/2026-06-21-horizon-ui-deployment-and-banyandb/)，以及整个系统全貌的 [3D view](/zh/2026-06-22-horizon-ui-3d-infrastructure-map/)。它们回答“我的系统长什么样”。这一篇转向相反方向：从聚合视角一路下钻到 *一个请求*，看它的 spans、时序，以及到底是哪一跳变慢了。这就是 **Traces** 标签页。
+这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第六篇。前几篇都在讲地图：服务之间的[拓扑](/zh/2026-06-21-horizon-ui-topology-and-dependency/)、单个服务内部的 [deployment](/zh/2026-06-21-horizon-ui-deployment-and-banyandb/)，以及整个系统全貌的 [3D view](/zh/2026-06-22-horizon-ui-3d-infrastructure-map/)。它们回答“我的系统长什么样”。这一篇换一个方向：回到 *一个请求*，看它的 spans、时序，以及到底是哪一跳变慢了。这就是 **Traces** 标签页。
 
 ## 为排查设计，而不是为 tailing 设计
 
-Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：选择服务，设置条件，然后阅读单条 Trace 的 span 时间线。它有意和控制台其他部分不一样，因为 Trace 是排查数据，不是实时 feed。
+Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：选择服务，设置条件，然后阅读单条 Trace 的 span 时间线。它有意和控制台其他部分不一样，因为 Trace 是排查数据，不是实时流。
 
 它 **拥有自己的时间范围和条件**。它不跟随全局顶栏时间选择器，也不会自动刷新。你先把要找的条件摆好，再按 **Run query**；按之前不会取任何数据。第一次运行前，列表只显示 *"Pick your conditions, then click Run query."*。当你在追二十分钟前的一条坏 Trace 时，最不需要的就是页面每几秒自己往前滑，所以它不会这么做。
 
 ## 条件表单，不是查询语言
 
-整个过滤界面都是结构化表单控件：select、数字范围、tag chips。条件会暂存在工具栏里，只在点击 **Run query** 后生效：
+整个过滤界面都是结构化表单控件：select、数字范围、tag 标签。条件会暂存在工具栏里，只在点击 **Run query** 后生效：
 
 - **Instance** 和 **Endpoint**：在服务内部收窄范围，endpoint 下拉框只列出这个服务自己的 endpoints。
 - **Status**：`ALL` / `SUCCESS` / `ERROR`。
@@ -29,7 +29,7 @@ Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：
 - **Time range**：滚动预设（最近 15 分钟到 24 小时）或自定义绝对窗口，按 **秒级精度** 计算，所以刚结束的 Trace 不会因为分钟取整而掉出窗口。
 - **Trace ID**：粘贴一个 id 直接查。
 - **Duration range**：毫秒级 min-max。
-- **Tag**：自由输入 span tags，格式为 `key=value`（比如 `http.status_code=500`），按 Enter 添加为可删除 chip，多个 tag 按 AND 连接；key 和 value 都从后端获得 typeahead。
+- **Tag**：自由输入 span tags，格式为 `key=value`（比如 `http.status_code=500`），按 Enter 添加为可删除标签，多个 tag 按 AND 连接；key 和 value 都从后端获得 typeahead。
 
 它不是查询语言。Horizon 里没有 TraceQL 输入框。上面的结构化条件就是完整界面。（TraceQL 是另一条路径：SkyWalking 后端可以通过 TraceQL 向 Grafana 提供 Trace，这件事在[另一篇文章](/zh/2026-04-08-traceql/)里讲。Horizon 的探索器是表单，不是 DSL。）
 
@@ -37,7 +37,7 @@ Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：
 
 结果返回后，工具栏下会出现一张 **Distribution** 图：每个点代表一条 Trace，X 轴是开始时间，高度是 duration，越慢的 Trace 越高。点按 **status** 着色：错误为红色，成功为强调色。所以左上角、右上角那类高处红点，就是你要找的“又慢又失败”的区域。
 
-这张图本身也是过滤器。点击一个点可以选中它，或者 **拖一个矩形框选一片点**，结果列表会收窄到这批选择；header 切换成 *"N picked"* 计数，并提供 Reset。这是基于已加载结果的客户端过滤，不会发起新查询。直接框住慢且失败的角落，只读那几行，是从“200 条 Trace”缩到“这 6 条值得打开”的最快路径。
+这张图本身也是过滤器。点击一个点可以选中它，或者 **拖一个矩形框选一片点**，结果列表会收窄到这批选择；标题区切换成 *"N picked"* 计数，并提供 Reset。这是基于已加载结果的客户端过滤，不会发起新查询。直接框住慢且失败的角落，只读那几行，是从“200 条 Trace”缩到“这 6 条值得打开”的最快路径。
 
 ![图 1：Traces 探索器。分阶段条件工具栏、Distribution 图（每点一条 Trace，高度表示 duration，红色表示 error）和被框选的区域（8 picked），下方是结果列表。](/screenshots/horizon-0.7.0/p06-traces-01-explorer.webp)
 图 1：先摆条件、执行查询，再在分布图上框选一片区域，把列表缩到真正值得打开的 Trace。</br>
@@ -65,16 +65,16 @@ Traces 标签页是一个位于 **Layer 内部** 的分布式 Trace 探索器：
 - **Cross-trace refs**：当一个 span 的 parent 位于 *另一条* Trace（异步跳转、稍后消费的消息）中时，这里会列出 parent 的 trace id、segment 和 span；trace id 是一个 **链接**，点击可以直接切换到那条 Trace。
 - **Tags**、**Logs**（每个 span 的带时间戳日志项）和 **Attached Events**（带 start/end time 和 summary key/values 的命名事件）。
 
-详情 header 会显示 Trace 开始时间、总耗时、span 数量，以及触达了多少个不同服务；从这里可以复制 trace id 或可分享链接。打开一个带 `?traceId=...` 的分享 URL，会直接落到该 Trace 的 overlay 上。这让 Trace 成为可以粘贴到 incident channel 里、让同事打开同一视图的对象。
+详情标题区会显示 Trace 开始时间、总耗时、span 数量，以及触达了多少个不同服务；从这里可以复制 trace id 或可分享链接。打开一个带 `?traceId=...` 的分享 URL，会直接打开这条 Trace 的 overlay。这让 Trace 成为可以粘贴到 incident channel 里、让同事打开同一视图的对象。
 
 ## Native 和 Zipkin 并排
 
 并不是每个 Layer 的 Trace 都来自 SkyWalking 自己的 agent。Layer 模板带一个 `traces.source` 设置，可以是 `native`、`zipkin` 或 `both`，Horizon 据此路由。由 agent 接入的 Layer（比如 General Service）使用上面讲的 **native** 探索器；service-mesh 和 Kubernetes 风格的 Layer 中，spans 以 Zipkin/OpenTelemetry 数据进入，则使用 **Zipkin** 探索器；设置为 `both` 的 Layer 会简单地得到 **两个侧边栏标签页**，因为 native 和 Zipkin spans 的形状和条件确实不同。
 
-Zipkin 标签页通过 **OAP 的 Zipkin query API** 查询上游 Zipkin store。这是 OAP 向任何 Zipkin client 暴露的兼容接口，不是 GraphQL，也不是 TraceQL。Zipkin 按自己的服务宇宙组织数据（每个 span 上的 `serviceName`，可能和 SkyWalking 的服务列表不同），所以这个标签页有自己的服务控件，不绑定页面上的 service picker；它也带 Zipkin 原生条件，比如 *Remote service*、*Span name* 和 *Annotations* 查询（`error` 或 `key=value`）。两个存储路径独立失败：Zipkin 不可达时，native traces 不受影响，反之亦然。
+Zipkin 标签页通过 **OAP 的 Zipkin query API** 查询上游 Zipkin store。这是 OAP 向任何 Zipkin client 暴露的兼容接口，不是 GraphQL，也不是 TraceQL。Zipkin 按自己的服务集合组织数据（每个 span 上的 `serviceName`，可能和 SkyWalking 的服务列表不同），所以这个标签页有自己的服务控件，不绑定页面上的 service picker；它也带 Zipkin 原生条件，比如 *Remote service*、*Span name* 和 *Annotations* 查询（`error` 或 `key=value`）。两个存储路径独立失败：Zipkin 不可达时，native traces 不受影响，反之亦然。
 
 ![图 4：mesh Layer 上的 Zipkin trace 标签页。它有自己的 service / remote-service / span-name / annotations 条件，并通过 OAP 查询上游 Zipkin store，打开了一条 Zipkin trace waterfall。](/screenshots/horizon-0.7.0/p06-traces-04-zipkin.webp)
-图 4：设置为 Zipkin 的 Layer 会得到自己的标签页和自己的服务宇宙，并通过 OAP 查询上游 Zipkin store。</br>
+图 4：设置为 Zipkin 的 Layer 会得到自己的标签页和自己的服务集合，并通过 OAP 查询上游 Zipkin store。</br>
 
 打开一个 Zipkin span 后，详情会保留 Zipkin 的形状：`CLIENT` / `SERVER` kind、本地和远端 endpoint，以及原始 Zipkin/OpenTelemetry tags（`istio.*`、`http.status_code`、sidecar `node_id`）都会按 Zipkin 记录的方式展示，不翻译成 SkyWalking span 模型。
 

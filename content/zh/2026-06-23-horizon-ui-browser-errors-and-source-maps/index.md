@@ -1,8 +1,8 @@
 ---
-title: "认识 Horizon UI · 8/17：浏览器错误与 Source Maps"
+title: "认识 Horizon UI · 8/17：浏览器错误与 Source Map"
 date: 2026-06-23
 author: 吴晟
-description: "Horizon UI 系列第八篇：browser agent 上报的 JavaScript 错误流，以及让这些错误真正可用的能力：逐帧把生产环境混淆栈还原到原始文件、行、列、符号和源码片段。"
+description: "Horizon UI 系列第八篇：浏览器 Agent 上报的 JavaScript 错误流，以及让这些错误真正可用的能力：逐帧把生产环境混淆栈还原到原始文件、行、列、符号和源码片段。"
 tags:
   - Logging
   - Engineering
@@ -12,11 +12,11 @@ tags:
 
 这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第八篇。[第七篇](/zh/2026-06-23-horizon-ui-log-explorer/)讲的是服务日志；这一篇讲 *用户* 遇到的错误，也就是 browser agent 上报的 JavaScript 异常，以及把这些错误从噪声变成可处理问题的关键能力。
 
-生产环境 JavaScript stack 基本不可读。代码经过压缩和打包后发布，浏览器只会报告错误出现在 `app.min.js:1:98412`，也就是一段机器生成代码里的位置，几乎不给你任何线索。这个功能的目的，是把这条 stack 沿着正确的 **source map** 走回你的源码：原始文件、行、列、符号名，以及出错位置附近的代码片段，逐帧还原。
+生产环境 JavaScript stack 基本不可读。代码经过压缩和打包后发布，浏览器只会报告错误出现在 `app.min.js:1:98412`，也就是一段机器生成代码里的位置，几乎不给你任何线索。这个功能的目的，是通过正确的 **source map** 把这条 stack 还原回你的源码：原始文件、行、列、符号名，以及出错位置附近的代码片段，逐帧还原。
 
 ## 浏览器错误流
 
-在 **BROWSER** Layer 上，**Browser Logs** 标签页（屏幕上的标签名，它专门表示 JavaScript 错误流）会列出 browser agent 上报的内容。BROWSER Layer 会把槽位重命名成自己的语义：services 变成 **Applications**，instances 变成 **Versions**，endpoints 变成 **Pages**。这个 feed 的阅读方式类似 [Log Explorer](/zh/2026-06-23-horizon-ui-log-explorer/)：可点击的 **category** legend 带计数，density histogram 位于日志流之上。每一行都有时间、**category**、page、app version 和错误消息；如果带有 minified `line:col`，也会显示成 chip。
+在 **BROWSER** Layer 上，**Browser Logs** 标签页（屏幕上的标签名，它专门表示 JavaScript 错误流）会列出 browser agent 上报的内容。BROWSER Layer 会把槽位重命名成自己的语义：services 变成 **Applications**，instances 变成 **Versions**，endpoints 变成 **Pages**。这个列表的阅读方式类似 [Log Explorer](/zh/2026-06-23-horizon-ui-log-explorer/)：可点击的 **category** legend 带计数，density histogram 位于日志流之上。每一行都有时间、**category**、page、app version 和错误消息；如果带有 minified `line:col`，也会显示成标记。
 
 排查方式和 trace/log 标签页一致：它拥有自己的 **Time range**（全局顶栏暂停），你可以按 **Version**、**Page** 或 **Category** 收窄，然后点击 **Run query**。没有后台轮询把视图从你脚下挪走，也没有要学习的查询语言，只有结构化控件。点击一行后，它会在日志流里原地展开。
 
@@ -42,7 +42,7 @@ map 覆盖不到的 frame 会诚实显示为 `unmapped`。所以一条顶层 fra
 
 ## 哪些错误带可解析 stack
 
-不是每类错误都有东西可翻译。**`JS`**、**`PROMISE`** 和 **`VUE`** 是真实 JavaScript 错误，它们的 stack 指向 bundle，可以解析。**`AJAX`** 和 **`RESOURCE`** 是网络和加载失败；它们的“stack”是 HTTP status 或失败 URL，不是代码，所以 source map 没有东西可映射（Horizon 不会阻止它们，只是那里没有 JavaScript 可以走回去）。没有 source map 的代码、`eval` 或 inline scripts 里的 frame，也会保持 `unmapped`。（`JS` 也是唯一由浏览器上报顶层 `line:col` 的 category；其他 category 的位置在 stack 字符串内部，由解析器提取。）
+不是每类错误都有可还原内容。**`JS`**、**`PROMISE`** 和 **`VUE`** 是真实 JavaScript 错误，它们的 stack 指向 bundle，可以解析。**`AJAX`** 和 **`RESOURCE`** 是网络和加载失败；它们的“stack”是 HTTP status 或失败 URL，不是代码，所以 source map 没有东西可映射（Horizon 不会阻止它们，只是没有可映射的 JavaScript 位置）。没有 source map 的代码、`eval` 或 inline scripts 里的 frame，也会保持 `unmapped`。（`JS` 也是唯一由浏览器上报顶层 `line:col` 的 category；其他 category 的位置在 stack 字符串内部，由解析器提取。）
 
 ## 怎么提供 map：上传，或者挂载
 
@@ -60,7 +60,7 @@ map 覆盖不到的 frame 会诚实显示为 `unmapped`。所以一条顶层 fra
 
 Horizon 刻意 **不猜测**。browser agent 会上报 app **version**，但不会上报精确 build fingerprint，所以没有安全方法自动把一个错误匹配到某份 map。用错 build 的 map 会给出非常自信、但完全错误的行号，比没有答案更糟。所以这里由你选择：挑选和该错误 build 对应的 map，并按版本给 map 清晰命名。（还有一个必须直说的注意点：source map 的 `sourcesContent` 会包含你的原始源码，所以无论上传还是挂载，都要把 map 当成敏感内容，只放在可信服务器上。）
 
-这种“有意手动”的选择，也划清了 **权限** 边界。查看错误、列出 maps、**解析** stack 都是读操作，由 `browser-errors:read` 控制；**上传或删除** map 是写操作，由 `source-map:write` 控制。所以只读 viewer 可以整天反混淆 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map store 才是写。
+这种“有意手动”的选择，也划清了 **权限** 边界。查看错误、列出 maps、**解析** stack 都是读操作，由 `browser-errors:read` 控制；**上传或删除** map 是写操作，由 `source-map:write` 控制。所以只读用户可以整天反混淆 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map 存储才是写。
 
 ## 下一步去哪里
 
