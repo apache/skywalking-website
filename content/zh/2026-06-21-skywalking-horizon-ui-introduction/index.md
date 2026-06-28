@@ -84,7 +84,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 **看见你的数据**
 
-1. **Dashboards & MQE**：只查询当前对象相关数据的组件、人类可读的数值格式、同步十字线和多对象对比。
+1. **Dashboards & MQE**：只查询当前对象相关数据的组件、指标格式化、同步十字线和多对象对比。
 2. **Topology & service dependency**：一套可为每个 Layer 重绘的拓扑引擎、降噪过滤器和多跳 API dependency 图。
 3. **The Deployment tab & BanyanDB self-observability**：深入单个集群服务内部的视图，以及 SkyWalking 终于像观测其他对象一样观测自己的数据库。
 4. **The 3D Infrastructure Map**：详细展开上面这个 3D 视图。
