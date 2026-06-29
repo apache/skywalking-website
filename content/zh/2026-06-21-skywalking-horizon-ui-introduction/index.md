@@ -14,20 +14,20 @@ Apache SkyWalking Horizon UI 是 SkyWalking 的新一代 Web 控制台。它仍�
 
 这是这个系列的第一篇。后续文章会依次介绍仪表盘和指标查询语言、拓扑视图、整个部署的 WebGL 3D 地图、链路和日志探索器、性能剖析、运维界面、访问控制，以及把这些模块串起来的配置化定制。本篇先交代背景：Horizon 是什么，整个 UI 围绕哪一个核心想法构建，以及今天如何把它接到你的 OAP 前面。
 
-Horizon 的主线可以概括为四件事：先 **observe**，看拓扑、链路、日志、五类性能剖析、只读告警，以及每个 Layer 的仪表盘；再 **operate** 这些被观测对象；然后 **govern** 谁可以操作它们；最后在不写 UI 代码的情况下 **customize** 整个控制台。Observe、operate、govern、customize，就是这个系列的主线。我们从每次会话都会看到的地方开始：侧边栏。
+Horizon 的主线可以概括为四个动词：先 **observe**，看拓扑、链路、日志、五类性能剖析、只读告警，以及每个 Layer 的仪表盘；再 **operate** 这些被观测对象；然后 **govern** 谁可以操作它们；最后在不写 UI 代码的情况下 **customize** 整个控制台。Observe、operate、govern、customize，就是这个系列的主线。我们从每次会话都会看到的地方开始：侧边栏。
 
 ## 侧边栏显示当前系统全貌
 
-打开 Horizon，左侧边栏不是手工写死的菜单，而是 OAP 当前上报内容的实时映射。Horizon 会向 OAP 查询有哪些 Layer、哪些 Layer 里有服务，然后只渲染这些内容，并每 60 秒刷新一次。某个 Layer 开始上报，它就出现；安静下来，它就消失。菜单不会和真实状态脱节，因为它直接来自 OAP 当前状态。
+打开 Horizon，左侧边栏不是手工写死的菜单，而是 OAP 当前上报内容的实时映射。Horizon 会向 OAP 查询有哪些 Layer、哪些 Layer 里有服务，然后只渲染这些内容，并每 60 秒刷新一次。某个 Layer 开始上报，它就出现；不再上报，它就消失。菜单不会和真实状态脱节，因为它直接来自 OAP 当前状态。
 
 ![图 1：Horizon 首页，左侧是系统全貌（Layer 分组为 Virtual Targets、Istio、Kubernetes 和 MQ，并显示实时的 "13 with services" 计数），右侧是跨 Layer 的 Services 概览。](/screenshots/horizon-0.7.0/p01-intro-01-sidebar-is-the-estate.webp)
 图 1：Horizon 首页，左侧是实时系统全貌，右侧是跨 Layer 的 Services 概览。</br>
 
 这个侧边栏有几个关键点：
 
-- **实时服务计数。** **Layers** 标题显示当前有多少个 Layer 包含服务，图 1 中是 *13 with services*。展开每个 Layer 后，也能看到它自己的服务数量。这些计数来自同一个服务端目录，整个 UI 共用，并且每分钟刷新一次，所以侧边栏、告警 Layer 标记器和落地页不会因为各自轮询而出现不一致。
-- **按组组织，而不是平铺列表。** Layer 会放在自己的分组下，比如 *Virtual Targets*、*Istio*、*Kubernetes*、*MQ*。顶部是 **Overviews** 和 **Alarms**，运维和管理区域（Cluster Status、Alerting rules、DSL Management、Users、Roles & permissions）放在更靠下的位置，并且只对有权限的角色展示。访问控制直接进入菜单生成逻辑，而不是事后再补一层。
-- **不会静默隐藏内容。** OAP 上报的每个 Layer 现在都会出现。即使没有内置模板，也会回退到一个普通的 Service 页面。过去有一份写死的 "hidden layers" 列表，会悄悄隐藏 `BanyanDB` 这样的 Layer；现在这件事被移除了。想隐藏某个 Layer，需要在 `horizon.yaml` 里通过 `layers.excluded` 明确配置。默认值是 `FAAS` 和 `VIRTUAL_GATEWAY`；清空列表就可以展示所有 Layer。
+- **实时服务计数。** **Layers** 标题显示当前有多少个 Layer 包含服务，图 1 中是 *13 with services*。展开每个 Layer 后，也能看到它自己的服务数量。这些计数来自同一个服务端目录，整个 UI 共用，并且每分钟刷新一次，所以侧边栏、告警里的 Layer 标记和落地页不会因为各自轮询而出现不一致。
+- **按组组织，而不是平铺列表。** Layer 会放在自己的分组下，比如 *Virtual Targets*、*Istio*、*Kubernetes*、*MQ*。顶部是 **Overviews** 和 **Alarms**，运维和管理区域（Cluster Status、Alerting rules、DSL Management、Users、Roles & permissions）放在更靠下的位置，并且只对有权限的角色展示。菜单生成时就会应用访问控制，而不是先渲染出来再补一层拦截。
+- **不会静默隐藏内容。** OAP 上报的每个 Layer 现在都会出现。即使没有内置模板，也会回退到一个普通的 Service 页面。过去有一份写死的 "hidden layers" 列表，会悄悄隐藏 `BanyanDB` 这样的 Layer；现在不再有这层隐藏逻辑。想隐藏某个 Layer，需要在 `horizon.yaml` 里通过 `layers.excluded` 明确配置。默认值是 `FAAS` 和 `VIRTUAL_GATEWAY`；清空列表就可以展示所有 Layer。
 
 点击任意 Layer，Horizon 会打开它的第一个可用标签页。所有 Layer 都沿用同一条固定路径：
 
@@ -44,10 +44,10 @@ service → instance → endpoint → topology → trace → logs → profiling
 
 一个跟随实时数据变化的控制台，必须能处理“没有数据”的时刻：全新安装、配置不完整的部署，或者刚刚重启的 OAP。Horizon 把这些情况都作为明确状态处理，而不是留给用户一个死胡同。
 
-打开 `/` 时，Horizon 会按顺序跳到一个真实可用的页面：第一个可用的公共 overview 仪表盘；如果没有，就进入第一个有服务的 Layer；只有两者都不存在时，才展示空落地页。真的进入空页面时，它会用明确语言告诉你问题在哪里：**"No data is flowing yet"** 表示还没有任何内容上报，**"No dashboard configured yet"** 表示已经有服务，但没有配置 overview。它会把问题指向数据接入或运维配置，而不是把你丢在一个空网格上。只要有服务开始上报，或者运维人员发布了仪表盘，下一次 60 秒刷新就会把空页面替换成真实页面。
+打开 `/` 时，Horizon 会按顺序跳到一个真实可用的页面：第一个可用的公共 overview 仪表盘；如果没有，就进入第一个有服务的 Layer；只有两者都不存在时，才展示空状态页。确实没有可跳转页面时，它会明确说明问题在哪里：**"No data is flowing yet"** 表示还没有任何内容上报，**"No dashboard configured yet"** 表示已经有服务，但没有配置 overview。它会把问题指向数据接入或运维配置，而不是把你丢在一个空网格上。只要有服务开始上报，或者运维人员发布了仪表盘，下一次 60 秒刷新就会把空状态替换成真实页面。
 
-![图 3：空落地页明确说明当前状态。这里是 "No dashboard configured yet"（服务已经上报，但没有配置 overview），而不是显示空仪表盘。](/screenshots/horizon-0.7.0/p01-intro-03-empty-no-dashboard-configured.webp)
-图 3：空落地页说明真实原因。这里是服务已经上报，但没有配置 overview，而不是给出一个空仪表盘。</br>
+![图 3：空状态页明确说明当前状态。这里是 "No dashboard configured yet"（服务已经上报，但没有配置 overview），而不是显示空仪表盘。](/screenshots/horizon-0.7.0/p01-intro-03-empty-no-dashboard-configured.webp)
+图 3：空状态页说明真实原因。这里是服务已经上报，但没有配置 overview，而不是给出一个空仪表盘。</br>
 
 OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间连不上，Horizon 会保留最后一次已知的侧边栏结构，并显示 "OAP unreachable" 横幅，服务计数标记为未知，直到恢复为止。短暂故障不会看起来像配置突然消失。
 
@@ -63,12 +63,12 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 ## BFF：Horizon 的服务端入口
 
-过去，SkyWalking Web UI 是浏览器直接访问 OAP。Horizon 在中间加了一小层基础设施：**Backend-for-Frontend (BFF)**，一个运行在 Node.js 上的 Fastify 服务。它负责提供 UI，并代理所有到 OAP 的调用。
+过去，SkyWalking Web UI 是浏览器直接访问 OAP。Horizon 在浏览器和 OAP 之间引入了一个服务端组件：**Backend-for-Frontend (BFF)**，一个运行在 Node.js 上的 Fastify 服务。它负责提供 UI，并代理所有到 OAP 的调用。
 
 ![架构图：浏览器只访问 Horizon BFF（运行在 Node.js 上的 Fastify 服务）。BFF 处理认证和会话、RBAC 校验、审计日志、能力探测和缓存、服务端 i18n 与组件开关，然后代理到 OAP 的 GraphQL query host（端口 12800）和 admin host（端口 17128）。](/screenshots/horizon-0.7.0/p01-intro-architecture.svg)
-*浏览器只访问 BFF；BFF 负责 auth、RBAC、audit、capability probing，以及服务端 i18n / widget gating，然后代理到 OAP 的 query host（`:12800`）和 admin host（`:17128`）。*
+*浏览器只访问 BFF；BFF 负责认证、RBAC、审计、能力探测，以及服务端 i18n / 组件开关，然后代理到 OAP 的 query host（`:12800`）和 admin host（`:17128`）。*
 
-后续文章里很多能力都依赖这一层。认证、基于角色的访问控制和审计都在服务端执行，伪造请求绕不过去。BFF 启动时会探测一次 OAP 的 GraphQL schema，某个能力不存在时就优雅降级；Horizon 能用同一个构建支持两代 OAP，靠的就是这个机制。它还会每分钟缓存一次服务目录，让整个 UI 对系统全貌持有同一份视图。运维、安全和定制相关的文章会分别展开这些内容；这里先记住一点：现在这里有一个服务端，它承担了实实在在的工作。
+后续文章里很多能力都依赖这一层。认证、基于角色的访问控制和审计都在服务端执行，伪造请求绕不过去。BFF 启动时会探测一次 OAP 的 GraphQL schema，某个能力不存在时就优雅降级；Horizon 能用同一个构建支持两代 OAP，靠的就是这个机制。它还会每分钟缓存一次服务目录，让整个 UI 共享同一份系统视图。运维、安全和定制相关的文章会分别展开这些内容；这里先记住一点：UI 前面现在有了一个真正做事的服务端。
 
 ## 用 3D 地图查看完整部署
 
@@ -76,7 +76,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 {{< map3d poster="/images/home/horizon-3d-map.png" badge="交互演示 · 示例数据" >}}
 
-后续有一篇专门拆解 3D 地图：层级、告警信标、让健康对象变暗、只突出告警对象的 "Beacon mode"，以及配置它的结构化编辑器。现在先把它当成 Horizon 目标的一个缩影：整个部署放在一个视图里，而且是活的。
+后续有一篇专门拆解 3D 地图：层级、告警信标、让健康对象变暗、只突出告警对象的 "Beacon mode"，以及用来配置它的结构化编辑器。现在先把它当成 Horizon 目标的一个缩影：整个部署放在一个视图里，而且是活的。
 
 ## 系列后续内容
 
@@ -90,7 +90,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 4. **The 3D Infrastructure Map**：详细展开上面这个 3D 视图。
 5. **Trace explorer**：在时延散点图上框选慢 Trace，然后用三种方式阅读同一条 Trace。
 6. **Log explorer**：类似 Loki 的日志流，带 facets、top patterns 和结构化内容。
-7. **Browser & RUM monitoring**：前端错误日志，以及把混淆后的栈恢复到原始源码行。
+7. **Browser & RUM monitoring**：前端错误日志，以及把压缩后的 stack 还原到原始源码行。
 8. **Five profilers, one flame graph**：trace、async-profiler、eBPF、Go pprof 和 network profiling，统一到同一套工作方式里。
 
 **运维**
@@ -140,7 +140,7 @@ auth:
 
 打开 `http://<host>:8081/`，登录后第一站是 **Cluster Status**，确认 Horizon 和 OAP 能正常通信。之后侧边栏就会填入你的系统全貌。
 
-完整安装路径，包括 binary tarball、Kubernetes、LDAP、TLS 和生产检查清单，请看 [Horizon UI 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/readme/)。左侧菜单里覆盖了安装、兼容性、访问控制、定制、组件和运维。
+完整安装路径，包括 binary tarball、Kubernetes、LDAP、TLS 和生产检查清单，请看 [Horizon UI 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/readme/)。文档左侧菜单覆盖安装、兼容性、访问控制、定制、组件和运维。
 
 ## 其他要点
 
@@ -149,4 +149,4 @@ auth:
 - **基于现代技术栈。** 前端是 Vue 3 + TypeScript on Vite、Pinia、Apache ECharts、D3 和 Monaco；BFF 使用 Node.js 上的 Fastify。
 - **Apache 许可证，社区共建。** Horizon UI 位于 [apache/skywalking-horizon-ui](https://github.com/apache/skywalking-horizon-ui)。欢迎接到你的集群上试用，也欢迎告诉我们缺什么，issue 和 pull request 都可以。
 
-下一篇：仪表盘，以及为什么一个组件可以在服务端判断自己不适用于当前对象，并且连查询都不发。
+下一篇讲仪表盘：MQE 如何驱动组件，BFF 又如何在服务端判断哪些组件该显示、哪些查询可以直接省掉。
