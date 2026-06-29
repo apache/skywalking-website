@@ -5,7 +5,7 @@
     <description>Recent content in Profiling on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Sun, 15 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 26 Jun 2026 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/profiling/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -14,6 +14,53 @@
         
       
     
+    
+    <item>
+      <title>Blog: Meet Horizon UI · 9/17: Five Profilers, One Flame Graph</title>
+      <link>/blog/2026-06-26-horizon-ui-profiling/</link>
+      <pubDate>Fri, 26 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-06-26-horizon-ui-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;This is the ninth post in the &lt;a href=&#34;/blog/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; series. Metrics tell you &lt;em&gt;what&lt;/em&gt; slowed down; &lt;a href=&#34;/blog/2026-06-22-horizon-ui-trace-explorer/&#34;&gt;traces&lt;/a&gt; tell you &lt;em&gt;which hop&lt;/em&gt;. Profiling goes one level deeper — into the call stacks, kernel events, and process-to-process conversations of a running service — to tell you &lt;em&gt;where in the code&lt;/em&gt;. SkyWalking has five different profilers for that, and Horizon surfaces all of them. The headline of this post: &lt;strong&gt;four of the five pour into one shared flame graph&lt;/strong&gt;, and the fifth is a deliberate exception.&lt;/p&gt;
+&lt;h2 id=&#34;one-renderer-four-profilers&#34;&gt;One renderer, four profilers&lt;/h2&gt;
+&lt;p&gt;Trace, async, eBPF, and pprof profiling all produce the same fundamental thing — a tree of stack frames with sample counts — so Horizon normalizes them into one shape and renders them through &lt;strong&gt;one flame-graph component&lt;/strong&gt; (a wrapper over &lt;code&gt;d3-flame-graph&lt;/code&gt;). The payoff is that you learn the view once and it works the same everywhere:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;each frame&amp;rsquo;s width is its share of the samples, and the hover card reads out the code signature, the dump count, the time spent (including and &lt;em&gt;excluding&lt;/em&gt; children), and the frame&amp;rsquo;s &lt;strong&gt;% of root&lt;/strong&gt;;&lt;/li&gt;
+&lt;li&gt;clicking a frame zooms into it and pins a highlight on it — and that selected-frame highlight is consistent across all four profilers;&lt;/li&gt;
+&lt;li&gt;a dim, per-frame color keyed off the method name keeps a thousand-frame graph legible on the dark canvas.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-01-flame.webp&#34; alt=&#34;Figure 1: The shared flame graph — stack frames sized by sample share, a method-keyed color, and a hover card reading the code signature, dump count, time with and without children, and % of root.&#34;&gt;
+Figure 1: One flame graph for four profilers — frames by sample share, the selected frame pinned, the hover card with % of root.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;On the &lt;strong&gt;Trace&lt;/strong&gt; and &lt;strong&gt;eBPF&lt;/strong&gt; tabs you can flip the same data to a &lt;strong&gt;Tree&lt;/strong&gt; view instead — an indented stack table with each method&amp;rsquo;s total vs &lt;strong&gt;self&lt;/strong&gt; duration and its dump count, expandable frame by frame. (Async and pprof are flame-graph-only; the toggle shows up where both views apply.)&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-01-tree.webp&#34; alt=&#34;Figure 2: The same analyze result as a Tree — an indented stack table with each method&amp;rsquo;s total and self duration and its dump count, expandable frame by frame.&#34;&gt;
+Figure 2: The same result, one toggle away — the Tree view swaps the flame for an indented stack table carrying total vs self duration and dump count.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;what-each-of-the-four-catches&#34;&gt;What each of the four catches&lt;/h2&gt;
+&lt;p&gt;The four stack profilers share the renderer but answer different questions, and each has its own New Task form:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Trace Profiling&lt;/strong&gt; samples the call stacks of &lt;em&gt;slow trace segments&lt;/em&gt;. Scope a task to a service (and optionally one endpoint), set a slowness &lt;strong&gt;threshold&lt;/strong&gt; and a &lt;strong&gt;dump period&lt;/strong&gt;, and the agent snapshots thread stacks from segments that cross the threshold. Then you pick a sampled trace, drill to a profiled span, and &lt;strong&gt;Analyze&lt;/strong&gt; — with a &lt;em&gt;data mode&lt;/em&gt; that includes or excludes child-span time.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Async Profiling&lt;/strong&gt; runs the JVM &lt;strong&gt;async-profiler&lt;/strong&gt; against a live Java service with no restart. A task can target several instances and several events at once — &lt;code&gt;CPU&lt;/code&gt;, &lt;code&gt;ALLOC&lt;/code&gt;, &lt;code&gt;LOCK&lt;/code&gt;, &lt;code&gt;WALL&lt;/code&gt;, and the timer events — and an event-type selector re-draws the flame for whichever one you want to read.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;eBPF Profiling&lt;/strong&gt; captures &lt;em&gt;kernel-level&lt;/em&gt; stacks with no in-process agent, driven by &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt;: &lt;strong&gt;ON_CPU&lt;/strong&gt; (where the process burns CPU) or &lt;strong&gt;OFF_CPU&lt;/strong&gt; (where it&amp;rsquo;s blocked — on locks, I/O, scheduling). A process picker lets you expand a process&amp;rsquo;s attributes and pin the ones to profile, and an aggregate toggle counts samples or sums blocked time (the latter only makes sense off-CPU).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;pprof&lt;/strong&gt; profiles a live &lt;strong&gt;Go&lt;/strong&gt; service through the standard runtime profiler — exactly &lt;em&gt;one&lt;/em&gt; event per task, chosen from &lt;code&gt;CPU&lt;/code&gt;, &lt;code&gt;HEAP&lt;/code&gt;, &lt;code&gt;BLOCK&lt;/code&gt;, &lt;code&gt;MUTEX&lt;/code&gt;, &lt;code&gt;GOROUTINE&lt;/code&gt;, &lt;code&gt;ALLOCS&lt;/code&gt;, and &lt;code&gt;THREADCREATE&lt;/code&gt;. The dialog adapts to the choice: a duration for the timed captures, a sampling rate for &lt;code&gt;BLOCK&lt;/code&gt;/&lt;code&gt;MUTEX&lt;/code&gt;, and a one-shot snapshot for the rest.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-02-pprof-tasks.webp&#34; alt=&#34;Figure 3: The pprof (Go) tab — a list of single-event tasks (GOROUTINE, MUTEX, CPU), each carrying its own duration and sampling rate, with one selected and analyzed into the shared flame graph.&#34;&gt;
+Figure 3: pprof takes exactly one Go event per task — GOROUTINE, MUTEX, and CPU are separate tasks, each with its own duration and sampling rate; select one and Analyze pours it into the same flame graph.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;network-profiling-the-deliberate-exception&#34;&gt;Network Profiling: the deliberate exception&lt;/h2&gt;
+&lt;p&gt;The fifth profiler answers a different kind of question — not &amp;ldquo;where is one process spending time&amp;rdquo; but &amp;ldquo;which processes are talking to which, and over what&amp;rdquo; — so it renders differently on purpose. &lt;strong&gt;Network Profiling&lt;/strong&gt; captures the network conversations between the processes of a service instance and draws them as a &lt;strong&gt;honeycomb topology&lt;/strong&gt;: each process is a hexagon, the instance&amp;rsquo;s own processes pack into the centre under a dashed pod boundary, and external peers ring the edge. The links between them are directed and animated, and &lt;strong&gt;colored by protocol&lt;/strong&gt; — HTTPS, TLS, HTTP, and plain TCP each get their own hue and a small pill.&lt;/p&gt;
+&lt;p&gt;It also runs differently: instead of a fixed duration, a network task carries &lt;strong&gt;sampling rules&lt;/strong&gt; — match by URI pattern, by 4xx/5xx responses, or by a minimum duration, and choose how much of each request/response body to keep — and keeps running until you stop it. Click an edge and a &lt;strong&gt;Client side | Server side&lt;/strong&gt; panel opens with that conversation&amp;rsquo;s call rate, latency, and bytes charted over the window. It&amp;rsquo;s drawn from the same process-relation data that powers the &lt;a href=&#34;/blog/2026-06-22-horizon-ui-3d-infrastructure-map/&#34;&gt;3D Infrastructure Map&lt;/a&gt; — and there&amp;rsquo;s not a flame graph in sight.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-03-network-honeycomb.webp&#34; alt=&#34;Figure 4: Network Profiling — an instance&amp;rsquo;s process conversations as a honeycomb: in-pod processes inside the dashed pod boundary, external peers ringing it, and edges colored by protocol (HTTP, HTTPS, TCP).&#34;&gt;
+Figure 4: The odd one out — process conversations as a honeycomb. In-pod processes pack inside the dashed pod boundary, external peers ring it, and every edge is colored by protocol; clicking one opens its client-vs-server metrics.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;one-task-model-two-permissions&#34;&gt;One task model, two permissions&lt;/h2&gt;
+&lt;p&gt;For all the differences in what they capture, every profiling tab is the same workflow: a &lt;strong&gt;task list&lt;/strong&gt; on the left, a &lt;strong&gt;New Task&lt;/strong&gt; control, and a &lt;strong&gt;result panel&lt;/strong&gt; on the right. Create a task and the list polls for a few rounds until OAP has dispatched it and the instances report back; select a task to analyze it.&lt;/p&gt;
+&lt;p&gt;That create-versus-read split is also a permission boundary. Starting a task needs &lt;strong&gt;&lt;code&gt;profile:enable&lt;/code&gt;&lt;/strong&gt; (an operator-and-above default) — because an unbounded profile could peg a production instance&amp;rsquo;s CPU, so the task forms are duration- and size-capped on the server. &lt;em&gt;Reading&lt;/em&gt; a result needs only &lt;strong&gt;&lt;code&gt;profile:read&lt;/code&gt;&lt;/strong&gt; (part of the read-only data catalog). So a viewer can sit with a flame graph all day and never be able to launch a profile.&lt;/p&gt;
+&lt;p&gt;Which tabs you even see depends on the service: a tab appears only when OAP reports that the service supports that kind of profiling. In practice the General agent layer carries the four stack engines (trace, eBPF, async, pprof), eBPF rides wherever Rover is deployed, and network profiling lights up on the service mesh.&lt;/p&gt;
+&lt;h2 id=&#34;where-to-go-next&#34;&gt;Where to go next&lt;/h2&gt;
+&lt;p&gt;For the field reference — every task field, the eBPF aggregate modes, the network sampling rules — see the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/profiling/&#34;&gt;Profiling docs&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Next up: &lt;strong&gt;Alarms &amp;amp; Incident Triage&lt;/strong&gt; — the incident-centric alarm surface, and replaying the MQE snapshot that fired a rule.&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Zh: AI Coding 如何重塑软件架构师的工作方式</title>
