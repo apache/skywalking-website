@@ -8,7 +8,7 @@ tags:
   - Cloud Native
 ---
 
-*本文翻译自英文原文：[Meet Horizon UI · 7/17: The Log Explorer](/blog/2026-06-23-horizon-ui-log-explorer/)，发布日期沿用原文日期。*
+*译自英文原文：[Meet Horizon UI · 7/17: The Log Explorer](/blog/2026-06-23-horizon-ui-log-explorer/)。*
 
 这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第七篇。[第六篇](/zh/2026-06-22-horizon-ui-trace-explorer/)讲的是一个请求的 spans；这一篇讲它周围的日志行。Horizon 用 **两个标签页** 展示日志，对应两类排查问题：*“这个服务过去半小时打了什么日志？”* 以及 *“这个 pod 现在正在向 stdout 打什么？”*
 
@@ -17,7 +17,7 @@ tags:
 
 某个 Layer 展示哪些标签页由模板决定：启用日志的 Layer（General、Mesh、Nginx、Envoy AI Gateway、mobile 和 mini-program Layer）会显示 **Logs** 标签页；只有感知 Kubernetes 的 Layer（Kubernetes Service、Mesh、Mesh data plane）会显示 **Pod Logs** 标签页。Browser JavaScript 错误又是另一类数据：它不是服务日志，而是浏览器端 agent 上报的客户端错误事件，有自己的分类，也有自己的 **source-map 反混淆**，可以把混淆后的 `app.min.js:1:...` frame 还原到原始 `file:line`。这是 Browser Layer 上的独立标签页，会在这个系列的另一篇文章里讲。
 
-## 存储日志流
+## 查询已存储日志
 
 打开一个有 **Logs** 标签页的 Layer，先在顶部选择服务，最新日志流会按 newest-first 加载。和 Trace 探索器一样，这个标签页使用 **独立的时间范围**。当你在这里排查时，全局顶栏时间选择器会暂停，自动刷新不会把你正在看的窗口不断往前推。可以选择滚动预设（最近 15 分钟到 24 小时，默认 30 分钟），也可以选择自定义绝对窗口；查询按 **秒级精度** 执行，所以最新日志不会被分钟取整吞掉。
 
@@ -31,7 +31,7 @@ tags:
 
 这里不提供单独的日志查询语言，也不需要学习 LogQL。上面的条件就是完整界面，并且 **编辑时会立即刷新日志流**；**Run query** 只是显式告诉系统“我改完了，现在刷新”，同时回到第一页。
 
-## 怎么读日志流
+## 用直方图和级别计数定位日志
 
 日志视图的目标不只是 *列出* 行，还要帮你看出分布和异常，所以日志流上方有两个定位信息。
 
@@ -42,14 +42,14 @@ tags:
 ![图 1：存储 Logs 流。条件栏、按 level 堆叠的 density histogram 和 Levels 条在上方，下面是日志行，每行带 level 颜色、service、格式标记和 ↗ trace 链接。](/screenshots/horizon-0.7.0/p07-logs-01-stream.webp)
 图 1：某个服务的存储日志流：窗口上的 level histogram 和 level 计数，下面是每行日志，带 JSON / YAML / TEXT 标记并可跳到 Trace。</br>
 
-## 进入单行日志
+## 查看单行日志详情
 
 点击一行后，完整日志内容会在弹层里打开：内容会按格式进行 **pretty-printing**，JSON 和 YAML 正常排版，plain text 则获得完整画布，而不是被挤在一条窄条里。面板还提供 **Copy** 按钮、service / instance / endpoint / trace 上下文，以及该行所有 tag 的表格。日志行与 Trace 关联时，**↗ trace** 按钮会在 overlay 中打开相关 [Trace 瀑布图](/zh/2026-06-22-horizon-ui-trace-explorer/)，不离开日志流；它还会把这行日志的 timestamp 传过去，所以 Trace 即使已经进入更冷的存储 tier，也仍然能找到。按 Escape 或点击 backdrop 即可关闭。
 
 ![图 2：日志行详情弹层。完整内容按格式 pretty-print（这里是 JSON access log），带 Copy 按钮、service 和 instance 上下文，以及该行 tag 表（这里是 `status.code`）。](/screenshots/horizon-0.7.0/p07-logs-02-payload.webp)
 图 2：完整查看一行日志：内容按格式排版，旁边展示上下文和所有 tags。</br>
 
-## Pod Logs：tail 当前正在输出的内容
+## Pod Logs：实时查看容器输出
 
 **Pod Logs** 标签页回答另一个问题，它的数据源也完全不同：不是 SkyWalking 存储的日志，而是通过 OAP 从 **Kubernetes API server** 实时读取 pod 的容器输出，也就是 `kubectl logs -f` 读取的同一类内容。这里没有可翻页的存储历史；每次刷新拉取尾部窗口，展示出来，然后丢弃。
 
@@ -60,7 +60,7 @@ tags:
 ![图 3：Pod Logs 标签页。pod 和 container 选择器、回看窗口和轮询间隔、live-indicator 状态条、Include/Exclude 正则标签，以及流式展示容器最近输出的只读日志窗口。](/screenshots/horizon-0.7.0/p07-logs-03-pod-logs.webp)
 图 3：一个 pod 容器的实时 tail：窗口化、按间隔轮询、可用正则过滤、永不持久化。</br>
 
-## 下一步去哪里
+## 后续阅读
 
 两个标签页，包括存储查询、tag 和 container autocomplete、live tail，都由同一个 `logs:read` 权限控制。所以授予“可以读日志”就是一个开关。字段参考，包括每个条件、histogram、Pod Logs 的窗口和过滤器，可以看 [Logs 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/logs/)。
 

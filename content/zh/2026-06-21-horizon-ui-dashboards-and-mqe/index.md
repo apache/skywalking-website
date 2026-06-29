@@ -8,7 +8,7 @@ tags:
   - Cloud Native
 ---
 
-*本文翻译自英文原文：[Meet Horizon UI · 2/17: Dashboards That Adapt — MQE, Smart Widgets, and Numbers Humans Can Read](/blog/2026-06-21-horizon-ui-dashboards-and-mqe/)，发布日期沿用原文日期。*
+*译自英文原文：[Meet Horizon UI · 2/17: Dashboards That Adapt — MQE, Smart Widgets, and Numbers Humans Can Read](/blog/2026-06-21-horizon-ui-dashboards-and-mqe/)。*
 
 这是 [Apache SkyWalking Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第二篇。第一篇介绍了控制台和按 Layer 组织的导航；这一篇讲你每天最常停留的界面：**仪表盘**。
 
@@ -26,7 +26,7 @@ Layer 仪表盘是一个紧凑的 **12 列网格**：行高 120px，空隙会自
 
 你不需要手工选择图表类型；写好 MQE，合适的组件会自己渲染。而且 service、instance、endpoint 这些层级使用同一套网格系统。Layer 模板里的 `dashboards.<scope>` map 会为不同页面配置不同组件集合，所以向下钻取时，仪表盘会切到对应作用域。（这些都运行在[第一篇](/zh/2026-06-21-skywalking-horizon-ui-introduction/)介绍的 BFF 层；浏览器不直接访问 OAP。）
 
-## 按当前对象取舍组件
+## 根据当前对象决定显示哪些组件
 
 这个设计会明显改变仪表盘的使用感受。组件可以带一个 **`visibleWhen`** 条件。如果条件不成立，组件不渲染；更关键的是，**它的查询也不会执行**。
 
@@ -43,7 +43,7 @@ Layer 仪表盘是一个紧凑的 **12 列网格**：行高 120px，空隙会自
 ![图 2：同一个 Instance 仪表盘打开在 Go 的 rating 服务上，JVM 组件组不存在，网格已经重排；这些组件的查询没有发往 OAP。](/screenshots/horizon-0.7.0/p02-dashboards-02-instance-go.webp)
 图 2：同一个仪表盘打开在 Go 实例上，JVM 组件不存在，查询也没有执行。同一个模板，会根据当前对象调整内容。</br>
 
-## 指标值要先格式化
+## 指标值的显示格式
 
 原始指标不一定适合直接给人看。Horizon 的组件会处理三类过去常让运维人员在脑子里换算的值：
 
@@ -57,32 +57,32 @@ Layer 仪表盘是一个紧凑的 **12 列网格**：行高 120px，空隙会自
 ![图 4：两个 BanyanDB 卡片："Last Sync" 通过 enum map 把编码 1 显示成 OK，"Time Since Last Sync" 通过 duration 格式把秒数显示成 "5m 20s ago"。](/screenshots/horizon-0.7.0/p02-dashboards-04-enum-duration-cards.webp)
 图 4：`enum` 和 `duration` 格式在 BanyanDB 生命周期卡片上的效果：`OK` 代替 `1`，"5m 20s ago" 代替秒数。</br>
 
-## 把整个网格当成同一条时间线读
+## 按同一条时间线阅读整页图表
 
 页面上所有 `line` 图共享 **同一个 hover 游标**。指向吞吐图上的第 32 分钟，时延图、错误率图和每个 sparkline 格子上的第 32 分钟也会一起亮起。这个契约在图表 wrapper 层强制执行，任何组件都不能退出，所以页面读起来是一组围绕同一时刻协同的视图，而不是十几个互不相关的图。多序列 tooltip 是固定对齐的表格，展示每条序列的 **title**（不会显示原始 MQE），所有值在同一列右对齐。
 
 ![图 5：同步十字线扫过吞吐、错误率和时延面板，一个游标、同一个时刻，所有图表对齐。](/screenshots/horizon-0.7.0/p02-dashboards-05-synced-crosshair.webp)
 图 5：一个游标跨过页面上所有折线图，所以你可以在所有图上同时读同一瞬间。</br>
 
-## 从慢记录跳到对应 Trace
+## 从慢记录直接打开 Trace
 
 `record` 组件，比如 Slow Statements、Slow Commands、Slow Database Statements，是采样记录列表。每一行如果带 trace id，行首会出现一个 **jump-to-trace** 图标，点击即可打开对应 Trace 的瀑布图。它按 **trace id** 解析，而不是按 Layer 解析，这点很重要：Virtual Database / Cache / MQ 服务上的 Slow Statements 属于另一个 Layer 上的 *caller*，虚拟目标 Layer 自己没有 traces 标签页，但跳转仍然能打开正确 Trace。语句文本本身也支持 **点击复制**。
 
 ![图 6：Slow Statements record 组件。每条带 trace id 的采样行都有 jump-to-trace 图标，语句文本可点击复制，其中一行显示 copied 闪烁状态。](/screenshots/horizon-0.7.0/p02-dashboards-06-record-jump-to-trace.webp)
 图 6：从慢语句跳到执行它的 Trace。按 trace id 解析，所以即使虚拟 Layer 自己没有 traces 标签页也能工作。</br>
 
-## 固定并对比多个对象
+## 固定多个对象做对比
 
 有时只看一个对象不够。Horizon 允许你 **锁定多个服务、实例或 endpoint，甚至跨服务锁定，并在当前页面内直接比较**。可以从选择器或 instance/endpoint 列表固定对象；当前正在查看的对象始终属于对比组，会标记为 `CURRENT`，并继续驱动顶部信息区。每个固定对象都有自己的颜色。之后每个组件都会就地对比：line 组件为每个对象叠加一条序列，card 为每个对象显示一行，`top` 和 `record` 组件增加按对象切换的标签页，table 增加 Entity 列。持久的对比栏会保持这组对象，不受底层列表分页或当前查看对象变化影响；每个对象单独发起请求，所以一个对象响应慢，不会把其他对象拖成空白。
 
 ![图 7：对比来自不同服务的两个实例：app（标记 CURRENT）和 rating。在 Load、Latency、Success Rate 折线组件中按颜色叠加显示，上方有对比栏。](/screenshots/horizon-0.7.0/p02-dashboards-07-pinned-entities.webp)
 图 7：锁定对象，甚至跨服务锁定，所有折线组件都会按颜色叠加；对比栏保持这组对象，CURRENT 对象仍然驱动顶部信息区。</br>
 
-## 时间选择器驱动整个仪表盘
+## 时间范围作用于整个仪表盘
 
 顶部时间范围会驱动页面上的所有内容：顶部 KPI 区、组件主体，以及 BanyanDB 分层 hot/warm/cold 存储里 **Cold** 标记相关的整条路径。过去落地页和拓扑路由固定在最近 60 分钟，所以选择 "12 days ago" 后仍然会悄悄展示近期数字；现在时间选择器在所有地方都生效。上游控制变化时，每个依赖它的格子会明确重置并显示 "Reading data..." 提示，而不是在加载动画下面留着旧值。
 
-## 下一步去哪里
+## 后续阅读
 
 需要强调的是，这是一套系统。同样的五类组件、同样的 MQE、同样的条件开关，会渲染每个 Layer 的仪表盘：上面的 JVM 面板、BanyanDB 生命周期卡片、mesh 服务上的百分位时延，以及专门为 Envoy AI Gateway（token throughput、time-to-first-token）或 GenAI virtual layer（per-model estimated cost）设计的面板。不同 Layer 之间变化的是 MQE，不是机制。
 

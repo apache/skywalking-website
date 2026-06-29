@@ -8,13 +8,13 @@ tags:
   - Engineering
 ---
 
-*本文翻译自英文原文：[Meet Horizon UI · 8/17: Browser Errors & Source Maps](/blog/2026-06-23-horizon-ui-browser-errors-and-source-maps/)，发布日期沿用原文日期。*
+*译自英文原文：[Meet Horizon UI · 8/17: Browser Errors & Source Maps](/blog/2026-06-23-horizon-ui-browser-errors-and-source-maps/)。*
 
 这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第八篇。[第七篇](/zh/2026-06-23-horizon-ui-log-explorer/)讲的是服务日志；这一篇讲 *用户* 遇到的错误，也就是浏览器端 agent 上报的 JavaScript 异常，以及把这些错误定位到源码的关键一步。
 
 生产环境 JavaScript stack 基本不可读。代码经过压缩和打包后发布，浏览器只会报告错误出现在 `app.min.js:1:98412`，也就是一段机器生成代码里的位置，几乎不给你任何线索。Horizon 要做的是借助正确的 **source map** 把这条 stack 还原回你的源码：原始文件、行、列、符号名，以及出错位置附近的代码片段，逐帧还原。
 
-## 浏览器错误流
+## 浏览器端错误流
 
 在 **BROWSER** Layer 上，**Browser Logs** 标签页（屏幕上的标签名，它专门表示 JavaScript 错误流）会列出 browser agent 上报的内容。BROWSER Layer 会把槽位重命名成自己的语义：services 变成 **Applications**，instances 变成 **Versions**，endpoints 变成 **Pages**。这个列表的阅读方式类似 [Log Explorer](/zh/2026-06-23-horizon-ui-log-explorer/)：可点击的 **category** legend 带计数，density histogram 位于日志流之上。每一行都有时间、**category**、page、app version 和错误消息；如果带有 minified `line:col`，也会显示成标记。
 
@@ -25,7 +25,7 @@ tags:
 
 那个 minified `line:col` 就是最典型的问题。它是真实位置，但位置在 *构建后* 的 bundle 里，不在你的源码里。后面的解析流程就是为了解决它。
 
-## 从 minified stack 回到源码
+## 从混淆后的 stack 定位到源码
 
 展开一个错误后，面板分成两侧：左边是浏览器原样报告的 **raw stack**，也就是那段很难读的生产栈；右边是解析结果区域。选择一个 **source map**，点击 **Resolve**，Horizon 会解析 stack，并通过这份 map 映射 **每一帧**：
 
@@ -40,11 +40,11 @@ map 覆盖不到的 frame 会明确标为 `unmapped`。所以一条顶层 frame 
 ![图 2：展开后的错误。左侧是原始 minified stack，右侧是解析后的 stack，每一帧显示原始 file:line:column、symbol 和高亮源码片段。](/screenshots/horizon-0.7.0/p08-browser-02-resolve.webp)
 图 2：核心流程：把 minified stack 指向正确 map，然后逐帧还原到你自己的源码。</br>
 
-## 哪些错误带可解析 stack
+## 哪些错误可以用 source map 解析
 
 不是每类错误都有可还原内容。**`JS`**、**`PROMISE`** 和 **`VUE`** 是真实 JavaScript 错误，它们的 stack 指向 bundle，可以解析。**`AJAX`** 和 **`RESOURCE`** 是网络和加载失败；它们的“stack”是 HTTP status 或失败 URL，不是代码，所以 source map 没有东西可映射（Horizon 不会阻止它们，只是没有可映射的 JavaScript 位置）。没有 source map 的代码、`eval` 或 inline scripts 里的 frame，也会保持 `unmapped`。（`JS` 也是唯一由浏览器上报顶层 `line:col` 的 category；其他 category 的位置在 stack 字符串内部，由解析器提取。）
 
-## 怎么提供 map：上传，或者挂载
+## 提供 source map：上传或挂载
 
 解析前必须让 map 可用。Horizon 提供两种方式，耐久性刻意不同：
 
@@ -56,13 +56,13 @@ map 覆盖不到的 frame 会明确标为 `unmapped`。所以一条顶层 frame 
 ![图 3：source-map 管理器。Upload .map 控件、内存预算条（这里是 0 B / 512 MB，max 64 MB/file）和已加载 maps；图中 map 是 Mounted 且 durable，所以不能在这里删除，uploaded maps 会显示为 temporary。](/screenshots/horizon-0.7.0/p08-browser-03-sourcemap-manager.webp)
 图 3：两种提供 map 的方式：upload 用于快速排查，mount 用于生产环境长期使用。</br>
 
-## 你需要主动选择 map
+## map 必须手动选择
 
 Horizon 刻意 **不猜测**。browser agent 会上报 app **version**，但不会上报精确 build fingerprint，所以没有安全方法自动把一个错误匹配到某份 map。用错 build 的 map 会给出非常自信、但完全错误的行号，比没有答案更糟。所以这里由你选择：挑选和该错误 build 对应的 map，并按版本给 map 清晰命名。（还有一个必须直说的注意点：source map 的 `sourcesContent` 会包含你的原始源码，所以无论上传还是挂载，都要把 map 当成敏感内容，只放在可信服务器上。）
 
 手动选择 map 这件事，也划清了 **权限** 边界。查看错误、列出 maps、**解析** stack 都是读操作，由 `browser-errors:read` 控制；**上传或删除** map 是写操作，由 `source-map:write` 控制。所以只读用户可以整天反混淆 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map 存储才是写。
 
-## 下一步去哪里
+## 后续阅读
 
 字段参考，包括 categories、两种提供路径、预算，以及如何按 build 匹配 map，可以看 [Browser Logs & Source Maps 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/)。
 

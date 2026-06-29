@@ -8,11 +8,11 @@ tags:
   - Storage
 ---
 
-*本文翻译自英文原文：[Meet Horizon UI · 4/17: The Deployment Tab & BanyanDB Self-Observability](/blog/2026-06-21-horizon-ui-deployment-and-banyandb/)，发布日期沿用原文日期。*
+*译自英文原文：[Meet Horizon UI · 4/17: The Deployment Tab & BanyanDB Self-Observability](/blog/2026-06-21-horizon-ui-deployment-and-banyandb/)。*
 
 这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第四篇。[第三篇](/zh/2026-06-21-horizon-ui-topology-and-dependency/)画的是服务 *之间* 的地图。这一篇把视角收回来，画一个集群服务 *内部* 的实例关系，并用它解决 SkyWalking 过去一直没有很好展示的问题：把 **自己的存储引擎** BanyanDB 按真实集群形态呈现出来。
 
-## Deployment 标签页：一个服务自身实例的地图
+## Deployment 标签页：查看服务内部实例关系
 
 服务地图回答“谁调用这个服务”。新的按 Layer 配置的 **Deployment** 标签页回答另一个问题：“*这个* 服务是怎么部署的，它自己的实例之间又是怎么通信的？”选择一个服务后，这个标签页会把它的实例画成节点，并画出实例之间的调用关系。你已经在服务地图里见过的平移/缩放画布、健康 ring 节点、边流动动画和每条调用的指标侧栏都会复用，只是作用域收缩到单个服务内部。
 
@@ -24,7 +24,7 @@ tags:
 
 边按 **(source-role → target-role)** pair 区分，所以每类链接展示自己的指标，而不是共享一组扁平指标。主指标会直接印在边上，完整指标则进入 **Flows** 子标签页，每种 role-pair 对应一张对齐表。它默认关闭，和服务地图一样，完全从 **Layer dashboards admin → Deployment** 作用域配置。
 
-## 像观测其他系统一样观测 BanyanDB
+## 把 BanyanDB 纳入 SkyWalking 自观测
 
 这套机制不是为了多画一种图，它首先服务于一个具体场景。SkyWalking 的原生数据库 **BanyanDB** 是一个集群化、按角色和 tier 组织的系统，而过去 SkyWalking 很难把它作为一个整体观测清楚。新的 **BanyanDB** Layer 位于 **Self-Observability** 下，并配合 OAP 后端 SWIP-15，把通过 BanyanDB FODC proxy 抓到的指标建模成整个部署：
 
@@ -69,7 +69,7 @@ tags:
 <figcaption style="flex:1 1 240px;color:#5f6b7a;font-size:.92em;line-height:1.6;">图 5：Group 作用域，一次查看一个 storage catalog，它的面板按 group 的 data model 开关。</figcaption>
 </figure>
 
-### 认识 role pair 的边，以及 Flows 表
+### Role pair 边与 Flows 表
 
 Deployment 标签页中，容器之间的调用边会从 SWIP-15 instance-relation families 中拿到 **role-pair-specific** 指标：**liaison → data** 边展示 write / query / part-sync 吞吐和 p99；**liaison → liaison** 边展示 write-forward 和 control；**lifecycle → data** 边展示 tier-migration volume / rate / p99。每条边最多内联显示三项属于该 pair 的指标，选中边面板保留完整 client-vs-server 拆分，**Flows** 子标签页则把每条边按 role-pair 展开成一组对齐表。
 
@@ -78,7 +78,7 @@ Deployment 标签页中，容器之间的调用边会从 SWIP-15 instance-relati
 
 这里有两个前提。边和角色专属面板假设你运行的是一个真实的 **集群化** BanyanDB；单进程 standalone 实例只会显示共享资源和 Go runtime 面板，其余面板会在集群角色开始上报后亮起来。尤其是 container-to-container 边，还需要 OAP 构建暴露 `SERVICE_INSTANCE_RELATION` 作用域；在那之前，Deployment 标签页仍然会画出完整清单，只是 pod 之间没有边。
 
-## 配置出来的，不是写死的
+## 由配置生成，而不是写死在页面里
 
 上面这些不是一张手工写死的 "BanyanDB 页面"。聚类规则、每个 role 的节点指标、role-pair 边指标，都在 Layer template 中作为一个自包含块存在，可以从 **Layer dashboards admin → Deployment** 作用域编辑，并随模板 export/import 一起携带。它和其他 Layer 背后的配置驱动模型一样，后续文章会完整展开。
 

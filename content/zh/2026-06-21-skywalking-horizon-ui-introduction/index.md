@@ -8,7 +8,7 @@ tags:
   - Cloud Native
 ---
 
-*本文翻译自英文原文：[Meet Horizon UI · 1/17: SkyWalking's New Observability Console](/blog/2026-06-21-skywalking-horizon-ui-introduction/)，发布日期沿用原文日期。*
+*译自英文原文：[Meet Horizon UI · 1/17: SkyWalking's New Observability Console](/blog/2026-06-21-skywalking-horizon-ui-introduction/)。*
 
 Apache SkyWalking Horizon UI 是 SkyWalking 的新一代 Web 控制台。它仍然连接你已经在运行的 OAP 后端：同样的 GraphQL 查询协议，同样的 admin REST 接口，同样的 MQE 语言，同样的 `Layer` 概念。换句话说，你可以直接把 Horizon 指向正在运行的 OAP，然后登录使用，不需要改后端。变化集中在这些后端协议之上的整套交互体验。
 
@@ -16,7 +16,7 @@ Apache SkyWalking Horizon UI 是 SkyWalking 的新一代 Web 控制台。它仍�
 
 Horizon 的主线可以概括为四件事：先 **observe**，看拓扑、链路、日志、五类性能剖析、只读告警，以及每个 Layer 的仪表盘；再 **operate** 这些被观测对象；然后 **govern** 谁可以操作它们；最后在不写 UI 代码的情况下 **customize** 整个控制台。Observe、operate、govern、customize，就是这个系列的主线。我们从每次会话都会看到的地方开始：侧边栏。
 
-## 侧边栏就是你的系统全貌
+## 侧边栏显示当前系统全貌
 
 打开 Horizon，左侧边栏不是手工写死的菜单，而是 OAP 当前上报内容的实时映射。Horizon 会向 OAP 查询有哪些 Layer、哪些 Layer 里有服务，然后只渲染这些内容，并每 60 秒刷新一次。某个 Layer 开始上报，它就出现；安静下来，它就消失。菜单不会和真实状态脱节，因为它直接来自 OAP 当前状态。
 
@@ -40,7 +40,7 @@ service → instance → endpoint → topology → trace → logs → profiling
 ![图 2：展开一个 Layer 后，它会展开成完整操作路径。这里 General Service 显示 Service、Instances、API、Topology、API dependency、Traces、Logs 和四个 profiling 引擎，右侧画布显示选中服务的仪表盘。](/screenshots/horizon-0.7.0/p01-intro-02-layer-drilldown.webp)
 图 2：展开一个 Layer 后进入完整流程，左侧是标签路径，右侧是选中服务的仪表盘。</br>
 
-## 不再给你一个空白页
+## 没有数据时，也要说明原因
 
 一个跟随实时数据变化的控制台，必须能处理“没有数据”的时刻：全新安装、配置不完整的部署，或者刚刚重启的 OAP。Horizon 把这些情况都作为明确状态处理，而不是留给用户一个死胡同。
 
@@ -61,7 +61,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 ![图 5：把侧边栏折叠成窄图标栏，把每一个水平像素都留给画布。](/screenshots/horizon-0.7.0/p01-intro-04-fold-rail.webp)
 图 5：需要最大画布空间时，可以把侧边栏折叠成窄图标栏。</br>
 
-## 新增一层，后续功能才有基础
+## BFF：Horizon 的服务端入口
 
 过去，SkyWalking Web UI 是浏览器直接访问 OAP。Horizon 在中间加了一小层基础设施：**Backend-for-Frontend (BFF)**，一个运行在 Node.js 上的 Fastify 服务。它负责提供 UI，并代理所有到 OAP 的调用。
 
@@ -70,7 +70,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 后续文章里很多能力都依赖这一层。认证、基于角色的访问控制和审计都在服务端执行，伪造请求绕不过去。BFF 启动时会探测一次 OAP 的 GraphQL schema，某个能力不存在时就优雅降级；Horizon 能用同一个构建支持两代 OAP，靠的就是这个机制。它还会每分钟缓存一次服务目录，让整个 UI 对系统全貌持有同一份视图。运维、安全和定制相关的文章会分别展开这些内容；这里先记住一点：现在这里有一个服务端，它承担了实实在在的工作。
 
-## 用 3D 看整个部署
+## 用 3D 地图查看完整部署
 
 有一个界面值得先提前看，因为它最能表达“后退一步，一次看清全局”的想法：**3D Infrastructure Map**。每个 Layer 的服务都会变成立方体，堆叠到按请求流向排列的层级上，实时流量、告警和调用关系都画在它们之间。拖动即可旋转：
 
@@ -78,7 +78,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 后续有一篇专门拆解 3D 地图：层级、告警信标、让健康对象变暗、只突出告警对象的 "Beacon mode"，以及配置它的结构化编辑器。现在先把它当成 Horizon 目标的一个缩影：整个部署放在一个视图里，而且是活的。
 
-## 这个系列会讲什么
+## 系列后续内容
 
 本篇之后，后续文章会分别介绍 Horizon 的不同模块。可以按任意顺序阅读，每篇也都会链接回这里。它们分成四条主线。
 
@@ -109,7 +109,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 14. **Localization**：八种语言的仪表盘，并且可以在实时预览里点击组件完成翻译。
 15. **Getting started & migration**：安装、OAP 版本矩阵，以及如何用 Horizon 替换现有 UI。
 
-## 今天就接到你的 OAP 上试试
+## 连接现有 OAP 即可试用
 
 Horizon 可以运行在你已有的 OAP 之上。在今天的 **OAP 10.x** 上，绝大多数功能已经可用：所有仪表盘、拓扑、Trace（原生和 **Zipkin**）、日志、告警，以及五类性能剖析，都通过 OAP 的 query host（`:12800`）渲染。Horizon 的访问控制、审计和主题运行在 BFF 里，不依赖 OAP 版本。需要等待 **OAP 11.0** 的是 *operate* 层：runtime-rule（DSL）管理、Live Debugger、Metrics Inspect、告警规则编辑器、Cluster Status 管理面板，以及把模板编辑发布回 OAP。这些依赖 admin host（`:17128`），即将随 OAP 11.0 发布。Horizon 会按 admin module 是否存在来探测能力，10.x 不能提供的页面会直接隐藏；完整观测控制台今天就能跑在 10.x 上，迁移到 11.0 后运维工具会自动亮起来。
 
@@ -142,7 +142,7 @@ auth:
 
 完整安装路径，包括 binary tarball、Kubernetes、LDAP、TLS 和生产检查清单，请看 [Horizon UI 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/readme/)。左侧菜单里覆盖了安装、兼容性、访问控制、定制、组件和运维。
 
-## 其他值得注意的点
+## 其他要点
 
 - **可以直接接入现有 OAP。** Horizon 是一次从零开始的重写，但保留了所有后端契约：同样的 GraphQL 查询协议、admin REST 接口、MQE 语言和 `Layer` 概念。所以你可以把它指向一个正在运行的集群，不改后端。今天的 **OAP 10.x** 已经能运行完整观测控制台（仪表盘、拓扑、包括 **Zipkin** 在内的 Trace、日志、告警、性能剖析），以及 Horizon BFF 侧的访问控制、审计和主题。只有 *operate* 工具链需要等待 OAP 的 **admin host**（`:17128`），也就是随 **OAP 11.0，即将发布** 的 runtime rules、Live Debugger、Inspect、Cluster Status admin pane 和模板编辑发布。
 - **暗色优先，高密度。** 12 列网格面向 incident 扫描设计，首屏承载更多信号，减少不必要留白。
