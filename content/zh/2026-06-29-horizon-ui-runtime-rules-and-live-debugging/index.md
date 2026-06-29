@@ -66,4 +66,4 @@ Live Debugger 按分析语言分成三个标签页，因为三种规则处理的
 
 字段参考，包括每个 apply state、dump 格式和各标签页的采集控制，可以看 [Runtime Rules](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/runtime-rules/) 和 [Live Debugger](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/live-debugger/) 文档。
 
-下一篇进入 **Inspect — Cross-Layer Query Power-Tools**：在 Operate 界面里跨 layer 直接运行 metric、trace 和 log 查询。
+下一篇：[Inspect，跨 layer 查询工具](/zh/2026-06-29-horizon-ui-inspect-cross-layer-query/)：在 Operate 界面里跨 layer 直接运行 metric、trace 和 log 查询。
