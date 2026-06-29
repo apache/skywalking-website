@@ -63,6 +63,54 @@ Figure 4: The odd one out — process conversations as a honeycomb. In-pod proce
     </item>
     
     <item>
+      <title>Zh: 认识 Horizon UI · 9/17：五种 Profiler，一套火焰图</title>
+      <link>/zh/2026-06-26-horizon-ui-profiling/</link>
+      <pubDate>Fri, 26 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-26-horizon-ui-profiling/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-26-horizon-ui-profiling/&#34;&gt;Meet Horizon UI · 9/17: Five Profilers, One Flame Graph&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第九篇。指标告诉你 &lt;em&gt;什么&lt;/em&gt; 变慢了；&lt;a href=&#34;/zh/2026-06-22-horizon-ui-trace-explorer/&#34;&gt;Trace&lt;/a&gt; 告诉你慢在哪一跳；Profiling 再往下一层，进入运行中服务的调用栈、内核事件和进程间通信，告诉你问题落在 &lt;em&gt;哪段代码&lt;/em&gt;。SkyWalking 为这件事提供了五种 profiler，Horizon 会把它们都展示出来。这篇的主线是：&lt;strong&gt;五种里有四种进入同一套火焰图&lt;/strong&gt;，第五种则是刻意设计的例外。&lt;/p&gt;
+&lt;h2 id=&#34;一个渲染器四种-profiler&#34;&gt;一个渲染器，四种 profiler&lt;/h2&gt;
+&lt;p&gt;Trace、async、eBPF 和 pprof 这四类 profiling 最终都会产出同一类数据：一棵带采样计数的 stack frame 树。Horizon 先把它们归一成同一种结构，再交给 &lt;strong&gt;同一个火焰图组件&lt;/strong&gt;（基于 &lt;code&gt;d3-flame-graph&lt;/code&gt; 封装）渲染。好处很直接：你只需要学一次这个视图，之后四种 profiling 都按同样方式读：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每个 frame 的宽度代表它占全部样本的比例；hover 卡片会显示代码签名、dump 次数、耗时（包含和 &lt;em&gt;不包含&lt;/em&gt; 子调用），以及该 frame 占根节点的 &lt;strong&gt;% of root&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;点击一个 frame 会缩放进去，并把选中高亮固定住；这个选中态在四种 profiler 里保持一致；&lt;/li&gt;
+&lt;li&gt;每个 frame 使用由方法名决定的低饱和度颜色，让上千个 frame 的图在暗色画布上仍然能读。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-01-flame.webp&#34; alt=&#34;图 1：共用火焰图。stack frame 按样本占比决定宽度，颜色由方法名决定；hover 卡片显示代码签名、dump 次数、包含/不包含子调用的耗时，以及 % of root。&#34;&gt;
+图 1：四种 profiler 共用一套火焰图：frame 按样本占比展开，选中 frame 会固定高亮，hover 卡片显示 % of root。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;在 &lt;strong&gt;Trace&lt;/strong&gt; 和 &lt;strong&gt;eBPF&lt;/strong&gt; 标签页里，同一份分析结果还可以切到 &lt;strong&gt;Tree&lt;/strong&gt; 视图：它是一张缩进的 stack 表，逐帧展示每个方法的 total 和 &lt;strong&gt;self&lt;/strong&gt; duration，以及 dump count。（Async 和 pprof 只提供火焰图；只有同时支持两种视图的地方才会出现这个切换。）&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-01-tree.webp&#34; alt=&#34;图 2：同一份分析结果的 Tree 视图：缩进的 stack 表展示每个方法的 total/self duration 和 dump count，并可逐帧展开。&#34;&gt;
+图 2：同一份结果，一次切换即可从火焰图变成 Tree：缩进 stack 表展示 total/self duration 和 dump count。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;四种-stack-profiler-分别抓什么&#34;&gt;四种 stack profiler 分别抓什么&lt;/h2&gt;
+&lt;p&gt;这四种 stack profiler 共用渲染器，但回答的问题不同，每种也有自己的 &lt;strong&gt;New Task&lt;/strong&gt; 表单：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Trace Profiling&lt;/strong&gt; 会对 &lt;em&gt;慢 trace segment&lt;/em&gt; 的调用栈采样。创建任务时指定 service（也可以限定 endpoint）、慢调用 &lt;strong&gt;threshold&lt;/strong&gt; 和 &lt;strong&gt;dump period&lt;/strong&gt;。segment 超过阈值时，agent 会抓取线程栈快照。之后你选择一条采样到的 Trace，下钻到带 profiling 的 span，再点 &lt;strong&gt;Analyze&lt;/strong&gt;。这里还有一个 &lt;em&gt;data mode&lt;/em&gt;，可以选择是否把 child span 时间计入结果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Async Profiling&lt;/strong&gt; 在运行中的 Java 服务上启动 JVM &lt;strong&gt;async-profiler&lt;/strong&gt;，不需要重启。一个任务可以同时覆盖多个实例和多个事件：&lt;code&gt;CPU&lt;/code&gt;、&lt;code&gt;ALLOC&lt;/code&gt;、&lt;code&gt;LOCK&lt;/code&gt;、&lt;code&gt;WALL&lt;/code&gt; 以及 timer 类事件。选择不同 event type 后，火焰图会按对应事件重新绘制。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;eBPF Profiling&lt;/strong&gt; 不需要进程内 agent，由 &lt;a href=&#34;https://github.com/apache/skywalking-rover&#34;&gt;SkyWalking Rover&lt;/a&gt; 在内核层抓 stack：&lt;strong&gt;ON_CPU&lt;/strong&gt; 看进程把 CPU 花在哪里，&lt;strong&gt;OFF_CPU&lt;/strong&gt; 看它阻塞在哪里，比如锁、I/O、调度。进程选择器可以展开进程属性，固定要剖析的进程；聚合开关可以选择统计样本数，或者累加 blocked time（后者只适合 off-CPU）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;pprof&lt;/strong&gt; 通过 Go 标准 runtime profiler 剖析运行中的 &lt;strong&gt;Go&lt;/strong&gt; 服务。每个任务只能选择 &lt;em&gt;一个&lt;/em&gt; event，来自 &lt;code&gt;CPU&lt;/code&gt;、&lt;code&gt;HEAP&lt;/code&gt;、&lt;code&gt;BLOCK&lt;/code&gt;、&lt;code&gt;MUTEX&lt;/code&gt;、&lt;code&gt;GOROUTINE&lt;/code&gt;、&lt;code&gt;ALLOCS&lt;/code&gt; 和 &lt;code&gt;THREADCREATE&lt;/code&gt;。对话框会跟随 event 调整：定时采集需要 duration，&lt;code&gt;BLOCK&lt;/code&gt;/&lt;code&gt;MUTEX&lt;/code&gt; 需要 sampling rate，其余则是一次性快照。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-02-pprof-tasks.webp&#34; alt=&#34;图 3：pprof（Go）标签页。列表里是单 event 任务（GOROUTINE、MUTEX、CPU），每个任务都有自己的 duration 和 sampling rate；选中任务后 Analyze，结果进入共用火焰图。&#34;&gt;
+图 3：pprof 每个任务只采一个 Go event：GOROUTINE、MUTEX 和 CPU 是不同任务，各自带 duration 和 sampling rate；选中后 Analyze，同样进入火焰图。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;network-profiling刻意设计的例外&#34;&gt;Network Profiling：刻意设计的例外&lt;/h2&gt;
+&lt;p&gt;第五种 profiler 问的是另一类问题：不是“一个进程把时间花在哪里”，而是“哪些进程在通信、通过什么协议通信”。所以它刻意不用火焰图。&lt;strong&gt;Network Profiling&lt;/strong&gt; 会捕获某个服务实例内进程之间的网络会话，并画成 &lt;strong&gt;蜂窝拓扑&lt;/strong&gt;：每个进程是一个六边形，实例自身的进程聚在虚线 pod 边界内，外部 peers 围在边缘。它们之间的边有方向、有动画，并按协议着色：HTTPS、TLS、HTTP 和普通 TCP 都有自己的颜色和小标签。&lt;/p&gt;
+&lt;p&gt;它的运行方式也不同：network task 不是固定时长，而是带 &lt;strong&gt;sampling rules&lt;/strong&gt;。你可以按 URI pattern、4xx/5xx 响应或最小时延匹配，并配置保留多少 request/response body。任务会一直运行，直到你手动停止。点击一条边，会打开 &lt;strong&gt;Client side | Server side&lt;/strong&gt; 面板，展示这段会话在当前窗口内的调用速率、时延和字节数图表。它使用的是和 &lt;a href=&#34;/zh/2026-06-22-horizon-ui-3d-infrastructure-map/&#34;&gt;3D Infrastructure Map&lt;/a&gt; 同源的 process-relation 数据。这里看不到火焰图，这正是设计。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p09-profiling-03-network-honeycomb.webp&#34; alt=&#34;图 4：Network Profiling。一个实例的进程会话显示成蜂窝拓扑：pod 内进程位于虚线 pod 边界内，外部 peers 围在外侧，边按协议（HTTP、HTTPS、TCP）着色。&#34;&gt;
+图 4：这个 profiler 是例外：进程通信画成蜂窝拓扑。pod 内进程聚在虚线边界内，外部 peers 围在外侧，每条边按协议着色；点击边会打开 client-vs-server 指标。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;同一套任务模型两类权限&#34;&gt;同一套任务模型，两类权限&lt;/h2&gt;
+&lt;p&gt;虽然五种 profiler 抓取的内容不同，每个 profiling 标签页的操作流程是一样的：左侧是 &lt;strong&gt;任务列表&lt;/strong&gt;，上方有 &lt;strong&gt;New Task&lt;/strong&gt;，右侧是 &lt;strong&gt;结果面板&lt;/strong&gt;。创建任务后，列表会轮询几轮，等待 OAP 下发任务、实例回报结果；选中一个任务后再分析。&lt;/p&gt;
+&lt;p&gt;创建任务和读取结果也是一条权限边界。启动任务需要 &lt;strong&gt;&lt;code&gt;profile:enable&lt;/code&gt;&lt;/strong&gt;（默认 operator 及以上拥有），因为没有边界的 profile 可能把生产实例 CPU 打满，所以任务表单的时长和数据大小都在服务端限额。&lt;em&gt;读取&lt;/em&gt; 结果只需要 &lt;strong&gt;&lt;code&gt;profile:read&lt;/code&gt;&lt;/strong&gt;（属于只读数据权限）。所以 viewer 可以一直看火焰图，但不能发起 profiling 任务。&lt;/p&gt;
+&lt;p&gt;你能看到哪些标签页，也取决于当前服务：只有 OAP 上报该服务支持某类 profiling 时，对应标签页才会出现。实际使用中，General agent Layer 会带上四个 stack 引擎（trace、eBPF、async、pprof）；部署了 Rover 的地方会有 eBPF；service mesh 上会出现 network profiling。&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;字段参考，包括每个任务字段、eBPF 聚合模式和 network sampling rules，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/profiling/&#34;&gt;Profiling 文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;英文原文的下一篇进入 &lt;strong&gt;Alarms &amp;amp; Incident Triage&lt;/strong&gt;：以 incident 为中心的告警界面，以及回放触发规则时的 MQE 快照。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Meet Horizon UI · 8/17: Browser Errors &amp; Source Maps</title>
       <link>/blog/2026-06-23-horizon-ui-browser-errors-and-source-maps/</link>
       <pubDate>Tue, 23 Jun 2026 00:00:00 +0000</pubDate>
@@ -154,7 +202,7 @@ Figure 3: Two ways to provide a map — upload for a quick triage, mount for the
 &lt;p&gt;手动选择 map 这件事，也划清了 &lt;strong&gt;权限&lt;/strong&gt; 边界。查看错误、列出 maps、&lt;strong&gt;解析&lt;/strong&gt; stack 都是读操作，由 &lt;code&gt;browser-errors:read&lt;/code&gt; 控制；&lt;strong&gt;上传或删除&lt;/strong&gt; map 是写操作，由 &lt;code&gt;source-map:write&lt;/code&gt; 控制。所以只读用户可以反复解析 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map 存储才是写。&lt;/p&gt;
 &lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
 &lt;p&gt;字段参考，包括 categories、两种提供路径、预算，以及如何按构建版本匹配 map，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/&#34;&gt;Browser Logs &amp;amp; Source Maps 文档&lt;/a&gt;。&lt;/p&gt;
-&lt;p&gt;英文原文的下一篇进入 &lt;strong&gt;Profiling&lt;/strong&gt;：五种 profiler（trace、async、eBPF、Go pprof、network）共用一套火焰图视图。&lt;/p&gt;
+&lt;p&gt;下一篇进入 Profiling：五种 profiler（trace、async、eBPF、Go pprof、network）如何共用一套火焰图视图，以及为什么 network profiling 是例外。&lt;/p&gt;
 
       </description>
     </item>
