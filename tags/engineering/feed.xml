@@ -58,6 +58,51 @@ Figure 6: LAL → logs — every captured record a column, every DSL block a row
     </item>
     
     <item>
+      <title>Zh: 认识 Horizon UI · 11/17：运行时规则与实时调试</title>
+      <link>/zh/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/</link>
+      <pubDate>Mon, 29 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/&#34;&gt;Meet Horizon UI · 11/17: Runtime Rules &amp;amp; Live Debugging&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第十一篇，仍然属于第三幕 &lt;strong&gt;operate it&lt;/strong&gt;。&lt;a href=&#34;/zh/2026-06-29-horizon-ui-alarms-and-incident-triage/&#34;&gt;上一篇&lt;/a&gt; 讲的是如何读取后端已经判断出的告警；这一篇更进一步，讲如何改变后端的判断逻辑，并验证这次修改确实按预期生效。&lt;/p&gt;
+&lt;p&gt;OAP 里的大多数分析都经过一组小型 DSL：&lt;strong&gt;OAL&lt;/strong&gt; 把 trace 转成 service 和 endpoint 指标，&lt;strong&gt;MAL&lt;/strong&gt; 把 meter（OpenTelemetry、Telegraf）转成指标，&lt;strong&gt;LAL&lt;/strong&gt; 把 log 转成 tag 和指标。过去，这些规则通常要在服务器上改 YAML，再重启服务。Horizon 把两件事都放进控制台：&lt;strong&gt;编辑规则并在线生效&lt;/strong&gt;，以及&lt;strong&gt;用实时数据调试规则&lt;/strong&gt;。这两项都是 SkyWalking UI 新增的能力，底层走 OAP 的 admin host。&lt;/p&gt;
+&lt;h2 id=&#34;规则直接在控制台里看&#34;&gt;规则直接在控制台里看&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Operate → DSL management&lt;/strong&gt; 会列出集群当前正在运行的分析规则，并按来源分组。四类目录可编辑：&lt;strong&gt;MAL · OTel&lt;/strong&gt;、&lt;strong&gt;MAL · Telegraf&lt;/strong&gt;、&lt;strong&gt;LAL&lt;/strong&gt; 和 &lt;strong&gt;LAL → MAL&lt;/strong&gt;（log-to-metric）；另外还有只读的 &lt;strong&gt;OAL&lt;/strong&gt; 浏览器。规则会按前缀归组，比如 ActiveMQ、BanyanDB、Elasticsearch、Flink 等。每条规则都有状态标记，也可以按 &lt;strong&gt;active / inactive / bundled / modified&lt;/strong&gt; 过滤，这样可以很快看出哪些是随版本发布的规则，哪些被 operator 改过。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-01-rule-catalog.webp&#34; alt=&#34;图 1：DSL management 目录：分析规则按来源分组，每条规则带状态标记，顶部提供状态过滤。&#34;&gt;
+图 1：DSL management：集群运行的 OAL/MAL/LAL 规则按来源分组，并可按 active / inactive / bundled / modified 过滤。这里展示的是 OpenTelemetry MAL 目录，包含 37 条 bundled 规则。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;编辑并安全地在线生效&#34;&gt;编辑，并安全地在线生效&lt;/h2&gt;
+&lt;p&gt;打开一条规则后，界面是一个 Monaco YAML 编辑器，带语法高亮和两种 diff：&lt;strong&gt;vs. server&lt;/strong&gt; 看当前线上版本，&lt;strong&gt;vs. bundled&lt;/strong&gt; 看随版本发布的默认版本。这样你在保存前就能确认自己改了什么。每个 &lt;code&gt;- name:&lt;/code&gt; 旁边还有绿色 ▶，点击后会把这条规则直接带到 Live Debugger。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-02-rule-editor.webp&#34; alt=&#34;图 2：Monaco YAML 编辑器中的一条 MAL 规则，带 edit / diff-vs-server / diff-vs-bundled 标签页，以及代码左侧的绿色播放按钮。&#34;&gt;
+图 2：用 Monaco YAML 编辑规则：语法高亮、对比线上版本和 bundled 版本，并可通过代码左侧的绿色 ▶ 直接进入 Live Debugger。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;保存时，Horizon 会区分修改的风险。只改规则主体或 filter，可以立即生效。但如果是&lt;strong&gt;结构性变更&lt;/strong&gt;，比如改了指标的 scope、downsampling 或存储形态，就会影响集群存储结构。Horizon 会按带集群确认的流程执行，并在界面上展示进度：&lt;strong&gt;Compiled → Confirming across the cluster → Committing → Done&lt;/strong&gt;；只有变更在集群里确认持久化后才算成功。&lt;/p&gt;
+&lt;p&gt;如果某个节点没有及时通过确认，应用结果会变成 &lt;strong&gt;DEGRADED&lt;/strong&gt;。界面会列出落后的节点，这些节点会在下次扫描时自行追上，而不是让整次应用直接失败。如果 commit 前出错，变更会 &lt;strong&gt;rolled back&lt;/strong&gt;，原因显示在界面里，你的编辑内容仍保留在 buffer 中。编译错误则会作为 inline diagnostic 展示。对于卡住的发布，可以点一次 &lt;strong&gt;Force re-apply&lt;/strong&gt;，用完全相同的内容重新跑一遍应用流程，让落后的节点恢复同步；这会短暂暂停那条规则的采集。把规则恢复到 bundled 默认版本也走同一套确认流程；此外也可以 inactivate、delete，或者把整个目录导出成 tarball。&lt;/p&gt;
+&lt;h2 id=&#34;live-debugger看清规则实际算出了什么&#34;&gt;Live Debugger：看清规则实际算出了什么&lt;/h2&gt;
+&lt;p&gt;编辑规则只是第一步。更难的是确认它跑在真实数据上到底会算出什么。过去通常要读代码、对输出、靠经验判断。&lt;strong&gt;Operate → Live debugger&lt;/strong&gt; 直接把这件事放到界面里：选择一条规则，点击 &lt;strong&gt;start sampling&lt;/strong&gt;，Horizon 会在&lt;strong&gt;每个可达的 OAP 节点&lt;/strong&gt;上安装一个受限采集任务，抓取少量真实记录，然后逐条展示这些记录如何经过规则处理。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-03-livedebug-session.webp&#34; alt=&#34;图 3：Live Debugger 的 MAL 采集中页面：规则和指标选择器、record cap、retention 控制，以及显示 installed 2 of 2 的节点覆盖条。&#34;&gt;
+图 3：启动采集后，任务会安装到每个可达的 OAP 节点上（这里是 2/2），抓取真实记录，并用 record cap 和 retention window 控制边界。三种分析语言共用这套会话框架。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;Live Debugger 按分析语言分成三个标签页，因为三种规则处理的数据不同。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;OAL → traces。&lt;/strong&gt; 捕获到的一行 source 是真实的 trace segment。它会按 clause 展开：&lt;code&gt;from(Service.*)&lt;/code&gt; 读取 segment（可以看到 latency、status、endpoint），&lt;code&gt;build_metrics&lt;/code&gt; 组织指标结构，&lt;code&gt;cpm()&lt;/code&gt; 做聚合。你可以直接看到一条 trace 如何变成指标。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-04-oal-trace.webp&#34; alt=&#34;图 4：OAL 标签页展示一个 trace segment 如何经过 input、function 和 aggregation 阶段，并显示完整 payload。&#34;&gt;
+图 4：OAL → traces：来自 &lt;code&gt;agent::gateway&lt;/code&gt; 的真实 segment（latency 38，status 200，&lt;code&gt;/rcmd&lt;/code&gt;）逐步经过 &lt;code&gt;from(Service.*)&lt;/code&gt; → &lt;code&gt;build_metrics&lt;/code&gt; → &lt;code&gt;cpm()&lt;/code&gt;，最终进入 service-CPM 指标。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;MAL → metrics。&lt;/strong&gt; 一个 meter sample 会按 input → filter → function → output 流动。因为同一个指标往往会展开成多组 label，样本会按 metric 分组；&lt;strong&gt;diff&lt;/strong&gt; 会淡化所有样本共有的 label，只高亮不同的部分。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-05-mal-diff.webp&#34; alt=&#34;图 5：一组 MAL sample 展开后的 diff 视图：COMMON 区块里的共享 label 被淡化，每个 sample 只高亮两个不同 label。&#34;&gt;
+图 5：MAL → metrics：sample 按 metric 分组，diff 会淡化 16 个所有样本共有的 label，只高亮不同的两个 label（&lt;code&gt;group&lt;/code&gt;、&lt;code&gt;pod_name&lt;/code&gt;）。四条非常相似的时序因此能一眼区分。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;LAL → logs。&lt;/strong&gt; 每条捕获到的 log record 是一列，每个 DSL block（或 statement）是一行，所以整个采集结果会变成一个矩阵。你可以看到哪些记录被 &lt;code&gt;filter&lt;/code&gt; &lt;strong&gt;aborted&lt;/strong&gt;，也能看到通过 filter 的记录被 &lt;code&gt;extractor&lt;/code&gt; 提取出了什么。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix.webp&#34; alt=&#34;图 6：LAL 标签页左侧是捕获规则，右侧是按 record 和 block 组成的矩阵；被 filter 丢弃的记录显示为 aborted cell。&#34;&gt;
+图 6：LAL → logs：每条捕获记录是一列，每个 DSL block 是一行。这个 filter 会丢弃正常日志，只让异常日志继续往下走，再由 extractor 提取 &lt;code&gt;status.code&lt;/code&gt; 和 &lt;code&gt;response.flag&lt;/code&gt;。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;它在哪里运行&#34;&gt;它在哪里运行&lt;/h2&gt;
+&lt;p&gt;这两个界面都属于 &lt;strong&gt;operate&lt;/strong&gt; 功能：它们访问的是 OAP 的 &lt;strong&gt;admin host&lt;/strong&gt;，不是 query port。DSL management 走 &lt;code&gt;receiver-runtime-rule&lt;/code&gt; 模块，Live Debugger 走 &lt;code&gt;dsl-debugging&lt;/code&gt;。admin host 随 OAP 11 提供；在当前后端上，这两个页面会明确提示“需要 admin host / module”，并保持只读。与此同时，所有 observe 界面不受影响：dashboard、trace、log、alarm、profiling 都照常工作。&lt;/p&gt;
+&lt;p&gt;权限也按角色拆开：浏览规则、查看采集结果是读权限；编辑规则、执行结构性应用、启动采集分别需要对应的写权限或执行权限。因此，只读 operator 可以一直查看采集样本，但不能改规则，也不能启动新的调试会话。这正是开源后端最近才补上的那块 operate 能力。&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;字段参考，包括每个 apply state、dump 格式和各标签页的采集控制，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/runtime-rules/&#34;&gt;Runtime Rules&lt;/a&gt; 和 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/live-debugger/&#34;&gt;Live Debugger&lt;/a&gt; 文档。&lt;/p&gt;
+&lt;p&gt;下一篇进入 &lt;strong&gt;Inspect — Cross-Layer Query Power-Tools&lt;/strong&gt;：在 Operate 界面里跨 layer 直接运行 metric、trace 和 log 查询。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Meet Horizon UI · 9/17: Five Profilers, One Flame Graph</title>
       <link>/blog/2026-06-26-horizon-ui-profiling/</link>
       <pubDate>Fri, 26 Jun 2026 00:00:00 +0000</pubDate>
