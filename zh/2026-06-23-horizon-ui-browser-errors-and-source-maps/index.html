@@ -25,24 +25,24 @@
 <title>认识 Horizon UI · 8/17：浏览器错误与 Source Map | Apache SkyWalking</title><meta property="og:url" content="/zh/2026-06-23-horizon-ui-browser-errors-and-source-maps/">
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="认识 Horizon UI · 8/17：浏览器错误与 Source Map">
-  <meta property="og:description" content="Horizon UI 系列第八篇：浏览器端 Agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境混淆栈逐帧还原到原始文件、行、列、符号和源码片段。">
+  <meta property="og:description" content="Horizon UI 系列第八篇：浏览器端 agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境压缩后的 stack 还原到原始文件、行、列、符号和源码片段。">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="zh">
     <meta property="article:published_time" content="2026-06-23T00:00:00+00:00">
-    <meta property="article:modified_time" content="2026-06-29T08:50:49+08:00">
+    <meta property="article:modified_time" content="2026-06-29T10:07:30+08:00">
     <meta property="article:tag" content="Logging">
     <meta property="article:tag" content="Engineering">
 
   <meta itemprop="name" content="认识 Horizon UI · 8/17：浏览器错误与 Source Map">
-  <meta itemprop="description" content="Horizon UI 系列第八篇：浏览器端 Agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境混淆栈逐帧还原到原始文件、行、列、符号和源码片段。">
+  <meta itemprop="description" content="Horizon UI 系列第八篇：浏览器端 agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境压缩后的 stack 还原到原始文件、行、列、符号和源码片段。">
   <meta itemprop="datePublished" content="2026-06-23T00:00:00+00:00">
-  <meta itemprop="dateModified" content="2026-06-29T08:50:49+08:00">
-  <meta itemprop="wordCount" content="315">
+  <meta itemprop="dateModified" content="2026-06-29T10:07:30+08:00">
+  <meta itemprop="wordCount" content="301">
   <meta itemprop="keywords" content="Logging,Engineering">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="认识 Horizon UI · 8/17：浏览器错误与 Source Map">
-  <meta name="twitter:description" content="Horizon UI 系列第八篇：浏览器端 Agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境混淆栈逐帧还原到原始文件、行、列、符号和源码片段。">
+  <meta name="twitter:description" content="Horizon UI 系列第八篇：浏览器端 agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境压缩后的 stack 还原到原始文件、行、列、符号和源码片段。">
 
 
 
@@ -298,7 +298,7 @@
             
 <div class="td-content">
   <h1>认识 Horizon UI · 8/17：浏览器错误与 Source Map</h1>
-  <div class="lead">Horizon UI 系列第八篇：浏览器端 Agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境混淆栈逐帧还原到原始文件、行、列、符号和源码片段。</div>
+  <div class="lead">Horizon UI 系列第八篇：浏览器端 agent 上报的 JavaScript 错误流，以及如何借助 source map 把生产环境压缩后的 stack 还原到原始文件、行、列、符号和源码片段。</div>
   <div class="td-byline mb-3">
     By <b>吴晟</b> |
     <time datetime="2026-06-23" class="text-muted">Tuesday, June 23, 2026</time>
@@ -314,41 +314,41 @@
   
   <p><em>译自英文原文：<a href="/blog/2026-06-23-horizon-ui-browser-errors-and-source-maps/">Meet Horizon UI · 8/17: Browser Errors &amp; Source Maps</a>。</em></p>
 <p>这是 <a href="/zh/2026-06-21-skywalking-horizon-ui-introduction/">Meet Horizon UI</a> 系列的第八篇。<a href="/zh/2026-06-23-horizon-ui-log-explorer/">第七篇</a>讲的是服务日志；这一篇讲 <em>用户</em> 遇到的错误，也就是浏览器端 agent 上报的 JavaScript 异常，以及把这些错误定位到源码的关键一步。</p>
-<p>生产环境 JavaScript stack 基本不可读。代码经过压缩和打包后发布，浏览器只会报告错误出现在 <code>app.min.js:1:98412</code>，也就是一段机器生成代码里的位置，几乎不给你任何线索。Horizon 要做的是借助正确的 <strong>source map</strong> 把这条 stack 还原回你的源码：原始文件、行、列、符号名，以及出错位置附近的代码片段，逐帧还原。</p>
+<p>生产环境 JavaScript stack 基本不可读。代码经过压缩和打包后发布，浏览器只会报告错误出现在 <code>app.min.js:1:98412</code>，也就是一段机器生成代码里的位置，几乎不给你任何线索。Horizon 要做的是找到正确的 <strong>source map</strong>，把 stack 里的每一帧映射回源码：原始文件、行、列、符号名，以及出错位置附近的代码片段。</p>
 <h2 id="浏览器端错误流">浏览器端错误流</h2>
-<p>在 <strong>BROWSER</strong> Layer 上，<strong>Browser Logs</strong> 标签页（屏幕上的标签名，它专门表示 JavaScript 错误流）会列出 browser agent 上报的内容。BROWSER Layer 会把槽位重命名成自己的语义：services 变成 <strong>Applications</strong>，instances 变成 <strong>Versions</strong>，endpoints 变成 <strong>Pages</strong>。这个列表的阅读方式类似 <a href="/zh/2026-06-23-horizon-ui-log-explorer/">Log Explorer</a>：可点击的 <strong>category</strong> legend 带计数，density histogram 位于日志流之上。每一行都有时间、<strong>category</strong>、page、app version 和错误消息；如果带有 minified <code>line:col</code>，也会显示成标记。</p>
+<p>在 <strong>BROWSER</strong> Layer 上，<strong>Browser Logs</strong> 标签页（屏幕上的标签名，专指 JavaScript 错误流）会列出浏览器端 agent 上报的内容。BROWSER Layer 会把槽位重命名成自己的语义：services 变成 <strong>Applications</strong>，instances 变成 <strong>Versions</strong>，endpoints 变成 <strong>Pages</strong>。这个列表的阅读方式类似 <a href="/zh/2026-06-23-horizon-ui-log-explorer/">Log Explorer</a>：可点击的 <strong>category</strong> legend 带计数，density histogram 位于日志流之上。每一行都有时间、<strong>category</strong>、page、app version 和错误消息；如果带有压缩后的 <code>line:col</code>，也会显示成标记。</p>
 <p>排查方式和 trace/log 标签页一致：它使用独立的 <strong>Time range</strong>（全局顶栏暂停），你可以按 <strong>Version</strong>、<strong>Page</strong> 或 <strong>Category</strong> 收窄，然后点击 <strong>Run query</strong>。没有后台轮询把视图不断往前推，也没有要学习的查询语言，只有结构化控件。点击一行后，它会在日志流里原地展开。</p>
-<p><img src="/screenshots/horizon-0.7.0/p08-browser-01-stream.webp" alt="图 1：BROWSER Layer 上的 Browser Logs 标签页。category legend 和 density histogram 位于 JS 错误流上方，每行显示 category、page、app version 和 minified line:col。">
-图 1：browser agent 上报的错误流：按 category 组织、带图表，并限定到某个 app 版本和页面。</br></p>
-<p>那个 minified <code>line:col</code> 就是最典型的问题。它是真实位置，但位置在 <em>构建后</em> 的 bundle 里，不在你的源码里。后面的解析流程就是为了解决它。</p>
-<h2 id="从混淆后的-stack-定位到源码">从混淆后的 stack 定位到源码</h2>
+<p><img src="/screenshots/horizon-0.7.0/p08-browser-01-stream.webp" alt="图 1：BROWSER Layer 上的 Browser Logs 标签页。category legend 和 density histogram 位于 JS 错误流上方，每行显示 category、page、app version 和压缩后的 line:col。">
+图 1：浏览器端 agent 上报的错误流：按 category 组织、带图表，并限定到某个 app 版本和页面。</br></p>
+<p>压缩后的 <code>line:col</code> 就是最典型的问题。它是真实位置，但位置在 <em>构建后</em> 的 bundle 里，不在你的源码里。后面的解析流程就是为了解决这个落差。</p>
+<h2 id="从压缩后的-stack-定位到源码">从压缩后的 stack 定位到源码</h2>
 <p>展开一个错误后，面板分成两侧：左边是浏览器原样报告的 <strong>raw stack</strong>，也就是那段很难读的生产栈；右边是解析结果区域。选择一个 <strong>source map</strong>，点击 <strong>Resolve</strong>，Horizon 会解析 stack，并通过这份 map 映射 <strong>每一帧</strong>：</p>
 <ul>
 <li>每帧原始 <strong><code>file:line:column</code></strong>；</li>
 <li>原始 <strong>symbol name</strong>（如果 map 携带了）；</li>
 <li>出错行附近几行 <strong>原始源码</strong>，命中行会高亮（如果 map 内嵌 <code>sourcesContent</code>）。</li>
 </ul>
-<p>map 覆盖不到的 frame 会明确标为 <code>unmapped</code>。所以一条顶层 frame 为 <code>app.min.js:1:45</code> 的 stack，可以还原成 <code>checkout.ts:2:20</code> 上的 <code>computeCartTotal</code>，并把 <code>checkout.ts</code> 附近几行显示出来。真正抛错的 <code>cart.items.reduce(...)</code> 就在面板里，不只还原第一帧，而是从上到下还原整条 stack。</p>
+<p>map 覆盖不到的 frame 会明确标为 <code>unmapped</code>。所以一条顶层 frame 为 <code>app.min.js:1:45</code> 的 stack，可以还原成 <code>checkout.ts:2:20</code> 上的 <code>computeCartTotal</code>，并把 <code>checkout.ts</code> 附近几行显示出来。真正抛错的 <code>cart.items.reduce(...)</code> 就在面板里，不只是还原第一帧，而是从上到下还原整条 stack。</p>
 <p>这里有一些细节决定结果是否可信：浏览器 stack 的列号从 1 开始计数，source map 从 0 开始计数，所以解析器每次查找前都会做偏移；这条路径用真实 bundler 输出测试，而不是手写 fixture。</p>
-<p><img src="/screenshots/horizon-0.7.0/p08-browser-02-resolve.webp" alt="图 2：展开后的错误。左侧是原始 minified stack，右侧是解析后的 stack，每一帧显示原始 file:line:column、symbol 和高亮源码片段。">
-图 2：核心流程：把 minified stack 指向正确 map，然后逐帧还原到你自己的源码。</br></p>
+<p><img src="/screenshots/horizon-0.7.0/p08-browser-02-resolve.webp" alt="图 2：展开后的错误。左侧是压缩后的原始 stack，右侧是解析后的 stack，每一帧显示原始 file:line:column、symbol 和高亮源码片段。">
+图 2：核心流程：把压缩后的 stack 匹配到正确 map，然后逐帧还原到你自己的源码。</br></p>
 <h2 id="哪些错误可以用-source-map-解析">哪些错误可以用 source map 解析</h2>
 <p>不是每类错误都有可还原内容。<strong><code>JS</code></strong>、<strong><code>PROMISE</code></strong> 和 <strong><code>VUE</code></strong> 是真实 JavaScript 错误，它们的 stack 指向 bundle，可以解析。<strong><code>AJAX</code></strong> 和 <strong><code>RESOURCE</code></strong> 是网络和加载失败；它们的“stack”是 HTTP status 或失败 URL，不是代码，所以 source map 没有东西可映射（Horizon 不会阻止它们，只是没有可映射的 JavaScript 位置）。没有 source map 的代码、<code>eval</code> 或 inline scripts 里的 frame，也会保持 <code>unmapped</code>。（<code>JS</code> 也是唯一由浏览器上报顶层 <code>line:col</code> 的 category；其他 category 的位置在 stack 字符串内部，由解析器提取。）</p>
 <h2 id="提供-source-map上传或挂载">提供 source map：上传或挂载</h2>
-<p>解析前必须让 map 可用。Horizon 提供两种方式，耐久性刻意不同：</p>
+<p>解析前必须让 map 可用。Horizon 提供两种方式，持久化策略有意不同：</p>
 <ul>
 <li><strong>Upload</strong> 一个 <code>.map</code>，直接从标签页上传。它只保存在服务端 <strong>内存</strong> 里，没有后端存储，并且临时性是设计目标：它占用内存预算，在压力下按 least-recently-used 淘汰，<strong>服务重启后丢失</strong>；多实例部署时，它也只存在于接收上传的那一个实例。这个路径适合临时排查：拖一个 map 进来，解析，处理完离开。</li>
-<li><strong>Mount</strong> <code>.map</code> 文件到服务端 <strong>source-map 目录</strong>（容器镜像中是 <code>/app/sourcemaps</code>，可通过 <code>HORIZON_SOURCEMAPS_DIR</code> 指定）。这些文件在启动时按 Source Map v3 校验，按需从磁盘读取（所以不占内存预算），重启后仍然存在，会自动 reload，并且 <strong>不能从 UI 删除</strong>。这是生产路径：把构建产物里的 maps 放进镜像或挂载目录，它们就一直可用。</li>
+<li><strong>Mount</strong> <code>.map</code> 文件到服务端 <strong>source-map 目录</strong>（容器镜像中是 <code>/app/sourcemaps</code>，可通过 <code>HORIZON_SOURCEMAPS_DIR</code> 指定）。这些文件在启动时按 Source Map v3 校验，按需从磁盘读取（所以不占内存预算），重启后仍然存在，会自动重新加载，并且 <strong>不能从 UI 删除</strong>。这是生产路径：把构建产物里的 map 文件放进镜像或挂载目录，它们就一直可用。</li>
 </ul>
 <p>管理器会显示每个 map 的来源（<em>uploaded · temporary</em> 还是 <em>mounted · durable</em>），以及当前内存预算使用量。预算配置，包括单文件上限和常驻上传总量上限，默认 64 MiB 和 512 MiB，位于 <code>horizon.yaml</code> 的 <code>sourceMaps</code> 块。</p>
 <p><img src="/screenshots/horizon-0.7.0/p08-browser-03-sourcemap-manager.webp" alt="图 3：source-map 管理器。Upload .map 控件、内存预算条（这里是 0 B / 512 MB，max 64 MB/file）和已加载 maps；图中 map 是 Mounted 且 durable，所以不能在这里删除，uploaded maps 会显示为 temporary。">
 图 3：两种提供 map 的方式：upload 用于快速排查，mount 用于生产环境长期使用。</br></p>
 <h2 id="map-必须手动选择">map 必须手动选择</h2>
-<p>Horizon 刻意 <strong>不猜测</strong>。browser agent 会上报 app <strong>version</strong>，但不会上报精确 build fingerprint，所以没有安全方法自动把一个错误匹配到某份 map。用错 build 的 map 会给出非常自信、但完全错误的行号，比没有答案更糟。所以这里由你选择：挑选和该错误 build 对应的 map，并按版本给 map 清晰命名。（还有一个必须直说的注意点：source map 的 <code>sourcesContent</code> 会包含你的原始源码，所以无论上传还是挂载，都要把 map 当成敏感内容，只放在可信服务器上。）</p>
-<p>手动选择 map 这件事，也划清了 <strong>权限</strong> 边界。查看错误、列出 maps、<strong>解析</strong> stack 都是读操作，由 <code>browser-errors:read</code> 控制；<strong>上传或删除</strong> map 是写操作，由 <code>source-map:write</code> 控制。所以只读用户可以整天反混淆 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map 存储才是写。</p>
+<p>Horizon 刻意 <strong>不猜测</strong>。浏览器端 agent 会上报 app <strong>version</strong>，但不会上报精确的构建指纹，所以没有安全方法自动把一个错误匹配到某份 map。用错构建的 map 会给出非常自信、但完全错误的行号，比没有答案更糟。所以这里由你选择：挑选和这次错误对应构建的 map，并按版本给 map 清晰命名。（还有一个必须直说的注意点：source map 的 <code>sourcesContent</code> 会包含你的原始源码，所以无论上传还是挂载，都要把 map 当成敏感内容，只放在可信服务器上。）</p>
+<p>手动选择 map 这件事，也划清了 <strong>权限</strong> 边界。查看错误、列出 maps、<strong>解析</strong> stack 都是读操作，由 <code>browser-errors:read</code> 控制；<strong>上传或删除</strong> map 是写操作，由 <code>source-map:write</code> 控制。所以只读用户可以反复解析 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map 存储才是写。</p>
 <h2 id="后续阅读">后续阅读</h2>
-<p>字段参考，包括 categories、两种提供路径、预算，以及如何按 build 匹配 map，可以看 <a href="https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/">Browser Logs &amp; Source Maps 文档</a>。</p>
-<p>下一篇英文系列将进入 <strong>Profiling</strong>：五种 profiler（trace、async、eBPF、Go pprof、network）通过同一个火焰图呈现。</p>
+<p>字段参考，包括 categories、两种提供路径、预算，以及如何按构建版本匹配 map，可以看 <a href="https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/">Browser Logs &amp; Source Maps 文档</a>。</p>
+<p>英文原文的下一篇进入 <strong>Profiling</strong>：五种 profiler（trace、async、eBPF、Go pprof、network）共用一套火焰图视图。</p>
 
   
   <ul class="list-unstyled d-flex justify-content-between align-items-center mb-0 pt-5">
@@ -394,7 +394,7 @@
     <li>
       <ul>
         <li><a href="#浏览器端错误流">浏览器端错误流</a></li>
-        <li><a href="#从混淆后的-stack-定位到源码">从混淆后的 stack 定位到源码</a></li>
+        <li><a href="#从压缩后的-stack-定位到源码">从压缩后的 stack 定位到源码</a></li>
         <li><a href="#哪些错误可以用-source-map-解析">哪些错误可以用 source map 解析</a></li>
         <li><a href="#提供-source-map上传或挂载">提供 source map：上传或挂载</a></li>
         <li><a href="#map-必须手动选择">map 必须手动选择</a></li>

@@ -89,24 +89,24 @@ Figure 6: Flows — the same role-pair edges as a sortable table, one block per 
         
         
         &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-21-horizon-ui-deployment-and-banyandb/&#34;&gt;Meet Horizon UI · 4/17: The Deployment Tab &amp;amp; BanyanDB Self-Observability&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第四篇。&lt;a href=&#34;/zh/2026-06-21-horizon-ui-topology-and-dependency/&#34;&gt;第三篇&lt;/a&gt;画的是服务 &lt;em&gt;之间&lt;/em&gt; 的地图。这一篇把视角收回来，画一个集群服务 &lt;em&gt;内部&lt;/em&gt; 的实例关系，并用它解决 SkyWalking 过去一直没有很好展示的问题：把 &lt;strong&gt;自己的存储引擎&lt;/strong&gt; BanyanDB 按真实集群形态呈现出来。&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第四篇。&lt;a href=&#34;/zh/2026-06-21-horizon-ui-topology-and-dependency/&#34;&gt;第三篇&lt;/a&gt;画的是服务 &lt;em&gt;之间&lt;/em&gt; 的地图。这一篇把视角收回来，画一个集群服务 &lt;em&gt;内部&lt;/em&gt; 的实例关系，并用它解决 SkyWalking 过去一直展示得不够清楚的对象：&lt;strong&gt;自己的存储引擎&lt;/strong&gt; BanyanDB。&lt;/p&gt;
 &lt;h2 id=&#34;deployment-标签页查看服务内部实例关系&#34;&gt;Deployment 标签页：查看服务内部实例关系&lt;/h2&gt;
 &lt;p&gt;服务地图回答“谁调用这个服务”。新的按 Layer 配置的 &lt;strong&gt;Deployment&lt;/strong&gt; 标签页回答另一个问题：“&lt;em&gt;这个&lt;/em&gt; 服务是怎么部署的，它自己的实例之间又是怎么通信的？”选择一个服务后，这个标签页会把它的实例画成节点，并画出实例之间的调用关系。你已经在服务地图里见过的平移/缩放画布、健康 ring 节点、边流动动画和每条调用的指标侧栏都会复用，只是作用域收缩到单个服务内部。&lt;/p&gt;
 &lt;p&gt;它不是一张普通节点图，关键在三点：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;实例渲染成六边形，并组合成 pod。&lt;/strong&gt; 一个 pod 的 &lt;strong&gt;main&lt;/strong&gt; container 是完整六边形，&lt;strong&gt;sibling&lt;/strong&gt; containers 会作为更小的六边形贴在它边上。所以主进程和 sidecar 会作为一个单元呈现，跨 pod 的 sidecar 链接也会连到它真正所属的小六边形上。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Pod 按你选择的规则聚到带标签的分组框里。&lt;/strong&gt; 规则可以是单个实例属性（role）、多个属性组合（比如 &lt;code&gt;node_role&lt;/code&gt; + &lt;code&gt;node_type&lt;/code&gt;），也可以是名称正则。这样一组混合角色节点会按角色分框展示，而不是堆成一团。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;布局是分层的。&lt;/strong&gt; 每个 cluster box 会按调用深度摆放 pod：source 在左，被调用对象在右，所以 upstream→downstream 链条从左到右就能看清；拖动任意 pod 后，它所属的 box 会重新流式布局，保持内容都被包住。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;布局是分层的。&lt;/strong&gt; 每个 cluster box 会按调用深度摆放 pod：source 在左，被调用对象在右，所以 upstream→downstream 链条从左到右就能看清；拖动任意 pod 后，它所属的 box 会重新流式布局，保证内容仍在分组框内。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;边按 &lt;strong&gt;(source-role → target-role)&lt;/strong&gt; pair 区分，所以每类链接展示自己的指标，而不是共享一组扁平指标。主指标会直接印在边上，完整指标则进入 &lt;strong&gt;Flows&lt;/strong&gt; 子标签页，每种 role-pair 对应一张对齐表。它默认关闭，和服务地图一样，完全从 &lt;strong&gt;Layer dashboards admin → Deployment&lt;/strong&gt; 作用域配置。&lt;/p&gt;
+&lt;p&gt;边按 &lt;strong&gt;(source-role → target-role)&lt;/strong&gt; pair 区分，所以每类链接展示自己的指标，而不是所有边共用一组指标。主指标会直接印在边上，完整指标则进入 &lt;strong&gt;Flows&lt;/strong&gt; 子标签页，每种 role-pair 对应一张对齐表。它默认关闭，和服务地图一样，完全从 &lt;strong&gt;Layer dashboards admin → Deployment&lt;/strong&gt; 作用域配置。&lt;/p&gt;
 &lt;h2 id=&#34;把-banyandb-纳入-skywalking-自观测&#34;&gt;把 BanyanDB 纳入 SkyWalking 自观测&lt;/h2&gt;
-&lt;p&gt;这套机制不是为了多画一种图，它首先服务于一个具体场景。SkyWalking 的原生数据库 &lt;strong&gt;BanyanDB&lt;/strong&gt; 是一个集群化、按角色和 tier 组织的系统，而过去 SkyWalking 很难把它作为一个整体观测清楚。新的 &lt;strong&gt;BanyanDB&lt;/strong&gt; Layer 位于 &lt;strong&gt;Self-Observability&lt;/strong&gt; 下，并配合 OAP 后端 SWIP-15，把通过 BanyanDB FODC proxy 抓到的指标建模成整个部署：&lt;/p&gt;
+&lt;p&gt;这套机制不是为了多画一种图，它首先服务于一个具体场景。SkyWalking 的原生数据库 &lt;strong&gt;BanyanDB&lt;/strong&gt; 是一个集群化、按角色和 tier 组织的系统，而过去 SkyWalking 很难把它作为一个整体观测清楚。新的 &lt;strong&gt;BanyanDB&lt;/strong&gt; Layer 位于 &lt;strong&gt;Self-Observability&lt;/strong&gt; 下，并配合 OAP 后端 SWIP-15，把通过 BanyanDB FODC proxy 抓到的指标建模为整个部署：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;整个 &lt;strong&gt;cluster&lt;/strong&gt; 是一个 &lt;strong&gt;Cluster&lt;/strong&gt;（service）；&lt;/li&gt;
 &lt;li&gt;每个 container 是一个 &lt;strong&gt;Container&lt;/strong&gt;（instance），并携带 &lt;code&gt;container_name&lt;/code&gt; &lt;strong&gt;role&lt;/strong&gt; 和 &lt;code&gt;node_type&lt;/code&gt; &lt;strong&gt;tier&lt;/strong&gt; 属性；&lt;/li&gt;
 &lt;li&gt;每个存储 &lt;strong&gt;Group&lt;/strong&gt; 是一个 &lt;strong&gt;endpoint&lt;/strong&gt;。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;所以其他 Layer 中通用的 Service / Instance / Endpoint 导航结构，在 BanyanDB 这里就变成 &lt;strong&gt;Cluster / Container / Group&lt;/strong&gt;。叠在上面的 Deployment 标签页，会直接画出这个数据库集群自身。&lt;/p&gt;
+&lt;p&gt;所以其他 Layer 中通用的 Service / Instance / Endpoint 导航结构，在 BanyanDB 这里就变成 &lt;strong&gt;Cluster / Container / Group&lt;/strong&gt;。基于这套模型，Deployment 标签页可以直接画出数据库集群自身。&lt;/p&gt;
 &lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p04-deployment-01-banyandb-deployment.webp&#34; alt=&#34;图 1：BanyanDB 的 Deployment 标签页。容器按 role/tier box 分组（liaison、data hot/warm/cold），以六边形 pod 形式展示，并带 role-pair 调用边和每个 role 自己的健康 ring 指标。&#34;&gt;
 图 1：SkyWalking 观测自己的数据库：BanyanDB 集群按角色和 tier 绘制，并展示 pod 之间的 liaison→data 与 lifecycle→data 边。&lt;/br&gt;&lt;/p&gt;
 &lt;h3 id=&#34;clustercontainergroup&#34;&gt;Cluster、Container、Group&lt;/h3&gt;
@@ -120,7 +120,7 @@ Figure 6: Flows — the same role-pair edges as a sortable table, one block per 
 &lt;img src=&#34;/screenshots/horizon-0.7.0/p04-deployment-02-cluster-dashboard.webp&#34; alt=&#34;BanyanDB Cluster 仪表盘：write/query/error KPI、CPU/memory/disk capacity，以及 Containers by Role 表。&#34; style=&#34;max-height:320px;max-width:100%;width:auto;border-radius:4px;&#34;&gt;
 &lt;figcaption style=&#34;flex:1 1 240px;color:#5f6b7a;font-size:.92em;line-height:1.6;&#34;&gt;图 2：Cluster 作用域，一眼看完整个数据库，并按角色列出所有容器。&lt;/figcaption&gt;
 &lt;/figure&gt;
-&lt;p&gt;打开 &lt;em&gt;同一个&lt;/em&gt; Container 仪表盘到两个不同 role 上，最容易看出 role-gating 的效果：&lt;/p&gt;
+&lt;p&gt;把 &lt;em&gt;同一个&lt;/em&gt; Container 仪表盘分别打开到两个不同 role 上，最容易看出 role-gating 的效果：&lt;/p&gt;
 &lt;figure style=&#34;display:flex;flex-wrap:wrap;gap:1.1rem;align-items:center;margin:1.5rem 0;&#34;&gt;
 &lt;img src=&#34;/screenshots/horizon-0.7.0/p04-deployment-03-container-dashboard.webp&#34; alt=&#34;data/liaison 节点的 Container 仪表盘，在共享 CPU / memory / Go-runtime 资源面板上方显示角色专属的 ingestion / storage 面板。&#34; style=&#34;max-height:320px;max-width:100%;width:auto;border-radius:4px;&#34;&gt;
 &lt;figcaption style=&#34;flex:1 1 240px;color:#5f6b7a;font-size:.92em;line-height:1.6;&#34;&gt;图 3：data/liaison Container，在共享资源面板之上展示 ingestion、query、storage 和 compaction 面板。&lt;/figcaption&gt;
@@ -132,16 +132,16 @@ Figure 6: Flows — the same role-pair edges as a sortable table, one block per 
 &lt;p&gt;&lt;strong&gt;Group&lt;/strong&gt; 作用域则让每个 storage catalog 都有独立页面：&lt;/p&gt;
 &lt;figure style=&#34;display:flex;flex-wrap:wrap;gap:1.1rem;align-items:center;margin:1.5rem 0;&#34;&gt;
 &lt;img src=&#34;/screenshots/horizon-0.7.0/p04-deployment-04-group-dashboard.webp&#34; alt=&#34;Group 仪表盘：某个 storage catalog 的按 data model 配置的面板。&#34; style=&#34;max-height:320px;max-width:100%;width:auto;border-radius:4px;&#34;&gt;
-&lt;figcaption style=&#34;flex:1 1 240px;color:#5f6b7a;font-size:.92em;line-height:1.6;&#34;&gt;图 5：Group 作用域，一次查看一个 storage catalog，它的面板按 group 的 data model 开关。&lt;/figcaption&gt;
+&lt;figcaption style=&#34;flex:1 1 240px;color:#5f6b7a;font-size:.92em;line-height:1.6;&#34;&gt;图 5：Group 作用域，一次查看一个 storage catalog，面板按 group 的 data model 开关。&lt;/figcaption&gt;
 &lt;/figure&gt;
 &lt;h3 id=&#34;role-pair-边与-flows-表&#34;&gt;Role pair 边与 Flows 表&lt;/h3&gt;
 &lt;p&gt;Deployment 标签页中，容器之间的调用边会从 SWIP-15 instance-relation families 中拿到 &lt;strong&gt;role-pair-specific&lt;/strong&gt; 指标：&lt;strong&gt;liaison → data&lt;/strong&gt; 边展示 write / query / part-sync 吞吐和 p99；&lt;strong&gt;liaison → liaison&lt;/strong&gt; 边展示 write-forward 和 control；&lt;strong&gt;lifecycle → data&lt;/strong&gt; 边展示 tier-migration volume / rate / p99。每条边最多内联显示三项属于该 pair 的指标，选中边面板保留完整 client-vs-server 拆分，&lt;strong&gt;Flows&lt;/strong&gt; 子标签页则把每条边按 role-pair 展开成一组对齐表。&lt;/p&gt;
 &lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p04-deployment-05-flows-table.webp&#34; alt=&#34;图 6：Flows 子标签页。每条 container-to-container 边按 role-pair（liaison→data、lifecycle→data 等）展开成一张对齐表。&#34;&gt;
-图 6：Flows，把同样的 role-pair 边显示成可排序表格，每个 pair 一个区块。&lt;/br&gt;&lt;/p&gt;
+图 6：Flows，把这些 role-pair 边显示成可排序表格，每个 pair 一个区块。&lt;/br&gt;&lt;/p&gt;
 &lt;p&gt;这里有两个前提。边和角色专属面板假设你运行的是一个真实的 &lt;strong&gt;集群化&lt;/strong&gt; BanyanDB；单进程 standalone 实例只会显示共享资源和 Go runtime 面板，其余面板会在集群角色开始上报后亮起来。尤其是 container-to-container 边，还需要 OAP 构建暴露 &lt;code&gt;SERVICE_INSTANCE_RELATION&lt;/code&gt; 作用域；在那之前，Deployment 标签页仍然会画出完整清单，只是 pod 之间没有边。&lt;/p&gt;
 &lt;h2 id=&#34;由配置生成而不是写死在页面里&#34;&gt;由配置生成，而不是写死在页面里&lt;/h2&gt;
 &lt;p&gt;上面这些不是一张手工写死的 &amp;ldquo;BanyanDB 页面&amp;rdquo;。聚类规则、每个 role 的节点指标、role-pair 边指标，都在 Layer template 中作为一个自包含块存在，可以从 &lt;strong&gt;Layer dashboards admin → Deployment&lt;/strong&gt; 作用域编辑，并随模板 export/import 一起携带。它和其他 Layer 背后的配置驱动模型一样，后续文章会完整展开。&lt;/p&gt;
-&lt;p&gt;下一篇：&lt;strong&gt;3D Infrastructure Map&lt;/strong&gt;。同一个部署，以及所有其他 Layer，会进入三维空间，变成一张展示系统全貌的 WebGL 视图。&lt;/p&gt;
+&lt;p&gt;下一篇看 3D Infrastructure Map：把所有 Layer 的服务放进一张 WebGL 地图，从全局看部署状态。&lt;/p&gt;
 
       </description>
     </item>
