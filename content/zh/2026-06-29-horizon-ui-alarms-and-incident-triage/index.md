@@ -70,4 +70,4 @@ Alarms 页面不是唯一入口。同一套 incident 模型还会跟着你出现
 
 字段参考，包括窗口上限、快照内部结构和 pinned-layer 配置，可以看 [Alarms 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/alarms/)。
 
-下一篇是 **Runtime Rules & Live Debugging**：通过 OAP admin host，用实时样本编辑 OAL / MAL / LAL。这也是开源后端最近才真正支撑起来的 operate 环节。
+下一篇：[运行时规则与实时调试](/zh/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/)：通过 OAP admin host，用真实数据编辑并验证 OAL / MAL / LAL。
