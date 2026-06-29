@@ -61,4 +61,4 @@ Trace、async、eBPF 和 pprof 这四类 profiling 最终都会产出同一类�
 
 字段参考，包括每个任务字段、eBPF 聚合模式和 network sampling rules，可以看 [Profiling 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/profiling/)。
 
-英文原文的下一篇进入 **Alarms & Incident Triage**：以 incident 为中心的告警界面，以及回放触发规则时的 MQE 快照。
+下一篇：[告警与 Incident 排查](/zh/2026-06-29-horizon-ui-alarms-and-incident-triage/)：Horizon 如何把重复告警归并成 incident，并回放触发规则时的 MQE 指标快照。
