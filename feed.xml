@@ -65,6 +65,48 @@ Figure 4: The same incidents everywhere — the topbar badge, red-ringed service
     </item>
     
     <item>
+      <title>Blog: Meet Horizon UI · 11/17: Runtime Rules &amp; Live Debugging</title>
+      <link>/blog/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/</link>
+      <pubDate>Mon, 29 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/</guid>
+      <description>
+        
+        
+        &lt;p&gt;This is the eleventh post in the &lt;a href=&#34;/blog/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; series, and it stays in &lt;strong&gt;Act 3 — operate it&lt;/strong&gt;. The &lt;a href=&#34;/blog/2026-06-29-horizon-ui-alarms-and-incident-triage/&#34;&gt;previous post&lt;/a&gt; was about reading what the backend already decided; this one is about changing &lt;em&gt;how&lt;/em&gt; it decides — and then proving the change does what you meant.&lt;/p&gt;
+&lt;p&gt;Almost everything OAP computes runs through a small family of DSLs: &lt;strong&gt;OAL&lt;/strong&gt; turns traces into service and endpoint metrics, &lt;strong&gt;MAL&lt;/strong&gt; turns meters (OpenTelemetry, Telegraf) into metrics, &lt;strong&gt;LAL&lt;/strong&gt; turns logs into tags and metrics. Traditionally you edit those as YAML on the server and restart. Horizon brings both halves into the console — &lt;strong&gt;edit and hot-apply the rules&lt;/strong&gt;, and &lt;strong&gt;debug them against live data&lt;/strong&gt; — two capabilities new to the SkyWalking UI that ride OAP&amp;rsquo;s admin host.&lt;/p&gt;
+&lt;h2 id=&#34;your-rules-live-in-the-console&#34;&gt;Your rules, live in the console&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Operate → DSL management&lt;/strong&gt; lists every analysis rule the cluster is running, grouped by source. Four catalogs are editable — &lt;strong&gt;MAL · OTel&lt;/strong&gt;, &lt;strong&gt;MAL · Telegraf&lt;/strong&gt;, &lt;strong&gt;LAL&lt;/strong&gt;, and &lt;strong&gt;LAL → MAL&lt;/strong&gt; (log-to-metric) — plus a read-only &lt;strong&gt;OAL&lt;/strong&gt; browser. Rules group by prefix (ActiveMQ, BanyanDB, Elasticsearch, Flink…), each tagged by status, and you can filter by &lt;strong&gt;active / inactive / bundled / modified&lt;/strong&gt; to see at a glance what an operator has changed versus what shipped.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-01-rule-catalog.webp&#34; alt=&#34;Figure 1: The DSL management catalog — analysis rules grouped by source, each with a status chip, and status-filter facets across the top.&#34;&gt;
+Figure 1: DSL management — every OAL/MAL/LAL rule the cluster runs, grouped by source and filterable by status (active / inactive / bundled / modified). Here, the OpenTelemetry MAL catalog: 37 bundled rules.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;edit-and-hot-apply-safely&#34;&gt;Edit, and hot-apply safely&lt;/h2&gt;
+&lt;p&gt;Open a rule and it&amp;rsquo;s a Monaco YAML editor with syntax highlighting and two diff modes — &lt;strong&gt;vs. server&lt;/strong&gt; (what&amp;rsquo;s live) and &lt;strong&gt;vs. bundled&lt;/strong&gt; (what shipped) — so you always see what you&amp;rsquo;re about to change. The green ▶ in the gutter beside each &lt;code&gt;- name:&lt;/code&gt; jumps that rule straight into the Live Debugger.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-02-rule-editor.webp&#34; alt=&#34;Figure 2: A MAL rule open in the Monaco YAML editor, with edit / diff-vs-server / diff-vs-bundled tabs and green play glyphs in the gutter.&#34;&gt;
+Figure 2: Edit a rule as Monaco YAML — syntax-highlighted, with diffs against the live (server) and bundled versions, and a green ▶ in the gutter that jumps the rule into the Live Debugger.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;Saving is where the care shows. A body- or filter-only edit applies instantly. But a &lt;strong&gt;structural&lt;/strong&gt; change — one that moves a metric&amp;rsquo;s scope, downsampling, or storage shape — reshapes the cluster&amp;rsquo;s storage, so Horizon runs it as a fenced rollout and tracks it on screen: &lt;strong&gt;Compiled → Confirming across the cluster → Committing → Done&lt;/strong&gt;, reporting success only once the change is durable. If a node lags the fence, the apply ends &lt;strong&gt;DEGRADED&lt;/strong&gt; — it names the laggard nodes (they self-converge on their next scan) rather than failing; a pre-commit error is &lt;strong&gt;rolled back&lt;/strong&gt; with the reason inline and your edit kept in the buffer; a compile error surfaces as an inline diagnostic. A one-click &lt;strong&gt;Force re-apply&lt;/strong&gt; re-runs a stuck rollout on byte-identical content to un-stick a node (it briefly pauses that one rule&amp;rsquo;s collection). Reverting a rule to its bundled default goes through the same fenced path; you can also inactivate it, delete it, or dump the whole catalog to a tarball.&lt;/p&gt;
+&lt;h2 id=&#34;the-live-debugger-see-what-a-rule-actually-does&#34;&gt;The Live Debugger: see what a rule actually does&lt;/h2&gt;
+&lt;p&gt;Editing a rule is the easy part. The hard part — the part that used to mean reading code and squinting at output — is knowing what a rule &lt;em&gt;computes&lt;/em&gt; against your real data. &lt;strong&gt;Operate → Live debugger&lt;/strong&gt; answers that directly: pick a rule, click &lt;strong&gt;start sampling&lt;/strong&gt;, and Horizon installs a bounded capture on &lt;strong&gt;every reachable OAP node&lt;/strong&gt;, grabs a handful of real records, and shows each one stepped through the rule.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-03-livedebug-session.webp&#34; alt=&#34;Figure 3: The Live Debugger MAL tab capturing — rule and metric pickers, record-cap and retention controls, and a node-coverage strip reading installed 2 of 2.&#34;&gt;
+Figure 3: Start a capture and it installs on every reachable OAP node (here 2/2), grabs real records, and bounds itself with a record cap and a retention window — the same shell serves all three analysis languages.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;It has one tab per analysis language, because each works on a different kind of data.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;OAL → traces.&lt;/strong&gt; A captured source row — a real trace segment — flows clause by clause: &lt;code&gt;from(Service.*)&lt;/code&gt; reads the segment (you see its latency, status, endpoint), &lt;code&gt;build_metrics&lt;/code&gt; shapes it, &lt;code&gt;cpm()&lt;/code&gt; aggregates it. You watch a trace become a metric.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-04-oal-trace.webp&#34; alt=&#34;Figure 4: The OAL tab showing a trace segment stepped through input, function, and aggregation stages with its full payload.&#34;&gt;
+Figure 4: OAL → traces — a real segment from &lt;code&gt;agent::gateway&lt;/code&gt; (latency 38, status 200, &lt;code&gt;/rcmd&lt;/code&gt;) stepped clause by clause, &lt;code&gt;from(Service.*)&lt;/code&gt; → &lt;code&gt;build_metrics&lt;/code&gt; → &lt;code&gt;cpm()&lt;/code&gt;, into the service-CPM metric it feeds.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;MAL → metrics.&lt;/strong&gt; A meter sample flows input → filter → function → output. Because one metric fans out into many label-sets, the samples are grouped by metric, and a &lt;strong&gt;diff&lt;/strong&gt; dims the labels every sample shares and highlights only the ones that differ.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-05-mal-diff.webp&#34; alt=&#34;Figure 5: A MAL sample group expanded into a diff view, with a dimmed COMMON block of shared labels and only two labels highlighted per sample.&#34;&gt;
+Figure 5: MAL → metrics — samples grouped by metric, with a diff that dims the 16 labels every sample shares and lights only the two that differ (&lt;code&gt;group&lt;/code&gt;, &lt;code&gt;pod_name&lt;/code&gt;), so four near-identical series read apart at a glance.&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;LAL → logs.&lt;/strong&gt; Each captured log record becomes a column and each DSL block (or statement) a row, so the whole capture reads as a matrix: you can see which records the &lt;code&gt;filter&lt;/code&gt; &lt;strong&gt;aborted&lt;/strong&gt; and what the &lt;code&gt;extractor&lt;/code&gt; pulled out of the ones that passed.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix.webp&#34; alt=&#34;Figure 6: The LAL tab showing the captured rule on the left and a matrix of records by block on the right, with aborted cells where the filter dropped records.&#34;&gt;
+Figure 6: LAL → logs — every captured record a column, every DSL block a row. This filter aborts the normal logs (only abnormal ones pass) before the extractor pulls out &lt;code&gt;status.code&lt;/code&gt; and &lt;code&gt;response.flag&lt;/code&gt;.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;where-it-runs&#34;&gt;Where it runs&lt;/h2&gt;
+&lt;p&gt;Both surfaces are &lt;strong&gt;operate&lt;/strong&gt; features: they talk to OAP&amp;rsquo;s &lt;strong&gt;admin host&lt;/strong&gt;, not the query port — DSL management through the &lt;code&gt;receiver-runtime-rule&lt;/code&gt; module, the Live Debugger through &lt;code&gt;dsl-debugging&lt;/code&gt;. That admin host ships with OAP 11, so on today&amp;rsquo;s backend these two pages surface a clear &amp;ldquo;needs the admin host / module&amp;rdquo; banner and stay read-only, while every observe surface — dashboards, traces, logs, alarms, profiling — keeps working untouched. Access is role-gated: browsing rules and viewing captures are read permissions, while editing, structural apply, and running a capture each need their own write or execute verb — so a read-only operator can study captured samples all day without ever being able to change a rule or start a session. This is the slice of &amp;ldquo;operate&amp;rdquo; the open-source backend only just made possible.&lt;/p&gt;
+&lt;h2 id=&#34;where-to-go-next&#34;&gt;Where to go next&lt;/h2&gt;
+&lt;p&gt;For the field reference — every apply state, the dump format, the per-tab capture controls — see the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/runtime-rules/&#34;&gt;Runtime Rules&lt;/a&gt; and &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/live-debugger/&#34;&gt;Live Debugger&lt;/a&gt; docs.&lt;/p&gt;
+&lt;p&gt;Next up: &lt;strong&gt;Inspect — Cross-Layer Query Power-Tools&lt;/strong&gt; — the Operate-side surfaces for running metric, trace, and log queries straight across every layer.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Meet Horizon UI · 9/17: Five Profilers, One Flame Graph</title>
       <link>/blog/2026-06-26-horizon-ui-profiling/</link>
       <pubDate>Fri, 26 Jun 2026 00:00:00 +0000</pubDate>
@@ -7853,111 +7895,6 @@ technical account manager working across many of their enterprise strategic acco
 &lt;li&gt;&lt;strong&gt;Continuous profiling&lt;/strong&gt;, helps you automatically profile without manual intervention. For example, when Rover detects that the CPU exceeds a configurable threshold, it automatically executes the on-CPU profiling task.&lt;/li&gt;
 &lt;li&gt;More profiling types to enrich usage scenarios, such as network, and memory profiling.&lt;/li&gt;
 &lt;/ol&gt;
-
-      </description>
-    </item>
-    
-    <item>
-      <title>Blog: Apache ShenYu(incubating) plugin implementation principles and observability practices</title>
-      <link>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</link>
-      <pubDate>Sun, 08 May 2022 00:00:00 +0000</pubDate>
-      <guid>/blog/2022-05-08-apache-shenyuincubating-integrated-skywalking-practice-observability/</guid>
-      <description>
-        
-        
-        &lt;h3 id=&#34;content&#34;&gt;Content&lt;/h3&gt;
-&lt;ol&gt;
-&lt;li&gt;&lt;a href=&#34;#1.-Introduction-of-SkyWalking-and-ShenYu&#34;&gt;Introduction of SkyWalking and ShenYu&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;#2.-Apache-ShenYu-plugin-implementation-principle&#34;&gt;Apache ShenYu plugin implementation principle&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;#3.-Adding-generalized-call-tracking-to-the-gRPC-plugin-and-keeping-it-compatible&#34;&gt;Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;#4.-ShenYu-Gateway-Observability-Practice&#34;&gt;ShenYu Gateway Observability Practice&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;#5.-Summary&#34;&gt;Summary&lt;/a&gt;&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;1-introduction-of-skywalking-and-shenyu&#34;&gt;1. Introduction of SkyWalking and ShenYu&lt;/h2&gt;
-&lt;h3 id=&#34;11-skywalking&#34;&gt;1.1 SkyWalking&lt;/h3&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/hutaishi/skywalking&#34;&gt;SkyWalking&lt;/a&gt; is an Application Performance Monitoring (APM) and Observability Analysis Platform (OAP) for microservices, distributed systems, and cloud natives,
-Has powerful features that provide a multi-dimensional means of application performance analysis, including distributed topology diagrams, application performance metrics, distributed link tracing, log correlation analysis and alerts. Also has a very rich ecology. Widely used in various companies and open source projects.&lt;/p&gt;
-&lt;h3 id=&#34;12-apache-shenyu-incubating&#34;&gt;1.2 Apache ShenYu (incubating)&lt;/h3&gt;
-&lt;p&gt;&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;
-High-performance,multi-protocol,extensible,responsive API Gateway. Compatible with a variety of mainstream framework systems, support hot plug,
-users can customize the development, meet the current situation and future needs of users in a variety of scenarios, experienced the temper of large-scale scenes.
-Rich protocol support: &lt;code&gt;Http&lt;/code&gt;, &lt;code&gt;Spring Cloud&lt;/code&gt;, &lt;code&gt;gRPC&lt;/code&gt;, &lt;code&gt;Dubbo&lt;/code&gt;, &lt;code&gt;SOFARPC&lt;/code&gt;, &lt;code&gt;Motan&lt;/code&gt;, &lt;code&gt;Tars&lt;/code&gt;, etc.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;shenyu-arch.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;2-apache-shenyu-plugin-implementation-principle&#34;&gt;2. Apache ShenYu plugin implementation principle&lt;/h2&gt;
-&lt;p&gt;ShenYu&amp;rsquo;s asynchrony is a little different from previous exposure to asynchrony, it is a full-link asynchrony, the execution of each plug-in is asynchronous, and thread switching is not a single fixed situation (and the individual plug-in implementation is related).
-The gateway initiates service calls of various protocol types, and the existing SkyWalking plugins create ExitSpan (synchronous or asynchronous) when they initiate service calls.  The gateway receives the request and creates an asynchronous EntrySpan.
-The asynchronous EntrySpan needs to be concatenated with the synchronous or asynchronous ExitSpan, otherwise the link will be broken.&lt;/p&gt;
-&lt;p&gt;There are 2 types of tandem solutions：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Snapshot Delivery&lt;/strong&gt;:&lt;br&gt;
-Pass the snapshot after creating the EntrySpan to the thread that created the ExitSpan in some way.&lt;br&gt;
-Currently this approach is used in the asynchronous WebClient plugin, which can receive asynchronous snapshots. shenYu proxy Http service or SpringCloud service is to achieve span concatenation through snapshot passing.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;LocalSpan transit&lt;/strong&gt;:&lt;br&gt;
-Other RPC class plugins do not receive snapshots for concatenation like Asynchronous WebClient. Although you can modify other RPC plugins to receive snapshots for concatenation, it is not recommended or necessary to do so.
-This can be achieved by creating a LocalSpan in the thread where the ExitSpan is created, and then connecting the asynchronous EntrySpan and LocalSpan by &lt;code&gt;snapshot passing&lt;/code&gt;. This can be done without changing the original plugin code.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;The span connection is shown below:&lt;br&gt;
-&lt;img src=&#34;span-connect.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;You may ask if it is possible to create LocalSpan inside a generic plugin, instead of creating one separately for ShenYu RPC plugin?
-The answer is no, because you need to ensure that LocalSpan and ExitSpan are in the same thread, and ShenYu is fully linked asynchronously. The code to create LocalSpan is reused in the implementation.&lt;/p&gt;
-&lt;h2 id=&#34;3-adding-generalized-call-tracking-to-the-grpc-plugin-and-keeping-it-compatible&#34;&gt;3. Adding generalized call tracking to the gRPC plugin and keeping it compatible&lt;/h2&gt;
-&lt;p&gt;The existing SkyWalking gRPC plugin only supports calls initiated by way of stubs. For the gateway there is no proto file, the gateway takes generalized calls (not through stubs), so tracing RPC requests, you will find that the link will break at the gateway node.
-In this case, it is necessary to make the gRPC plugin support generalized calls, while at the same time needing to remain compatible and not affect the original tracing method. This is achieved by determining whether the request parameter is a DynamicMessage, and if it is not, then the original tracing logic through the stub is used.
-If not, then the original tracing logic via stubs is used, and if not, then the generalized call tracing logic is used. The other compatibility is the difference between the old and new versions of gRPC, as well as the compatibility of various cases of obtaining server-side IP, for those interested in the source code.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;grpc-generic-call.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;4-shenyu-gateway-observability-practice&#34;&gt;4. ShenYu Gateway Observability Practice&lt;/h2&gt;
-&lt;p&gt;The above explains the principle of SkyWalking ShenYu plug-in implementation, the following deployment application to see the effect. SkyWalking powerful, in addition to the link tracking requires the development of plug-ins, other powerful features out of the box.
-Here only describe the link tracking and application performance analysis part, if you want to experience the power of SkyWalking features, please refer to the &lt;a href=&#34;https://skywalking.apache.org/&#34;&gt;SkyWalking official documentation&lt;/a&gt;.&lt;br&gt;
-Version description:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;skywalking-java: &lt;code&gt;8.11.0-SNAPSHOT&lt;/code&gt; source code build. Note: The shenyu plugin will be released in version 8.11.0, and will probably release it initially in May or June. the Java agent is in the regular release phase.&lt;/li&gt;
-&lt;li&gt;skywalking: &lt;code&gt;9.0.0&lt;/code&gt; V9 version&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Usage instructions:&lt;br&gt;
-SkyWalking is designed to be very easy to use. Please refer to the official documentation for configuring and activating the shenyu plugin.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/main/latest/readme/&#34;&gt;SkyWalking Documentation&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/readme/&#34;&gt;SkyWalking Java Agent Documentation&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h3 id=&#34;41-sending-requests-to-the-gateway&#34;&gt;4.1 Sending requests to the gateway&lt;/h3&gt;
-&lt;p&gt;Initiate various service requests to the gateway via the &lt;code&gt;postman&lt;/code&gt; client or &lt;code&gt;other means&lt;/code&gt;.&lt;/p&gt;
-&lt;h3 id=&#34;42-request-topology-diagram&#34;&gt;4.2 Request Topology Diagram&lt;/h3&gt;
-&lt;p&gt;&lt;img src=&#34;topology.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;p&gt;&lt;img src=&#34;topology2.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;hr&gt;
-&lt;h3 id=&#34;43-request-trace-in-the-case-of-grpc&#34;&gt;4.3 Request Trace (in the case of gRPC)&lt;/h3&gt;
-&lt;h4 id=&#34;normal-trace&#34;&gt;Normal Trace：&lt;/h4&gt;
-&lt;p&gt;&lt;img src=&#34;grpc-ok.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h4 id=&#34;abnormal-trace&#34;&gt;Abnormal Trace：&lt;/h4&gt;
-&lt;p&gt;&lt;img src=&#34;grpc-error.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;Click on the link node to see the corresponding node information and exception information&lt;/p&gt;
-&lt;h4 id=&#34;service-provider-span&#34;&gt;Service Provider Span&lt;/h4&gt;
-&lt;p&gt;&lt;img src=&#34;grpc-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h4 id=&#34;gateway-request-span&#34;&gt;Gateway request span&lt;/h4&gt;
-&lt;p&gt;&lt;img src=&#34;gateway-error-span.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;44-service-metrics-monitoring&#34;&gt;4.4 Service Metrics Monitoring&lt;/h3&gt;
-&lt;p&gt;&lt;img src=&#34;overview.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;45-gateway-background-metrics-monitoring&#34;&gt;4.5 Gateway background metrics monitoring&lt;/h3&gt;
-&lt;h4 id=&#34;database-monitoring&#34;&gt;Database Monitoring:&lt;/h4&gt;
-&lt;p&gt;&lt;img src=&#34;database.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h4 id=&#34;thread-pool-and-connection-pool-monitoring&#34;&gt;Thread pool and connection pool monitoring:&lt;/h4&gt;
-&lt;p&gt;&lt;img src=&#34;img.png&#34; alt=&#34;img.png&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;46-jvm-monitoring&#34;&gt;4.6 JVM Monitoring&lt;/h3&gt;
-&lt;p&gt;&lt;img src=&#34;jvm.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;47-endpoint-analysis&#34;&gt;4.7 Endpoint Analysis&lt;/h3&gt;
-&lt;p&gt;&lt;img src=&#34;endpoint.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;48-exception-log-and-exception-link-analysis&#34;&gt;4.8 Exception log and exception link analysis&lt;/h3&gt;
-&lt;p&gt;&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-java/latest/en/setup/service-agent/java-agent/application-toolkit-logback-1.x/&#34;&gt;See official documentation for log configuration&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;Log monitoring
-&lt;img src=&#34;log-trace.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;Distributed link trace details corresponding to exception logs
-&lt;img src=&#34;log-trace-detail.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;h2 id=&#34;5-summary&#34;&gt;5. Summary&lt;/h2&gt;
-&lt;p&gt;SkyWalking has very comprehensive support for metrics, link tracing, and logging in observability, and is powerful, easy to use, and designed for large distributed systems, microservices, cloud-native, container architectures, and has a rich ecosystem.
-Using SkyWalking to provide powerful observability support for Apache ShenYu (incubating) gives ShenYu a boost. Finally, if you are interested in high-performance responsive gateways, you can follow
-&lt;a href=&#34;https://github.com/apache/incubator-shenyu&#34;&gt;Apache ShenYu (incubating)&lt;/a&gt;.
-Also, thanks to SkyWalking such an excellent open source software to the industry contributions.&lt;/p&gt;
 
       </description>
     </item>
