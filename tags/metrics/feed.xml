@@ -81,6 +81,72 @@ Figure 7: Lock entities — even across services — and every line widget overl
     </item>
     
     <item>
+      <title>Zh: 认识 Horizon UI · 2/17：动态仪表盘、MQE 与指标格式化</title>
+      <link>/zh/2026-06-21-horizon-ui-dashboards-and-mqe/</link>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-21-horizon-ui-dashboards-and-mqe/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-21-horizon-ui-dashboards-and-mqe/&#34;&gt;Meet Horizon UI · 2/17: Dashboards That Adapt — MQE, Smart Widgets, and Numbers Humans Can Read&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Apache SkyWalking Horizon UI&lt;/a&gt; 系列的第二篇。第一篇介绍了控制台和按 Layer 组织的导航；这一篇讲你每天最常停留的界面：&lt;strong&gt;仪表盘&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;Horizon 里的每个仪表盘，本质上都使用同一套机制：一个组件网格，每个组件都是一条由 BFF 解析并发往 OAP 的 &lt;strong&gt;MQE 表达式&lt;/strong&gt;。它值得单独写一篇，不只是因为能展示指标值，还因为它会处理很多实际问题：不适合当前服务、实例或 endpoint 的组件会被隐藏，相关查询也完全不会发出；编码值、耗时和原始字节数会按场景格式化；页面上所有图表都绑定到同一个游标；你还可以从一条慢 SQL 记录直接跳到产生它的 Trace。下面逐项看。&lt;/p&gt;
+&lt;h2 id=&#34;每个组件都是一条-mqe-表达式&#34;&gt;每个组件都是一条 MQE 表达式&lt;/h2&gt;
+&lt;p&gt;Layer 仪表盘是一个紧凑的 &lt;strong&gt;12 列网格&lt;/strong&gt;：行高 120px，空隙会自动回填，避免墙一样的组件块出现洞；宽度低于约 1100px 时会折叠成单列。每个格子是五类组件之一，而组件类型取决于 MQE 表达式返回数据的 &lt;em&gt;形状&lt;/em&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;card&lt;/code&gt;&lt;/strong&gt;：表达式收敛为单个标量，比如 &lt;code&gt;latest(...)&lt;/code&gt;、&lt;code&gt;avg(...)&lt;/code&gt;、&lt;code&gt;service_sla/100&lt;/code&gt;。显示一个主指标值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;line&lt;/code&gt;&lt;/strong&gt;：时间序列；每个表达式一条线，混合单位时可以使用双 Y 轴，比如左侧吞吐、右侧时延。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;top&lt;/code&gt;&lt;/strong&gt;：来自 &lt;code&gt;top_n(endpoint_cpm, 20, des)&lt;/code&gt; 的排行列表，带一个小标签切换器，可以在 Traffic / Slow / Successful Rate 之间切换排序。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;record&lt;/code&gt;&lt;/strong&gt;：记录型输出，比如慢数据库语句或慢缓存命令：文本行加数值。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;table&lt;/code&gt;&lt;/strong&gt;：带标签的 &lt;code&gt;latest(...)&lt;/code&gt; 指标，每组 label 一个表格行，比如每个服务的 pod phase、node condition、deployment replicas。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;你不需要手工选择图表类型；写好 MQE，合适的组件会自己渲染。而且 service、instance、endpoint 这些层级使用同一套网格系统。Layer 模板里的 &lt;code&gt;dashboards.&amp;lt;scope&amp;gt;&lt;/code&gt; map 会为不同页面配置不同组件集合，所以向下钻取时，仪表盘会切到对应作用域。（这些都运行在&lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;第一篇&lt;/a&gt;介绍的 BFF 层；浏览器不直接访问 OAP。）&lt;/p&gt;
+&lt;h2 id=&#34;根据当前对象决定显示哪些组件&#34;&gt;根据当前对象决定显示哪些组件&lt;/h2&gt;
+&lt;p&gt;这个设计会明显改变仪表盘的使用感受。组件可以带一个 &lt;strong&gt;&lt;code&gt;visibleWhen&lt;/code&gt;&lt;/strong&gt; 条件。如果条件不成立，组件不渲染；更关键的是，&lt;strong&gt;它的查询也不会执行&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;条件有两类：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;MQE metric&lt;/strong&gt;：只有表达式 &lt;em&gt;有值&lt;/em&gt; 时展示组件（&lt;code&gt;op: exists&lt;/code&gt;），或者只有值超过阈值时展示（&lt;code&gt;gt&lt;/code&gt; / &lt;code&gt;lt&lt;/code&gt;）。组件可以拿自己的指标做自我开关：JVM 组件带 &lt;code&gt;&amp;quot;visibleWhen&amp;quot;: { &amp;quot;kind&amp;quot;: &amp;quot;mqe&amp;quot;, &amp;quot;expression&amp;quot;: &amp;quot;instance_jvm_cpu&amp;quot;, &amp;quot;op&amp;quot;: &amp;quot;exists&amp;quot; }&lt;/code&gt;，所以它们会出现在 Java 实例上，在 Go 实例上消失。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Entity attribute&lt;/strong&gt;：在 Instance 作用域上，根据选中实例的属性开关，比如 &lt;code&gt;language eq JAVA&lt;/code&gt;，或者某个属性是否存在。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;因为条件在 &lt;strong&gt;服务端&lt;/strong&gt; 计算，非 JVM 实例不只是把 JVM 格子藏起来；BFF 根本不会把这些查询发给 OAP。用同一个 Instance 仪表盘打开一个 JVM 服务和一个非 JVM 服务，你看到的是同一个模板根据当前对象自动取舍，而不是两套手工维护的页面。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-01-instance-jvm.webp&#34; alt=&#34;图 1：Java 服务的 Instance 仪表盘，因为 instance_jvm_cpu 有数据，JVM 组件组（CPU、heap、GC、threads、classes）会展示。&#34;&gt;
+图 1：JVM 实例上会渲染 JVM 组件，因为它们的 &lt;code&gt;visibleWhen&lt;/code&gt; 条件成立。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-02-instance-go.webp&#34; alt=&#34;图 2：同一个 Instance 仪表盘打开在 Go 的 rating 服务上，JVM 组件组不存在，网格已经重排；这些组件的查询没有发往 OAP。&#34;&gt;
+图 2：同一个仪表盘打开在 Go 实例上，JVM 组件不存在，查询也没有执行。同一个模板，会根据当前对象调整内容。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;指标值的显示格式&#34;&gt;指标值的显示格式&lt;/h2&gt;
+&lt;p&gt;原始指标不一定适合直接给人看。Horizon 的组件会处理三类过去常让运维人员在脑子里换算的值：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;enum&lt;/code&gt;&lt;/strong&gt;：用 value→label map 把编码型 gauge 变成文字。&lt;code&gt;1/0&lt;/code&gt; 成功指标会显示成 &lt;strong&gt;&lt;code&gt;OK&lt;/code&gt;&lt;/strong&gt; / &lt;strong&gt;&lt;code&gt;Failed&lt;/code&gt;&lt;/strong&gt;，而不是裸数字。label 可以按 locale 翻译。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;duration&lt;/code&gt;&lt;/strong&gt;：以秒为单位的指标会显示成人能理解的时间差，比如 &lt;strong&gt;&lt;code&gt;5m 20s ago&lt;/code&gt;&lt;/strong&gt;；在坐标轴上会压缩成 &lt;code&gt;5m&lt;/code&gt; / &lt;code&gt;2h&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SI suffixes&lt;/strong&gt;：图表坐标轴和 tooltip 上的大数会显示成 &lt;strong&gt;&lt;code&gt;45.1k&lt;/code&gt;&lt;/strong&gt;、&lt;strong&gt;&lt;code&gt;1.34M&lt;/code&gt;&lt;/strong&gt;、&lt;strong&gt;&lt;code&gt;2.5G&lt;/code&gt;&lt;/strong&gt;，而不是 &lt;code&gt;4.51e4&lt;/code&gt;。坐标轴刻度和 hover 值使用同一套写法。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-03-si-suffix-axis.webp&#34; alt=&#34;图 3：折线图的 Y 轴和十字线 tooltip 都使用紧凑 SI 后缀（45.1k、1.34M），刻度和 hover 值保持同一写法。&#34;&gt;
+图 3：高密度字节数和计数序列使用紧凑 SI 后缀，坐标轴和 tooltip 保持一致。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-04-enum-duration-cards.webp&#34; alt=&#34;图 4：两个 BanyanDB 卡片：&amp;ldquo;Last Sync&amp;rdquo; 通过 enum map 把编码 1 显示成 OK，&amp;ldquo;Time Since Last Sync&amp;rdquo; 通过 duration 格式把秒数显示成 &amp;ldquo;5m 20s ago&amp;rdquo;。&#34;&gt;
+图 4：&lt;code&gt;enum&lt;/code&gt; 和 &lt;code&gt;duration&lt;/code&gt; 格式在 BanyanDB 生命周期卡片上的效果：&lt;code&gt;OK&lt;/code&gt; 代替 &lt;code&gt;1&lt;/code&gt;，&amp;ldquo;5m 20s ago&amp;rdquo; 代替秒数。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;按同一条时间线阅读整页图表&#34;&gt;按同一条时间线阅读整页图表&lt;/h2&gt;
+&lt;p&gt;页面上所有 &lt;code&gt;line&lt;/code&gt; 图共享 &lt;strong&gt;同一个 hover 游标&lt;/strong&gt;。指向吞吐图上的第 32 分钟，时延图、错误率图和每个 sparkline 格子上的第 32 分钟也会一起亮起。这个契约在图表 wrapper 层强制执行，任何组件都不能退出，所以页面读起来是一组围绕同一时刻协同的视图，而不是十几个互不相关的图。多序列 tooltip 是固定对齐的表格，展示每条序列的 &lt;strong&gt;title&lt;/strong&gt;（不会显示原始 MQE），所有值在同一列右对齐。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-05-synced-crosshair.webp&#34; alt=&#34;图 5：同步十字线扫过吞吐、错误率和时延面板，一个游标、同一个时刻，所有图表对齐。&#34;&gt;
+图 5：一个游标跨过页面上所有折线图，所以你可以在所有图上同时读同一瞬间。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;从慢记录直接打开-trace&#34;&gt;从慢记录直接打开 Trace&lt;/h2&gt;
+&lt;p&gt;&lt;code&gt;record&lt;/code&gt; 组件，比如 Slow Statements、Slow Commands、Slow Database Statements，是采样记录列表。每一行如果带 trace id，行首会出现一个 &lt;strong&gt;jump-to-trace&lt;/strong&gt; 图标，点击即可打开对应 Trace 的瀑布图。它按 &lt;strong&gt;trace id&lt;/strong&gt; 解析，而不是按 Layer 解析，这点很重要：Virtual Database / Cache / MQ 服务上的 Slow Statements 属于另一个 Layer 上的 &lt;em&gt;caller&lt;/em&gt;，虚拟目标 Layer 自己没有 traces 标签页，但跳转仍然能打开正确 Trace。语句文本本身也支持 &lt;strong&gt;点击复制&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-06-record-jump-to-trace.webp&#34; alt=&#34;图 6：Slow Statements record 组件。每条带 trace id 的采样行都有 jump-to-trace 图标，语句文本可点击复制，其中一行显示 copied 闪烁状态。&#34;&gt;
+图 6：从慢语句跳到执行它的 Trace。按 trace id 解析，所以即使虚拟 Layer 自己没有 traces 标签页也能工作。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;固定多个对象做对比&#34;&gt;固定多个对象做对比&lt;/h2&gt;
+&lt;p&gt;有时只看一个对象不够。Horizon 允许你 &lt;strong&gt;锁定多个服务、实例或 endpoint，甚至跨服务锁定，并在当前页面内直接比较&lt;/strong&gt;。可以从选择器或 instance/endpoint 列表固定对象；当前正在查看的对象始终属于对比组，会标记为 &lt;code&gt;CURRENT&lt;/code&gt;，并继续驱动顶部信息区。每个固定对象都有自己的颜色。之后每个组件都会就地对比：line 组件为每个对象叠加一条序列，card 为每个对象显示一行，&lt;code&gt;top&lt;/code&gt; 和 &lt;code&gt;record&lt;/code&gt; 组件增加按对象切换的标签页，table 增加 Entity 列。持久的对比栏会保持这组对象，不受底层列表分页或当前查看对象变化影响；每个对象单独发起请求，所以一个对象响应慢，不会把其他对象拖成空白。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p02-dashboards-07-pinned-entities.webp&#34; alt=&#34;图 7：对比来自不同服务的两个实例：app（标记 CURRENT）和 rating。在 Load、Latency、Success Rate 折线组件中按颜色叠加显示，上方有对比栏。&#34;&gt;
+图 7：锁定对象，甚至跨服务锁定，所有折线组件都会按颜色叠加；对比栏保持这组对象，CURRENT 对象仍然驱动顶部信息区。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;时间范围作用于整个仪表盘&#34;&gt;时间范围作用于整个仪表盘&lt;/h2&gt;
+&lt;p&gt;顶部时间范围会驱动页面上的所有内容：顶部 KPI 区、组件主体，以及 BanyanDB 分层 hot/warm/cold 存储里 &lt;strong&gt;Cold&lt;/strong&gt; 标记相关的整条路径。过去落地页和拓扑路由固定在最近 60 分钟，所以选择 &amp;ldquo;12 days ago&amp;rdquo; 后仍然会悄悄展示近期数字；现在时间选择器在所有地方都生效。上游控制变化时，每个依赖它的格子会明确重置并显示 &amp;ldquo;Reading data&amp;hellip;&amp;rdquo; 提示，而不是在加载动画下面留着旧值。&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;需要强调的是，这是一套系统。同样的五类组件、同样的 MQE、同样的条件开关，会渲染每个 Layer 的仪表盘：上面的 JVM 面板、BanyanDB 生命周期卡片、mesh 服务上的百分位时延，以及专门为 Envoy AI Gateway（token throughput、time-to-first-token）或 GenAI virtual layer（per-model estimated cost）设计的面板。不同 Layer 之间变化的是 MQE，不是机制。&lt;/p&gt;
+&lt;p&gt;上面讲的是 &lt;em&gt;查看&lt;/em&gt; 体验。每个组件的 MQE、&lt;code&gt;visibleWhen&lt;/code&gt; 条件、格式，以及各作用域的网格，都可以从 &lt;strong&gt;Layer dashboards&lt;/strong&gt; 管理界面编辑。但这个创作流程（draft → preview → publish，以及可内联/展开的 MQE 编辑器）会在后续文章里单独展开。字段级参考可以看文档里的 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/components/dashboard-widgets/&#34;&gt;dashboard widgets&lt;/a&gt; 和 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/components/charts/&#34;&gt;charts&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;下一篇：&lt;strong&gt;topology and service dependency&lt;/strong&gt;，把 Horizon 在这里用图表展示的同一批数据，画成一张可以走进去看的地图。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Monitoring WeChat and Alipay Mini Programs with SkyWalking</title>
       <link>/blog/2026-04-30-mini-program-monitoring-with-skywalking/</link>
       <pubDate>Thu, 30 Apr 2026 00:00:00 +0000</pubDate>

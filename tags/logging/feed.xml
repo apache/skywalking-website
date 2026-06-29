@@ -112,6 +112,104 @@ Figure 3: Two ways to provide a map — upload for a quick triage, mount for the
     </item>
     
     <item>
+      <title>Zh: 认识 Horizon UI · 7/17：日志探索器</title>
+      <link>/zh/2026-06-23-horizon-ui-log-explorer/</link>
+      <pubDate>Tue, 23 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-23-horizon-ui-log-explorer/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-23-horizon-ui-log-explorer/&#34;&gt;Meet Horizon UI · 7/17: The Log Explorer&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第七篇。&lt;a href=&#34;/zh/2026-06-22-horizon-ui-trace-explorer/&#34;&gt;第六篇&lt;/a&gt;讲的是一个请求的 spans；这一篇讲它周围的日志行。Horizon 用 &lt;strong&gt;两个标签页&lt;/strong&gt; 展示日志，对应两类排查问题：&lt;em&gt;“这个服务过去半小时打了什么日志？”&lt;/em&gt; 以及 &lt;em&gt;“这个 pod 现在正在向 stdout 打什么？”&lt;/em&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Logs&lt;/strong&gt; 标签页查询 SkyWalking 已经 &lt;strong&gt;采集并存储&lt;/strong&gt; 的日志：已索引、可过滤、可与 Trace 关联。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Pod Logs&lt;/strong&gt; 标签页按需 &lt;strong&gt;实时 tail&lt;/strong&gt; Kubernetes pod 的容器日志。这类日志不走 SkyWalking 的日志存储：OAP 直接从 &lt;strong&gt;Kubernetes API server&lt;/strong&gt; 读取它们（也就是 &lt;code&gt;kubectl logs&lt;/code&gt; 那条路径），Horizon 只展示当前窗口，然后丢弃，不会持久化。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;某个 Layer 展示哪些标签页由模板决定：启用日志的 Layer（General、Mesh、Nginx、Envoy AI Gateway、mobile 和 mini-program Layer）会显示 &lt;strong&gt;Logs&lt;/strong&gt; 标签页；只有感知 Kubernetes 的 Layer（Kubernetes Service、Mesh、Mesh data plane）会显示 &lt;strong&gt;Pod Logs&lt;/strong&gt; 标签页。Browser JavaScript 错误又是另一类数据：它不是服务日志，而是浏览器端 agent 上报的客户端错误事件，有自己的分类，也有自己的 &lt;strong&gt;source-map 反混淆&lt;/strong&gt;，可以把混淆后的 &lt;code&gt;app.min.js:1:...&lt;/code&gt; frame 还原到原始 &lt;code&gt;file:line&lt;/code&gt;。这是 Browser Layer 上的独立标签页，会在这个系列的另一篇文章里讲。&lt;/p&gt;
+&lt;h2 id=&#34;查询已存储日志&#34;&gt;查询已存储日志&lt;/h2&gt;
+&lt;p&gt;打开一个有 &lt;strong&gt;Logs&lt;/strong&gt; 标签页的 Layer，先在顶部选择服务，最新日志流会按 newest-first 加载。和 Trace 探索器一样，这个标签页使用 &lt;strong&gt;独立的时间范围&lt;/strong&gt;。当你在这里排查时，全局顶栏时间选择器会暂停，自动刷新不会把你正在看的窗口不断往前推。可以选择滚动预设（最近 15 分钟到 24 小时，默认 30 分钟），也可以选择自定义绝对窗口；查询按 &lt;strong&gt;秒级精度&lt;/strong&gt; 执行，所以最新日志不会被分钟取整吞掉。&lt;/p&gt;
+&lt;p&gt;条件栏用来收窄日志流，每个过滤条件都是可选的，多个条件按 AND 连接：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Instance&lt;/strong&gt;：限制到某个服务实例。在 sidecar Layer 上标签显示为 &lt;strong&gt;Sidecar&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Endpoint&lt;/strong&gt;：输入搜索服务 endpoints，点击固定，按 &lt;strong&gt;×&lt;/strong&gt; 清除。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace ID&lt;/strong&gt;：只显示和某条 Trace 关联的日志行。从 Trace 跳转过来时，也会预填这个字段并直接限定日志流。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tags&lt;/strong&gt;：单个 &lt;code&gt;key=value&lt;/code&gt; 字段，带 autocomplete；输入 key 可看建议，输入 &lt;code&gt;=&lt;/code&gt; 后切换到已知 value，按 Enter 提交。提交后的 tags 以可删除标签形式保留。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Level&lt;/strong&gt;：日志流上方的 &lt;strong&gt;Levels&lt;/strong&gt; 条也可以当过滤器用。点击 &lt;code&gt;error&lt;/code&gt;、&lt;code&gt;warn&lt;/code&gt;、&lt;code&gt;info&lt;/code&gt; 或 &lt;code&gt;debug&lt;/code&gt; 只保留该级别，再点一次清除。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这里不提供单独的日志查询语言，也不需要学习 LogQL。上面的条件就是完整界面，并且 &lt;strong&gt;编辑时会立即刷新日志流&lt;/strong&gt;；&lt;strong&gt;Run query&lt;/strong&gt; 只是显式告诉系统“我改完了，现在刷新”，同时回到第一页。&lt;/p&gt;
+&lt;h2 id=&#34;用直方图和级别计数定位日志&#34;&gt;用直方图和级别计数定位日志&lt;/h2&gt;
+&lt;p&gt;日志视图的目标不只是 &lt;em&gt;列出&lt;/em&gt; 行，还要帮你看出分布和异常，所以日志流上方有两个定位信息。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Density histogram&lt;/strong&gt; 按时间展示日志量，每个柱按 legend 颜色 &lt;strong&gt;堆叠 level&lt;/strong&gt;；hover 柱子可以看到该 bucket 的时间范围和每个 level 的计数。它基于当前页面上可见数据绘制，所以展示的是你正在看的日志分布。&lt;strong&gt;Levels&lt;/strong&gt; 条则保留每个 level 在窗口内的累计计数。这个计数跨整个查询窗口采样，而不只是当前可见页，所以 error/warn/info 比例反映的是整个窗口。&lt;/p&gt;
+&lt;p&gt;日志行会展示 timestamp、level（行颜色跟随 level）、service、存在 Trace 关联时的 &lt;strong&gt;↗ trace&lt;/strong&gt; 链接、&lt;strong&gt;&lt;code&gt;JSON&lt;/code&gt; / &lt;code&gt;YAML&lt;/code&gt; / &lt;code&gt;TEXT&lt;/code&gt; 格式标记&lt;/strong&gt;，以及内容的一行预览。Horizon 按日志内容本身决定这个标记：OAP 会标注日志 body 是 JSON 还是 plain text，在此基础上 Horizon 还会嗅探 JSON 和 YAML 结构，所以即使一行没有被标注但内容是结构化的，也会得到正确处理。JSON 在预览里压平成一行，YAML 保留 key，plain text 会折叠空白。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p07-logs-01-stream.webp&#34; alt=&#34;图 1：存储 Logs 流。条件栏、按 level 堆叠的 density histogram 和 Levels 条在上方，下面是日志行，每行带 level 颜色、service、格式标记和 ↗ trace 链接。&#34;&gt;
+图 1：某个服务的存储日志流：窗口上的 level histogram 和 level 计数，下面是每行日志，带 JSON / YAML / TEXT 标记并可跳到 Trace。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;查看单行日志详情&#34;&gt;查看单行日志详情&lt;/h2&gt;
+&lt;p&gt;点击一行后，完整日志内容会在弹层里打开：内容会按格式进行 &lt;strong&gt;pretty-printing&lt;/strong&gt;，JSON 和 YAML 正常排版，plain text 则获得完整画布，而不是被挤在一条窄条里。面板还提供 &lt;strong&gt;Copy&lt;/strong&gt; 按钮、service / instance / endpoint / trace 上下文，以及该行所有 tag 的表格。日志行与 Trace 关联时，&lt;strong&gt;↗ trace&lt;/strong&gt; 按钮会在 overlay 中打开相关 &lt;a href=&#34;/zh/2026-06-22-horizon-ui-trace-explorer/&#34;&gt;Trace 瀑布图&lt;/a&gt;，不离开日志流；它还会把这行日志的 timestamp 传过去，所以 Trace 即使已经进入更冷的存储 tier，也仍然能找到。按 Escape 或点击 backdrop 即可关闭。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p07-logs-02-payload.webp&#34; alt=&#34;图 2：日志行详情弹层。完整内容按格式 pretty-print（这里是 JSON access log），带 Copy 按钮、service 和 instance 上下文，以及该行 tag 表（这里是 status.code）。&#34;&gt;
+图 2：完整查看一行日志：内容按格式排版，旁边展示上下文和所有 tags。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;pod-logs实时查看容器输出&#34;&gt;Pod Logs：实时查看容器输出&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Pod Logs&lt;/strong&gt; 标签页回答另一个问题，它的数据源也完全不同：不是 SkyWalking 存储的日志，而是通过 OAP 从 &lt;strong&gt;Kubernetes API server&lt;/strong&gt; 实时读取 pod 的容器输出，也就是 &lt;code&gt;kubectl logs -f&lt;/code&gt; 读取的同一类内容。这里没有可翻页的存储历史；每次刷新拉取尾部窗口，展示出来，然后丢弃。&lt;/p&gt;
+&lt;p&gt;启动 tail 只需要几个选择：选一个 &lt;strong&gt;Pod&lt;/strong&gt;（固定的服务实例）、一个 &lt;strong&gt;Container&lt;/strong&gt;（Horizon 会列出 pod 的 containers 并默认选第一个）、一个回看 &lt;strong&gt;Window&lt;/strong&gt;（last 30s、1m、5m、15m 或 30m，决定每次轮询向前取多远），以及轮询 &lt;strong&gt;Interval&lt;/strong&gt;（2s、5s、10s 或 30s，决定多久重新取一次）。按 &lt;strong&gt;Start&lt;/strong&gt; 后，日志会流入只读查看器，保持最新行可见，并持续轮询直到你按 &lt;strong&gt;Pause&lt;/strong&gt;。顶部状态条显示 container、行数、live indicator，以及上次更新距今多久。两行 &lt;strong&gt;Include&lt;/strong&gt; / &lt;strong&gt;Exclude&lt;/strong&gt; filter 用来收窄可见内容；每个标签都是一个 &lt;strong&gt;整行正则表达式&lt;/strong&gt;（&lt;code&gt;.*error.*&lt;/code&gt;），由 OAP 执行，所以它匹配整行而不是子串，并且可以叠加。&lt;/p&gt;
+&lt;p&gt;使用前需要知道一点：按需读取 pod logs 在 OAP 上 &lt;strong&gt;默认关闭&lt;/strong&gt;，因为容器输出可能包含 secret。功能关闭时，或者你选择的 pod 已经滚动或缩容消失时，OAP 会返回一个 &lt;em&gt;原因&lt;/em&gt;，Horizon 会把它显示成横幅，而不是给你一个空面板。这样你能区分“需要打开这个功能”和“那个 pod 已经不存在”。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p07-logs-03-pod-logs.webp&#34; alt=&#34;图 3：Pod Logs 标签页。pod 和 container 选择器、回看窗口和轮询间隔、live-indicator 状态条、Include/Exclude 正则标签，以及流式展示容器最近输出的只读日志窗口。&#34;&gt;
+图 3：一个 pod 容器的实时 tail：窗口化、按间隔轮询、可用正则过滤、永不持久化。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;两个标签页，包括存储查询、tag 和 container autocomplete、live tail，都由同一个 &lt;code&gt;logs:read&lt;/code&gt; 权限控制。所以授予“可以读日志”就是一个开关。字段参考，包括每个条件、histogram、Pod Logs 的窗口和过滤器，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/logs/&#34;&gt;Logs 文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;下一篇：&lt;strong&gt;Browser &amp;amp; RUM monitoring&lt;/strong&gt;。browser agent 自己的错误流，以及如何用 source map 反混淆 minified stack。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 认识 Horizon UI · 8/17：浏览器错误与 Source Map</title>
+      <link>/zh/2026-06-23-horizon-ui-browser-errors-and-source-maps/</link>
+      <pubDate>Tue, 23 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-23-horizon-ui-browser-errors-and-source-maps/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-23-horizon-ui-browser-errors-and-source-maps/&#34;&gt;Meet Horizon UI · 8/17: Browser Errors &amp;amp; Source Maps&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第八篇。&lt;a href=&#34;/zh/2026-06-23-horizon-ui-log-explorer/&#34;&gt;第七篇&lt;/a&gt;讲的是服务日志；这一篇讲 &lt;em&gt;用户&lt;/em&gt; 遇到的错误，也就是浏览器端 agent 上报的 JavaScript 异常，以及把这些错误定位到源码的关键一步。&lt;/p&gt;
+&lt;p&gt;生产环境 JavaScript stack 基本不可读。代码经过压缩和打包后发布，浏览器只会报告错误出现在 &lt;code&gt;app.min.js:1:98412&lt;/code&gt;，也就是一段机器生成代码里的位置，几乎不给你任何线索。Horizon 要做的是借助正确的 &lt;strong&gt;source map&lt;/strong&gt; 把这条 stack 还原回你的源码：原始文件、行、列、符号名，以及出错位置附近的代码片段，逐帧还原。&lt;/p&gt;
+&lt;h2 id=&#34;浏览器端错误流&#34;&gt;浏览器端错误流&lt;/h2&gt;
+&lt;p&gt;在 &lt;strong&gt;BROWSER&lt;/strong&gt; Layer 上，&lt;strong&gt;Browser Logs&lt;/strong&gt; 标签页（屏幕上的标签名，它专门表示 JavaScript 错误流）会列出 browser agent 上报的内容。BROWSER Layer 会把槽位重命名成自己的语义：services 变成 &lt;strong&gt;Applications&lt;/strong&gt;，instances 变成 &lt;strong&gt;Versions&lt;/strong&gt;，endpoints 变成 &lt;strong&gt;Pages&lt;/strong&gt;。这个列表的阅读方式类似 &lt;a href=&#34;/zh/2026-06-23-horizon-ui-log-explorer/&#34;&gt;Log Explorer&lt;/a&gt;：可点击的 &lt;strong&gt;category&lt;/strong&gt; legend 带计数，density histogram 位于日志流之上。每一行都有时间、&lt;strong&gt;category&lt;/strong&gt;、page、app version 和错误消息；如果带有 minified &lt;code&gt;line:col&lt;/code&gt;，也会显示成标记。&lt;/p&gt;
+&lt;p&gt;排查方式和 trace/log 标签页一致：它使用独立的 &lt;strong&gt;Time range&lt;/strong&gt;（全局顶栏暂停），你可以按 &lt;strong&gt;Version&lt;/strong&gt;、&lt;strong&gt;Page&lt;/strong&gt; 或 &lt;strong&gt;Category&lt;/strong&gt; 收窄，然后点击 &lt;strong&gt;Run query&lt;/strong&gt;。没有后台轮询把视图不断往前推，也没有要学习的查询语言，只有结构化控件。点击一行后，它会在日志流里原地展开。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p08-browser-01-stream.webp&#34; alt=&#34;图 1：BROWSER Layer 上的 Browser Logs 标签页。category legend 和 density histogram 位于 JS 错误流上方，每行显示 category、page、app version 和 minified line:col。&#34;&gt;
+图 1：browser agent 上报的错误流：按 category 组织、带图表，并限定到某个 app 版本和页面。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;那个 minified &lt;code&gt;line:col&lt;/code&gt; 就是最典型的问题。它是真实位置，但位置在 &lt;em&gt;构建后&lt;/em&gt; 的 bundle 里，不在你的源码里。后面的解析流程就是为了解决它。&lt;/p&gt;
+&lt;h2 id=&#34;从混淆后的-stack-定位到源码&#34;&gt;从混淆后的 stack 定位到源码&lt;/h2&gt;
+&lt;p&gt;展开一个错误后，面板分成两侧：左边是浏览器原样报告的 &lt;strong&gt;raw stack&lt;/strong&gt;，也就是那段很难读的生产栈；右边是解析结果区域。选择一个 &lt;strong&gt;source map&lt;/strong&gt;，点击 &lt;strong&gt;Resolve&lt;/strong&gt;，Horizon 会解析 stack，并通过这份 map 映射 &lt;strong&gt;每一帧&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每帧原始 &lt;strong&gt;&lt;code&gt;file:line:column&lt;/code&gt;&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;原始 &lt;strong&gt;symbol name&lt;/strong&gt;（如果 map 携带了）；&lt;/li&gt;
+&lt;li&gt;出错行附近几行 &lt;strong&gt;原始源码&lt;/strong&gt;，命中行会高亮（如果 map 内嵌 &lt;code&gt;sourcesContent&lt;/code&gt;）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;map 覆盖不到的 frame 会明确标为 &lt;code&gt;unmapped&lt;/code&gt;。所以一条顶层 frame 为 &lt;code&gt;app.min.js:1:45&lt;/code&gt; 的 stack，可以还原成 &lt;code&gt;checkout.ts:2:20&lt;/code&gt; 上的 &lt;code&gt;computeCartTotal&lt;/code&gt;，并把 &lt;code&gt;checkout.ts&lt;/code&gt; 附近几行显示出来。真正抛错的 &lt;code&gt;cart.items.reduce(...)&lt;/code&gt; 就在面板里，不只还原第一帧，而是从上到下还原整条 stack。&lt;/p&gt;
+&lt;p&gt;这里有一些细节决定结果是否可信：浏览器 stack 的列号从 1 开始计数，source map 从 0 开始计数，所以解析器每次查找前都会做偏移；这条路径用真实 bundler 输出测试，而不是手写 fixture。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p08-browser-02-resolve.webp&#34; alt=&#34;图 2：展开后的错误。左侧是原始 minified stack，右侧是解析后的 stack，每一帧显示原始 file:line:column、symbol 和高亮源码片段。&#34;&gt;
+图 2：核心流程：把 minified stack 指向正确 map，然后逐帧还原到你自己的源码。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;哪些错误可以用-source-map-解析&#34;&gt;哪些错误可以用 source map 解析&lt;/h2&gt;
+&lt;p&gt;不是每类错误都有可还原内容。&lt;strong&gt;&lt;code&gt;JS&lt;/code&gt;&lt;/strong&gt;、&lt;strong&gt;&lt;code&gt;PROMISE&lt;/code&gt;&lt;/strong&gt; 和 &lt;strong&gt;&lt;code&gt;VUE&lt;/code&gt;&lt;/strong&gt; 是真实 JavaScript 错误，它们的 stack 指向 bundle，可以解析。&lt;strong&gt;&lt;code&gt;AJAX&lt;/code&gt;&lt;/strong&gt; 和 &lt;strong&gt;&lt;code&gt;RESOURCE&lt;/code&gt;&lt;/strong&gt; 是网络和加载失败；它们的“stack”是 HTTP status 或失败 URL，不是代码，所以 source map 没有东西可映射（Horizon 不会阻止它们，只是没有可映射的 JavaScript 位置）。没有 source map 的代码、&lt;code&gt;eval&lt;/code&gt; 或 inline scripts 里的 frame，也会保持 &lt;code&gt;unmapped&lt;/code&gt;。（&lt;code&gt;JS&lt;/code&gt; 也是唯一由浏览器上报顶层 &lt;code&gt;line:col&lt;/code&gt; 的 category；其他 category 的位置在 stack 字符串内部，由解析器提取。）&lt;/p&gt;
+&lt;h2 id=&#34;提供-source-map上传或挂载&#34;&gt;提供 source map：上传或挂载&lt;/h2&gt;
+&lt;p&gt;解析前必须让 map 可用。Horizon 提供两种方式，耐久性刻意不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Upload&lt;/strong&gt; 一个 &lt;code&gt;.map&lt;/code&gt;，直接从标签页上传。它只保存在服务端 &lt;strong&gt;内存&lt;/strong&gt; 里，没有后端存储，并且临时性是设计目标：它占用内存预算，在压力下按 least-recently-used 淘汰，&lt;strong&gt;服务重启后丢失&lt;/strong&gt;；多实例部署时，它也只存在于接收上传的那一个实例。这个路径适合临时排查：拖一个 map 进来，解析，处理完离开。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Mount&lt;/strong&gt; &lt;code&gt;.map&lt;/code&gt; 文件到服务端 &lt;strong&gt;source-map 目录&lt;/strong&gt;（容器镜像中是 &lt;code&gt;/app/sourcemaps&lt;/code&gt;，可通过 &lt;code&gt;HORIZON_SOURCEMAPS_DIR&lt;/code&gt; 指定）。这些文件在启动时按 Source Map v3 校验，按需从磁盘读取（所以不占内存预算），重启后仍然存在，会自动 reload，并且 &lt;strong&gt;不能从 UI 删除&lt;/strong&gt;。这是生产路径：把构建产物里的 maps 放进镜像或挂载目录，它们就一直可用。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;管理器会显示每个 map 的来源（&lt;em&gt;uploaded · temporary&lt;/em&gt; 还是 &lt;em&gt;mounted · durable&lt;/em&gt;），以及当前内存预算使用量。预算配置，包括单文件上限和常驻上传总量上限，默认 64 MiB 和 512 MiB，位于 &lt;code&gt;horizon.yaml&lt;/code&gt; 的 &lt;code&gt;sourceMaps&lt;/code&gt; 块。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p08-browser-03-sourcemap-manager.webp&#34; alt=&#34;图 3：source-map 管理器。Upload .map 控件、内存预算条（这里是 0 B / 512 MB，max 64 MB/file）和已加载 maps；图中 map 是 Mounted 且 durable，所以不能在这里删除，uploaded maps 会显示为 temporary。&#34;&gt;
+图 3：两种提供 map 的方式：upload 用于快速排查，mount 用于生产环境长期使用。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;map-必须手动选择&#34;&gt;map 必须手动选择&lt;/h2&gt;
+&lt;p&gt;Horizon 刻意 &lt;strong&gt;不猜测&lt;/strong&gt;。browser agent 会上报 app &lt;strong&gt;version&lt;/strong&gt;，但不会上报精确 build fingerprint，所以没有安全方法自动把一个错误匹配到某份 map。用错 build 的 map 会给出非常自信、但完全错误的行号，比没有答案更糟。所以这里由你选择：挑选和该错误 build 对应的 map，并按版本给 map 清晰命名。（还有一个必须直说的注意点：source map 的 &lt;code&gt;sourcesContent&lt;/code&gt; 会包含你的原始源码，所以无论上传还是挂载，都要把 map 当成敏感内容，只放在可信服务器上。）&lt;/p&gt;
+&lt;p&gt;手动选择 map 这件事，也划清了 &lt;strong&gt;权限&lt;/strong&gt; 边界。查看错误、列出 maps、&lt;strong&gt;解析&lt;/strong&gt; stack 都是读操作，由 &lt;code&gt;browser-errors:read&lt;/code&gt; 控制；&lt;strong&gt;上传或删除&lt;/strong&gt; map 是写操作，由 &lt;code&gt;source-map:write&lt;/code&gt; 控制。所以只读用户可以整天反混淆 stack，但没有权限改变已加载的 map 集合。读就是读，修改 map 存储才是写。&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;字段参考，包括 categories、两种提供路径、预算，以及如何按 build 匹配 map，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/&#34;&gt;Browser Logs &amp;amp; Source Maps 文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;下一篇英文系列将进入 &lt;strong&gt;Profiling&lt;/strong&gt;：五种 profiler（trace、async、eBPF、Go pprof、network）通过同一个火焰图呈现。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Use of SkyWalking Go Toolkit Log and Metrics</title>
       <link>/blog/2024-10-20-skywalking-go-toolkit-metrics-log/</link>
       <pubDate>Sun, 20 Oct 2024 00:00:00 +0000</pubDate>

@@ -82,6 +82,73 @@ Figure 5: A Zipkin span keeps its native fields — the kind, the endpoints, and
     </item>
     
     <item>
+      <title>Zh: 认识 Horizon UI · 6/17：Trace 探索器</title>
+      <link>/zh/2026-06-22-horizon-ui-trace-explorer/</link>
+      <pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-22-horizon-ui-trace-explorer/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-22-horizon-ui-trace-explorer/&#34;&gt;Meet Horizon UI · 6/17: The Trace Explorer&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第六篇。前几篇都在讲地图：服务之间的&lt;a href=&#34;/zh/2026-06-21-horizon-ui-topology-and-dependency/&#34;&gt;拓扑&lt;/a&gt;、单个服务内部的 &lt;a href=&#34;/zh/2026-06-21-horizon-ui-deployment-and-banyandb/&#34;&gt;deployment&lt;/a&gt;，以及整个系统全貌的 &lt;a href=&#34;/zh/2026-06-22-horizon-ui-3d-infrastructure-map/&#34;&gt;3D view&lt;/a&gt;。它们回答“我的系统长什么样”。这一篇把视角缩到 &lt;em&gt;一个请求&lt;/em&gt;，看它的 spans、时序，以及到底是哪一跳变慢了。这就是 &lt;strong&gt;Traces&lt;/strong&gt; 标签页。&lt;/p&gt;
+&lt;h2 id=&#34;面向排查不做实时滚动刷新&#34;&gt;面向排查，不做实时滚动刷新&lt;/h2&gt;
+&lt;p&gt;Traces 标签页是一个位于 &lt;strong&gt;Layer 内部&lt;/strong&gt; 的分布式 Trace 探索器：选择服务，设置条件，然后阅读单条 Trace 的 span 时间线。它有意和控制台其他部分不一样，因为 Trace 是排查数据，不是实时流。&lt;/p&gt;
+&lt;p&gt;它使用 &lt;strong&gt;独立的时间范围和条件&lt;/strong&gt;。它不跟随全局顶栏时间选择器，也不会自动刷新。你先配置要找的条件，再按 &lt;strong&gt;Run query&lt;/strong&gt;；按之前不会取任何数据。第一次运行前，列表只显示 &lt;em&gt;&amp;ldquo;Pick your conditions, then click Run query.&amp;quot;&lt;/em&gt;。当你在追二十分钟前的一条坏 Trace 时，最不需要的就是窗口每几秒自动往前滚，所以它不会这么做。&lt;/p&gt;
+&lt;h2 id=&#34;用表单配置条件不写查询语言&#34;&gt;用表单配置条件，不写查询语言&lt;/h2&gt;
+&lt;p&gt;过滤条件全部通过结构化表单配置：select、数字范围、tag 标签。条件会暂存在工具栏里，只在点击 &lt;strong&gt;Run query&lt;/strong&gt; 后生效：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Instance&lt;/strong&gt; 和 &lt;strong&gt;Endpoint&lt;/strong&gt;：在服务内部收窄范围，endpoint 下拉框只列出这个服务自己的 endpoints。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Status&lt;/strong&gt;：&lt;code&gt;ALL&lt;/code&gt; / &lt;code&gt;SUCCESS&lt;/code&gt; / &lt;code&gt;ERROR&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Order&lt;/strong&gt;：Newest（按开始时间）或 Slowest（按耗时）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Limit&lt;/strong&gt;：拉取多少行，默认 30；BFF 会在服务端限制 page size，避免客户端向 OAP 请求过量数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Time range&lt;/strong&gt;：滚动预设（最近 15 分钟到 24 小时）或自定义绝对窗口，按 &lt;strong&gt;秒级精度&lt;/strong&gt; 计算，所以刚结束的 Trace 不会因为分钟取整而掉出窗口。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trace ID&lt;/strong&gt;：粘贴一个 id 直接查。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Duration range&lt;/strong&gt;：毫秒级 min-max。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tag&lt;/strong&gt;：自由输入 span tags，格式为 &lt;code&gt;key=value&lt;/code&gt;（比如 &lt;code&gt;http.status_code=500&lt;/code&gt;），按 Enter 添加为可删除标签，多个 tag 按 AND 连接；key 和 value 都从后端获得 typeahead。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;它不是查询语言。Horizon 里没有 TraceQL 输入框。上面的结构化条件就是完整界面。（TraceQL 是另一条路径：SkyWalking 后端可以通过 TraceQL 向 Grafana 提供 Trace，这件事在&lt;a href=&#34;/zh/2026-04-08-traceql/&#34;&gt;另一篇文章&lt;/a&gt;里讲。Horizon 的探索器是表单，不是 DSL。）&lt;/p&gt;
+&lt;h2 id=&#34;可框选的时延分布图&#34;&gt;可框选的时延分布图&lt;/h2&gt;
+&lt;p&gt;结果返回后，工具栏下会出现一张 &lt;strong&gt;Distribution&lt;/strong&gt; 图：每个点代表一条 Trace，X 轴是开始时间，高度是 duration，越慢的 Trace 越高。点按 &lt;strong&gt;status&lt;/strong&gt; 着色：错误为红色，成功为强调色。所以左上角、右上角那类高处红点，就是你要找的“又慢又失败”的区域。&lt;/p&gt;
+&lt;p&gt;这张图本身也是过滤器。点击一个点可以选中它，或者 &lt;strong&gt;拖一个矩形框选一片点&lt;/strong&gt;，结果列表会收窄到这批选择；标题区切换成 &lt;em&gt;&amp;ldquo;N picked&amp;rdquo;&lt;/em&gt; 计数，并提供 Reset。这是基于已加载结果的客户端过滤，不会发起新查询。直接框住慢且失败的角落，只读那几行，是从“200 条 Trace”缩到“这 6 条值得打开”的最快路径。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-01-explorer.webp&#34; alt=&#34;图 1：Traces 探索器。分阶段条件工具栏、Distribution 图（每点一条 Trace，高度表示 duration，红色表示 error）和被框选的区域（8 picked），下方是结果列表。&#34;&gt;
+图 1：先配置条件、执行查询，再在分布图上框选一片区域，把列表缩到真正值得打开的 Trace。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;每条结果行会显示 Trace 的 root endpoint、OK/ERR 标记、duration，以及按当前结果中最慢 Trace 归一化后的长度条。每一行 &lt;em&gt;代表什么&lt;/em&gt; 取决于存储后端，Horizon 会自动检测：横幅会显示 &lt;em&gt;&amp;ldquo;Full traces are returned inline&amp;rdquo;&lt;/em&gt;，表示后端返回的是带 spans 的完整 Trace，点击即可打开；或者显示 &lt;em&gt;&amp;ldquo;Each row is a trace segment — click one to fetch its full trace.&amp;quot;&lt;/em&gt;。你不需要配置这个，横幅只是告诉你当前看到的是什么。&lt;/p&gt;
+&lt;h2 id=&#34;三种方式阅读同一条-trace&#34;&gt;三种方式阅读同一条 Trace&lt;/h2&gt;
+&lt;p&gt;点击一行后，Trace 会打开，并在同一组 spans 上提供三种视图切换：&lt;strong&gt;Default&lt;/strong&gt;、&lt;strong&gt;Tree&lt;/strong&gt; 和 &lt;strong&gt;Statistics&lt;/strong&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Default&lt;/strong&gt; 是 span 瀑布图：每个 span 一行缩进展示，带一个按服务着色的条形，条形在共享时间线上按 span 起始偏移和耗时定位；同时显示 span-kind glyph、组件图标（和拓扑地图共用同一套图标）、endpoint 或 peer 名称，以及 span 自身耗时。错误 span 会高亮，带 attached events 的 span 会有标记。关键点在于，瀑布图会用 parent references &lt;strong&gt;把跨 segment 的 spans 串起来&lt;/strong&gt;，所以一个跨过五个服务的请求会渲染成一条连贯时间线，而不是五段互不相干的内容。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tree&lt;/strong&gt; 把同一批 spans 画成可缩放、可平移的节点图：root 在左，callees 向右流动。适合你更关心调用树形状，而不是精确时序的时候。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Statistics&lt;/strong&gt; 按 &lt;strong&gt;name&lt;/strong&gt; 聚合 spans：一张可排序表，展示每个 operation 的 count、total / average / maximum duration。所以“这条 Trace 里到底哪个 span 名称累计耗时最多”只需要点一次排序。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-02-waterfall.webp&#34; alt=&#34;图 2：Default 视图。span 瀑布图，每个 span 是共享时间线上的服务色条，带 kind glyph、组件图标和 duration；错误 span 高亮，跨服务 spans 被缝成一条时间线。&#34;&gt;
+图 2：瀑布图（Default），一条请求触达的所有服务被画成同一条连贯时间线。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-03-tree.webp&#34; alt=&#34;图 3：Tree 视图。同一条 Trace 被画成可缩放的节点图，root 在左，callees 向右流动。&#34;&gt;
+图 3：Tree 视图，把同一批 spans 画成调用树形状，可以缩放和平移。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;查看-span-详情&#34;&gt;查看 span 详情&lt;/h2&gt;
+&lt;p&gt;点击任意 span，旁边会打开详情面板。&lt;strong&gt;Meta&lt;/strong&gt; 展示核心信息：service、instance、endpoint、kind（entry / exit / local / producer / consumer）、component、peer、layer、start time、duration 和 error 标记。适用时，下面还会出现：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Cross-trace refs&lt;/strong&gt;：当一个 span 的 parent 位于 &lt;em&gt;另一条&lt;/em&gt; Trace（异步跳转、稍后消费的消息）中时，这里会列出 parent 的 trace id、segment 和 span；trace id 是一个 &lt;strong&gt;链接&lt;/strong&gt;，点击可以直接切换到那条 Trace。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tags&lt;/strong&gt;、&lt;strong&gt;Logs&lt;/strong&gt;（每个 span 的带时间戳日志项）和 &lt;strong&gt;Attached Events&lt;/strong&gt;（带 start/end time 和 summary key/values 的命名事件）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;详情标题区会显示 Trace 开始时间、总耗时、span 数量，以及触达了多少个不同服务；从这里可以复制 trace id 或可分享链接。打开一个带 &lt;code&gt;?traceId=...&lt;/code&gt; 的分享 URL，会直接打开这条 Trace 的 overlay。这让 Trace 成为可以粘贴到 incident channel 里、让同事打开同一视图的对象。&lt;/p&gt;
+&lt;h2 id=&#34;native-与-zipkin-并列支持&#34;&gt;Native 与 Zipkin 并列支持&lt;/h2&gt;
+&lt;p&gt;并不是每个 Layer 的 Trace 都来自 SkyWalking 自己的 agent。Layer 模板带一个 &lt;code&gt;traces.source&lt;/code&gt; 设置，可以是 &lt;code&gt;native&lt;/code&gt;、&lt;code&gt;zipkin&lt;/code&gt; 或 &lt;code&gt;both&lt;/code&gt;，Horizon 据此路由。由 agent 接入的 Layer（比如 General Service）使用上面讲的 &lt;strong&gt;native&lt;/strong&gt; 探索器；service-mesh 和 Kubernetes 风格的 Layer 中，spans 以 Zipkin/OpenTelemetry 数据进入，则使用 &lt;strong&gt;Zipkin&lt;/strong&gt; 探索器；设置为 &lt;code&gt;both&lt;/code&gt; 的 Layer 会得到 &lt;strong&gt;两个标签页&lt;/strong&gt;，因为 native 和 Zipkin spans 的形状和条件确实不同。&lt;/p&gt;
+&lt;p&gt;Zipkin 标签页通过 &lt;strong&gt;OAP 的 Zipkin query API&lt;/strong&gt; 查询上游 Zipkin store。这是 OAP 向任何 Zipkin client 暴露的兼容接口，不是 GraphQL，也不是 TraceQL。Zipkin 按自己的服务集合组织数据（每个 span 上的 &lt;code&gt;serviceName&lt;/code&gt;，可能和 SkyWalking 的服务列表不同），所以这个标签页有自己的服务控件，不绑定页面上的 service picker；它也带 Zipkin 原生条件，比如 &lt;em&gt;Remote service&lt;/em&gt;、&lt;em&gt;Span name&lt;/em&gt; 和 &lt;em&gt;Annotations&lt;/em&gt; 查询（&lt;code&gt;error&lt;/code&gt; 或 &lt;code&gt;key=value&lt;/code&gt;）。两个存储路径独立失败：Zipkin 不可达时，native traces 不受影响，反之亦然。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-04-zipkin.webp&#34; alt=&#34;图 4：mesh Layer 上的 Zipkin trace 标签页。它有自己的 service / remote-service / span-name / annotations 条件，并通过 OAP 查询上游 Zipkin store，打开了一条 Zipkin trace waterfall。&#34;&gt;
+图 4：设置为 Zipkin 的 Layer 会得到自己的标签页和自己的服务集合，并通过 OAP 查询上游 Zipkin store。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;打开一个 Zipkin span 后，详情会保留 Zipkin 的形状：&lt;code&gt;CLIENT&lt;/code&gt; / &lt;code&gt;SERVER&lt;/code&gt; kind、本地和远端 endpoint，以及原始 Zipkin/OpenTelemetry tags（&lt;code&gt;istio.*&lt;/code&gt;、&lt;code&gt;http.status_code&lt;/code&gt;、sidecar &lt;code&gt;node_id&lt;/code&gt;）都会按 Zipkin 记录的方式展示，不翻译成 SkyWalking span 模型。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p06-traces-04-zipkin-span.webp&#34; alt=&#34;图 5：Zipkin span 详情面板。Meta（Kind CLIENT、peer、duration）和原始 Zipkin/OTel tags，包括 Istio sidecar 相关字段，都保留原生形状。&#34;&gt;
+图 5：Zipkin span 保留自己的字段：kind、endpoints，以及原始 &lt;code&gt;istio.*&lt;/code&gt; / HTTP tags。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;从慢记录定位到对应-trace&#34;&gt;从慢记录定位到对应 Trace&lt;/h2&gt;
+&lt;p&gt;还有一种进入 Trace 的方式，不需要经过探索器。整个应用只挂载一个 Trace overlay，多个入口都能按 &lt;strong&gt;trace id&lt;/strong&gt; 打开它：&lt;code&gt;?traceId=&lt;/code&gt; 链接、cross-trace ref、日志行，以及&lt;a href=&#34;/zh/2026-06-21-horizon-ui-dashboards-and-mqe/&#34;&gt;第二篇&lt;/a&gt;里提到的 record 组件慢语句行上的 &lt;strong&gt;jump-to-trace&lt;/strong&gt; 图标。因为它按 id 解析，而不是按 Layer 解析，所以即使 Trace 属于你当前看到的 &lt;em&gt;另一个&lt;/em&gt; Layer 也能工作：Virtual Database、Cache 或 MQ 服务没有自己的 traces 标签页，但它的慢语句仍然能带你到发起方 Trace。跳转如果带 timestamp（日志行知道自己写入时间），查找会围绕那个时间放宽窗口，所以即便 Trace 已经进入冷存储，也不会悄悄找不到。&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;Traces 标签页把一个请求完整展开；前面几篇的仪表盘和地图，是你最初发现异常的地方。字段参考，包括每个条件、native-vs-Zipkin 拆分和 span 详情面板，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/traces/&#34;&gt;Traces 文档&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;下一篇：&lt;strong&gt;Log Explorer&lt;/strong&gt;。同样的排查思路，应用到日志流而不是 spans。&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
       <title>Blog: Meet Horizon UI · 3/17: Topology &amp; Service Dependency</title>
       <link>/blog/2026-06-21-horizon-ui-topology-and-dependency/</link>
       <pubDate>Sun, 21 Jun 2026 00:00:00 +0000</pubDate>
@@ -128,6 +195,58 @@ Figure 7: One service, every layer it reports through — the cross-layer hierar
 &lt;h2 id=&#34;where-to-go-next&#34;&gt;Where to go next&lt;/h2&gt;
 &lt;p&gt;Every metric, threshold, and edge weight on these maps lives in the layer template&amp;rsquo;s &lt;code&gt;topology&lt;/code&gt; block — which means you tune them the same config-driven way you tune dashboards, the subject of a later post in this series. For the field reference, see the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/layer-templates/&#34;&gt;layer-template&lt;/a&gt; topology docs.&lt;/p&gt;
 &lt;p&gt;Next up: &lt;strong&gt;the Deployment tab and BanyanDB self-observability&lt;/strong&gt; — where the same map technique turns &lt;em&gt;inward&lt;/em&gt; to show how one clustered service&amp;rsquo;s own instances are deployed and talk to each other.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 认识 Horizon UI · 3/17：拓扑与服务依赖</title>
+      <link>/zh/2026-06-21-horizon-ui-topology-and-dependency/</link>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-21-horizon-ui-topology-and-dependency/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-21-horizon-ui-topology-and-dependency/&#34;&gt;Meet Horizon UI · 3/17: Topology &amp;amp; Service Dependency&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第三篇。&lt;a href=&#34;/zh/2026-06-21-horizon-ui-dashboards-and-mqe/&#34;&gt;第二篇&lt;/a&gt;讲的是如何从仪表盘数字里理解服务；这一篇讲如何把服务关系画成一张 &lt;strong&gt;地图&lt;/strong&gt;：谁调用谁，调用有多重，以及同一个逻辑服务在不同上报 Layer 中是什么样子。&lt;/p&gt;
+&lt;p&gt;SkyWalking 拓扑背后的调用数据是一份，但 Horizon 不只画一种图。它有每个 Layer 自己的服务地图，可以从单条调用下钻到背后的实例，可以看 endpoint 级依赖图，也可以用跨 Layer 叠加视图把一个服务在不同 Layer 中的形态连起来。它们共用同一套引擎，只是回答的问题不同。（Deployment 标签页，也就是单个集群服务 &lt;em&gt;内部&lt;/em&gt; 实例的地图，以及 WebGL 3D 地图，都足够大，会在接下来的文章里单独讲。）&lt;/p&gt;
+&lt;h2 id=&#34;一套拓扑引擎适配不同-layer&#34;&gt;一套拓扑引擎，适配不同 Layer&lt;/h2&gt;
+&lt;p&gt;打开任意 Layer 的 &lt;strong&gt;Topology&lt;/strong&gt; 标签页，你会看到一张从左到右排列的层次化服务地图：&lt;code&gt;User&lt;/code&gt; 存在时位于最左侧，每个服务按调用深度落在不同列里；同一列内部则保留图遍历到它们时的顺序，所以主调用链可以自上而下读。每个服务都是一个 &lt;strong&gt;六边形节点&lt;/strong&gt;，节点上展示的所有东西都来自这个 Layer 的配置，没有写死逻辑：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;六边形 &lt;strong&gt;边框&lt;/strong&gt; 承载节点的 &lt;strong&gt;ring&lt;/strong&gt; 指标，用类似 SLA 的健康色带展示（绿色 → 红色）；&lt;/li&gt;
+&lt;li&gt;组件 &lt;strong&gt;图标&lt;/strong&gt; 放在六边形内部，和 Trace 瀑布图使用同一套图标，所以 PostgreSQL 节点像 PostgreSQL，Kafka 节点像 Kafka；&lt;/li&gt;
+&lt;li&gt;节点头部数字，也就是 &lt;strong&gt;center&lt;/strong&gt; 指标，带单位显示在六边形 &lt;strong&gt;上方&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;服务 &lt;strong&gt;名称&lt;/strong&gt; 显示在节点 &lt;strong&gt;下方&lt;/strong&gt;，&lt;strong&gt;secondary&lt;/strong&gt; 指标（默认是时延）显示在名称下面；&lt;/li&gt;
+&lt;li&gt;每条 &lt;strong&gt;边&lt;/strong&gt; 都带调用吞吐的 &lt;strong&gt;RPM 标记&lt;/strong&gt;，使用服务端指标，缺失时回退到客户端指标。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这里需要强调一点：上面这些都只是 &lt;strong&gt;General Layer 的内置默认配置&lt;/strong&gt;。节点的 center / ring / secondary 指标，以及边指标，都位于 &lt;strong&gt;Layer dashboards admin → Topology&lt;/strong&gt; 作用域，本质上是带单位和角色的 MQE 表达式。所以你可以把任意槽位指向另一条指标，同一套引擎就会为另一个 Layer 画出不同地图，或者按你的方式重画当前 Layer。（这些选择会像其他模板内容一样，跟着 Layer template 的 export/import 走。）&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-01-service-map.webp&#34; alt=&#34;图 1：单个 Layer 的服务地图。六边形节点用边框表示 SLA 健康色带，节点上方显示主指标，内部显示组件图标，下方显示名称，每条边带 RPM 标记。&#34;&gt;
+图 1：一套由模板驱动的拓扑引擎：带健康色带的六边形节点、带 RPM 标记的边、真实组件图标；图上的每个指标都按 Layer 配置。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;过滤拓扑噪声&#34;&gt;过滤拓扑噪声&lt;/h2&gt;
+&lt;p&gt;真实拓扑通常很嘈杂。一张密集地图里会混入 OAP 没法完整识别的推测节点，比如裸露的 &lt;code&gt;rcmd:80&lt;/code&gt;、未接入探针的地址。Horizon 的 &lt;strong&gt;Filter&lt;/strong&gt; 控件可以关掉这些噪声，同时保留真实依赖。它会自动生成一个 &lt;strong&gt;按 Layer 分组&lt;/strong&gt; 的过滤维度，展示方式和侧边栏一致。每一行都有 Layer 自己的图标和本地化名称，比如 &lt;em&gt;Virtual Database&lt;/em&gt;、&lt;em&gt;Java Agent&lt;/em&gt;，还会有一个 &lt;strong&gt;Others&lt;/strong&gt; 分组，用来收纳 OAP 无法分类的节点，以及一个独立的 &lt;strong&gt;User&lt;/strong&gt; 开关。取消勾选 &lt;em&gt;Others&lt;/em&gt; 后，未接入探针的杂点和悬空边会消失，而数据库、缓存和队列（各自的 &lt;code&gt;VIRTUAL_*&lt;/code&gt; 行）仍然留在图上。过滤在客户端执行，行会在每次刷新时重新推导，所以不会陈旧。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-02-filter-denoise.webp&#34; alt=&#34;图 2：拓扑 Filter。一个自动推导出的按 Layer 分组过滤器（每行带 Layer 图标和名称）、一个 Others 分组，以及 User 开关，用来从密集地图里去掉推测节点。&#34;&gt;
+图 2：快速降噪，去掉无法解析的 &amp;ldquo;Others&amp;rdquo; 节点，同时保留真实依赖。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;当某个 Layer 的服务属于 OAP service group，地图上的服务聚焦选择器也会按这些 group 分组。点击 group header 可以 &lt;strong&gt;批量选中或清空该组里的所有服务&lt;/strong&gt;，所以你能一次聚焦一张繁忙地图中某个团队负责的那一片。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-03-group-selector.webp&#34; alt=&#34;图 3：感知 group 的服务选择器。服务按 OAP Service.group 分组，点击 group header 可批量聚焦或清空整个 group。&#34;&gt;
+图 3：从地图选择器里一次聚焦整个 service group。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;从服务调用下钻到实例关系&#34;&gt;从服务调用下钻到实例关系&lt;/h2&gt;
+&lt;p&gt;服务到服务的边是一条聚合调用；它背后是真实实例在和真实实例通信。点击地图上的一条调用并选择 &lt;strong&gt;Instance map →&lt;/strong&gt;，Horizon 会画出这层关系：客户端服务的实例在左列，服务端服务的实例在右列，中间是实例级调用，并带有客户端→服务端方向动画。它复用服务地图上的所有能力：健康 ring 节点、每条调用的 client/server 指标侧栏、带 &lt;strong&gt;Open instance dashboard&lt;/strong&gt; 的节点 popover，并且按 Layer 自己的词汇标注列名，比如 Kubernetes 上叫 &lt;em&gt;Pods&lt;/em&gt;，data plane 上叫 &lt;em&gt;Sidecars&lt;/em&gt;。两个服务选择器会根据关系联动：server 列表来自当前 client 的 callees，client 列表来自当前 server 的 callers；每次改动其中一个，另一个都会重新推导。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-04-instance-map.webp&#34; alt=&#34;图 4：Instance map。客户端服务实例在左，服务端服务实例在右，中间是实例级调用，并带每条调用的指标侧栏。&#34;&gt;
+图 4：从一条聚合调用下钻到背后的实例到实例流量。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;按-endpoint-追完整请求链&#34;&gt;按 endpoint 追完整请求链&lt;/h2&gt;
+&lt;p&gt;服务拓扑回答“哪些服务调用了这个服务”。&lt;strong&gt;API dependency&lt;/strong&gt; 标签页回答更具体的问题：“哪些 &lt;em&gt;endpoint&lt;/em&gt; 调用了这个 endpoint，它又调用了哪些 endpoint”。选择一个 endpoint 后，图会按方向分列：callers 在左，焦点 endpoint 在中间，callees 在右。它同样用 SLA 色边框、每条边上的 RPM 和时延，以及最重边标签。选中节点后会出现一个 &lt;strong&gt;+&lt;/strong&gt; handle，点击后拉入 &lt;em&gt;它自己&lt;/em&gt; 的 callers 和 callees。这样你可以一跳一跳追链路，不需要一次展开整张图。拖开节点后，外跳链接（&lt;strong&gt;Open endpoint&lt;/strong&gt;、&lt;strong&gt;Service →&lt;/strong&gt;）会在新标签页打开，保留你正在探索的图。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-05-api-dependency.webp&#34; alt=&#34;图 5：API dependency 图。callers 在左，焦点 endpoint 在中间，callees 在右，通过 + handle 扩展一跳，每条边带时延和 SLA 着色 RPM。&#34;&gt;
+图 5：按 endpoint 一跳一跳走请求链，每条边都有时延。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;同一个服务在不同-layer-中的形态&#34;&gt;同一个服务在不同 Layer 中的形态&lt;/h2&gt;
+&lt;p&gt;一个逻辑服务经常会同时通过多个 Layer 上报：General agent、Service Mesh sidecar、mesh data plane、Kubernetes pod。SkyWalking 从 OAP 10 开始就建模了这种跨 Layer 层级关系；Horizon 做的事情，是让你能从地图上的任何位置直接打开它。选中一个节点后，Horizon 会惰性探测它的 hierarchy。如果这个服务有跨 Layer 对应对象，节点上会贴一个小的 &lt;strong&gt;chevron-stack&lt;/strong&gt; 标记。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-06-smartscape.webp&#34; alt=&#34;图 6：选中的服务节点上带 chevron-stack 标记，这是该服务还通过其他 Layer 上报的提示。&#34;&gt;
+图 6：选中节点上的 chevron-stack 标记。它在选择时惰性探测，只在服务存在跨 Layer 对应对象时显示。&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;点击这个标记，拓扑会在 &lt;strong&gt;Smartscape&lt;/strong&gt; 叠加视图下变暗：焦点节点在原位高亮重绘，它的对应对象按 OAP 的 Layer 顺序纵向展开，请求近端 Layer 在上，基础设施近端 Layer 在下。之后两步点击就能在对应 Layer 中打开任意对象，并完成预选。（叠加视图打开时自动刷新会暂停，避免内容在你眼前移动。）&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p03-topology-06-smartscape-expand.webp&#34; alt=&#34;图 7：Smartscape 叠加视图。一个逻辑服务投射到多个 Layer（General agent、Service Mesh、mesh data plane、Kubernetes），按 Layer 顺序展开，每个对应对象都可以进入自己的 Layer。&#34;&gt;
+图 7：一个服务在所有上报 Layer 中的样子，通过叠加视图展示跨 Layer hierarchy。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;这些地图上的每个指标、阈值和边权重，都位于 Layer template 的 &lt;code&gt;topology&lt;/code&gt; 块里。换句话说，你会用和仪表盘一样的配置驱动方式调整它们，这也是后续文章的主题。字段参考可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/layer-templates/&#34;&gt;layer-template&lt;/a&gt; 里的 topology 文档。&lt;/p&gt;
+&lt;p&gt;下一篇：&lt;strong&gt;Deployment 标签页和 BanyanDB 自观测&lt;/strong&gt;。同样的地图技术会用到服务 &lt;em&gt;内部&lt;/em&gt;，展示一个集群服务自身实例是如何部署、如何相互通信的。&lt;/p&gt;
 
       </description>
     </item>
