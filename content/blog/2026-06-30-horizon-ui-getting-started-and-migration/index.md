@@ -12,7 +12,7 @@ This is the seventeenth and final post in the [Meet Horizon UI](/blog/2026-06-21
 
 ## One image, one config
 
-Horizon ships as a **single container image** — the Vue UI and its Fastify BFF in one artifact — published to GHCR at `ghcr.io/apache/skywalking-horizon-ui`. There's one configuration file, `horizon.yaml`, and its defining trait is that **every field is an environment-variable token** (`${HORIZON_X:default}`) expanded *before* the YAML is parsed. So you can run the image with nothing mounted and set only the env vars you care about, or copy the file, edit it, and mount it.
+Horizon ships as a **single container image** — the Vue UI and its Fastify BFF in one artifact — published to Docker Hub as `apache/skywalking-ui`, with Horizon releases tagged `horizon-<version>` (and `latest`). There's one configuration file, `horizon.yaml`, and its defining trait is that **every field is an environment-variable token** (`${HORIZON_X:default}`) expanded *before* the YAML is parsed. So you can run the image with nothing mounted and set only the env vars you care about, or copy the file, edit it, and mount it.
 
 ```yaml
 # horizon.yaml — every field is an env token: ${HORIZON_X:default},
@@ -44,10 +44,10 @@ docker run -d --name horizon -p 8081:8081 \
   -e HORIZON_OAP_QUERY_URL=http://oap:12800 \
   -e HORIZON_OAP_ADMIN_URL=http://oap:17128 \
   -e HORIZON_AUTH_LOCAL_USERS='[{"username":"admin","passwordHash":"$argon2id$...","roles":["admin"]}]' \
-  ghcr.io/apache/skywalking-horizon-ui:<version>
+  apache/skywalking-ui:horizon-<version>
 ```
 
-Two things worth knowing on the first boot. There is **no default admin/admin** — with the `local` backend and no users (or `ldap` with no group mappings) the BFF starts but no one can sign in until you configure it; you generate password hashes with `pnpm --filter bff cli:hash`. And for reproducible deploys, **pin to a specific release tag or commit SHA** rather than a rolling tag.
+Two things worth knowing on the first boot. There is **no default admin/admin** — with the `local` backend and no users (or `ldap` with no group mappings) the BFF starts but no one can sign in until you configure it; you generate password hashes with `pnpm --filter bff cli:hash`. And for reproducible deploys, **pin to a specific `horizon-<version>` tag** rather than `latest`.
 
 ## What works on which OAP
 

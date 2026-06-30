@@ -14,7 +14,7 @@ tags:
 
 ## 一个镜像，一份配置
 
-Horizon 以**单个容器镜像**发布：Vue UI 和 Fastify BFF 打在同一个 artifact 里，镜像位于 GHCR：`ghcr.io/apache/skywalking-horizon-ui`。配置文件只有一个：`horizon.yaml`。它最重要的特点是，**每个字段都是环境变量 token**（`${HORIZON_X:default}`），并且会在 YAML 解析之前展开。所以你可以不挂载任何文件，只用环境变量启动镜像；也可以复制这份文件，修改后挂载进去。
+Horizon 以**单个容器镜像**发布：Vue UI 和 Fastify BFF 打在同一个 artifact 里，镜像发布在 Docker Hub：`apache/skywalking-ui`，Horizon 的 release 用 `horizon-<version>` 标签（也提供 `latest`）。配置文件只有一个：`horizon.yaml`。它最重要的特点是，**每个字段都是环境变量 token**（`${HORIZON_X:default}`），并且会在 YAML 解析之前展开。所以你可以不挂载任何文件，只用环境变量启动镜像；也可以复制这份文件，修改后挂载进去。
 
 ```yaml
 # horizon.yaml — 每个字段都是 env token: ${HORIZON_X:default}
@@ -46,10 +46,10 @@ docker run -d --name horizon -p 8081:8081 \
   -e HORIZON_OAP_QUERY_URL=http://oap:12800 \
   -e HORIZON_OAP_ADMIN_URL=http://oap:17128 \
   -e HORIZON_AUTH_LOCAL_USERS='[{"username":"admin","passwordHash":"$argon2id$...","roles":["admin"]}]' \
-  ghcr.io/apache/skywalking-horizon-ui:<version>
+  apache/skywalking-ui:horizon-<version>
 ```
 
-第一次启动时有两点需要注意。第一，Horizon **没有默认的 admin/admin**。使用 `local` 后端但没有配置用户，或者使用 `ldap` 但没有配置 group mapping 时，BFF 会启动，但没人能登录；密码哈希可以用 `pnpm --filter bff cli:hash` 生成。第二，为了让部署可复现，生产环境应该固定到明确的 release tag 或 commit SHA，而不是使用滚动标签。
+第一次启动时有两点需要注意。第一，Horizon **没有默认的 admin/admin**。使用 `local` 后端但没有配置用户，或者使用 `ldap` 但没有配置 group mapping 时，BFF 会启动，但没人能登录；密码哈希可以用 `pnpm --filter bff cli:hash` 生成。第二，为了让部署可复现，生产环境应该固定到明确的 `horizon-<version>` 标签，而不是 `latest`。
 
 ## 哪些功能需要哪个 OAP
 
