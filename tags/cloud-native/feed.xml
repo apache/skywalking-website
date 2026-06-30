@@ -5,7 +5,7 @@
     <description>Recent content in Cloud Native on Apache SkyWalking</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 29 Jun 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 30 Jun 2026 00:00:00 +0000</lastBuildDate>
     
 	  <atom:link href="/tags/cloud-native/feed.xml" rel="self" type="application/rss+xml" />
     
@@ -14,6 +14,81 @@
         
       
     
+    
+    <item>
+      <title>Blog: Meet Horizon UI · 13/17: Platform &amp; Cluster Introspection</title>
+      <link>/blog/2026-06-30-horizon-ui-platform-introspection/</link>
+      <pubDate>Tue, 30 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/blog/2026-06-30-horizon-ui-platform-introspection/</guid>
+      <description>
+        
+        
+        &lt;p&gt;This is the thirteenth post in the &lt;a href=&#34;/blog/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; series, and the last stop in &lt;strong&gt;Act 3 — operate it&lt;/strong&gt;. The earlier operate posts were about acting &lt;em&gt;on&lt;/em&gt; the backend — alarms, runtime rules, the live debugger, cross-layer inspect. This one turns the lens around onto the backend &lt;em&gt;itself&lt;/em&gt;: is it healthy, how is it configured, and how long does it keep your data? Three read-only surfaces under &lt;strong&gt;Platform monitoring&lt;/strong&gt; answer exactly those questions — no knobs, just the facts you need when you&amp;rsquo;re triaging.&lt;/p&gt;
+&lt;h2 id=&#34;cluster-status-is-the-backend-healthy-and-on-which-port&#34;&gt;Cluster Status: is the backend healthy, and on which port?&lt;/h2&gt;
+&lt;p&gt;Horizon talks to OAP over more than one channel, and &lt;strong&gt;Cluster Status&lt;/strong&gt; shows the health of each one separately. It&amp;rsquo;s a two-port view with a third, independent probe:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Query / GraphQL (&lt;code&gt;:12800&lt;/code&gt;)&lt;/strong&gt; — the port every observability page rides. It reports OAP&amp;rsquo;s version, the server&amp;rsquo;s timezone and clock (next to your browser&amp;rsquo;s), and OAP&amp;rsquo;s own health score. This works on any OAP, 10.x included.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Admin host (&lt;code&gt;:17128&lt;/code&gt;)&lt;/strong&gt; — the port the &lt;em&gt;operate&lt;/em&gt; features need. Each admin module is probed &lt;strong&gt;live&lt;/strong&gt;: the page GETs the exact REST path the feature calls and reports whether it answers, alongside the &lt;code&gt;SW_…&lt;/code&gt; env var that enables it and what breaks if it&amp;rsquo;s down — &lt;code&gt;admin-server&lt;/code&gt;, &lt;code&gt;receiver-runtime-rule&lt;/code&gt;, &lt;code&gt;dsl-debugging&lt;/code&gt;, &lt;code&gt;inspect&lt;/code&gt;, &lt;code&gt;ui-management&lt;/code&gt;. This host ships with OAP 11, so on a 10.x backend the pane simply isn&amp;rsquo;t there.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Zipkin / OTLP (&lt;code&gt;:9412&lt;/code&gt;)&lt;/strong&gt; — informational: it feeds only the Zipkin trace menu, so a red dot here leaves every other page working.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;All three are polled independently, so one going red never drags the others down — which is precisely what makes this the first page to open when something elsewhere in Horizon looks off.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p13-platform-01-cluster-status.webp&#34; alt=&#34;Figure 1: Cluster Status — the Query, Admin, and Zipkin/OTLP panes, with the admin pane listing each module&amp;rsquo;s reachability, probe path, and enabling env var.&#34;&gt;
+Figure 1: Cluster Status — a two-port health view. The Query pane (&lt;code&gt;:12800&lt;/code&gt;, any OAP) shows version, server time, and health score; the Admin pane (&lt;code&gt;:17128&lt;/code&gt;, OAP 11) probes each admin module live with its REST path, the &lt;code&gt;SW_…&lt;/code&gt; env var that enables it, and what breaks if it&amp;rsquo;s unreachable; the Zipkin/OTLP pane feeds only the Zipkin menu.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;oap-configuration-what-is-it-actually-running&#34;&gt;OAP Configuration: what is it actually running?&lt;/h2&gt;
+&lt;p&gt;When a setting doesn&amp;rsquo;t behave the way you expect, the next question is &amp;ldquo;what config did OAP actually resolve?&amp;rdquo; &lt;strong&gt;OAP Configuration&lt;/strong&gt; answers it without an SSH session: it reads the connected backend&amp;rsquo;s effective runtime config from the admin port&amp;rsquo;s &lt;code&gt;/debugging/config/dump&lt;/code&gt;, grouped by module and searchable across keys &lt;em&gt;and&lt;/em&gt; values. Secret values — passwords, tokens, access keys — are masked to &lt;code&gt;******&lt;/code&gt; by OAP itself before Horizon ever sees them. It&amp;rsquo;s strictly read-only; to change a value you still edit it on the OAP side and restart. Like the admin pane above, it rides OAP 11&amp;rsquo;s admin host.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p13-platform-02-oap-config.webp&#34; alt=&#34;Figure 2: The OAP Configuration page — the runtime config dump grouped by module, with a filter box and key/value rows.&#34;&gt;
+Figure 2: OAP Configuration — the connected backend&amp;rsquo;s resolved runtime config from the admin port, grouped by module and filterable, with secrets masked to &lt;code&gt;******&lt;/code&gt; by OAP. Read-only: change config on the OAP side and restart.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;data-retention-how-long-does-it-keep-your-data&#34;&gt;Data Retention: how long does it keep your data?&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Data Retention&lt;/strong&gt; shows OAP&amp;rsquo;s time-to-live for each class of data, in whole days — records (trace, log, browser error, …) and metrics (metadata, minute, hour, day). And here the storage backend matters. On a flat store like &lt;strong&gt;Elasticsearch&lt;/strong&gt;, each class has one retention number, full stop. On &lt;strong&gt;BanyanDB&lt;/strong&gt;, data ages through configurable lifecycle stages — &lt;strong&gt;hot&lt;/strong&gt;, optionally &lt;strong&gt;warm&lt;/strong&gt;, optionally &lt;strong&gt;cold&lt;/strong&gt; — and OAP reports the hot and warm stages as one combined, queryable window. So Horizon draws a per-class &lt;strong&gt;lifecycle bar&lt;/strong&gt; instead of a single number: the &lt;strong&gt;hot+warm&lt;/strong&gt; window plus the &lt;strong&gt;cold&lt;/strong&gt; tail, with widths proportional to total days, so you read the relative durations at a glance.&lt;/p&gt;
+&lt;p&gt;There&amp;rsquo;s one operational subtlety the page calls out: the topbar &lt;strong&gt;Cold&lt;/strong&gt; pill swaps reads from hot+warm to cold — it doesn&amp;rsquo;t &lt;em&gt;union&lt;/em&gt; them — so it&amp;rsquo;s worth enabling only when the window you&amp;rsquo;re after is older than the hot+warm boundary. Data Retention reads through the standard query port, so unlike the two pages above it works on any OAP version.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p13-platform-03-data-retention.webp&#34; alt=&#34;Figure 3: The Data Retention page on a BanyanDB backend, showing per-data-class lifecycle bars split into hot+warm and cold segments.&#34;&gt;
+Figure 3: Data Retention — on BanyanDB, each class ages through hot → warm → cold, so Horizon draws lifecycle bars (the queryable hot+warm window plus cold, widths proportional to total days). A flat backend like Elasticsearch would show a single TTL per class instead.&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;where-it-runs&#34;&gt;Where it runs&lt;/h2&gt;
+&lt;p&gt;All three live under &lt;strong&gt;Platform monitoring&lt;/strong&gt;, each gated by its own read permission — &lt;code&gt;cluster:read&lt;/code&gt;, &lt;code&gt;config:read&lt;/code&gt;, &lt;code&gt;ttl:read&lt;/code&gt; — and all three are strictly read-only: this is introspection, not control. They split on the backend the same way the rest of operate does. Data Retention and the Cluster-Status &lt;em&gt;Query&lt;/em&gt; pane ride the standard query port, so they work on any OAP, 10.x included. The Cluster-Status &lt;em&gt;Admin&lt;/em&gt; pane and OAP Configuration read the admin host, which arrives with OAP 11 — and rather than break when it&amp;rsquo;s absent, they say so plainly (a hidden pane, a &amp;ldquo;needs the admin host&amp;rdquo; banner). (These are about the platform&amp;rsquo;s health and config; the OAP self-observability &lt;em&gt;dashboards&lt;/em&gt; are a separate, metrics-driven story.)&lt;/p&gt;
+&lt;h2 id=&#34;where-to-go-next&#34;&gt;Where to go next&lt;/h2&gt;
+&lt;p&gt;For the field reference — every pane, the config-dump shape, and the BanyanDB lifecycle details — see the &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/cluster-metadata/&#34;&gt;Cluster Status&lt;/a&gt;, &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/oap-configuration/&#34;&gt;OAP Configuration&lt;/a&gt;, and &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/data-retention/&#34;&gt;Data Retention&lt;/a&gt; docs.&lt;/p&gt;
+&lt;p&gt;That closes &lt;strong&gt;Act 3 — operate it&lt;/strong&gt;. Next up, &lt;strong&gt;Act 4 — govern &amp;amp; secure it&lt;/strong&gt;, starting with &lt;strong&gt;Access Control &amp;amp; Security&lt;/strong&gt;: server-enforced RBAC, LDAP/AD, the audit log, and break-glass.&lt;/p&gt;
+
+      </description>
+    </item>
+    
+    <item>
+      <title>Zh: 认识 Horizon UI · 13/17：平台与集群自检</title>
+      <link>/zh/2026-06-30-horizon-ui-platform-introspection/</link>
+      <pubDate>Tue, 30 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>/zh/2026-06-30-horizon-ui-platform-introspection/</guid>
+      <description>
+        
+        
+        &lt;p&gt;&lt;em&gt;译自英文原文：&lt;a href=&#34;/blog/2026-06-30-horizon-ui-platform-introspection/&#34;&gt;Meet Horizon UI · 13/17: Platform &amp;amp; Cluster Introspection&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;这是 &lt;a href=&#34;/zh/2026-06-21-skywalking-horizon-ui-introduction/&#34;&gt;Meet Horizon UI&lt;/a&gt; 系列的第十三篇，也是第三幕 &lt;strong&gt;operate it&lt;/strong&gt; 的最后一篇。前几篇 operate 文章讲的是怎么操作后端：告警、运行时规则、Live Debugger、跨 layer Inspect。这一篇反过来看后端本身：它现在是否健康？实际加载了哪些配置？数据会保留多久？&lt;strong&gt;Platform monitoring&lt;/strong&gt; 下的三个只读页面回答这些问题。这里没有开关，只给排障时需要的事实。&lt;/p&gt;
+&lt;h2 id=&#34;cluster-status后端是否健康哪些端口可用&#34;&gt;Cluster Status：后端是否健康，哪些端口可用？&lt;/h2&gt;
+&lt;p&gt;Horizon 和 OAP 通信不只走一个通道，&lt;strong&gt;Cluster Status&lt;/strong&gt; 会把每个通道的健康状态分开显示。可以把它看成两个端口的健康视图，外加一个独立探针：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Query / GraphQL（&lt;code&gt;:12800&lt;/code&gt;）&lt;/strong&gt;：所有 observability 页面都依赖这个端口。它会显示 OAP 版本、服务端时区和时钟（并排展示浏览器时间），以及 OAP 自己的健康评分。这个部分兼容任意 OAP，包括 10.x。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Admin host（&lt;code&gt;:17128&lt;/code&gt;）&lt;/strong&gt;：operate 功能依赖这个端口。页面会对每个 admin module 做&lt;strong&gt;实时探测&lt;/strong&gt;：直接 GET 功能实际调用的 REST path，并显示它是否可达、启用它的 &lt;code&gt;SW_...&lt;/code&gt; 环境变量，以及它不可用时哪些功能会受影响。这里包括 &lt;code&gt;admin-server&lt;/code&gt;、&lt;code&gt;receiver-runtime-rule&lt;/code&gt;、&lt;code&gt;dsl-debugging&lt;/code&gt;、&lt;code&gt;inspect&lt;/code&gt;、&lt;code&gt;ui-management&lt;/code&gt;。Admin host 随 OAP 11 提供，所以 10.x 后端上不会显示这个面板。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Zipkin / OTLP（&lt;code&gt;:9412&lt;/code&gt;）&lt;/strong&gt;：这是信息性探针，只影响 Zipkin trace 菜单。这里红了，其他页面仍然正常工作。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;三个面板独立轮询；其中一个变红，不会影响另外两个的判断。正因为这样，当 Horizon 里其他地方看起来不对劲时，Cluster Status 是最适合先打开的页面。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p13-platform-01-cluster-status.webp&#34; alt=&#34;图 1：Cluster Status：Query、Admin 和 Zipkin/OTLP 三个面板；Admin 面板列出每个 module 的可达性、probe path 和启用它的环境变量。&#34;&gt;
+图 1：Cluster Status 是一个双端口健康视图。Query 面板（&lt;code&gt;:12800&lt;/code&gt;，任意 OAP）显示版本、服务端时间和健康评分；Admin 面板（&lt;code&gt;:17128&lt;/code&gt;，OAP 11）用实际 REST path 实时探测每个 admin module，并显示启用它的 &lt;code&gt;SW_...&lt;/code&gt; 环境变量和不可达时受影响的功能；Zipkin/OTLP 面板只服务 Zipkin 菜单。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;oap-configuration实际运行的配置是什么&#34;&gt;OAP Configuration：实际运行的配置是什么？&lt;/h2&gt;
+&lt;p&gt;当某个配置项表现得和预期不一样，下一步通常是确认：OAP 最终到底解析出了什么配置？&lt;strong&gt;OAP Configuration&lt;/strong&gt; 让你不用 SSH 到后端，也能看到这个答案。它从 admin port 的 &lt;code&gt;/debugging/config/dump&lt;/code&gt; 读取当前连接后端的有效运行时配置，按 module 分组，并支持同时搜索 key 和 value。密码、token、access key 这类敏感值会由 OAP 自己在返回前 mask 成 &lt;code&gt;******&lt;/code&gt;，Horizon 看到的就是脱敏后的内容。这个页面严格只读；如果要改配置，仍然需要在 OAP 侧修改并重启。和上面的 Admin 面板一样，它依赖 OAP 11 的 admin host。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p13-platform-02-oap-config.webp&#34; alt=&#34;图 2：OAP Configuration 页面：运行时配置 dump 按 module 分组，带过滤框和 key/value 行。&#34;&gt;
+图 2：OAP Configuration 展示当前连接后端解析后的运行时配置，数据来自 admin port；配置按 module 分组，可以过滤，敏感值由 OAP mask 成 &lt;code&gt;******&lt;/code&gt;。页面只读：修改配置仍然要在 OAP 侧完成并重启。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;data-retention数据会保留多久&#34;&gt;Data Retention：数据会保留多久？&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;Data Retention&lt;/strong&gt; 展示 OAP 为各类数据设置的 time-to-live，单位是整天：records（trace、log、browser error 等）和 metrics（metadata、minute、hour、day）都会列出来。这里还要看存储后端。像 &lt;strong&gt;Elasticsearch&lt;/strong&gt; 这样的平面存储，每类数据只有一个 retention 数字。在 &lt;strong&gt;BanyanDB&lt;/strong&gt; 中，数据会按可配置的生命周期阶段流转：&lt;strong&gt;hot&lt;/strong&gt;、可选的 &lt;strong&gt;warm&lt;/strong&gt;、可选的 &lt;strong&gt;cold&lt;/strong&gt;。OAP 会把 hot 和 warm 合并报告为一个可查询窗口，所以 Horizon 不再只显示单个数字，而是为每类数据画一条 &lt;strong&gt;lifecycle bar&lt;/strong&gt;：前半段是 &lt;strong&gt;hot+warm&lt;/strong&gt; 窗口，后面接 &lt;strong&gt;cold&lt;/strong&gt; 尾段，宽度按总天数比例展示。这样你可以一眼看出各阶段相对持续多久。&lt;/p&gt;
+&lt;p&gt;页面还特别提醒一个操作细节：topbar 里的 &lt;strong&gt;Cold&lt;/strong&gt; pill 会把查询切到 cold 数据，它不是把 hot+warm 和 cold 合并查询。所以只有当你要看的时间窗口已经早于 hot+warm 边界时，才值得打开它。Data Retention 走标准 query port，因此不同于前两个页面，它兼容任意 OAP 版本。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/screenshots/horizon-0.7.0/p13-platform-03-data-retention.webp&#34; alt=&#34;图 3：BanyanDB 后端上的 Data Retention 页面：每类数据用 lifecycle bar 展示 hot+warm 和 cold 两段。&#34;&gt;
+图 3：Data Retention：在 BanyanDB 上，每类数据会经历 hot → warm → cold 生命周期，所以 Horizon 用 lifecycle bar 展示可查询的 hot+warm 窗口和 cold 尾段，宽度按总天数比例计算。平面存储如 Elasticsearch 则会显示每类数据的单个 TTL。&lt;/br&gt;&lt;/p&gt;
+&lt;h2 id=&#34;它在哪里运行&#34;&gt;它在哪里运行&lt;/h2&gt;
+&lt;p&gt;这三个页面都在 &lt;strong&gt;Platform monitoring&lt;/strong&gt; 下，各自有独立的读权限：&lt;code&gt;cluster:read&lt;/code&gt;、&lt;code&gt;config:read&lt;/code&gt;、&lt;code&gt;ttl:read&lt;/code&gt;。它们都严格只读：这里做的是自检，不是控制。后端接入方式也延续了 operate 里的分层。Data Retention 和 Cluster Status 的 &lt;em&gt;Query&lt;/em&gt; 面板走标准 query port，因此兼容任意 OAP，包括 10.x。Cluster Status 的 &lt;em&gt;Admin&lt;/em&gt; 面板和 OAP Configuration 则读取 OAP 11 才提供的 admin host；如果后端没有这个端口，页面会明确说明原因，比如隐藏面板，或者显示“需要 admin host”的提示，而不是直接报错。（这里关注的是平台健康和配置；OAP 自观测的 dashboard 是另一条基于 metrics 的线。）&lt;/p&gt;
+&lt;h2 id=&#34;后续阅读&#34;&gt;后续阅读&lt;/h2&gt;
+&lt;p&gt;字段参考，包括每个面板、config dump 结构和 BanyanDB 生命周期细节，可以看 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/cluster-metadata/&#34;&gt;Cluster Status&lt;/a&gt;、&lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/oap-configuration/&#34;&gt;OAP Configuration&lt;/a&gt; 和 &lt;a href=&#34;https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/data-retention/&#34;&gt;Data Retention&lt;/a&gt; 文档。&lt;/p&gt;
+&lt;p&gt;到这里，&lt;strong&gt;Act 3 — operate it&lt;/strong&gt; 结束。下一篇进入 &lt;strong&gt;Act 4 — govern &amp;amp; secure it&lt;/strong&gt;，从 &lt;strong&gt;Access Control &amp;amp; Security&lt;/strong&gt; 开始：服务端强制执行的 RBAC、LDAP/AD、audit log，以及 break-glass。&lt;/p&gt;
+
+      </description>
+    </item>
     
     <item>
       <title>Blog: Meet Horizon UI · 10/17: Alarms &amp; Incident Triage</title>
