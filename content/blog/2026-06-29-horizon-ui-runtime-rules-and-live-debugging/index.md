@@ -47,10 +47,13 @@ Figure 4: OAL → traces — a real segment from `agent::gateway` (latency 38, s
 ![Figure 5: A MAL sample group expanded into a diff view, with a dimmed COMMON block of shared labels and only two labels highlighted per sample.](/screenshots/horizon-0.7.0/p11-runtime-05-mal-diff.webp)
 Figure 5: MAL → metrics — samples grouped by metric, with a diff that dims the 16 labels every sample shares and lights only the two that differ (`group`, `pod_name`), so four near-identical series read apart at a glance.</br>
 
-**LAL → logs.** Each captured log record becomes a column and each DSL block (or statement) a row, so the whole capture reads as a matrix: you can see which records the `filter` **aborted** and what the `extractor` pulled out of the ones that passed.
+**LAL → logs.** Each captured log record becomes a column and each DSL block (or statement) a row, so the whole capture reads as a matrix: you can see which records the `filter` **aborted** and what the `extractor` pulled out of the ones that passed — and click any cell to open the record in full and compare it against another.
 
-![Figure 6: The LAL tab showing the captured rule on the left and a matrix of records by block on the right, with aborted cells where the filter dropped records.](/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix.webp)
-Figure 6: LAL → logs — every captured record a column, every DSL block a row. This filter aborts the normal logs (only abnormal ones pass) before the extractor pulls out `status.code` and `response.flag`.</br>
+![Figure 6: The LAL matrix — the captured rule on the left, records by block on the right, the extractor cells showing the status.code tag it added to each abnormal record.](/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix.webp)
+Figure 6: LAL → logs — every captured record is a column, every DSL block a row. The `filter` aborts the normal logs; for each abnormal one that passes, the `extractor` row shows the tag it added (`status.code=404`) as a diff over the raw record.</br>
+
+![Figure 7: A popout showing one record's complete captured data as raw JSON, with a "compare with" selector, alongside the full DSL.](/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix-2.webp)
+Figure 7: "Show complete data" opens a record in full — the entire raw log payload (here an Envoy access log) — with a **Compare with** selector to diff it field-by-field against any other captured record.</br>
 
 ## Where it runs
 
