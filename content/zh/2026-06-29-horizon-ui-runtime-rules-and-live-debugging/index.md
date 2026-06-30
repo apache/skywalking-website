@@ -51,10 +51,13 @@ Live Debugger 按分析语言分成三个标签页，因为三种规则处理的
 ![图 5：一组 MAL sample 展开后的 diff 视图：COMMON 区块里的共享 label 被淡化，每个 sample 只高亮两个不同 label。](/screenshots/horizon-0.7.0/p11-runtime-05-mal-diff.webp)
 图 5：MAL → metrics：sample 按 metric 分组，diff 会淡化 16 个所有样本共有的 label，只高亮不同的两个 label（`group`、`pod_name`）。四条非常相似的时序因此能一眼区分。</br>
 
-**LAL → logs。** 每条捕获到的 log record 是一列，每个 DSL block（或 statement）是一行，所以整个采集结果会变成一个矩阵。你可以看到哪些记录被 `filter` **aborted**，也能看到通过 filter 的记录被 `extractor` 提取出了什么。
+**LAL → logs。** 每条捕获到的 log record 是一列，每个 DSL block（或 statement）是一行，所以整个采集结果会变成一个矩阵。你可以看到哪些记录被 `filter` **aborted**，也能看到通过 filter 的记录被 `extractor` 提取出了什么；点开任意一个格子，还能查看这条记录的完整内容，并和另一条记录逐字段对比。
 
-![图 6：LAL 标签页左侧是捕获规则，右侧是按 record 和 block 组成的矩阵；被 filter 丢弃的记录显示为 aborted cell。](/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix.webp)
-图 6：LAL → logs：每条捕获记录是一列，每个 DSL block 是一行。这个 filter 会丢弃正常日志，只让异常日志继续往下走，再由 extractor 提取 `status.code` 和 `response.flag`。</br>
+![图 6：LAL 矩阵——左侧是捕获规则，右侧按 record 和 block 排开；extractor 行显示它给每条异常记录打上的 status.code 标签。](/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix.webp)
+图 6：LAL → logs：每条捕获记录是一列，每个 DSL block 是一行。`filter` 会丢弃正常日志；对通过的异常日志，`extractor` 行会以 diff 的形式显示它新增的标签（这里是 `status.code=404`）。</br>
+
+![图 7：弹窗以原始 JSON 展示某条记录的完整内容（一条 Envoy access log），并带有“与谁对比”的选择器，旁边还能看到完整的 DSL。](/screenshots/horizon-0.7.0/p11-runtime-06-lal-matrix-2.webp)
+图 7：点击格子上的“show complete data”，即可查看整条捕获记录的原始内容（这里是一条 Envoy access log），并通过 **Compare with** 选择器与其他任意记录逐字段对比。</br>
 
 ## 它在哪里运行
 
