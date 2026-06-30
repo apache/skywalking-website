@@ -64,4 +64,4 @@ That manual-by-design choice also draws a clean **permission** line. Viewing the
 
 For the field reference — the categories, the two provisioning paths, the budgets and the matching-maps-to-builds guidance — see the [Browser Logs & Source Maps docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/).
 
-Next up: **Profiling** — five profilers (trace, async, eBPF, Go pprof, network) rendered through one flame graph.
+Next up: [**Profiling**](/blog/2026-06-26-horizon-ui-profiling/) — five profilers (trace, async, eBPF, Go pprof, network) rendered through one flame graph.

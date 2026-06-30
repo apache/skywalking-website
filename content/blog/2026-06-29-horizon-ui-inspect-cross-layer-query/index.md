@@ -48,4 +48,4 @@ All three live under **Operate** and share one permission, `inspect:read`. They 
 
 For the field reference — the metric catalog, entity enumeration, foreign metrics, and MQE execution — see the [Inspect docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/inspect/).
 
-Next up: **Platform & Cluster Introspection** — Cluster Status, OAP configuration, and data-retention, the last stop in Act 3 before we turn to governing and securing the console.
+Next up: [**Platform & Cluster Introspection**](/blog/2026-06-30-horizon-ui-platform-introspection/) — Cluster Status, OAP configuration, and data-retention, the last stop in Act 3 before we turn to governing and securing the console.

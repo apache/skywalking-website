@@ -64,4 +64,4 @@ tags:
 
 两个标签页，包括存储查询、tag/container 自动补全和 live tail，都由同一个 `logs:read` 权限控制。所以授予“可以读日志”就是一个开关。字段参考，包括每个条件、histogram、Pod Logs 的窗口和过滤器，可以看 [Logs 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/logs/)。
 
-下一篇看 Browser/RUM：浏览器端错误如何上报，又如何用 source map 把压缩后的 stack 还原到源码位置。
+下一篇看 [Browser/RUM](/zh/2026-06-23-horizon-ui-browser-errors-and-source-maps/)：浏览器端错误如何上报，又如何用 source map 把压缩后的 stack 还原到源码位置。

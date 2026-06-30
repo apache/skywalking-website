@@ -62,4 +62,4 @@ Figure 3: A live tail of one pod's container — windowed, interval-polled, rege
 
 Both tabs — the stored queries, the tag and container autocomplete, and the live tail — are gated by a single `logs:read` permission, so granting "can read logs" is one switch. For the field reference — every condition, the histogram, the Pod Logs windows and filters — see the [Logs docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/logs/).
 
-Next up: **Browser & RUM monitoring** — the browser agent's own error stream, and de-obfuscating a minified stack with source maps.
+Next up: [**Browser & RUM monitoring**](/blog/2026-06-23-horizon-ui-browser-errors-and-source-maps/) — the browser agent's own error stream, and de-obfuscating a minified stack with source maps.

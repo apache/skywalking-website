@@ -82,4 +82,6 @@ Deployment 标签页中，容器之间的调用边会从 SWIP-15 instance-relati
 
 上面这些不是一张手工写死的 "BanyanDB 页面"。聚类规则、每个 role 的节点指标、role-pair 边指标，都在 Layer template 中作为一个自包含块存在，可以从 **Layer dashboards admin → Deployment** 作用域编辑，并随模板 export/import 一起携带。它和其他 Layer 背后的配置驱动模型一样，后续文章会完整展开。
 
-下一篇看 3D Infrastructure Map：把所有 Layer 的服务放进一张 WebGL 地图，从全局看部署状态。
+BanyanDB Layer 自身的字段——Cluster、Container、Group 和 Deployment 视图——可以参考 [BanyanDB dashboards](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/dashboards/banyandb/) 文档。
+
+下一篇看 [3D Infrastructure Map](/zh/2026-06-22-horizon-ui-3d-infrastructure-map/)：把所有 Layer 的服务放进一张 WebGL 地图，从全局看部署状态。

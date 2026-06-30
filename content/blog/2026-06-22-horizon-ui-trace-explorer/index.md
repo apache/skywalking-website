@@ -87,4 +87,4 @@ There's a second way into a trace that doesn't go through the explorer at all. A
 
 The Traces tab is one request in full detail; the dashboards and maps from the earlier posts are where you notice something's wrong in the first place. For the field reference — every condition, the native-vs-Zipkin split, the span detail panel — see the [Traces docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/traces/).
 
-Next up: **the Log Explorer** — the same triage instincts, applied to log streams instead of spans.
+Next up: [**the Log Explorer**](/blog/2026-06-23-horizon-ui-log-explorer/) — the same triage instincts, applied to log streams instead of spans.

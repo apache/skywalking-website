@@ -50,4 +50,4 @@ SkyWalking 会计算大量指标，但过去没有一个地方能把它们完整
 
 字段参考，包括指标目录、实体枚举、foreign metrics 和 MQE 执行，可以看 [Inspect 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/inspect/)。
 
-下一篇是 **Platform & Cluster Introspection**：Cluster Status、OAP configuration 和 data-retention。它是第三幕的最后一站，之后这个系列会转向控制台的治理和安全。
+下一篇是 [**Platform & Cluster Introspection**](/zh/2026-06-30-horizon-ui-platform-introspection/)：Cluster Status、OAP configuration 和 data-retention。它是第三幕的最后一站，之后这个系列会转向控制台的治理和安全。

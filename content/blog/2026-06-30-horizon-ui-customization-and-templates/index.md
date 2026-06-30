@@ -46,4 +46,4 @@ Figure 4: Overview templates are the same model — a 12-column canvas with mock
 
 Editing and previewing are entirely **browser-local** — no OAP call happens until you publish. Publishing writes the template to OAP's **ui-template store** through the admin host, which arrives with OAP 11; the bundled JSON is a seed and read-only fallback, and the OAP-published version always wins at render time. Access is role-gated: publishing layer dashboards needs `dashboard:write`, overviews need `overview:write`. For the field reference — the template shapes, the widget types, and the add-a-layer recipe — see the [Layer templates](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/layer-templates/), [Overview templates](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/overview-templates/), and [Adding a new layer](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/adding-a-new-layer/) docs.
 
-Next up: **Localization** — how those same templates speak eight languages.
+Next up: [**Localization**](/blog/2026-06-30-horizon-ui-localization-i18n/) — how those same templates speak eight languages.

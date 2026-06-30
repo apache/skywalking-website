@@ -39,4 +39,4 @@ Figure 3: The same General Service dashboard in Chinese — sidebar, tabs, and w
 
 Locale resolution happens **BFF-side**, so it works on any OAP. Publishing a translation writes a sibling overlay to OAP's template store through the admin host (OAP 11), gated on `overview:write`; the eight UI-chrome message catalogs are bundled and switch synchronously with no network fetch. A CI gate (`i18n:validate`) keeps every source template paired with an overlay per locale so nothing drifts. For the field reference — the translatable-field rules and the add-a-language recipe — see the [i18n docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/i18n/).
 
-Next, the series closes with **Getting Started & Migration** — installing Horizon and swapping it in for an existing UI.
+Next, the series closes with [**Getting Started & Migration**](/blog/2026-06-30-horizon-ui-getting-started-and-migration/) — installing Horizon and swapping it in for an existing UI.

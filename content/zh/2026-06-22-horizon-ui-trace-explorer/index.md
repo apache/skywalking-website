@@ -89,4 +89,4 @@ Zipkin 标签页通过 **OAP 的 Zipkin query API** 查询上游 Zipkin store。
 
 Traces 标签页把一个请求完整展开；前面几篇的仪表盘和地图，是你最初发现异常的地方。字段参考，包括每个条件、native-vs-Zipkin 拆分和 span 详情面板，可以看 [Traces 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/traces/)。
 
-下一篇看日志探索器：从 Trace 切到相关日志流，沿着同一条排查路径继续定位问题。
+下一篇看[日志探索器](/zh/2026-06-23-horizon-ui-log-explorer/)：从 Trace 切到相关日志流，沿着同一条排查路径继续定位问题。

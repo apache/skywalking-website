@@ -80,4 +80,6 @@ Figure 6: Flows — the same role-pair edges as a sortable table, one block per 
 
 None of the above is a hand-built "BanyanDB screen." The clustering rules, the per-role node metrics, and the role-pair edge metrics are all a self-contained block on the layer template, edited from the **Layer dashboards admin → Deployment scope** and carried with the template's export/import — the same config-driven model behind every other layer, which a later post covers end to end.
 
-Next up: **the 3D Infrastructure Map** — where this same deployment, and every other layer, lifts off the page into a WebGL view of your whole estate.
+For the BanyanDB layer's own fields — the Cluster, Container, Group, and Deployment views — see the [BanyanDB dashboards](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/dashboards/banyandb/) doc.
+
+Next up: [**the 3D Infrastructure Map**](/blog/2026-06-22-horizon-ui-3d-infrastructure-map/) — where this same deployment, and every other layer, lifts off the page into a WebGL view of your whole estate.
