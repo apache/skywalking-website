@@ -66,4 +66,4 @@ Horizon 刻意 **不猜测**。浏览器端 agent 会上报 app **version**，�
 
 字段参考，包括 categories、两种提供路径、预算，以及如何按构建版本匹配 map，可以看 [Browser Logs & Source Maps 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/browser-source-maps/)。
 
-下一篇进入 Profiling：五种 profiler（trace、async、eBPF、Go pprof、network）如何共用一套火焰图视图，以及为什么 network profiling 是例外。
+下一篇进入 [Profiling](/zh/2026-06-26-horizon-ui-profiling/)：五种 profiler（trace、async、eBPF、Go pprof、network）如何共用一套火焰图视图，以及为什么 network profiling 是例外。

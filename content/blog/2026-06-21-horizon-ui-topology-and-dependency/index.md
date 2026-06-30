@@ -69,4 +69,4 @@ Figure 7: One service, every layer it reports through — the cross-layer hierar
 
 Every metric, threshold, and edge weight on these maps lives in the layer template's `topology` block — which means you tune them the same config-driven way you tune dashboards, the subject of a later post in this series. For the field reference, see the [layer-template](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/layer-templates/) topology docs.
 
-Next up: **the Deployment tab and BanyanDB self-observability** — where the same map technique turns *inward* to show how one clustered service's own instances are deployed and talk to each other.
+Next up: [**the Deployment tab and BanyanDB self-observability**](/blog/2026-06-21-horizon-ui-deployment-and-banyandb/) — where the same map technique turns *inward* to show how one clustered service's own instances are deployed and talk to each other.

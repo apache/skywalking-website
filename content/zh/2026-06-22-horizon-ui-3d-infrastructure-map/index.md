@@ -88,4 +88,4 @@ Horizon 自带一份默认配置，所以地图开箱就有用。你的修改会
 
 3D 地图是全局入口；2D 的按 Layer 页面仍然是最完整的服务地图。查看它只需要读权限（`infra-3d:read`，内置 viewer 角色及以上持有）；调整它需要和仪表盘相同的写权限。字段参考，包括 tier、配置结构和加载阶段，可以看 [3D Infrastructure Map 文档](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/infra-3d-map/)。
 
-下一篇回到单个请求：Trace Explorer 会用分布图、瀑布图和调用树帮你定位慢调用。
+下一篇回到单个请求：[Trace Explorer](/zh/2026-06-22-horizon-ui-trace-explorer/) 会用分布图、瀑布图和调用树帮你定位慢调用。

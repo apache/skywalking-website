@@ -59,4 +59,4 @@ Which tabs you even see depends on the service: a tab appears only when OAP repo
 
 For the field reference — every task field, the eBPF aggregate modes, the network sampling rules — see the [Profiling docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/profiling/).
 
-Next up: **Alarms & Incident Triage** — the incident-centric alarm surface, and replaying the MQE snapshot that fired a rule.
+Next up: [**Alarms & Incident Triage**](/blog/2026-06-29-horizon-ui-alarms-and-incident-triage/) — the incident-centric alarm surface, and replaying the MQE snapshot that fired a rule.

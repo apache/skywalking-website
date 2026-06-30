@@ -63,4 +63,4 @@ Both surfaces are **operate** features: they talk to OAP's **admin host**, not t
 
 For the field reference — every apply state, the dump format, the per-tab capture controls — see the [Runtime Rules](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/runtime-rules/) and [Live Debugger](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/live-debugger/) docs.
 
-Next up: **Inspect — Cross-Layer Query Power-Tools** — the Operate-side surfaces for running metric, trace, and log queries straight across every layer.
+Next up: [**Inspect — Cross-Layer Query Power-Tools**](/blog/2026-06-29-horizon-ui-inspect-cross-layer-query/) — the Operate-side surfaces for running metric, trace, and log queries straight across every layer.

@@ -86,4 +86,4 @@ Figure 4: The map is configuration, not code — tiers, colors, and per-layer tr
 
 The 3D map is the bird's-eye summary; the 2D per-layer pages stay the authoritative service maps. Viewing it needs only read access (`infra-3d:read`, held by the built-in viewer role and up); shaping it needs the same write permission as the dashboards. For the field reference — tiers, the config shape, the loading stages — see the [3D Infrastructure Map docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/infra-3d-map/).
 
-Next up: **the Trace Explorer** — from the bird's-eye view of the whole deployment back down to a single request, drawn three different ways.
+Next up: [**the Trace Explorer**](/blog/2026-06-22-horizon-ui-trace-explorer/) — from the bird's-eye view of the whole deployment back down to a single request, drawn three different ways.

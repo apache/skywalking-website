@@ -47,4 +47,4 @@ All three live under **Platform monitoring**, each gated by its own read permiss
 
 For the field reference — every pane, the config-dump shape, and the BanyanDB lifecycle details — see the [Cluster Status](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/cluster-metadata/), [OAP Configuration](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/oap-configuration/), and [Data Retention](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/data-retention/) docs.
 
-That closes **Act 3 — operate it**. Next up, **Act 4 — govern & secure it**, starting with **Access Control & Security**: server-enforced RBAC, LDAP/AD, the audit log, and break-glass.
+That closes **Act 3 — operate it**. Next up, **Act 4 — govern & secure it**, starting with [**Access Control & Security**](/blog/2026-06-30-horizon-ui-access-control-and-security/): server-enforced RBAC, LDAP/AD, the audit log, and break-glass.

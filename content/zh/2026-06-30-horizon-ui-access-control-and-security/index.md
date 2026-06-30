@@ -59,4 +59,4 @@ tags:
 
 这篇里的五个入口都属于 Horizon 自己的 BFF 侧治理，不访问 OAP admin host，因此在不同 OAP 版本上行为一致。（本地开发时也可以完全关闭 RBAC；这时 Roles board 会用红色标出来。）字段参考，包括 verb 列表、LDAP group mapping、audit schema 和 break-glass 启用方式，可以看 [RBAC](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/access-control/rbac/)、[LDAP backend](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/access-control/ldap-backend/)、[Audit log](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/access-control/audit-log/) 和 [Break-glass](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/access-control/break-glass/) 文档。
 
-下一篇进入 **Act 5 — make it yours & adopt**，从 **Customization: Config-Driven Layer Templates** 开始：整个控制台如何由可编辑、可预览、可发布的模板塑造。
+下一篇进入 **Act 5 — make it yours & adopt**，从 [用模板定制控制台](/zh/2026-06-30-horizon-ui-customization-and-templates/) 开始：整个控制台如何由可编辑、可预览、可发布的模板塑造。

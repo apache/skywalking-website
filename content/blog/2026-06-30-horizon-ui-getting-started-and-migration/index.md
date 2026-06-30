@@ -60,7 +60,7 @@ Horizon is built **natively against OAP 11.x**, and it **partially supports OAP 
 | Inspect, DSL Management, Live Debugger, Alarm-rule editor | — | ✓ | admin `:17128` |
 | Cluster Status → Admin pane, template & translation publishing | — | ✓ | admin `:17128` |
 
-Crucially, Horizon **never reads the OAP version number** — it detects each capability by probing for the module and GraphQL fields it needs, hides the sidebar entries it can't back, and falls admin pages back to read-only when the admin port is dark. So if you only need triage (dashboards, alarms, traces, logs), a 10.x backend is enough; anything in the operate half needs 11.x with its admin modules (`admin-server`, `receiver-runtime-rule`, `dsl-debugging`, `inspect`) enabled.
+Crucially, Horizon **never reads the OAP version number** — it detects each capability by probing for the module and GraphQL fields it needs, hides the sidebar entries it can't back, and falls back to read-only for admin pages when the admin port is dark. So if you only need triage (dashboards, alarms, traces, logs), a 10.x backend is enough; anything in the operate half needs 11.x with its admin modules (`admin-server`, `receiver-runtime-rule`, `dsl-debugging`, `inspect`) enabled.
 
 ## Swapping in for an existing UI
 

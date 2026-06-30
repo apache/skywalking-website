@@ -68,4 +68,4 @@ Two deliberate non-features are worth calling out. Horizon alarms are a **read-o
 
 For the field reference — the window cap, the snapshot internals, and the pinned-layer setup — see the [Alarms docs](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/alarms/).
 
-Next up: **Runtime Rules & Live Debugging** — editing OAL / MAL / LAL against live samples through OAP's admin host, the part of "operate" the open-source backend only just made possible.
+Next up: [**Runtime Rules & Live Debugging**](/blog/2026-06-29-horizon-ui-runtime-rules-and-live-debugging/) — editing OAL / MAL / LAL against live samples through OAP's admin host, the part of "operate" the open-source backend only just made possible.

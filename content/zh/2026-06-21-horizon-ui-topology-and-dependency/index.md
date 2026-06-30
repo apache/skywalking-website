@@ -71,4 +71,4 @@ SkyWalking 拓扑背后的调用数据只有一份，但 Horizon 不只画一种
 
 这些地图上的每个指标、阈值和边权重，都位于 Layer template 的 `topology` 块里。换句话说，你会用和仪表盘一样的配置驱动方式调整它们，这也是后续文章的主题。字段参考可以看 [layer-template](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/customization/layer-templates/) 里的 topology 文档。
 
-下一篇转向服务内部：Deployment 标签页如何展示集群服务的实例关系，以及 BanyanDB 如何接入 SkyWalking 自观测。
+下一篇转向服务内部：[Deployment 标签页](/zh/2026-06-21-horizon-ui-deployment-and-banyandb/)如何展示集群服务的实例关系，以及 BanyanDB 如何接入 SkyWalking 自观测。

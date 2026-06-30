@@ -28,7 +28,7 @@ OAP 里的大多数分析都经过一组小型 DSL：**OAL** 把 trace 转成 se
 ![图 2：Monaco YAML 编辑器中的一条 MAL 规则，带 edit / diff-vs-server / diff-vs-bundled 标签页，以及代码左侧的绿色播放按钮。](/screenshots/horizon-0.7.0/p11-runtime-02-rule-editor.webp)
 图 2：用 Monaco YAML 编辑规则：语法高亮、对比线上版本和 bundled 版本，并可通过代码左侧的绿色 ▶ 直接进入 Live Debugger。</br>
 
-保存时，Horizon 会区分修改的风险。只改规则主体或 filter，可以立即生效。但如果是**结构性变更**，比如改了指标的 scope、downsampling 或存储形态，就会影响集群存储结构。Horizon 会按带集群确认的流程执行，并在界面上展示进度：**Compiled → Confirming across the cluster → Committing → Done**；只有变更在集群里确认持久化后才算成功。
+保存时，Horizon 会区分修改的风险。只改规则主体或 filter，可以立即生效。但如果是**结构性变更**，比如改了指标的 scope、downsampling 或存储形态，就会影响集群存储结构。Horizon 会按集群确认流程执行，并在界面上展示进度：**Compiled → Confirming across the cluster → Committing → Done**；只有变更在集群里确认持久化后才算成功。
 
 如果某个节点没有及时通过确认，应用结果会变成 **DEGRADED**。界面会列出落后的节点，这些节点会在下次扫描时自行追上，而不是让整次应用直接失败。如果 commit 前出错，变更会 **rolled back**，原因显示在界面里，你的编辑内容仍保留在 buffer 中。编译错误则会作为 inline diagnostic 展示。对于卡住的发布，可以点一次 **Force re-apply**，用完全相同的内容重新跑一遍应用流程，让落后的节点恢复同步；这会短暂暂停那条规则的采集。把规则恢复到 bundled 默认版本也走同一套确认流程；此外也可以 inactivate、delete，或者把整个目录导出成 tarball。
 

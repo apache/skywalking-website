@@ -10,7 +10,7 @@ tags:
 
 *译自英文原文：[Meet Horizon UI · 16/17: Localization in Eight Languages](/blog/2026-06-30-horizon-ui-localization-i18n/)。*
 
-这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第十六篇，仍然属于第五幕 **make it yours & adopt**。上一篇讲到，整个控制台都由 template 驱动。本地化也建立在这个基础上：Horizon 支持**八种语言**，每种翻译都是覆盖在同一套 template 上的一层 **overlay**。它不是 fork 出一份 dashboard，也不是每次渲染图表时重新翻译。
+这是 [Meet Horizon UI](/zh/2026-06-21-skywalking-horizon-ui-introduction/) 系列的第十六篇，仍然属于第五幕 **make it yours & adopt**。[上一篇](/zh/2026-06-30-horizon-ui-customization-and-templates/)讲到，整个控制台都由 template 驱动。本地化也建立在这个基础上：Horizon 支持**八种语言**，每种翻译都是覆盖在同一套 template 上的一层 **overlay**。它不是 fork 出一份 dashboard，也不是每次渲染图表时重新翻译。
 
 ## 翻译是 overlay，在服务端合并一次
 

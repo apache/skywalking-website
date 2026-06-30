@@ -111,7 +111,7 @@ OAP 短暂不可达时，Horizon 也遵循同样思路。如果后端短时间�
 
 ## 连接现有 OAP 即可试用
 
-Horizon 可以运行在你已有的 OAP 之上。在今天的 **OAP 10.x** 上，绝大多数功能已经可用：所有仪表盘、拓扑、Trace（原生和 **Zipkin**）、日志、告警，以及五类性能剖析，都通过 OAP 的 query host（`:12800`）渲染。Horizon 的访问控制、审计和主题运行在 BFF 里，不依赖 OAP 版本。需要等待 **OAP 11.0** 的是 *operate* 层：runtime-rule（DSL）管理、Live Debugger、Metrics Inspect、告警规则编辑器、Cluster Status 管理面板，以及把模板编辑发布回 OAP。这些依赖 admin host（`:17128`），即将随 OAP 11.0 发布。Horizon 会按 admin module 是否存在来探测能力，10.x 不能提供的页面会直接隐藏；完整观测控制台今天就能跑在 10.x 上，迁移到 11.0 后运维工具会自动亮起来。
+Horizon 可以运行在你已有的 OAP 之上。在今天的 **OAP 10.x** 上，绝大多数功能已经可用：所有仪表盘、拓扑、Trace（原生和 **Zipkin**）、日志、告警，以及五类性能剖析，都通过 OAP 的 query host（`:12800`）渲染。Horizon 的访问控制、审计和主题运行在 BFF 里，不依赖 OAP 版本。需要等待 **OAP 11.0** 的是 *operate* 层：runtime-rule（DSL）管理、Live Debugger、Metrics Inspect、告警规则编辑器、Cluster Status 管理面板，以及把模板编辑发布回 OAP。这些依赖 admin host（`:17128`），由 OAP 11.0 提供。Horizon 会按 admin module 是否存在来探测能力，10.x 不能提供的页面会直接隐藏；完整观测控制台今天就能跑在 10.x 上，迁移到 11.0 后运维工具会自动亮起来。
 
 把 Horizon 指向已有集群即可启动，不需要改后端。仍然是你的部署已经在使用的那个 OAP：
 
@@ -144,9 +144,9 @@ auth:
 
 ## 其他要点
 
-- **可以直接接入现有 OAP。** Horizon 是一次从零开始的重写，但保留了所有后端契约：同样的 GraphQL 查询协议、admin REST 接口、MQE 语言和 `Layer` 概念。所以你可以把它指向一个正在运行的集群，不改后端。今天的 **OAP 10.x** 已经能运行完整观测控制台（仪表盘、拓扑、包括 **Zipkin** 在内的 Trace、日志、告警、性能剖析），以及 Horizon BFF 侧的访问控制、审计和主题。只有 *operate* 工具链需要等待 OAP 的 **admin host**（`:17128`），也就是随 **OAP 11.0，即将发布** 的 runtime rules、Live Debugger、Inspect、Cluster Status admin pane 和模板编辑发布。
+- **可以直接接入现有 OAP。** Horizon 是一次从零开始的重写，但保留了所有后端契约：同样的 GraphQL 查询协议、admin REST 接口、MQE 语言和 `Layer` 概念。所以你可以把它指向一个正在运行的集群，不改后端。今天的 **OAP 10.x** 已经能运行完整观测控制台（仪表盘、拓扑、包括 **Zipkin** 在内的 Trace、日志、告警、性能剖析），以及 Horizon BFF 侧的访问控制、审计和主题。只有 *operate* 工具链需要等待 OAP 的 **admin host**（`:17128`），也就是随 **OAP 11.0** 提供的 runtime rules、Live Debugger、Inspect、Cluster Status admin pane 和模板编辑发布。
 - **暗色优先，高密度。** 12 列网格面向 incident 扫描设计，首屏承载更多信号，减少不必要留白。
 - **基于现代技术栈。** 前端是 Vue 3 + TypeScript on Vite、Pinia、Apache ECharts、D3 和 Monaco；BFF 使用 Node.js 上的 Fastify。
 - **Apache 许可证，社区共建。** Horizon UI 位于 [apache/skywalking-horizon-ui](https://github.com/apache/skywalking-horizon-ui)。欢迎接到你的集群上试用，也欢迎告诉我们缺什么，issue 和 pull request 都可以。
 
-下一篇讲仪表盘：MQE 如何驱动组件，BFF 又如何在服务端判断哪些组件该显示、哪些查询可以直接省掉。
+下一篇讲[仪表盘](/zh/2026-06-21-horizon-ui-dashboards-and-mqe/)：MQE 如何驱动组件，BFF 又如何在服务端判断哪些组件该显示、哪些查询可以直接省掉。

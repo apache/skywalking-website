@@ -86,4 +86,4 @@ It's worth stressing that this is *one* system. The same five widgets, the same 
 
 Everything above is the *reading* experience. Each widget's MQE, its `visibleWhen` gate, its format, and the per-scope grids are all editable from the **Layer dashboards** admin — but that authoring story (draft → preview → publish, with the inline-and-expand MQE editor) is its own post later in the series. For the field-level reference, see the docs on [dashboard widgets](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/components/dashboard-widgets/) and [charts](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/components/charts/).
 
-Next up: **topology and service dependency** — the same data Horizon charts here, drawn as a map you can walk.
+Next up: [**topology and service dependency**](/blog/2026-06-21-horizon-ui-topology-and-dependency/) — the same data Horizon charts here, drawn as a map you can walk.

@@ -88,4 +88,4 @@ Layer 仪表盘是一个紧凑的 **12 列网格**：行高 120px，空隙会自
 
 上面讲的是 *查看* 体验。每个组件的 MQE、`visibleWhen` 条件、格式，以及各作用域的网格，都可以从 **Layer dashboards** 管理界面编辑。但这个创作流程（draft → preview → publish，以及可内联/展开的 MQE 编辑器）会在后续文章里单独展开。字段级参考可以看文档里的 [dashboard widgets](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/components/dashboard-widgets/) 和 [charts](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/components/charts/)。
 
-下一篇讲拓扑与服务依赖：同一批观测数据，如何从图表变成服务关系图，并继续下钻到实例和 endpoint。
+下一篇讲[拓扑与服务依赖](/zh/2026-06-21-horizon-ui-topology-and-dependency/)：同一批观测数据，如何从图表变成服务关系图，并继续下钻到实例和 endpoint。

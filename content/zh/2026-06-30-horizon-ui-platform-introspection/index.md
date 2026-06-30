@@ -49,4 +49,4 @@ Horizon 和 OAP 通信不只走一个通道，**Cluster Status** 会把每个通
 
 字段参考，包括每个面板、config dump 结构和 BanyanDB 生命周期细节，可以看 [Cluster Status](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/cluster-metadata/)、[OAP Configuration](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/oap-configuration/) 和 [Data Retention](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/data-retention/) 文档。
 
-到这里，**Act 3 — operate it** 结束。下一篇进入 **Act 4 — govern & secure it**，从 **Access Control & Security** 开始：服务端强制执行的 RBAC、LDAP/AD、audit log，以及 break-glass。
+到这里，**Act 3 — operate it** 结束。下一篇：[访问控制与安全](/zh/2026-06-30-horizon-ui-access-control-and-security/)，进入 **Act 4 — govern & secure it**：服务端强制执行的 RBAC、LDAP/AD、audit log，以及 break-glass。
