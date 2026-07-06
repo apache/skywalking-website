@@ -1,7 +1,6 @@
 ---
 title: "认识 Horizon UI · AI Assistant：用日常语言查询你的可观测性数据"
 date: 2026-07-06
-draft: true
 author: 吴晟
 description: "Horizon UI 新增的 AI Assistant 可以用和 UI 相同的图表、拓扑和表格回答关于 live system 的问题；它只读、继承权限，并运行在你自己接入的高性价比模型上。"
 tags:
