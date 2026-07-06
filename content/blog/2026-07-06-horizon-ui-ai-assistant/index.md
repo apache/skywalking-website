@@ -1,7 +1,6 @@
 ---
 title: "Meet Horizon UI · The AI Assistant: Ask Your Observability Data in Plain Language"
 date: 2026-07-06
-draft: true
 author: Sheng Wu
 description: "Horizon UI's new AI Assistant answers questions about your live system with the same charts, topology and tables as the UI — read-only, permission-scoped, and running on a cost-efficient model you bring yourself."
 tags:
