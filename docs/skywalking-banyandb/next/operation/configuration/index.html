@@ -34,7 +34,7 @@ BanyanDB supports both absolute and relative paths for directory and file config
   <meta itemprop="name" content="Configuration">
   <meta itemprop="description" content="Configuration BanyanD is the BanyanDB server. There are two ways to configure BanyanD: using a bootstrap flag or using environment variables. The environment variable name has a prefix BYDB_ followed by the flag name in uppercase. For example, the flag --port can be set using the environment variable BYDB_PORT.
 BanyanDB supports both absolute and relative paths for directory and file configurations (such as data directories, TLS certificates, keys, etc.). Relative paths are resolved against the current working directory where the BanyanD process is started. Available as of v0.10.0.">
-  <meta itemprop="wordCount" content="1911">
+  <meta itemprop="wordCount" content="2560">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Configuration">
   <meta name="twitter:description" content="Configuration BanyanD is the BanyanDB server. There are two ways to configure BanyanD: using a bootstrap flag or using environment variables. The environment variable name has a prefix BYDB_ followed by the flag name in uppercase. For example, the flag --port can be set using the environment variable BYDB_PORT.
@@ -1431,7 +1431,7 @@ BanyanDB supports both absolute and relative paths for directory and file config
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 67a743f</div>
+                  <div class="commit-id">Commit Id: add78bb</div>
                 
 
 
@@ -1517,6 +1517,31 @@ BanyanDB supports both absolute and relative paths for directory and file config
 <li><code>--stream-write-timeout duration</code>: Stream write timeout (default: 1m).</li>
 <li><code>--measure-write-timeout duration</code>: Measure write timeout (default: 1m).</li>
 <li><code>--trace-write-timeout duration</code>: Trace write timeout (default: 1m).</li>
+</ul>
+<p>The following flags tune the BydbQL prepared-statement cache on the query path. The cache stores parsed statements keyed by query text so repeated, parameterized (<code>?</code>) queries skip re-parsing; literal queries without placeholders are never cached. It is bounded by both an entry count and the estimated in-memory size of the cached statements, evicting least-recently-used entries when either bound is exceeded. Effectiveness is observable via the <code>bydbql_prepared_cache_*</code> metrics (a <code>hit</code>/<code>miss</code>/<code>bypass</code> counter plus hit-ratio, entry-count, and byte-size gauges).</p>
+<ul>
+<li><code>--bydbql-prepared-cache-size int</code>: Max number of prepared BydbQL statements cached on the query path; <code>0</code> disables the cache (default: 2000).</li>
+<li><code>--bydbql-prepared-cache-max-bytes int</code>: Max total estimated size (in bytes) of the cached prepared statements; <code>0</code> removes the byte bound (default: 10485760, i.e. 10MiB).</li>
+</ul>
+<p>These flags surface the queries behind cache misses and slow responses without exposing high-cardinality query text as metric labels: Prometheus gets only two counters (<code>bydbql_prepared_cache_total{result=&quot;miss&quot;}</code> and <code>bydbql_slow_query_total</code>), while the specific hot queries are logged.</p>
+<ul>
+<li><code>--bydbql-slow-query-threshold duration</code>: End-to-end latency above which a BydbQL query is counted as slow (increments <code>bydbql_slow_query_total</code>) and tracked in the slow-query top-K; <code>0</code> disables slow-query tracking (default: <code>1s</code>).</li>
+<li><code>--bydbql-topk-log-interval duration</code>: How often to log the hottest cache-miss and slow queries. Counts are cumulative since process start. The cache-miss list only shows templates re-parsed at least twice (<code>count&gt;=2</code>): every template misses once on its cold-start lookup, so a <code>count==1</code> entry is benign and is filtered out — only repeatedly evicted-and-re-parsed (thrashing) templates are surfaced. The slow-query list is ranked by peak latency (<code>max_latency</code>) so a rarely-but-catastrophically slow query is not buried under frequently-mildly-slow ones. Uses a bounded approximate heavy-hitters tracker (128 entries), so it costs O(1) and never grows unbounded; <code>0</code> disables the top-K log (default: <code>5m</code>).</li>
+</ul>
+<h4 id="diagnosing-an-ineffective-bydbql-cache">Diagnosing an ineffective BydbQL cache</h4>
+<p>A cache hit costs about 25 ns and 0 allocations, so the cache is effectively free when it works. When it does not, every request re-parses the query — for a wide trace/log query that is roughly <strong>220 µs and ~147 KB / ~2,100 allocations per request</strong> (about four orders of magnitude more CPU and heap churn than a hit). Watch these signals; several going abnormal together points at an ineffective cache:</p>
+<ul>
+<li><strong><code>bydbql_prepared_cache_hit_ratio</code> drops toward 0</strong> and the <strong><code>miss</code> rate of <code>bydbql_prepared_cache_total{result=&quot;miss&quot;}</code> climbs</strong> — the primary indicator.</li>
+<li><strong>BydbQL query latency rises</strong> (the liaison gRPC <code>query</code> latency series) because the parse cost is added back to every request.</li>
+<li><strong>Process CPU and Go GC pressure rise</strong> — each miss allocates a fresh parse tree, so the allocation rate, GC frequency, GC pause, and GC CPU fraction all increase.</li>
+<li><strong><code>bydbql_prepared_cache_count</code> / <code>bydbql_prepared_cache_bytes</code> sit pinned at the cap while the miss rate stays high</strong> — the set of distinct query templates exceeds the cache capacity and entries are constantly evicted.</li>
+<li><strong>The <code>bypass</code> rate of <code>bydbql_prepared_cache_total{result=&quot;bypass&quot;}</code> is high</strong> — many queries are literal (contain no <code>?</code>) and are never cached. Bypasses are excluded from the hit ratio.</li>
+</ul>
+<p>To find the exact queries behind a high miss/bypass rate, enable the query access log (<code>--enable-query-access-log</code>). Each BydbQL entry is tagged with its cache outcome via the log&rsquo;s service field: <code>bydbql-hit</code>, <code>bydbql-miss</code> (cacheable but not in the cache), and <code>bydbql-bypass</code> (literal, never cached). Filtering the <code>bydbql-query-*</code> log for <code>bydbql-miss</code> / <code>bydbql-bypass</code> yields exactly the queries that did not hit the cache, together with their full text.</p>
+<p>Remedies:</p>
+<ul>
+<li><strong>High miss rate with the cache pinned at capacity</strong> → the working set of distinct query templates is larger than the cache. Raise <code>--bydbql-prepared-cache-size</code> (and <code>--bydbql-prepared-cache-max-bytes</code> if the byte bound binds first) until the hit ratio recovers.</li>
+<li><strong>High bypass rate (near-empty cache)</strong> → queries are not parameterized. Literal queries (no <code>?</code>) are never cached, and inlining values (e.g. <code>id = 'a' OR id = 'b' …</code>) explodes the template count. Use the <code>bydbql-bypass</code> access-log entries to find them, then parameterize the varying values with <code>?</code>, and express value sets as <code>IN (?)</code> bound to a <code>str_array</code>/<code>int_array</code> so a query is one reusable template regardless of the number of values.</li>
 </ul>
 <h3 id="tls">TLS</h3>
 <p>If you want to enable TLS for the communication between the client and liaison/standalone, you can use the following flags:</p>
