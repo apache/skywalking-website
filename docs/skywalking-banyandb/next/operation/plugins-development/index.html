@@ -34,7 +34,7 @@ Contract &amp; source layout: plugins/README.md Reference plugin: pkg/pipeline/s
   <meta itemprop="name" content="Developing Trace-Pipeline Sampler Plugins">
   <meta itemprop="description" content="Developing Trace-Pipeline Sampler Plugins A single, linear walkthrough — implement → verify → debug → deploy — for a trace-pipeline sampler plugin. It is the entry point that ties together the reference material:
 Contract &amp; source layout: plugins/README.md Reference plugin: pkg/pipeline/sdk/_example/segment-tail-sampler SDK API: the package doc on pkg/pipeline/sdk Offline test kit: pkg/pipeline/sdk/sdktest Packaging &amp; deploy: plugins.md Debugging runbook: plugins-debugging.md What a plugin is A sampler plugin is a native Go .so the data node loads at runtime to decide, per trace, keep-or-drop during merge/finalize. It is a package main built with go build -buildmode=plugin that exports exactly two SDK symbols. Read the ABI/toolchain lock in plugins/README.md before building for production — a .so must be built with the exact toolchain/SDK of the host it loads into, or plugin.Open rejects it (safe and loud, never silent). For first-party plugins this parity is guaranteed by lockstep builds.">
-  <meta itemprop="wordCount" content="682">
+  <meta itemprop="wordCount" content="834">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Developing Trace-Pipeline Sampler Plugins">
   <meta name="twitter:description" content="Developing Trace-Pipeline Sampler Plugins A single, linear walkthrough — implement → verify → debug → deploy — for a trace-pipeline sampler plugin. It is the entry point that ties together the reference material:
@@ -1431,7 +1431,7 @@ Contract &amp; source layout: plugins/README.md Reference plugin: pkg/pipeline/s
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: add78bb</div>
+                  <div class="commit-id">Commit Id: 2fbb65e</div>
                 
 
 
@@ -1449,8 +1449,8 @@ Contract &amp; source layout: plugins/README.md Reference plugin: pkg/pipeline/s
 trace-pipeline sampler plugin. It is the entry point that ties together the
 reference material:</p>
 <ul>
-<li><strong>Contract &amp; source layout:</strong> <a href="https://github.com/apache/skywalking-banyandb/tree/add78bb6a61c6baea1a74aec26c0a4caaa3dd593/plugins/README.md"><code>plugins/README.md</code></a></li>
-<li><strong>Reference plugin:</strong> <a href="https://github.com/apache/skywalking-banyandb/tree/add78bb6a61c6baea1a74aec26c0a4caaa3dd593/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a></li>
+<li><strong>Contract &amp; source layout:</strong> <a href="https://github.com/apache/skywalking-banyandb/tree/2fbb65efa68b60991fe824e764b85d9b3aef67df/plugins/README.md"><code>plugins/README.md</code></a></li>
+<li><strong>Reference plugin:</strong> <a href="https://github.com/apache/skywalking-banyandb/tree/2fbb65efa68b60991fe824e764b85d9b3aef67df/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a></li>
 <li><strong>SDK API:</strong> the package doc on <code>pkg/pipeline/sdk</code></li>
 <li><strong>Offline test kit:</strong> <code>pkg/pipeline/sdk/sdktest</code></li>
 <li><strong>Packaging &amp; deploy:</strong> <a href="../plugins"><code>plugins.md</code></a></li>
@@ -1460,7 +1460,7 @@ reference material:</p>
 <p>A sampler plugin is a native Go <code>.so</code> the data node loads at runtime to decide,
 per trace, keep-or-drop during merge/finalize. It is a <code>package main</code> built with
 <code>go build -buildmode=plugin</code> that exports exactly two SDK symbols. <strong>Read the
-ABI/toolchain lock in <a href="https://github.com/apache/skywalking-banyandb/tree/add78bb6a61c6baea1a74aec26c0a4caaa3dd593/plugins/README.md"><code>plugins/README.md</code></a> before
+ABI/toolchain lock in <a href="https://github.com/apache/skywalking-banyandb/tree/2fbb65efa68b60991fe824e764b85d9b3aef67df/plugins/README.md"><code>plugins/README.md</code></a> before
 building for production</strong> — a <code>.so</code> must be built with the exact toolchain/SDK
 of the host it loads into, or <code>plugin.Open</code> rejects it (safe and loud, never
 silent). For first-party plugins this parity is guaranteed by lockstep builds.</p>
@@ -1522,15 +1522,34 @@ plugin-capable host image (<code>apache/skywalking-banyandb:&lt;tag&gt;-plugins<
 <code>/plugins</code>. Enable on the <strong>data-node</strong> pod:</p>
 <pre tabindex="0"><code>-trace-pipeline-native-plugin-enabled=true
 -trace-pipeline-trusted-plugin-dir=/plugins
-</code></pre><p>Reference the plugin by filename in the group&rsquo;s <code>TracePipelineConfig</code>:</p>
+</code></pre><p>Mount the carrier at <code>/plugins</code> via an <strong>OCI image volume</strong> (K8s ≥1.31) or an
+<strong>initContainer + emptyDir</strong> (portable) — full instructions, both mechanisms,
+third-party plugins, and Kubernetes manifests are in <a href="../plugins"><code>plugins.md</code></a>
+and <a href="https://github.com/apache/skywalking-banyandb/tree/2fbb65efa68b60991fe824e764b85d9b3aef67df/examples/kubernetes/plugins"><code>examples/kubernetes/plugins/</code></a>.</p>
+<p><strong>Register the pipeline — this is the step that actually activates the plugin.</strong>
+Mounting only delivers the <code>.so</code>. The data node <em>loads</em> it when a group&rsquo;s
+<code>TracePipelineConfig</code> (referencing the plugin by its trusted-dir-relative
+filename) is registered: the node watches the schema registry and, on the group
+add/update, reconciles the pipeline and calls <code>plugin.Open</code> on the mounted <code>.so</code>.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;enabled&#34;</span><span style="color:#1f2328">:</span> <span style="color:#cf222e">true</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;enabledEvents&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">[</span><span style="color:#0a3069">&#34;PIPELINE_EVENT_MERGE&#34;</span><span style="color:#1f2328">],</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;plugins&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">[</span> <span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;name&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;latency-status&#34;</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#0550ae">&#34;sampler&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;path&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;latencystatussampler.so&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;abiVersion&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">1</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>                 <span style="color:#0550ae">&#34;config&#34;</span><span style="color:#1f2328">:</span> <span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;thresholdMs&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">500</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;successValue&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;success&#34;</span> <span style="color:#1f2328">}</span> <span style="color:#1f2328">}</span> <span style="color:#1f2328">}</span> <span style="color:#1f2328">]</span> <span style="color:#1f2328">}</span>
-</span></span></code></pre></div><p>Mount the carrier at <code>/plugins</code> via an <strong>OCI image volume</strong> (K8s ≥1.31) or an
-<strong>initContainer + emptyDir</strong> (portable) — full instructions, both mechanisms,
-third-party plugins, and Kubernetes manifests are in <a href="../plugins"><code>plugins.md</code></a>
-and <a href="https://github.com/apache/skywalking-banyandb/tree/add78bb6a61c6baea1a74aec26c0a4caaa3dd593/examples/kubernetes/plugins"><code>examples/kubernetes/plugins/</code></a>.</p>
+</span></span></code></pre></div><p>Attach it with any standard schema API — all write through the one schema
+registry (<code>GroupRegistryService</code>) and preserve the nested <code>pipeline</code> field:</p>
+<ul>
+<li><strong>bydbctl:</strong> add a <code>pipeline:</code> block to the group&rsquo;s YAML, then
+<code>bydbctl group update -f group.yaml</code> (or <code>group create</code>).</li>
+<li><strong>REST:</strong> <code>PUT /api/v1/group/schema/{group}</code> with <code>{&quot;group&quot;: {…, &quot;pipeline&quot;: {…}}}</code>.</li>
+<li><strong>gRPC:</strong> <code>GroupRegistryService.Update</code> — <code>Get</code> the group, set <code>.pipeline</code>, then
+<code>Update</code>. Reference: <a href="https://github.com/apache/skywalking-banyandb/tree/2fbb65efa68b60991fe824e764b85d9b3aef67df/test/cases/tracepipeline/ops.go"><code>test/cases/tracepipeline/ops.go</code></a>
+(<code>applyPipelineConfig</code>).</li>
+</ul>
+<p><strong>Verify activation</strong> on the data node&rsquo;s metrics port (<code>2121</code>):
+<code>banyandb_trace_pipeline_sampler_active_count{group=…}</code> goes <code>&gt;0</code> once the plugin
+loads. A bad/mismatched <code>.so</code> fails <strong>open and loud</strong> — an ERROR log plus
+<code>banyandb_trace_pipeline_sampler_load_failed{…}</code> — and the group simply keeps its
+previous sampler set; the node stays up.</p>
 <h2 id="step-5--validate-the-deployment-shape-in-kubernetes">Step 5 — Validate the deployment shape in Kubernetes</h2>
 <p>The <code>test/plugin-sidecar</code> kind gate proves the CGO host + carrier-mount design
 works in real Kubernetes (host boots, carrier delivers the <code>.so</code>, the node loads
