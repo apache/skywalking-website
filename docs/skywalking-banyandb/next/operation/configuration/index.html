@@ -34,7 +34,7 @@ BanyanDB supports both absolute and relative paths for directory and file config
   <meta itemprop="name" content="Configuration">
   <meta itemprop="description" content="Configuration BanyanD is the BanyanDB server. There are two ways to configure BanyanD: using a bootstrap flag or using environment variables. The environment variable name has a prefix BYDB_ followed by the flag name in uppercase. For example, the flag --port can be set using the environment variable BYDB_PORT.
 BanyanDB supports both absolute and relative paths for directory and file configurations (such as data directories, TLS certificates, keys, etc.). Relative paths are resolved against the current working directory where the BanyanD process is started. Available as of v0.10.0.">
-  <meta itemprop="wordCount" content="2560">
+  <meta itemprop="wordCount" content="2912">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Configuration">
   <meta name="twitter:description" content="Configuration BanyanD is the BanyanDB server. There are two ways to configure BanyanD: using a bootstrap flag or using environment variables. The environment variable name has a prefix BYDB_ followed by the flag name in uppercase. For example, the flag --port can be set using the environment variable BYDB_PORT.
@@ -1431,7 +1431,7 @@ BanyanDB supports both absolute and relative paths for directory and file config
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c22f7d4</div>
+                  <div class="commit-id">Commit Id: 8d88629</div>
                 
 
 
@@ -1526,8 +1526,12 @@ BanyanDB supports both absolute and relative paths for directory and file config
 <p>These flags surface the queries behind cache misses and slow responses without exposing high-cardinality query text as metric labels: Prometheus gets only two counters (<code>bydbql_prepared_cache_total{result=&quot;miss&quot;}</code> and <code>bydbql_slow_query_total</code>), while the specific hot queries are logged.</p>
 <ul>
 <li><code>--bydbql-slow-query-threshold duration</code>: End-to-end latency above which a BydbQL query is counted as slow (increments <code>bydbql_slow_query_total</code>) and tracked in the slow-query top-K; <code>0</code> disables slow-query tracking (default: <code>1s</code>).</li>
-<li><code>--bydbql-topk-log-interval duration</code>: How often to log the hottest cache-miss and slow queries. Counts are cumulative since process start. The cache-miss list only shows templates re-parsed at least twice (<code>count&gt;=2</code>): every template misses once on its cold-start lookup, so a <code>count==1</code> entry is benign and is filtered out — only repeatedly evicted-and-re-parsed (thrashing) templates are surfaced. The slow-query list is ranked by peak latency (<code>max_latency</code>) so a rarely-but-catastrophically slow query is not buried under frequently-mildly-slow ones. Uses a bounded approximate heavy-hitters tracker (128 entries), so it costs O(1) and never grows unbounded; <code>0</code> disables the top-K log (default: <code>5m</code>).</li>
+<li><code>--bydbql-topk-log-interval duration</code>: How often to log the hottest cache-miss and slow queries. The cache-miss list holds only templates that were compiled more than once — either evicted and compiled again (thrashing), or too large for the byte bound and therefore re-compiled on every single request; a template&rsquo;s unavoidable first-ever compile is excluded at the source, so every entry is actionable. The slow-query list is ranked by peak latency (<code>max_latency</code>) so a rarely-but-catastrophically slow query is not buried under frequently-mildly-slow ones. Uses a bounded approximate heavy-hitters tracker (128 entries), so it costs O(1) and never grows unbounded; <code>0</code> disables the top-K log (default: <code>5m</code>).</li>
+<li><code>--bydbql-topk-slow-ttl duration</code>: Drop a slow-query top-K entry whose query has not been slow again for this long; <code>0</code> keeps entries for the process lifetime (default: <code>24h</code>).</li>
+<li><code>--bydbql-topk-reparse-ttl duration</code>: Drop a cache-miss top-K entry whose template has not been re-parsed again for this long; <code>0</code> keeps entries for the process lifetime (default: <code>24h</code>).</li>
 </ul>
+<p>Each logged entry carries <code>last_seen</code>, and slow entries additionally carry <code>max_latency_at</code>. Both trackers accumulate, so <code>max_latency</code> is a running peak that can long outlive the incident that produced it: without these timestamps a one-off startup spike keeps being reported as if it were current, and a reader cannot tell a live problem from a stale one. The TTLs bound how long that can happen — an entry whose query stops recurring disappears — while <code>max_latency_at</code> dates the peak itself for entries that do keep recurring.</p>
+<p>Keep each TTL comfortably above <code>--bydbql-topk-log-interval</code>. An entry is only ever reported by a dump, so a TTL shorter than the interval lets an entry expire in the gap between two dumps and never be logged at all — the tracker would go quiet not because nothing is wrong but because it forgets faster than it reports. The defaults (<code>24h</code> against <code>5m</code>) leave a wide margin.</p>
 <h4 id="diagnosing-an-ineffective-bydbql-cache">Diagnosing an ineffective BydbQL cache</h4>
 <p>A cache hit costs about 25 ns and 0 allocations, so the cache is effectively free when it works. When it does not, every request re-parses the query — for a wide trace/log query that is roughly <strong>220 µs and ~147 KB / ~2,100 allocations per request</strong> (about four orders of magnitude more CPU and heap churn than a hit). Watch these signals; several going abnormal together points at an ineffective cache:</p>
 <ul>
@@ -1654,6 +1658,13 @@ The same certificate/key pair can be reused for both external traffic and the in
 <li><code>--schema-property-client-tls</code>: Enable TLS for property schema client connections.</li>
 <li><code>--schema-property-client-ca-cert string</code>: CA certificate file to verify the property schema server.</li>
 </ul>
+<h3 id="queue-client-liaison-to-data-nodes">Queue client (liaison to data nodes)</h3>
+<p>These flags configure the connections a liaison holds to the data nodes it queries and writes to. <code>&lt;prefix&gt;</code> is <code>data</code> or <code>liaison</code> depending on which peer set the client serves.</p>
+<ul>
+<li><code>--&lt;prefix&gt;-client-health-check-interval duration</code>: How often to re-check the nodes the client currently considers active, evicting any that no longer answer; <code>0</code> disables the periodic check (default: <code>10s</code>). The active set is otherwise only validated when a node is admitted and, after that, when a request happens to fail on it — so a node that dies stays routable until some query picks it and pays that query&rsquo;s full timeout to discover it. Keep this well below the distributed query timeouts (<code>--dst-broadcast-timeout</code>, default <code>15s</code>), since the interval bounds how long a dead node can keep absorbing queries.</li>
+<li><code>--&lt;prefix&gt;-client-tls</code>: Enable client TLS.</li>
+<li><code>--&lt;prefix&gt;-client-ca-cert string</code>: CA certificate file to verify the server.</li>
+</ul>
 <h3 id="other">Other</h3>
 <ul>
 <li><code>-n, --name string</code>: Name of this service.</li>
@@ -1727,6 +1738,7 @@ The same certificate/key pair can be reused for both external traffic and the in
             <li><a href="#snapshot-retention">Snapshot Retention</a></li>
             <li><a href="#observability">Observability</a></li>
             <li><a href="#schema-registry">Schema Registry</a></li>
+            <li><a href="#queue-client-liaison-to-data-nodes">Queue client (liaison to data nodes)</a></li>
             <li><a href="#other">Other</a></li>
             <li><a href="#global-flags">Global Flags</a></li>
           </ul>
