@@ -1,0 +1,62 @@
+{{- $path := .RelPermalink -}}
+{{- $lang := partial "seo/lang.html" . -}}
+
+{{- /* --- rel=canonical -------------------------------------------------------
+       Self-canonical everywhere, except versioned doc trees that are a duplicate
+       rendering of /latest/ (see seo/doc-canonical-map.html), which point at the
+       /latest/ equivalent of the same page. */ -}}
+{{- $canonical := .Permalink -}}
+{{- range $p := partialCached "seo/doc-canonical-map.html" . -}}
+  {{- if hasPrefix $path $p.from -}}
+    {{- $canonical = absURL (printf "%s%s" $p.to (strings.TrimPrefix $p.from $path)) -}}
+  {{- end -}}
+{{- end -}}
+<link rel="canonical" href="{{ $canonical }}">
+
+{{- /* --- meta description ----------------------------------------------------
+       Hugo's internal opengraph template already emits og:description, but no
+       plain <meta name="description"> was ever rendered. Only emit one when the
+       page has a real description or usable prose — a duplicated boilerplate
+       description across 4k doc pages is worse than letting Google build its own
+       snippet from the content. */ -}}
+{{- $desc := default "" .Params.description -}}
+{{- if and (eq $desc "") (not .IsHome) .Content -}}
+  {{- $desc = .Summary | plainify | htmlUnescape | chomp -}}
+  {{- $desc = replaceRE `\s+` " " $desc | truncate 160 "…" -}}
+{{- end -}}
+{{- with $desc }}
+<meta name="description" content="{{ . }}">
+{{- end }}
+
+{{- /* --- hreflang ------------------------------------------------------------
+       content/zh holds Chinese translations of ~half the posts in content/blog,
+       matched by identical slug. Emit reciprocal alternates only when both pages
+       actually exist, so an unpaired post never claims a translation it lacks. */ -}}
+{{- $en := "" -}}
+{{- $zh := "" -}}
+{{- if hasPrefix $path "/blog/" -}}
+  {{- $slug := strings.TrimPrefix "/blog/" $path -}}
+  {{- if and (ne $slug "") (site.GetPage (printf "/zh/%s" $slug)) -}}
+    {{- $en = $path -}}
+    {{- $zh = printf "/zh/%s" $slug -}}
+  {{- end -}}
+{{- else if hasPrefix $path "/zh/" -}}
+  {{- $slug := strings.TrimPrefix "/zh/" $path -}}
+  {{- if and (ne $slug "") (site.GetPage (printf "/blog/%s" $slug)) -}}
+    {{- $zh = $path -}}
+    {{- $en = printf "/blog/%s" $slug -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (ne $en "") (ne $zh "") }}
+<link rel="alternate" hreflang="en" href="{{ $en | absURL }}">
+<link rel="alternate" hreflang="zh-CN" href="{{ $zh | absURL }}">
+<link rel="alternate" hreflang="x-default" href="{{ $en | absURL }}">
+{{- end }}
+
+{{- /* Note: og:locale is emitted by Hugo's _internal/opengraph.html and is always
+       the site language ("en"), including on the Chinese pages. _internal
+       templates cannot be overridden, and a second og:locale here would just be a
+       conflicting duplicate — the first one wins in every parser. <html lang> and
+       the hreflang pair above are the signals search engines actually use, so this
+       is left alone; fixing it would mean replacing the internal OpenGraph call in
+       themes/docsy/layouts/partials/head.html with a local partial. */ -}}
