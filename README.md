@@ -62,6 +62,80 @@ If you want to display the summary in the popover in the lower right corner, you
 |img|The illustration|false|/images/skywalking_200x200.png|
 |poster|The poster|false|-|
 
+### Community Calendar
+
+Located at `data/talks.yml`, rendered at `/events/calendar/`. This is where conference
+talks, meetups and summits go — the release timeline at `/events/` is driven by
+`content/events` instead, and the two do not mix.
+
+To add or update a talk, edit `data/talks.yml` and open a pull request. You can do it
+entirely in the browser: use the **Add your talk** link on the calendar page, or the
+GitHub *Edit* button on the file. No local Hugo setup needed.
+
+```yaml
+events:
+  - event: Community Over Code Asia 2026
+    intro: >-
+      One or two sentences on what this conference is, for readers who
+      have never heard of it.
+    start: "2026-08-07"
+    end: "2026-08-09"          # omit for a single-day event
+    location: Beijing, China   # or "Online"
+    venue: Mountain Yang Hall  # optional
+    url: https://asia.communityovercode.org
+    recap: /zh/2023-08-20-coc-asia-2023/   # optional, a recap post on this site
+    talks:
+      - title: "Observing LLM Applications with SkyWalking 10.4"
+        speaker: 邵一鸣 YiMing Shao
+        date: "2026-08-09"     # only when it differs from the event start
+        time: 13:30 GMT+8
+        room: Mountain Yang Hall
+        url: https://asia.communityovercode.org/sessions/observability-1206017.html
+        video: https://www.bilibili.com/video/BVxxxxxxxxx
+        intro: >-
+          One or two sentences on what the session covers, in the same
+          language as the title.
+```
+
+Event fields:
+
+|Parameter|Description|Required|Default|
+|----|----|----|----|
+|event|Conference / meetup name|true|-|
+|start|Start date, `"YYYY-MM-DD"`, zero-padded|true|-|
+|end|End date, for multi-day events|false|`start`|
+|location|`City, Country`, or `Online`|true|-|
+|venue|Venue name|false|-|
+|intro|What this conference is, in one or two sentences|true|-|
+|url|Event home page. Omit rather than guess|false|-|
+|recap|Link to a recap post on this site|false|-|
+|talks|One or more sessions|true|-|
+
+Session fields, under `talks`:
+
+|Parameter|Description|Required|Default|
+|----|----|----|----|
+|title|Session title|true|-|
+|speaker|Speaker name. Use `中文名 English Name` when both are known|true|-|
+|intro|What the session covers. Condense the published abstract; don't invent one|false|-|
+|date|Session day, when it differs from the event `start`|false|`start`|
+|time|e.g. `13:30 GMT+8`|false|-|
+|room|Room name|false|-|
+|url|Session page|false|-|
+|video|Recording|false|-|
+|slides|Slide deck|false|-|
+
+Two things happen on their own, so you don't need to maintain them:
+
+- **Upcoming vs. past** is decided at build time from the event's `end` date, and the
+  site rebuilds daily, so an event moves itself into the past section once it is over.
+- **The year pager** under *Past* builds its year buttons and counts from the data, so
+  a new year appears as soon as an event needs it.
+
+If a required field is missing, or a date isn't in `YYYY-MM-DD` form, the build fails
+with a message naming the offending event — so a broken entry shows up as a failed
+check on the pull request rather than as a blank card on the site.
+
 ### Blog
 
 Located at `content/blog`. If you want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.

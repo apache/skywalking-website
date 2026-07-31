@@ -1,0 +1,268 @@
+{{ define "main" }}
+{{/*
+  Community calendar. Data lives in data/talks.yml; nothing here reads
+  content/events/, so the release timeline in events/list.html is untouched.
+*/}}
+{{/*
+  Schema check. A contributor adding a talk edits data/talks.yml straight in the
+  GitHub web editor, so the build is the only thing standing between a typo and
+  production. Malformed YAML already fails in Hugo's data loader; these checks
+  cover the case it cannot see — well-formed YAML that omits a required field,
+  which would otherwise render a silently blank card. errorf fails the build, so
+  it surfaces as a red check on the PR rather than shipping.
+*/}}
+{{ range $i, $ev := .Site.Data.talks.events }}
+  {{ $at := printf "data/talks.yml: event #%d (%s)" (add $i 1) (default "unnamed" $ev.event) }}
+  {{ range slice "event" "start" "location" "intro" }}
+    {{ if not (index $ev .) }}{{ errorf "%s is missing required field %q" $at . }}{{ end }}
+  {{ end }}
+  {{ range $f := slice "start" "end" }}
+    {{ with index $ev $f }}
+      {{ if not (findRE `^\d{4}-\d{2}-\d{2}$` .) }}
+        {{ errorf "%s has %s: %q — expected \"YYYY-MM-DD\", zero-padded (e.g. \"2026-08-07\", not \"2026-8-7\")" $at $f . }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+  {{ if not $ev.talks }}{{ errorf "%s lists no talks" $at }}{{ end }}
+  {{ range $j, $t := $ev.talks }}
+    {{ range slice "title" "speaker" }}
+      {{ if not (index $t .) }}
+        {{ errorf "%s, talk #%d is missing required field %q" $at (add $j 1) . }}
+      {{ end }}
+    {{ end }}
+    {{ with $t.date }}
+      {{ if not (findRE `^\d{4}-\d{2}-\d{2}$` .) }}
+        {{ errorf "%s, talk %q has date: %q — expected a quoted \"YYYY-MM-DD\"" $at $t.title . }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{ $now := now }}
+{{ $upcoming := slice }}
+{{ $past := slice }}
+{{ range .Site.Data.talks.events }}
+  {{ $last := time.AsTime (default .start .end) }}
+  {{/* an event stays "upcoming" until the day after it ends */}}
+  {{ if ge ($last.AddDate 0 0 1).Unix $now.Unix }}
+    {{ $upcoming = $upcoming | append . }}
+  {{ else }}
+    {{ $past = $past | append . }}
+  {{ end }}
+{{ end }}
+{{ $upcoming = sort $upcoming "start" "asc" }}
+{{ $past = sort $past "start" "desc" }}
+{{ $talkCount := 0 }}
+{{ range .Site.Data.talks.events }}{{ $talkCount = add $talkCount (len .talks) }}{{ end }}
+
+<section class="ev-hero">
+  <div class="container">
+    <span class="eyebrow">EVENTS &amp; RELEASES</span>
+    <h1>Where to meet the SkyWalking community</h1>
+    <p>Conference talks, meetups and summits featuring SkyWalking committers and community
+      speakers. Speaking about SkyWalking somewhere?
+      <a href="https://github.com/apache/skywalking-website/edit/master/data/talks.yml">Add your talk</a>.</p>
+    {{ partial "events-tabs.html" (dict "active" "calendar") }}
+  </div>
+</section>
+
+<div class="container cal-wrap">
+  <div class="cal-stats">
+    <span><strong>{{ len $upcoming }}</strong> upcoming</span>
+    <span><strong>{{ len .Site.Data.talks.events }}</strong> events</span>
+    <span><strong>{{ $talkCount }}</strong> talks</span>
+  </div>
+
+  <section class="cal-block">
+    <h2 class="cal-head"><span class="cal-pulse" aria-hidden="true"></span>Upcoming</h2>
+    {{ if $upcoming }}
+      {{ range $upcoming }}
+        {{ template "cal-card" (dict "ev" . "now" $now "upcoming" true) }}
+      {{ end }}
+    {{ else }}
+      <p class="cal-empty">No events scheduled right now — watch the
+        <a href="https://lists.apache.org/list.html?dev@skywalking.apache.org">dev mailing list</a>
+        for the next announcement.</p>
+    {{ end }}
+  </section>
+
+  {{ if $past }}
+  {{/* distinct years, newest first — $past is already sorted desc */}}
+  {{ $years := slice }}
+  {{ range $past }}
+    {{ $y := substr .start 0 4 }}
+    {{ if not (in $years $y) }}{{ $years = $years | append $y }}{{ end }}
+  {{ end }}
+  <section class="cal-block">
+    <div class="cal-past-head">
+      <h2 class="cal-head">Past</h2>
+      <div class="cal-years" role="tablist" aria-label="Show past events by year">
+        {{ range $years }}
+          {{ $y := . }}
+          {{ $n := 0 }}{{ range $past }}{{ if eq (substr .start 0 4) $y }}{{ $n = add $n 1 }}{{ end }}{{ end }}
+          <button type="button" class="cal-yr-btn" data-year="{{ $y }}" role="tab" aria-selected="false">
+            {{ $y }}<span class="cal-yr-n">{{ $n }}</span>
+          </button>
+        {{ end }}
+        <button type="button" class="cal-yr-btn" data-year="all" role="tab" aria-selected="false">All</button>
+      </div>
+    </div>
+    {{/* every group ships visible; the script below hides all but one, so the
+         page still reads end-to-end without JS and stays fully indexable */}}
+    {{ range $years }}
+      {{ $y := . }}
+      <div class="cal-yeargroup" data-year="{{ $y }}">
+        <div class="cal-year"><span>{{ $y }}</span></div>
+        {{ range $past }}
+          {{ if eq (substr .start 0 4) $y }}
+            {{ template "cal-card" (dict "ev" . "now" $now "upcoming" false) }}
+          {{ end }}
+        {{ end }}
+      </div>
+    {{ end }}
+  </section>
+  {{ end }}
+</div>
+
+<script>
+  // Year pager for the Past section. Groups render visible so the page works
+  // without JS; this hides all but the selected year and syncs the #YYYY hash.
+  (function () {
+    var btns = Array.prototype.slice.call(document.querySelectorAll('.cal-yr-btn'));
+    var groups = Array.prototype.slice.call(document.querySelectorAll('.cal-yeargroup'));
+    if (!btns.length || !groups.length) { return; }
+
+    var stamps = Array.prototype.slice.call(document.querySelectorAll('.cal-yeargroup .cal-year'));
+
+    function show(year, push) {
+      groups.forEach(function (g) {
+        g.hidden = !(year === 'all' || g.getAttribute('data-year') === year);
+      });
+      // the in-group year chip only earns its place when several years are stacked
+      stamps.forEach(function (s) { s.hidden = year !== 'all'; });
+      btns.forEach(function (b) {
+        var on = b.getAttribute('data-year') === year;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      if (push) {
+        try {
+          history.replaceState(null, '', year === 'all' ? location.pathname : '#' + year);
+        } catch (e) { /* file:// and the like */ }
+      }
+    }
+
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () { show(b.getAttribute('data-year'), true); });
+    });
+
+    // deep link: /events/calendar/#2023 opens straight on that year
+    var hash = (location.hash || '').replace('#', '');
+    var wanted = /^\d{4}$/.test(hash) &&
+      document.querySelector('.cal-yeargroup[data-year="' + hash + '"]') ? hash : null;
+    show(wanted || btns[0].getAttribute('data-year'), false);
+  })();
+</script>
+{{ end }}
+
+
+{{/* ------------------------------------------------------------------ */}}
+{{ define "cal-card" }}
+{{ $ev := .ev }}
+{{ $start := time.AsTime $ev.start }}
+{{ $end := time.AsTime (default $ev.start $ev.end) }}
+{{ $multi := gt $end.Unix $start.Unix }}
+{{ $sameMonth := and $multi (eq ($start.Format "2006-01") ($end.Format "2006-01")) }}
+
+<article class="cal-card{{ if .upcoming }} is-upcoming{{ end }}">
+  <div class="cal-when" aria-hidden="true">
+    <span class="cal-mon">{{ $start.Format "Jan" }}</span>
+    <span class="cal-day">
+      {{- if $sameMonth }}{{ $start.Format "2" }}–{{ $end.Format "2" }}
+      {{- else }}{{ $start.Format "2" }}{{ end -}}
+    </span>
+    <span class="cal-yr">{{ $start.Format "2006" }}</span>
+  </div>
+
+  <div class="cal-body">
+    <div class="cal-meta">
+      <time datetime="{{ $ev.start }}">
+        {{- if and $multi (not $sameMonth) -}}
+          {{ $start.Format "Jan 2" }} – {{ $end.Format "Jan 2, 2006" }}
+        {{- else if $multi -}}
+          {{ $start.Format "Jan 2" }}–{{ $end.Format "2, 2006" }}
+        {{- else -}}
+          {{ $start.Format "Mon, Jan 2, 2006" }}
+        {{- end -}}
+      </time>
+      <span class="cal-loc">{{ $ev.location }}{{ with $ev.venue }} · {{ . }}{{ end }}</span>
+      {{ if .upcoming }}
+        {{ $days := int (math.Ceil (div (float (sub $start.Unix .now.Unix)) 86400.0)) }}
+        <span class="cal-badge">
+          {{- if le $days 0 }}Happening now
+          {{- else if eq $days 1 }}Tomorrow
+          {{- else }}In {{ $days }} days{{ end -}}
+        </span>
+      {{ end }}
+    </div>
+
+    {{ $ext := false }}
+    {{ with $ev.url }}{{ $ext = hasPrefix . "http" }}{{ end }}
+    <h3 class="cal-title">
+      {{- if $ev.url -}}
+        <a href="{{ $ev.url }}"{{ if $ext }} target="_blank" rel="noopener"{{ end }}>
+          {{- $ev.event }}{{ if $ext }}<span class="cal-ext" aria-hidden="true">↗</span>{{ end -}}
+        </a>
+      {{- else -}}
+        {{ $ev.event }}
+      {{- end -}}
+    </h3>
+
+    {{ with $ev.intro }}<p class="cal-intro">{{ . }}</p>{{ end }}
+
+    <ul class="cal-talks">
+      {{ range $ev.talks }}
+      <li class="cal-talk">
+        <span class="cal-talk-dot" aria-hidden="true"></span>
+        <div class="cal-talk-body">
+          <p class="cal-talk-title">
+            {{- if .url -}}
+              {{ $tExt := hasPrefix .url "http" }}
+              <a href="{{ .url }}"{{ if $tExt }} target="_blank" rel="noopener"{{ end }}>
+                {{- .title }}{{ if $tExt }}<span class="cal-ext" aria-hidden="true">↗</span>{{ end -}}
+              </a>
+            {{- else -}}
+              {{ .title }}
+            {{- end -}}
+          </p>
+          <p class="cal-talk-sub">
+            <span class="cal-speaker">{{ .speaker }}</span>
+            {{ with .date }}<span class="cal-sep">·</span><span>{{ (time.AsTime .).Format "Jan 2" }}</span>{{ end }}
+            {{ with .time }}<span class="cal-sep">·</span><span>{{ . }}</span>{{ end }}
+            {{ with .room }}<span class="cal-sep">·</span><span>{{ . }}</span>{{ end }}
+            {{ with .video }}<a class="cal-link" href="{{ . }}" target="_blank" rel="noopener">Video</a>{{ end }}
+            {{ with .slides }}<a class="cal-link" href="{{ . }}" target="_blank" rel="noopener">Slides</a>{{ end }}
+          </p>
+          {{ with .intro }}<p class="cal-talk-intro">{{ . }}</p>{{ end }}
+        </div>
+      </li>
+      {{ end }}
+    </ul>
+
+    {{ if or $ev.url $ev.recap }}
+    <div class="cal-actions">
+      {{ with $ev.url }}
+      <a class="cal-site" href="{{ . }}"{{ if $ext }} target="_blank" rel="noopener"{{ end }}>
+        {{- if $ext -}}
+          {{ replaceRE `^https?://(www\.)?([^/]+).*$` "$2" . }}<span class="cal-ext" aria-hidden="true">↗</span>
+        {{- else -}}
+          Event page<span class="cal-ext" aria-hidden="true">→</span>
+        {{- end -}}
+      </a>
+      {{ end }}
+      {{ with $ev.recap }}<a class="cal-recap" href="{{ . }}">Read the recap →</a>{{ end }}
+    </div>
+    {{ end }}
+  </div>
+</article>
+{{ end }}
