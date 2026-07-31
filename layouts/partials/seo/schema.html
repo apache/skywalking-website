@@ -1,0 +1,107 @@
+{{- /* JSON-LD, which _internal/schema.html does not emit: Organization and
+       SoftwareApplication on the home page, BlogPosting on posts, TechArticle
+       plus BreadcrumbList on docs. */ -}}
+
+{{- $lang := partial "seo/lang.html" . -}}
+{{- $org := dict
+      "@type" "Organization"
+      "@id" (absURL "#organization")
+      "name" "Apache SkyWalking"
+      "url" (absURL "")
+      "logo" (absURL "images/skywalking_400x400.png")
+      "sameAs" (slice
+        "https://github.com/apache/skywalking"
+        "https://twitter.com/asfskywalking"
+        "https://projects.apache.org/project.html?skywalking")
+      "parentOrganization" (dict
+        "@type" "Organization"
+        "name" "The Apache Software Foundation"
+        "url" "https://www.apache.org/")
+-}}
+{{- $publisher := dict "@id" (absURL "#organization") -}}
+
+{{- /* Organization is repeated on every page: consumers do not dereference an
+       @id defined on another document, so publisher would resolve to nothing. */ -}}
+{{- $nodes := slice -}}
+
+{{- if .IsHome -}}
+  {{- /* Guarded so a reshuffle of data/releases.yml cannot fail the build. */ -}}
+  {{- $version := "" -}}
+  {{- with site.Data.releases -}}
+    {{- with index . 0 -}}
+      {{- with .list -}}
+        {{- with index . 0 -}}
+          {{- with .distribution -}}
+            {{- with index . 0 -}}
+              {{- $version = default "" .version -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $app := dict
+        "@type" "SoftwareApplication"
+        "name" "Apache SkyWalking"
+        "url" (absURL "")
+        "applicationCategory" "DeveloperApplication"
+        "applicationSubCategory" "Observability, Application Performance Monitoring, Distributed Tracing"
+        "operatingSystem" "Linux, macOS, Windows"
+        "description" site.Params.description
+        "downloadUrl" (absURL "downloads/")
+        "license" "https://www.apache.org/licenses/LICENSE-2.0"
+        "isAccessibleForFree" true
+        "author" $publisher
+        "offers" (dict "@type" "Offer" "price" "0" "priceCurrency" "USD")
+  -}}
+  {{- with $version -}}
+    {{- $app = merge $app (dict "softwareVersion" (strings.TrimPrefix "v" .)) -}}
+  {{- end -}}
+  {{- $nodes = $nodes | append $org -}}
+  {{- $nodes = $nodes | append (dict
+        "@type" "WebSite"
+        "@id" (absURL "#website")
+        "url" (absURL "")
+        "name" site.Title
+        "inLanguage" $lang
+        "publisher" $publisher) -}}
+  {{- $nodes = $nodes | append $app -}}
+{{- else if eq .Kind "page" -}}
+  {{- $isDoc := hasPrefix .RelPermalink "/docs/" -}}
+  {{- $type := cond $isDoc "TechArticle" "BlogPosting" -}}
+  {{- $article := dict
+        "@type" $type
+        "headline" .Title
+        "url" .Permalink
+        "mainEntityOfPage" (dict "@type" "WebPage" "@id" .Permalink)
+        "inLanguage" $lang
+        "publisher" $publisher
+  -}}
+  {{- with .Params.description -}}
+    {{- $article = merge $article (dict "description" .) -}}
+  {{- end -}}
+  {{- if not .Date.IsZero -}}
+    {{- $article = merge $article (dict "datePublished" (.Date.Format "2006-01-02")) -}}
+  {{- end -}}
+  {{- if not .Lastmod.IsZero -}}
+    {{- $article = merge $article (dict "dateModified" (.Lastmod.Format "2006-01-02")) -}}
+  {{- end -}}
+  {{- with .Params.author -}}
+    {{- $article = merge $article (dict "author" (dict "@type" "Person" "name" .)) -}}
+  {{- end -}}
+  {{- $nodes = $nodes | append $org -}}
+  {{- $nodes = $nodes | append $article -}}
+
+  {{- if $isDoc -}}
+    {{- $nodes = $nodes | append (dict
+          "@type" "BreadcrumbList"
+          "itemListElement" (slice
+            (dict "@type" "ListItem" "position" 1 "name" site.Title "item" (absURL ""))
+            (dict "@type" "ListItem" "position" 2 "name" "Documentation" "item" (absURL "docs/"))
+            (dict "@type" "ListItem" "position" 3 "name" .Title "item" .Permalink))) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- with $nodes }}
+<script type="application/ld+json">{{ (dict "@context" "https://schema.org" "@graph" .) | jsonify | safeJS }}</script>
+{{- end }}

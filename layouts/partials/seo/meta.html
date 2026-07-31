@@ -1,0 +1,50 @@
+{{- $path := .RelPermalink -}}
+{{- $lang := partial "seo/lang.html" . -}}
+
+{{- /* Self-canonical, except doc versions that duplicate /latest/. */ -}}
+{{- $canonical := .Permalink -}}
+{{- range $p := partialCached "seo/doc-canonical-map.html" . -}}
+  {{- if hasPrefix $path $p.from -}}
+    {{- $canonical = absURL (printf "%s%s" $p.to (strings.TrimPrefix $p.from $path)) -}}
+  {{- end -}}
+{{- end -}}
+<link rel="canonical" href="{{ $canonical }}">
+
+{{- /* Omitted when there is nothing page-specific to say: one boilerplate
+       description repeated across 4k doc pages is worse than none. */ -}}
+{{- $desc := default "" .Params.description -}}
+{{- if and (eq $desc "") (not .IsHome) .Content -}}
+  {{- $desc = .Summary | plainify | htmlUnescape | chomp -}}
+  {{- $desc = replaceRE `\s+` " " $desc | truncate 160 "…" -}}
+{{- end -}}
+{{- with $desc }}
+<meta name="description" content="{{ . }}">
+{{- end }}
+
+{{- /* Reciprocal alternates only where both slugs exist, so an unpaired post
+       never claims a translation it lacks. */ -}}
+{{- $en := "" -}}
+{{- $zh := "" -}}
+{{- if hasPrefix $path "/blog/" -}}
+  {{- $slug := strings.TrimPrefix "/blog/" $path -}}
+  {{- if and (ne $slug "") (site.GetPage (printf "/zh/%s" $slug)) -}}
+    {{- $en = $path -}}
+    {{- $zh = printf "/zh/%s" $slug -}}
+  {{- end -}}
+{{- else if hasPrefix $path "/zh/" -}}
+  {{- $slug := strings.TrimPrefix "/zh/" $path -}}
+  {{- if and (ne $slug "") (site.GetPage (printf "/blog/%s" $slug)) -}}
+    {{- $zh = $path -}}
+    {{- $en = printf "/blog/%s" $slug -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (ne $en "") (ne $zh "") }}
+<link rel="alternate" hreflang="en" href="{{ $en | absURL }}">
+<link rel="alternate" hreflang="zh-CN" href="{{ $zh | absURL }}">
+<link rel="alternate" hreflang="x-default" href="{{ $en | absURL }}">
+{{- end }}
+
+{{- /* og:locale still reports "en" on Chinese pages: it comes from
+       _internal/opengraph.html, which cannot be overridden, and a second tag here
+       would only be a conflicting duplicate. Fixing it means replacing that
+       template call in head.html. */ -}}
