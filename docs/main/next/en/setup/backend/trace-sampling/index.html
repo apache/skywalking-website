@@ -33,7 +33,7 @@ If you enable the trace sampling mechanism at the server-side, you will find tha
   <meta itemprop="name" content="Trace Sampling at server side">
   <meta itemprop="description" content="Trace Sampling at server side An advantage of a distributed tracing system is that detailed information from the traces can be obtained. However, the downside is that these traces use up a lot of storage.
 If you enable the trace sampling mechanism at the server-side, you will find that the service metrics, service instance, endpoint, and topology all have the same accuracy as before. The only difference is that they do not save all traces in storage.">
-  <meta itemprop="wordCount" content="631">
+  <meta itemprop="wordCount" content="832">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Sampling at server side">
   <meta name="twitter:description" content="Trace Sampling at server side An advantage of a distributed tracing system is that detailed information from the traces can be obtained. However, the downside is that these traces use up a lot of storage.
@@ -1431,6 +1431,14 @@ If you enable the trace sampling mechanism at the server-side, you will find tha
     <li>
         
             <a href="/docs/main/next/en/banyandb/stages">Data Lifecycle Stages(Hot/Warm/Cold)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/main/next/en/banyandb/tail-sampling">Trace Tail Sampling</a>
         
     </li>
 
@@ -3021,7 +3029,7 @@ If you enable the trace sampling mechanism at the server-side, you will find tha
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: be0383a</div>
+                  <div class="commit-id">Commit Id: c66a476</div>
                 
 
 
@@ -3129,6 +3137,23 @@ Setting this threshold on latency (in milliseconds) would cause slow trace segme
 <h1 id="note">Note</h1>
 <p>When you enable sampling, the actual sample rate may exceed sampleRate. The reason is that currently, all error/slow segments will be saved; meanwhile, the upstream and downstream may not be sampled. This feature ensures that you have the error/slow stacks and segments, although it is not guaranteed that you would have the whole traces.</p>
 <p>Note that if most of the accesses have failed or are slow, the sampling rate would be close to 100%. This may cause the backend or storage clusters to crash.</p>
+<h1 id="zipkin-receiver-sampling">Zipkin receiver sampling</h1>
+<p>Zipkin spans do not pass through <code>agent-analyzer</code>, so they are sampled by the receiver instead,
+also at ingest and before storage.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">receiver-zipkin</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#57606a"># The sample rate precision is 1/10000, should be between 0 and 10000</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">sampleRate</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_ZIPKIN_SAMPLE_RATE:10000}<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#57606a"># The maximum spans to be collected per second. 0 means no limit. Spans exceeding this threshold will be dropped.</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">maxSpansPerSecond</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_ZIPKIN_MAX_SPANS_PER_SECOND:0}<span style="color:#fff">
+</span></span></span></code></pre></div><p><code>sampleRate</code> keeps a span when <code>abs(traceId) &lt;= Long.MAX_VALUE * sampleRate / 10000</code>. Because the
+boundary is derived from the trace ID, every span of a given trace is kept or dropped together.
+A span with <code>debug=true</code> is always kept, ignoring the sample rate.</p>
+<p><code>maxSpansPerSecond</code> is a rate limiter applied <strong>per span</strong>, before the rate check. Unlike the
+other mechanisms it is not trace-consistent: when the limit is hit it can drop some spans of a
+trace while keeping others, leaving partial traces in storage.</p>
+<h1 id="see-also">See also</h1>
+<p>Both mechanisms above decide at <strong>ingest</strong>, before the trace is written. BanyanDB can also discard traces <em>after</em> storage, during its own compaction, which lets the decision consider the whole trace and reclaim space already written — see <a href="../../../banyandb/tail-sampling">Trace Tail Sampling</a>. The two are independent gates, so enabling both multiplies the drop rate.</p>
 
 </div>
 
@@ -3168,6 +3193,8 @@ Setting this threshold on latency (in milliseconds) would cause slow trace segme
     </li>
     <li><a href="#recommendation">Recommendation</a></li>
     <li><a href="#note">Note</a></li>
+    <li><a href="#zipkin-receiver-sampling">Zipkin receiver sampling</a></li>
+    <li><a href="#see-also">See also</a></li>
   </ul>
 </nav>
 
@@ -3276,6 +3303,12 @@ Setting this threshold on latency (in milliseconds) would cause slow trace segme
 
     </div>
     
+
+
+
+
+
+
 
 
 
