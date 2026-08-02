@@ -35,7 +35,7 @@ Tired of understanding these complicated multiprocessing behaviors? Try the new 
   <meta itemprop="description" content="How to use with Gunicorn? Gunicorn is another popular process manager and prefork server widely used in production. The state-of-the-art practice is to use Gunicorn as the process manager for ASGI applications such as FastAPI to get resilient &amp; blazing fast services.
 Since Gunicorn is a prefork server, it will fork a new process for each worker, and the forked process will be the one that actually serves requests.
 Tired of understanding these complicated multiprocessing behaviors? Try the new sw-python run --prefork/-p support for Gunicorn first! You can always fall back to the manual approach (although it’s also non-intrusive for application).">
-  <meta itemprop="wordCount" content="462">
+  <meta itemprop="wordCount" content="645">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="How to use with Gunicorn?">
   <meta name="twitter:description" content="How to use with Gunicorn? Gunicorn is another popular process manager and prefork server widely used in production. The state-of-the-art practice is to use Gunicorn as the process manager for ASGI applications such as FastAPI to get resilient &amp; blazing fast services.
@@ -636,7 +636,7 @@ Tired of understanding these complicated multiprocessing behaviors? Try the new 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 88d30ab</div>
+                  <div class="commit-id">Commit Id: e78d0cf</div>
                 
 
 
@@ -684,22 +684,35 @@ You can always fall back to the manual approach (although it&rsquo;s also non-in
 <blockquote>
 <p>Note: Python 3.10+ is required. Earlier versions (3.7-3.9) are no longer supported.</p>
 </blockquote>
-<p><strong>TL;DR:</strong> specify <code>-p</code> or <code>--prefork</code> in <code>sw-python run -p</code> and all Gunicorn workers and master will get their own working agent.</p>
+<p><strong>TL;DR:</strong> specify <code>-p</code> or <code>--prefork</code> in <code>sw-python run -p</code> and every Gunicorn worker will get its own working agent (the master is instrumented only and runs no agent).</p>
 <p><strong>Important:</strong> if the call to gunicorn is prefixed with other commands, this approach will fail
 since agent currently looks for the command line input at index 0 for safety as an experimental feature.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>sw-python run -p gunicorn gunicorn_consumer_prefork:app --workers <span style="color:#0550ae">2</span> --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8088
 </span></span></code></pre></div><p><strong>Long version:</strong> (notice this is different from how uWSGI equivalent works)</p>
 <p>By specifying the -p or &ndash;prefork option in sw-python CLI, the <code>agent_experimental_fork_support</code> agent option will be turned on automatically.</p>
 <p>Startup flow:
-sw-python -&gt; gunicorn -&gt; master process (agent starts) -&gt; fork -&gt; worker process (agent restarts due to os.register_at_fork)</p>
-<p>The master process will get its own agent, although it won&rsquo;t report any trace, since obviously it doesn&rsquo;t take requests,
-it still reports metrics that is useful for debugging</p>
+sw-python -&gt; gunicorn -&gt; master process (instrumentation only) -&gt; fork -&gt; worker process (full agent starts due to os.register_at_fork)</p>
+<p>The master process does not run a full agent: it only installs instrumentation, and the reporters plus the
+gRPC channel are created in each forked worker. Therefore the master does not appear as a service instance
+(it takes no requests anyway). A gRPC channel created before fork() is unsafe with grpcio &gt;= 1.80, see
+<a href="https://github.com/apache/skywalking/issues/13958">apache/skywalking#13958</a>.</p>
 <blockquote>
 <p>A runnable example can be found in the demo folder of skywalking-python GitHub repository</p>
 </blockquote>
+<h3 id="known-issue-with-agent--120-and-grpcio--180">Known issue with agent &lt;= 1.2.0 and grpcio &gt;= 1.80</h3>
+<p>Agent versions up to 1.2.0 started a full agent (including a gRPC channel) in the Gunicorn master before forking.
+With grpcio &gt;= 1.80 this produces continuous <code>Kick Failure (eventfd_write: Bad file descriptor)</code> errors
+and can silently hang workers. Tracing generally keeps working — the errors come from the gRPC client polling
+engine and are unrelated to the OAP version. Workarounds on old agents: pin <code>grpcio&lt;1.80</code> or use <code>SW_AGENT_PROTOCOL=http</code>.
+Fixed agent versions require <code>grpcio &gt;= 1.83</code> and never create a gRPC channel in the master.</p>
+<h3 id="incompatible-with-the-asyncio-enhancement">Incompatible with the asyncio enhancement</h3>
+<p><code>SW_AGENT_ASYNCIO_ENHANCEMENT=true</code> is incompatible with <code>sw-python run -p gunicorn</code>: the asyncio agent has no
+fork support, so the agent refuses to start (an error is logged) and the application serves WITHOUT observability.
+Remove the asyncio enhancement option, or run Gunicorn without <code>-p</code>.</p>
 <h2 id="manual-approach-only-use-when-sw-python-doesnt-work">Manual Approach (only use when sw-python doesn&rsquo;t work)</h2>
-<p><strong>Limitation</strong>: Using normal postfork hook will not add observability to the master process, you could also define a prefork hook to
-start an agent in the master process, with a instance name like <code>instance-name-master(&lt;pid&gt;)</code></p>
+<p><strong>Limitation</strong>: Using normal postfork hook will not add observability to the master process.
+Do NOT start an agent in the master process (e.g. from a prefork hook): a gRPC channel created before
+fork() is unsafe with grpcio &gt;= 1.80 and can deadlock workers.</p>
 <p>The following is just an example, since Gunicorn&rsquo;s automatic injection approach is likely to work in many situations.</p>
 <blockquote>
 <p>The manual approach should not be used together with the agent&rsquo;s fork support. Otherwise, agent will be dual booted and
@@ -759,7 +772,12 @@ def post_fork(server, worker):
   <ul>
     <li><a href="#how-to-use-with-gunicorn">How to use with Gunicorn?</a>
       <ul>
-        <li><a href="#automatic-injection-approach-non-intrusive">Automatic Injection Approach (Non-intrusive)</a></li>
+        <li><a href="#automatic-injection-approach-non-intrusive">Automatic Injection Approach (Non-intrusive)</a>
+          <ul>
+            <li><a href="#known-issue-with-agent--120-and-grpcio--180">Known issue with agent &lt;= 1.2.0 and grpcio &gt;= 1.80</a></li>
+            <li><a href="#incompatible-with-the-asyncio-enhancement">Incompatible with the asyncio enhancement</a></li>
+          </ul>
+        </li>
         <li><a href="#manual-approach-only-use-when-sw-python-doesnt-work">Manual Approach (only use when sw-python doesn&rsquo;t work)</a></li>
       </ul>
     </li>
@@ -871,6 +889,8 @@ def post_fork(server, worker):
 
     </div>
     
+
+
 
 
 

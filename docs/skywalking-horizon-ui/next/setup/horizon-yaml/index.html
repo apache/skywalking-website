@@ -35,7 +35,7 @@ Section Purpose Details server HTTP listener and static asset path. server templ
   <meta itemprop="description" content="horizon.yaml Reference horizon.yaml is the single configuration file for the Horizon BFF. Validation runs at startup and again on every hot reload. A file that fails validation is rejected; the BFF keeps the previously valid config rather than serving with broken settings.
 This page is the top-level map. Each subsection has its own detail page:
 Section Purpose Details server HTTP listener and static asset path. server templates Template source mode: OAP-backed (live) or local read-only bundle (readonly). below oap OAP query / admin / Zipkin URLs, timeouts, basic-auth, MQE override. oap auth Active backend (local or LDAP), local users, LDAP binding, break-glass. auth rbac Role definitions, permission grants, landing route per role. rbac session Cookie name, TTL, secure flag. session audit Audit trail switch &#43; log file path. audit debugLog Wire-level request/response log for troubleshooting. debugLog query Per-request query limits (layer-landing service cap, Overview top-N). below sourceMaps In-memory source-map budgets &#43; static mount for the Browser Logs tab. Browser Logs &amp; Source Maps ai AI assistant: provider, model, credentials, prompt overrides, history cap. AI Assistant performance How hard the BFF fans queries out to OAP, plus render / per-request record caps. below layers Layers to hide from the sidebar. below Top-level shape server: { host, port, staticDir? } templates: { mode? } # live (default) | readonly oap: queryUrl: string adminUrl: string zipkinUrl?: string timeoutMs?: number auth?: { username, password } mqe?: { host?, port? } auth: backend: local | ldap local?: { users: [{ username, passwordHash, roles? }] } ldap?: { ... } breakGlass?: { username, passwordHash, roles? } rbac: enabled?: boolean roles?: { &lt;name&gt;: [verb, ...] } landingByRole?: { &lt;name&gt;: &#34;/route&#34; } session: { ttlMinutes?, cookieName?, cookieSecure? } audit: { enabled?, file? } debugLog: { enabled?, file?, maxBodyChars?, redactAuthHeaders? } query: { landingServiceCap?, overviewTopN? } sourceMaps: { enabled?, maxFileBytes?, maxTotalBytes?, maxFileCount?, bootMountDir? } ai: enabled?: boolean # off by default provider?: openai-compatible | bedrock model?: string baseUrl?: string # openai-compatible only region?: string # bedrock only; blank → AWS_REGION / AWS_DEFAULT_REGION apiKey?: string # secret — set via env interpolation only systemPrompt?: string # blank → bundled default starters?: [string, ...] # blank → bundled defaults history?: { maxMb? } performance: bulk: topology: { nodeBulkSize?, edgeBulkSize?, concurrency? } infra3d: { metricBulkSize?, metricConcurrency?, topologyConcurrency?, templateConcurrency? } landing: { bulkSize?, concurrency? } dashboard: { bulkSize? } limits: topologyMaxNodes?: number topologyMaxEdges?: number maxPageSize: { traces?, logs?, browserLogs?, events? } layers: { excluded?: [{ key, reason? }] } The ai block’s fields, env-var forms, and provider recipes are documented on AI Assistant.">
-  <meta itemprop="wordCount" content="2316">
+  <meta itemprop="wordCount" content="2362">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="horizon.yaml Reference">
   <meta name="twitter:description" content="horizon.yaml Reference horizon.yaml is the single configuration file for the Horizon BFF. Validation runs at startup and again on every hot reload. A file that fails validation is rejected; the BFF keeps the previously valid config rather than serving with broken settings.
@@ -1230,7 +1230,7 @@ Section Purpose Details server HTTP listener and static asset path. server templ
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 2975fc3</div>
+                  <div class="commit-id">Commit Id: 8269984</div>
                 
 
 
@@ -1446,7 +1446,7 @@ Section Purpose Details server HTTP listener and static asset path. server templ
 <li>Auth backend selection (re-evaluated on next login).</li>
 <li>RBAC roles and policy (re-evaluated on next route call).</li>
 <li>OAP URLs and credentials (used on next outbound call).</li>
-<li>Session TTL (new sessions use the new TTL; existing sessions keep their original).</li>
+<li>Session TTL (applies to every session immediately, already-signed-in ones included — see <a href="../session#hot-reload">Sessions</a>).</li>
 <li><code>sourceMaps.enabled</code>, <code>sourceMaps.maxTotalBytes</code>, <code>sourceMaps.maxFileCount</code> — applied on the next source-map upload / resolve / list. Lowering a budget trims the in-memory <strong>uploaded</strong> set then (least-recently-used first). It does <strong>not</strong> shrink maps already loaded from the static mount — see below.</li>
 </ul>
 <p>These changes require a process restart:</p>
@@ -1569,29 +1569,29 @@ cap and pair it with a tighter OAP rate limit.</p>
       </tr>
       <tr>
           <td><code>maxPageSize.traces</code></td>
-          <td>The maximum <strong>records</strong> fetched per Traces request (the storage <code>LIMIT</code>, not a page count). The page-size picker on the page maxes at this same value, so a client can&rsquo;t out-ask the dropdown.</td>
+          <td>The largest <strong>page</strong> the Traces list will show — records displayed at once, not a page count. The page-size picker on the page maxes at this same value, so a client can&rsquo;t out-ask the dropdown. Each read fetches one record beyond the page, which is how the list knows whether there is a next page.</td>
           <td><code>100</code></td>
       </tr>
       <tr>
           <td><code>maxPageSize.logs</code></td>
-          <td>The same per-request record cap for Logs.</td>
+          <td>The same displayed-page cap for Logs.</td>
           <td><code>100</code></td>
       </tr>
       <tr>
           <td><code>maxPageSize.browserLogs</code></td>
-          <td>The same per-request record cap for Browser Logs.</td>
+          <td>The same displayed-page cap for Browser Logs.</td>
           <td><code>100</code></td>
       </tr>
       <tr>
           <td><code>maxPageSize.events</code></td>
-          <td>The same per-request record cap for Events. Defaults deeper than the other feeds because events are grouped for display (one deployment produces many per-instance rows), so a raw page has to carry more records to fill a screen.</td>
+          <td>The same displayed-page cap for Events. Defaults deeper than the other feeds because events are grouped for display (one deployment produces many per-instance rows), so a raw page has to carry more records to fill a screen.</td>
           <td><code>200</code></td>
       </tr>
   </tbody>
 </table>
 <ul>
 <li><strong><code>topologyMaxNodes</code> / <code>topologyMaxEdges</code></strong> are a readability and safety valve, not a data limit — if your deployment legitimately has a graph this large, raising them lets it render (at the cost of a denser scene and a heavier draw). Lower them if you&rsquo;d rather force operators to scope down sooner.</li>
-<li><strong><code>maxPageSize.*</code></strong> bound how many rows one Traces / Logs / Browser-Logs / Events request pulls from storage. Some storage backends fail or slow on large list queries — lower these to keep list pages cheap on a constrained backend; raise them (up to the ceiling) if your backend serves big result sets comfortably and operators want more rows per fetch.</li>
+<li><strong><code>maxPageSize.*</code></strong> bound how many rows one Traces / Logs / Browser-Logs / Events page shows, and with it how much each list read pulls from storage (one record beyond the page — that extra row is how the list knows another page exists). Some storage backends fail or slow on large list queries — lower these to keep list pages cheap on a constrained backend; raise them (up to the ceiling) if your backend serves big result sets comfortably and operators want more rows per page.</li>
 </ul>
 <h2 id="excluded-layers">Excluded layers</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">layers</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -1775,6 +1775,8 @@ Layer dashboards page.</li>
 
     </div>
     
+
+
 
 
 
