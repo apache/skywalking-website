@@ -35,7 +35,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
   <meta itemprop="description" content="Upgrade Procedure This document describes how to upgrade your existing installation of the BanyanDB database.
 Server and File Versioning BanyanDB uses a separate version for the server and the file format. The server version is the version of the BanyanDB server binary, and the file version is the version of the data files stored on the disk.
 You can use “banyand liaison/data/standalone -v” to check the server version. The file version is stored in “metadata” file laid in each “segment” folder.">
-  <meta itemprop="wordCount" content="831">
+  <meta itemprop="wordCount" content="1202">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Upgrade Procedure">
   <meta name="twitter:description" content="Upgrade Procedure This document describes how to upgrade your existing installation of the BanyanDB database.
@@ -1431,7 +1431,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 5898e90</div>
+                  <div class="commit-id">Commit Id: 21d113a</div>
                 
 
 
@@ -1471,6 +1471,12 @@ You can use “banyand liaison/data/standalone -v” to check the server version
 <li>Upgrade &ldquo;data&rdquo; nodes first, then &ldquo;liaison&rdquo; nodes.</li>
 <li>After upgrading all nodes, the cluster will be running the new version.</li>
 </ul>
+<blockquote>
+<p><strong>Exception — upgrading to 0.11 or later.</strong> The vectorized query paths change the
+liaison&lt;-&gt;data wire format, and a data node must never have a vectorized path enabled
+that the liaison it answers cannot decode. For 0.11 the order is <strong>reversed</strong>: upgrade
+&ldquo;liaison&rdquo; nodes first, then &ldquo;data&rdquo; nodes. See <a href="#vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default</a>.</p>
+</blockquote>
 <p>To ensure this strategy works, you should have a minimum of one node for each role of node in the cluster. For example, if you have a 2-node cluster, you should have at least one &ldquo;liaison&rdquo; and one &ldquo;data&rdquo; node.</p>
 <p>The cluster should also have enough capacity to handle the load when one node is down for upgrade.</p>
 <h2 id="minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy to Upgrade a Cluster</h2>
@@ -1483,6 +1489,39 @@ You can use “banyand liaison/data/standalone -v” to check the server version
 </ul>
 <p>The data ingestion and retrieval will be stopped during the upgrade process. The downtime will be the sum of the time taken to stop and start the nodes. All these steps should be running in parallel to minimize the downtime.</p>
 <p>If you don&rsquo;t have enough resource to perform a rolling upgrade or you have a large cluster with many nodes, you can use the minimum downtime strategy.</p>
+<h2 id="upgrading-to-011">Upgrading to 0.11</h2>
+<p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.11.0.</p>
+<h3 id="vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default (breaking for rolling upgrades)</h3>
+<p>The vectorized <strong>stream</strong> and <strong>trace</strong> query paths are now enabled by default, joining <strong>measure</strong> (default-on since 0.10). <code>--stream-vectorized-enabled</code>, <code>--trace-vectorized-enabled</code> and <code>--measure-vectorized-enabled</code> all default to <code>true</code>.</p>
+<p><strong>This changes the required rolling-upgrade order. Upgrade &ldquo;liaison&rdquo; nodes BEFORE &ldquo;data&rdquo; nodes.</strong></p>
+<p>The reason is that each flag selects the liaison&lt;-&gt;data wire format as well as the query engine. A flag-on distributed <strong>data</strong> node emits a native columnar frame instead of protobuf. Liaison nodes on 0.11 accept both — they dispatch per message on the frame&rsquo;s leading magic byte and fall back to protobuf — but a liaison still running an older binary has <strong>no frame decoder at all</strong> and will fail to deserialize the response.</p>
+<p>The two orders behave differently:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Upgrade order</th>
+          <th>Result</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Liaison first, then data</td>
+          <td><strong>Safe.</strong> New liaisons decode both frames and protobuf; old data nodes keep sending protobuf until upgraded.</td>
+      </tr>
+      <tr>
+          <td>Data first, then liaison</td>
+          <td><strong>Queries fail</strong> for the duration of the rollout. New data nodes emit frames that old liaisons cannot decode.</td>
+      </tr>
+  </tbody>
+</table>
+<p>This is the opposite of the general rolling strategy documented above, which applies to all other upgrades.</p>
+<p>If you cannot control node ordering, either use the <a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy</a>, or start the new data nodes with the vectorized paths explicitly disabled and enable them after every liaison is upgraded:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>banyand data <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --stream-vectorized-enabled<span style="color:#0550ae">=</span><span style="color:#6639ba">false</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --trace-vectorized-enabled<span style="color:#0550ae">=</span><span style="color:#6639ba">false</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --measure-vectorized-enabled<span style="color:#0550ae">=</span><span style="color:#6639ba">false</span>
+</span></span></code></pre></div><p>Standalone deployments are unaffected: the frame is only emitted on a distributed data node, so a standalone server always uses the protobuf path regardless of the flag.</p>
+<p><strong>Rollback.</strong> Pass <code>--stream-vectorized-enabled=false</code> / <code>--trace-vectorized-enabled=false</code> / <code>--measure-vectorized-enabled=false</code> on the standalone or data-node command line and restart. The row path and the protobuf wire format resume immediately; no data migration is involved, because the flags affect only the query and wire paths, never the on-disk format.</p>
 <h2 id="upgrading-to-010">Upgrading to 0.10</h2>
 <p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.10.0.</p>
 <h3 id="property-on-disk-path-change-breaking">Property on-disk path change (breaking)</h3>
@@ -1543,6 +1582,11 @@ You can use “banyand liaison/data/standalone -v” to check the server version
         <li><a href="#upgrade-a-single-node">Upgrade a Single Node</a></li>
         <li><a href="#rolling-strategy-to-upgrade-a-cluster">Rolling Strategy to Upgrade a Cluster</a></li>
         <li><a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy to Upgrade a Cluster</a></li>
+        <li><a href="#upgrading-to-011">Upgrading to 0.11</a>
+          <ul>
+            <li><a href="#vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default (breaking for rolling upgrades)</a></li>
+          </ul>
+        </li>
         <li><a href="#upgrading-to-010">Upgrading to 0.10</a>
           <ul>
             <li><a href="#property-on-disk-path-change-breaking">Property on-disk path change (breaking)</a></li>
@@ -1664,6 +1708,8 @@ You can use “banyand liaison/data/standalone -v” to check the server version
 
     </div>
     
+
+
 
 
 
