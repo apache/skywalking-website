@@ -136,6 +136,25 @@ If a required field is missing, or a date isn't in `YYYY-MM-DD` form, the build 
 with a message naming the offending event — so a broken entry shows up as a failed
 check on the pull request rather than as a blank card on the site.
 
+### Feeds
+
+| Feed | Contents |
+|----|----|
+|`/blog/feed.xml`|English blog|
+|`/zh/feed.xml`|中文博客|
+|`/events/feed.xml`|Releases and events|
+|`/feed.xml`|Combined blog + events|
+|`/events/calendar/index.ics`|Community calendar, subscribable in a calendar app|
+
+RSS is opt-in per section via `outputs` in that section's `_index.md`, not through
+`[outputs] section` in `config.toml`, which would also build a feed for `docs`.
+`rss_sections` and `rss_limit` in `config.toml` control the combined feed and the
+window size. The template is `layouts/_default/list.rss.xml`.
+
+The calendar feed is generated from `data/talks.yml` by
+`layouts/events/calendar.calendar.ics`. Use the `webcal://` link on the calendar
+page to subscribe — downloading the `.ics` imports a snapshot that never updates.
+
 ### Blog
 
 Located at `content/blog`. If you want to create a new blog, you need to create a new subdirectory under this directory. Here is a sample blog below.

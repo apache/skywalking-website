@@ -1,5 +1,6 @@
 ---
 title: "Blog"
+outputs: ["HTML", "RSS"]
 linkTitle: "Blog"
 ---
 
