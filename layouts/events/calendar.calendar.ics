@@ -1,0 +1,45 @@
+{{- /* iCalendar feed for /events/calendar/, from the same data/talks.yml the page
+       renders. A calendar beats RSS here: RSS announces an item when it is
+       published, a calendar puts it on the day it happens.
+
+       Lines are assembled into a slice and joined with CRLF because RFC 5545
+       requires CRLF line endings throughout, not just at fold points. */ -}}
+{{- $lines := slice
+  "BEGIN:VCALENDAR"
+  "VERSION:2.0"
+  "PRODID:-//Apache SkyWalking//Community Calendar//EN"
+  "CALSCALE:GREGORIAN"
+  "METHOD:PUBLISH"
+  "X-WR-CALNAME:Apache SkyWalking Community Calendar"
+  (partial "ics-fold.txt" (printf "X-WR-CALDESC:%s" (partial "ics-text.txt" "Conference talks, meetups and summits featuring Apache SkyWalking committers and community speakers")))
+  "REFRESH-INTERVAL;VALUE=DURATION:PT12H"
+  "X-PUBLISHED-TTL:PT12H"
+-}}
+{{- $stamp := now.UTC.Format "20060102T150405Z" -}}
+{{- range $ev := .Site.Data.talks.events -}}
+  {{- $start := time.AsTime $ev.start -}}
+  {{- /* DTEND is exclusive for all-day events, so the final day needs +1 */ -}}
+  {{- $end := (time.AsTime (default $ev.start $ev.end)).AddDate 0 0 1 -}}
+  {{- $where := $ev.location -}}
+  {{- with $ev.venue }}{{ $where = printf "%s, %s" . $ev.location }}{{ end -}}
+  {{- $desc := partial "ics-text.txt" $ev.intro -}}
+  {{- range $ev.talks -}}
+    {{- $desc = printf "%s\\n\\n%s" $desc (partial "ics-text.txt" (printf "%s — %s" .title .speaker)) -}}
+  {{- end -}}
+  {{- $lines = $lines
+    | append "BEGIN:VEVENT"
+    | append (printf "UID:%s@skywalking.apache.org" (md5 (printf "%s|%s" $ev.start $ev.event)))
+    | append (printf "DTSTAMP:%s" $stamp)
+    | append (printf "DTSTART;VALUE=DATE:%s" ($start.Format "20060102"))
+    | append (printf "DTEND;VALUE=DATE:%s" ($end.Format "20060102"))
+    | append (partial "ics-fold.txt" (printf "SUMMARY:%s" (partial "ics-text.txt" $ev.event)))
+    | append (partial "ics-fold.txt" (printf "LOCATION:%s" (partial "ics-text.txt" $where)))
+  -}}
+  {{- with $ev.url }}{{ $lines = $lines | append (partial "ics-fold.txt" (printf "URL:%s" (. | absURL))) }}{{ end -}}
+  {{- $lines = $lines
+    | append (partial "ics-fold.txt" (printf "DESCRIPTION:%s" $desc))
+    | append "END:VEVENT"
+  -}}
+{{- end -}}
+{{- $lines = $lines | append "END:VCALENDAR" -}}
+{{- delimit $lines "\r\n" -}}
