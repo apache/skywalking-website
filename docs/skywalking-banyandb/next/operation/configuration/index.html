@@ -33,7 +33,7 @@ BanyanDB supports both absolute and relative paths for directory and file config
   <meta itemprop="name" content="Configuration">
   <meta itemprop="description" content="Configuration BanyanD is the BanyanDB server. There are two ways to configure BanyanD: using a bootstrap flag or using environment variables. The environment variable name has a prefix BYDB_ followed by the flag name in uppercase. For example, the flag --port can be set using the environment variable BYDB_PORT.
 BanyanDB supports both absolute and relative paths for directory and file configurations (such as data directories, TLS certificates, keys, etc.). Relative paths are resolved against the current working directory where the BanyanD process is started. Available as of v0.10.0.">
-  <meta itemprop="wordCount" content="2912">
+  <meta itemprop="wordCount" content="3312">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Configuration">
   <meta name="twitter:description" content="Configuration BanyanD is the BanyanDB server. There are two ways to configure BanyanD: using a bootstrap flag or using environment variables. The environment variable name has a prefix BYDB_ followed by the flag name in uppercase. For example, the flag --port can be set using the environment variable BYDB_PORT.
@@ -1431,7 +1431,7 @@ BanyanDB supports both absolute and relative paths for directory and file config
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: ae42840</div>
+                  <div class="commit-id">Commit Id: 31b044b</div>
                 
 
 
@@ -1525,10 +1525,28 @@ BanyanDB supports both absolute and relative paths for directory and file config
 </ul>
 <p>These flags surface the queries behind cache misses and slow responses without exposing high-cardinality query text as metric labels: Prometheus gets only two counters (<code>bydbql_prepared_cache_total{result=&quot;miss&quot;}</code> and <code>bydbql_slow_query_total</code>), while the specific hot queries are logged.</p>
 <ul>
-<li><code>--bydbql-slow-query-threshold duration</code>: End-to-end latency above which a BydbQL query is counted as slow (increments <code>bydbql_slow_query_total</code>) and tracked in the slow-query top-K; <code>0</code> disables slow-query tracking (default: <code>1s</code>).</li>
-<li><code>--bydbql-topk-log-interval duration</code>: How often to log the hottest cache-miss and slow queries. The cache-miss list holds only templates that were compiled more than once — either evicted and compiled again (thrashing), or too large for the byte bound and therefore re-compiled on every single request; a template&rsquo;s unavoidable first-ever compile is excluded at the source, so every entry is actionable. The slow-query list is ranked by peak latency (<code>max_latency</code>) so a rarely-but-catastrophically slow query is not buried under frequently-mildly-slow ones. Uses a bounded approximate heavy-hitters tracker (128 entries), so it costs O(1) and never grows unbounded; <code>0</code> disables the top-K log (default: <code>5m</code>).</li>
-<li><code>--bydbql-topk-slow-ttl duration</code>: Drop a slow-query top-K entry whose query has not been slow again for this long; <code>0</code> keeps entries for the process lifetime (default: <code>24h</code>).</li>
-<li><code>--bydbql-topk-reparse-ttl duration</code>: Drop a cache-miss top-K entry whose template has not been re-parsed again for this long; <code>0</code> keeps entries for the process lifetime (default: <code>24h</code>).</li>
+<li>
+<p><code>--bydbql-slow-query-threshold duration</code>: End-to-end latency above which a BydbQL query is counted as slow (increments <code>bydbql_slow_query_total</code>) and tracked in the slow-query top-K; <code>0</code> disables slow-query tracking (default: <code>1s</code>).</p>
+</li>
+<li>
+<p><code>--bydbql-topk-log-interval duration</code>: How often to log the hottest cache-miss and slow queries. The cache-miss list holds only templates that were compiled more than once — either evicted and compiled again (thrashing), or too large for the byte bound and therefore re-compiled on every single request; a template&rsquo;s unavoidable first-ever compile is excluded at the source, so every entry is actionable. The slow-query list is ranked by peak latency (<code>max_latency</code>) so a rarely-but-catastrophically slow query is not buried under frequently-mildly-slow ones. Uses a bounded approximate heavy-hitters tracker (128 entries), so it costs O(1) and never grows unbounded; <code>0</code> disables the top-K log (default: <code>5m</code>).</p>
+</li>
+<li>
+<p><code>--bydbql-topk-slow-ttl duration</code>: Drop a slow-query top-K entry whose query has not been slow again for this long; <code>0</code> keeps entries for the process lifetime (default: <code>24h</code>).</p>
+</li>
+<li>
+<p><code>--bydbql-topk-reparse-ttl duration</code>: Drop a cache-miss top-K entry whose template has not been re-parsed again for this long; <code>0</code> keeps entries for the process lifetime (default: <code>24h</code>).</p>
+</li>
+<li>
+<p><code>--bydbql-topk-param-mode string</code>: How much of a slow query&rsquo;s bound parameters to include in the slow-query top-K log (default: <code>fingerprint</code>). The reported sample is that of the <strong>most recent</strong> slow occurrence of the template, logged as <code>last_params</code> — it is not necessarily the occurrence that produced <code>max_latency</code>. Numeric, timestamp and null parameters are always rendered verbatim in every mode above <code>none</code>: window width, <code>LIMIT</code> and thresholds are what explain a slow query, and they carry no user-identifying content. Only <code>str</code> and <code>str_array</code> parameters are subject to the mode; binary is always digested, never rendered verbatim:</p>
+<ul>
+<li><code>none</code> — omit parameters entirely. The log line carries no <code>last_params</code> field at all. Choose this when the log destination is untrusted or when any parameter metadata is unacceptable; you lose the ability to tell which parameters a slow query ran with.</li>
+<li><code>fingerprint</code> (default) — report each string&rsquo;s length plus a stable digest (<code>str(len=12):fp=1a2b3c4d</code>). The value itself never appears. The same value digests identically across restarts and across liaison nodes, which is what distinguishes &ldquo;one particular service is always slow&rdquo; from &ldquo;every service is slow&rdquo;. The digest is <strong>unsalted</strong>: it hides values from a casual reader of the log, but a low-cardinality value such as a service name can be recovered by digesting a candidate dictionary. Do not treat it as a cryptographic guarantee.</li>
+<li><code>raw</code> — log string values verbatim (<code>&quot;checkout-svc&quot;</code>). This is the only mode that reveals parameter values. Enable it only when the log destination is trusted, and prefer turning it back off once the investigation is done; parameters may contain user data such as trace IDs or account identifiers. Binary parameters are digested even in this mode — raw bytes would corrupt the log line and carry no diagnostic value beyond their size.</li>
+</ul>
+<p>In short: <code>none</code> reveals nothing, <code>fingerprint</code> reveals <em>whether two slow queries used the same value</em>, <code>raw</code> reveals <em>the value</em>. Non-string parameters (numeric, timestamp, null) render verbatim in <code>fingerprint</code> and <code>raw</code> alike, because window width, <code>LIMIT</code> and thresholds are what explain a slow query and carry no user-identifying content.</p>
+<p>Array parameters (<code>IN (?)</code> bound to a <code>str_array</code>/<code>int_array</code>) render at most 8 elements plus a <code>+N more</code> marker, so a large value set cannot bloat the log line. If you need the complete, unredacted parameters of a query, enable the query access log (<code>--enable-query-access-log</code>) instead: it already records every request in full, in its own file, with its own retention and permissions.</p>
+</li>
 </ul>
 <p>Each logged entry carries <code>last_seen</code>, and slow entries additionally carry <code>max_latency_at</code>. Both trackers accumulate, so <code>max_latency</code> is a running peak that can long outlive the incident that produced it: without these timestamps a one-off startup spike keeps being reported as if it were current, and a reader cannot tell a live problem from a stale one. The TTLs bound how long that can happen — an entry whose query stops recurring disappears — while <code>max_latency_at</code> dates the peak itself for entries that do keep recurring.</p>
 <p>Keep each TTL comfortably above <code>--bydbql-topk-log-interval</code>. An entry is only ever reported by a dump, so a TTL shorter than the interval lets an entry expire in the gap between two dumps and never be logged at all — the tracker would go quiet not because nothing is wrong but because it forgets faster than it reports. The defaults (<code>24h</code> against <code>5m</code>) leave a wide margin.</p>

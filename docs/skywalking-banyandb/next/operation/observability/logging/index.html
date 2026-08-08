@@ -33,7 +33,7 @@ logging-env is used to set the logging environment. The default value is prod. T
   <meta itemprop="name" content="Logging">
   <meta itemprop="description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the log-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
 logging-env is used to set the logging environment. The default value is prod. The logging environment can be set to dev for development or prod for production. The logging environment affects the log format and output. In the dev environment, logs are output in a human-readable format, while in the prod environment, logs are output in JSON format.">
-  <meta itemprop="wordCount" content="288">
+  <meta itemprop="wordCount" content="625">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Logging">
   <meta name="twitter:description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the log-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
@@ -1431,7 +1431,7 @@ logging-env is used to set the logging environment. The default value is prod. T
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: ae42840</div>
+                  <div class="commit-id">Commit Id: 31b044b</div>
                 
 
 
@@ -1453,6 +1453,41 @@ logging-env is used to set the logging environment. The default value is prod. T
 <p>BanyanDB supports slow query logging. The <code>slow-query</code> flag is used to set the slow query threshold. If a query takes longer than the threshold, it will be logged as a slow query. The default value is <code>0</code>, which means no slow query logging. This flag is only used for the data and standalone servers.</p>
 <p>The <code>dst-slow-query</code> flag is used to set the distributed slow query threshold. This flag is only used for the liaison server. The default value is <code>5s</code>; set it to <code>0</code> to disable distributed slow query logging.</p>
 <p>When query tracing is enabled, the slow query log won&rsquo;t be generated.</p>
+<blockquote>
+<p><strong>What these two logs contain.</strong> Both <code>slow-query</code> and <code>dst-slow-query</code> write the entire query request, including the tag filter values it was executed with. Those values come from the client and may be user data. There is no redaction option on these two flags — if that matters for your deployment, control it by raising the threshold or by routing the log somewhere with appropriate access.</p>
+</blockquote>
+<h3 id="bydbql-slow-queries">BydbQL Slow Queries</h3>
+<p>BydbQL queries are tracked separately, because they are parameterized: the query text is a reusable template and the values arrive alongside it as <code>?</code> parameters. Instead of logging every slow occurrence, the liaison keeps a bounded top-K of the slowest templates and dumps it periodically, so a hot bad query is reported once per interval rather than once per request. <code>--bydbql-slow-query-threshold</code> sets what counts as slow and <code>--bydbql-topk-log-interval</code> sets how often the list is dumped.</p>
+<p>Because the template and its values are separate here, how much of the values reaches the log is a choice — <code>--bydbql-topk-param-mode</code>:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Mode</th>
+          <th><code>last_params</code> field</th>
+          <th>Reveals</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>none</code></td>
+          <td>absent</td>
+          <td>nothing</td>
+      </tr>
+      <tr>
+          <td><code>fingerprint</code> (default)</td>
+          <td><code>str(len=12):fp=1a2b3c4d</code></td>
+          <td>the length, and <em>whether two slow queries used the same value</em> — not the value</td>
+      </tr>
+      <tr>
+          <td><code>raw</code></td>
+          <td><code>&quot;checkout-svc&quot;</code></td>
+          <td>the value itself</td>
+      </tr>
+  </tbody>
+</table>
+<p>Numeric, timestamp and null parameters render verbatim under both <code>fingerprint</code> and <code>raw</code>: time-window width, <code>LIMIT</code> and thresholds are usually what explains why a query is slow, and they carry no user-identifying content. Only <code>str</code> and <code>str_array</code> are subject to the mode; binary is always digested and never rendered verbatim, not even under <code>raw</code>.</p>
+<p>The reported sample is the <strong>most recent</strong> slow occurrence of that template, which is why the field is named <code>last_params</code> and not <code>params</code> — it is not necessarily the occurrence that produced <code>max_latency</code>.</p>
+<p>For the complete flag list and the caveats on the fingerprint (it is unsalted, so it is not a cryptographic guarantee), see <a href="../../configuration">Configuration</a>. If you need the full, unredacted parameters of a query, enable the query access log (<code>--enable-query-access-log</code>) instead: it records every request in full, in its own file, with its own retention and permissions.</p>
 
 </div>
 
@@ -1481,6 +1516,21 @@ logging-env is used to set the logging environment. The default value is prod. T
 
 
 
+
+<div class="td-toc-label">On this page</div>
+<nav id="TableOfContents">
+  <ul>
+    <li><a href="#logging">Logging</a>
+      <ul>
+        <li><a href="#slow-query-logging">Slow Query Logging</a>
+          <ul>
+            <li><a href="#bydbql-slow-queries">BydbQL Slow Queries</a></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</nav>
 
 
 
