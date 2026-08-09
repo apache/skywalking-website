@@ -25,22 +25,19 @@
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="Trace Pipeline Merge Optimization Plan">
   <meta property="og:description" content="Trace Pipeline Merge Optimization Plan Status Proposed for review. Do not treat the targets in this document as frozen acceptance gates until they are approved.
-Current Result (Baseline) The controlled mature-merge comparison uses the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.
-Each retain-all run made two plugin calls, evaluated and retained 33,353 complete trace IDs, dropped no traces, and preserved all 147,126 span rows. Compressed logical write amplification over the core and both secondary indexes remained identical at 1.0009 times.">
+Opening Baseline (Before Adaptive Batching) The opening controlled mature-merge comparison used the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="docs">
 
   <meta itemprop="name" content="Trace Pipeline Merge Optimization Plan">
   <meta itemprop="description" content="Trace Pipeline Merge Optimization Plan Status Proposed for review. Do not treat the targets in this document as frozen acceptance gates until they are approved.
-Current Result (Baseline) The controlled mature-merge comparison uses the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.
-Each retain-all run made two plugin calls, evaluated and retained 33,353 complete trace IDs, dropped no traces, and preserved all 147,126 span rows. Compressed logical write amplification over the core and both secondary indexes remained identical at 1.0009 times.">
-  <meta itemprop="wordCount" content="2842">
+Opening Baseline (Before Adaptive Batching) The opening controlled mature-merge comparison used the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.">
+  <meta itemprop="wordCount" content="3471">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Pipeline Merge Optimization Plan">
   <meta name="twitter:description" content="Trace Pipeline Merge Optimization Plan Status Proposed for review. Do not treat the targets in this document as frozen acceptance gates until they are approved.
-Current Result (Baseline) The controlled mature-merge comparison uses the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.
-Each retain-all run made two plugin calls, evaluated and retained 33,353 complete trace IDs, dropped no traces, and preserved all 147,126 span rows. Compressed logical write amplification over the core and both secondary indexes remained identical at 1.0009 times.">
+Opening Baseline (Before Adaptive Batching) The opening controlled mature-merge comparison used the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.">
 
 
 
@@ -1434,7 +1431,7 @@ Each retain-all run made two plugin calls, evaluated and retained 33,353 complet
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 31b044b</div>
+                  <div class="commit-id">Commit Id: 02bb671</div>
                 
 
 
@@ -1450,19 +1447,19 @@ Each retain-all run made two plugin calls, evaluated and retained 33,353 complet
 	<h1 id="trace-pipeline-merge-optimization-plan">Trace Pipeline Merge Optimization Plan</h1>
 <h2 id="status">Status</h2>
 <p>Proposed for review. Do not treat the targets in this document as frozen acceptance gates until they are approved.</p>
-<h2 id="current-result-baseline">Current Result (Baseline)</h2>
-<p>The controlled mature-merge comparison uses the same frozen production selection for the pipeline-disabled and native
+<h2 id="opening-baseline-before-adaptive-batching">Opening Baseline (Before Adaptive Batching)</h2>
+<p>The opening controlled mature-merge comparison used the same frozen production selection for the pipeline-disabled and native
 retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection,
 maturity, row-count, secondary-index, and logical-ledger correctness gates.</p>
-<p>Each retain-all run made two plugin calls, evaluated and retained 33,353 complete trace IDs, dropped no traces, and
+<p>In that pre-adaptive baseline, each retain-all run made one plugin call, evaluated and retained 33,353 complete trace IDs, dropped no traces, and
 preserved all 147,126 span rows. Compressed logical write amplification over the core and both secondary indexes remained
 identical at 1.0009 times.</p>
 <p>Compared with the pipeline-disabled medians, the native retain-all path currently adds approximately:</p>
 <ul>
-<li>121.9 MiB of allocated bytes, an increase of 56.2%;</li>
-<li>1.07 million allocations, an increase of 38.0%;</li>
-<li>91.5 MiB of peak Go heap, an increase of 83.4%; and</li>
-<li>98.4 MiB of peak RSS, an increase of 72.8%.</li>
+<li>113.5 MiB of allocated bytes, an increase of 59.6%;</li>
+<li>466,941 allocations, an increase of 16.6%;</li>
+<li>87.1 MiB of peak Go heap, an increase of 108.9%; and</li>
+<li>85.8 MiB of peak RSS, an increase of 75.3%.</li>
 </ul>
 <p>The differential allocation profile points primarily to <code>stageRawTrace</code>, <code>blockMetadata.copyFrom</code>,
 <code>traceEvaluationStager.stage</code>, and <code>assembleStagedEvaluationBatch</code>. Profile values overlap and must not be added together.</p>
@@ -1585,22 +1582,63 @@ pools no within-run reuse. Phase 4&rsquo;s batch-size sweep is required to deter
 allocation and peak-memory targets. Until that sweep completes, Phase 3 is structurally complete but not closed as a
 performance gate.</p>
 <hr>
-<h3 id="phase-4--batch-size-tuning">Phase 4 — Batch Size Tuning</h3>
-<p><strong>Scope.</strong> Empirically select the smallest staging batch size that meets memory and throughput goals without excess
-plugin-call overhead.</p>
+<h3 id="phase-4--adaptive-budget-validation">Phase 4 — Adaptive Budget Validation</h3>
+<p><strong>Scope.</strong> Validate the existing resource-derived staging budget under cold, steady-state, and naturally varying merge
+sizes. The budget is a memory-safety ceiling rather than a calibrated performance knob; this phase does not add an
+operator or benchmark override.</p>
 <p><strong>Entries from original plan.</strong> P5.</p>
-<p><strong>Hard invariants.</strong> Logical evaluated trace count, per-trace verdict, and merged output byte-identical across batch
-sizes. Both byte and trace-count limits enforced.</p>
+<p><strong>Hard invariants.</strong> The production budget formula remains derived solely from the detected cgroup memory and CPU
+limits. Logical evaluated trace count, per-trace verdict, and merged output remain correct when natural input variation
+causes complete-trace batch boundaries. Both byte and trace-count limits remain enforced.</p>
 <p><strong>Exit gate.</strong></p>
 <ul>
-<li><input disabled="" type="checkbox"> 16 / 32 / 64 / 128 / 256 / 512 MiB sweep completed against the unchanged frozen seed.</li>
-<li><input disabled="" type="checkbox"> Each run reports peak heap, peak RSS, allocated bytes, allocation count, plugin calls, traces per call, CPU time,
-wall time, logical write amplification.</li>
-<li><input disabled="" type="checkbox"> Selected batch size documented with both byte and trace-count limits; alternative sizes ruled out with evidence.</li>
+<li><input checked="" disabled="" type="checkbox"> Every sampled merge reports peak charged staging bytes, batch bytes and trace count, flush reason, and peak
+concurrent staged bytes.</li>
+<li><input checked="" disabled="" type="checkbox"> Cold first-merge cost and subsequent same-process reuse are reported separately without changing the budget.</li>
+<li><input disabled="" type="checkbox"> The serialized 24-hour workload validates naturally varying merge sizes under the canonical two-CPU, 4 GiB
+container and its resource-derived 256 MiB budget.</li>
+<li><input disabled="" type="checkbox"> At least one naturally budget-limited merge, or explicit evidence that the production-shaped workload never
+reaches the limit, is documented without manufacturing smaller batches.</li>
+<li><input disabled="" type="checkbox"> Core and secondary-index ledgers, complete-trace decisions, peak heap, peak RSS, allocations, plugin calls, CPU
+time, wall time, and logical write amplification remain reported.</li>
 </ul>
 <p><strong>Dependencies.</strong> Phase 3.</p>
-<p><strong>Boundary rationale.</strong> Cannot tune a knob whose dependent structure is still changing. Phase 3 must be stable before
-doing a controlled sweep.</p>
+<p><strong>Boundary rationale.</strong> A fixed budget selected from one seed would not generalize to varying production inputs or
+container sizes. Phase 3 must be stable before its resource-derived ceiling and cross-merge reuse can be validated.</p>
+<p><strong>Adaptive decision-batch implementation.</strong> The resource-derived staging and per-trace limits remain hard safety
+ceilings. Each MERGE or FINALIZE selection now derives a separate preferred decision-batch limit from the selected core
+parts&rsquo; <code>CompressedSizeBytes</code>, <code>UncompressedSpanSizeBytes</code>, and <code>BlocksCount</code>. The estimator uses the greater of compressed
+and uncompressed payload bytes plus a runtime-structure estimate per stored block. It then balances the estimated input
+around a nominal reusable window derived from the hard limit and the bounded BanyanDB staging-arena pool. A two-CPU,
+4 GiB process therefore keeps its 256 MiB hard ceiling while targeting approximately 32 MiB decision batches. Small
+estimated merges remain a single call; larger merges are split only at complete-trace boundaries. Exact runtime charged
+bytes remain authoritative, and the oversized single-trace fail-open limit is unchanged.</p>
+<p>The fragment guard continues to receive the hard ceiling rather than the preferred decision limit. The per-decision
+trace-count bound is derived from the preferred limit. Benchmark events report the metadata estimate, hard ceiling,
+preferred limit, planned batch count, effective trace-count limit, actual batch sizes and reasons, and peak staged bytes.
+The metadata estimate is advisory: an underestimate causes additional complete-trace batches, while the runtime byte
+accounting and hard per-trace bypass preserve safety and correctness.</p>
+<p>An initial two-CPU, 4 GiB controlled diagnostic estimated 85,716,327 bytes from the frozen selection and resolved a
+28,572,109-byte preferred limit under the unchanged 268,435,456-byte hard ceiling. Runtime accounting produced five
+complete-trace batches, peaked at 28,575,614 staged bytes, evaluated and retained all 33,353 traces, and preserved every
+core and secondary-index ledger. Compared with the preceding five-run retain-all medians, this single diagnostic reduced
+peak heap from 167.1 MiB to 106.8 MiB and peak RSS from 199.7 MiB to 151.6 MiB. It is evidence that adaptive batching
+controls the live set, not a replacement for the required alternating acceptance series.</p>
+<p>The balanced DR/RD acceptance series subsequently ran five fresh Docker processes per mode against the same selection.
+All ten runs preserved 147,126 rows, all three logical ledgers, the mature-only selection, and complete-trace decisions.
+The retain-all runs consistently made five sampler calls and peaked at 27.25 MiB of charged staged memory. Their median
+was 266.32 MiB allocated, 3,200,439 allocations, 109.28 MiB peak heap, and 158.93 MiB peak RSS. Relative to the previous
+one-call retain-all medians, this is a 12.4% allocated-byte reduction, 2.3% allocation-count reduction, 34.6% peak-heap
+reduction, and 20.4% peak-RSS reduction. Correctness and live-heap control pass, but the allocated-byte,
+allocation-count, and RSS targets remain open. The measured wall and CPU deltas remain non-blocking and are not credited
+as a pipeline speedup.</p>
+<p>A separate five-merge retain-all diagnostic used five identical seed clones sequentially in one two-CPU, 4 GiB process,
+without changing the 256 MiB hard ceiling or the metadata-derived preferred limit. The cold merge allocated 263.10 MiB.
+The four reuse merges allocated 225.93-238.53 MiB while CPU time stayed between 6.56 and 6.64 seconds. Reused arena
+capacities are included in the authoritative runtime charge, so the warm merges used six complete-trace sampler calls
+instead of the cold merge&rsquo;s five. Peak staged memory remained 27.25 MiB and every ledger remained correct. Absolute RSS
+in this diagnostic includes the history of earlier merges in the same process and must not be interpreted as an isolated
+per-merge RSS delta.</p>
 <hr>
 <h3 id="phase-5--decision-path-overhead">Phase 5 — Decision Path Overhead</h3>
 <p><strong>Scope.</strong> Reduce per-batch decision overhead in the chain execution and fragment-guard paths.</p>
@@ -1921,7 +1959,7 @@ explicitly accepted with quantified impact.</p>
     <li><a href="#trace-pipeline-merge-optimization-plan">Trace Pipeline Merge Optimization Plan</a>
       <ul>
         <li><a href="#status">Status</a></li>
-        <li><a href="#current-result-baseline">Current Result (Baseline)</a></li>
+        <li><a href="#opening-baseline-before-adaptive-batching">Opening Baseline (Before Adaptive Batching)</a></li>
         <li><a href="#invariants">Invariants</a></li>
         <li><a href="#phase-boundary-criteria">Phase Boundary Criteria</a></li>
         <li><a href="#core-track">Core Track</a>
@@ -1929,7 +1967,7 @@ explicitly accepted with quantified impact.</p>
             <li><a href="#phase-1--measurement-foundation">Phase 1 — Measurement Foundation</a></li>
             <li><a href="#phase-2--staging-budget-correctness">Phase 2 — Staging-Budget Correctness</a></li>
             <li><a href="#phase-3--retain-all-structural-optimization">Phase 3 — Retain-All Structural Optimization</a></li>
-            <li><a href="#phase-4--batch-size-tuning">Phase 4 — Batch Size Tuning</a></li>
+            <li><a href="#phase-4--adaptive-budget-validation">Phase 4 — Adaptive Budget Validation</a></li>
             <li><a href="#phase-5--decision-path-overhead">Phase 5 — Decision Path Overhead</a></li>
             <li><a href="#phase-6--drop-path-optimization">Phase 6 — Drop-Path Optimization</a></li>
             <li><a href="#phase-7--projection-path-optimization">Phase 7 — Projection Path Optimization</a></li>
