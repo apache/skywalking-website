@@ -33,7 +33,7 @@ Opening Baseline (Before Adaptive Batching) The opening controlled mature-merge 
   <meta itemprop="name" content="Trace Pipeline Merge Optimization Plan">
   <meta itemprop="description" content="Trace Pipeline Merge Optimization Plan Status Proposed for review. Do not treat the targets in this document as frozen acceptance gates until they are approved.
 Opening Baseline (Before Adaptive Batching) The opening controlled mature-merge comparison used the same frozen production selection for the pipeline-disabled and native retain-all variants. Each variant ran in five fresh resource-limited Docker processes. All ten runs passed the selection, maturity, row-count, secondary-index, and logical-ledger correctness gates.">
-  <meta itemprop="wordCount" content="3471">
+  <meta itemprop="wordCount" content="4340">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Pipeline Merge Optimization Plan">
   <meta name="twitter:description" content="Trace Pipeline Merge Optimization Plan Status Proposed for review. Do not treat the targets in this document as frozen acceptance gates until they are approved.
@@ -1431,7 +1431,7 @@ Opening Baseline (Before Adaptive Batching) The opening controlled mature-merge 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 02bb671</div>
+                  <div class="commit-id">Commit Id: c99d611</div>
                 
 
 
@@ -1648,18 +1648,33 @@ merge safety all preserved. Conjunction snapshot and coverage catalog pinned bef
 must not weaken publication-time revalidation.</p>
 <p><strong>Exit gate.</strong></p>
 <ul>
-<li><input disabled="" type="checkbox"> Sampler-wrapper slice built once per batch (or per worker) rather than per batch.</li>
-<li><input disabled="" type="checkbox"> Chain conjunction mask reused within bounded lifetime.</li>
-<li><input disabled="" type="checkbox"> Single retain mask for single-sampler chains.</li>
-<li><input disabled="" type="checkbox"> Reusable decision worker (or empirical evidence that the current goroutine/channel/timer pattern is cheaper)
+<li><input checked="" disabled="" type="checkbox"> Sampler-wrapper slice built once per batch (or per worker) rather than per batch.</li>
+<li><input checked="" disabled="" type="checkbox"> Chain conjunction mask reused within bounded lifetime.</li>
+<li><input checked="" disabled="" type="checkbox"> Single retain mask for single-sampler chains.</li>
+<li><input checked="" disabled="" type="checkbox"> Reusable decision worker (or empirical evidence that the current goroutine/channel/timer pattern is cheaper)
 selected.</li>
-<li><input disabled="" type="checkbox"> Fragment-guard ranges stored in compact integers; bounded guard-range vectors pooled; drop-specific probe state
+<li><input checked="" disabled="" type="checkbox"> Fragment-guard ranges stored in compact integers; bounded guard-range vectors pooled; drop-specific probe state
 allocated lazily.</li>
-<li><input disabled="" type="checkbox"> AlwaysKeep verification: with no fragment-guard confirmations, no throughput regression.</li>
+<li><input checked="" disabled="" type="checkbox"> AlwaysKeep verification: with no fragment-guard confirmations, no throughput regression.</li>
 </ul>
 <p><strong>Dependencies.</strong> Phase 3.</p>
 <p><strong>Boundary rationale.</strong> Lower priority than raw staging because the opening controlled round only makes two plugin
 calls. Following Phase 3 keeps the structural changes from masking any decision-path gains.</p>
+<p><strong>Implementation and measurement note.</strong> The chain now filters and stores its active samplers once, records observation
+metrics without constructing per-batch wrappers, and lets a single-sampler chain copy its verdict directly into the
+pooled decision mask. Healthy decisions reuse one worker and timer for the merge lifetime. A timeout abandons that worker
+and its caller-owned storage rather than risking reuse while plugin code may still read it, preserving fail-open ownership
+and circuit-breaker behavior. Fragment-guard trace ranges remain compact pooled integer pairs, while their block scratch
+is populated lazily only for plugin-proposed drops and is retained only within the existing bounded staging-vector pool.</p>
+<p>The focused 512-trace benchmarks reduced <code>BenchmarkMergeChainRunObserved</code> from approximately 613 ns/op, 48 B/op, and
+2 allocs/op to 539-617 ns/op, 0 B/op, and 0 allocs/op. <code>BenchmarkMergeChainExecuteObserved</code> fell from approximately
+2.24-2.36 us/op, 496 B/op, and 8 allocs/op to 1.80-1.87 us/op, 0 B/op, and 0 allocs/op.</p>
+<p>Five fresh two-CPU, 4 GiB Docker runs used the frozen 15-part mature selection and AlwaysKeep plugin. Every run made five
+plugin calls, evaluated and retained 33,353 traces, wrote 147,126 rows, and preserved the core and two secondary-index
+ledgers. Against the preceding adaptive-batch acceptance medians, wall time changed by +2.97%, CPU time by +2.34%,
+allocated bytes by -4.10%, allocation count by +0.009%, peak heap by -1.93%, and peak RSS by +3.61%. Wall-time and CPU
+coefficients of variation remained below 1.6%. The full-merge result therefore shows no regression beyond the 5%
+tolerance; only the focused measurements are credited as a decision-path improvement.</p>
 <hr>
 <h3 id="phase-6--drop-path-optimization">Phase 6 — Drop-Path Optimization</h3>
 <p><strong>Scope.</strong> Reduce overhead in the deterministic-drop path. <strong>Does not begin</strong> until retain-all overhead is reduced.</p>
@@ -1723,12 +1738,151 @@ fixes are kept separate from framework fixes.</p>
 <p><strong>Exit gate.</strong></p>
 <ul>
 <li><input disabled="" type="checkbox"> Independent measurements for projected tag/span decoding, complete-trace latency calculation, error and status
-rules, trace-ID hashing, regex/tag rules, verdict allocation, decision throughput across representative batch sizes.</li>
-<li><input disabled="" type="checkbox"> Each plugin-local cost attributed to a specific function call site.</li>
+rules, trace-ID hashing, regex/tag rules, verdict allocation, decision throughput across representative batch sizes.
+<em>Every axis is measured (table below), but on SYNTHETIC batches, not the mature seed — see &ldquo;Remaining gap&rdquo;.</em></li>
+<li><input checked="" disabled="" type="checkbox"> Each plugin-local cost attributed to a specific function call site.</li>
 </ul>
 <p><strong>Dependencies.</strong> None (parallel workstream).</p>
 <p><strong>Boundary rationale.</strong> Outside the merge framework; can run any time after the mature seed is frozen. Parallel
 workstream.</p>
+<p><strong>Per-axis measurements.</strong> All figures are ns per logical trace from
+<code>plugins/skywalking/internal/tracesampler</code> (<code>BenchmarkDecide*</code>), median of 3 runs at <code>-benchtime 2000x</code>, taken after
+the escape-free decode work landed. Both first-party schemas are reported because they exercise different paths: the
+segment schema reads a dedicated <code>is_error</code> column, while Zipkin has none and detects errors inside the flattened tag
+array.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Axis</th>
+          <th>Benchmark</th>
+          <th style="text-align: right">sw</th>
+          <th style="text-align: right">zipkin</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Projected tag decoding, 2 / 8 / 32 entries</td>
+          <td><code>_ArrayEntries</code> (unescaped)</td>
+          <td style="text-align: right">70 / 149 / 496</td>
+          <td style="text-align: right">67 / 147 / 491</td>
+      </tr>
+      <tr>
+          <td>Same, escaped values</td>
+          <td><code>_ArrayEntries</code> (escaped)</td>
+          <td style="text-align: right">157 / 377 / 1261</td>
+          <td style="text-align: right">159 / 380 / 1265</td>
+      </tr>
+      <tr>
+          <td>Complete-trace latency envelope</td>
+          <td><code>durationOnly</code></td>
+          <td style="text-align: right">238</td>
+          <td style="text-align: right">241</td>
+      </tr>
+      <tr>
+          <td>Same, per row count 1 / 4 / 16 / 64</td>
+          <td><code>_RowCount</code></td>
+          <td style="text-align: right">342 / 1176 / 4405 / 17333</td>
+          <td style="text-align: right">494 / 1718 / 6632 / 25917</td>
+      </tr>
+      <tr>
+          <td>Error rule, dedicated column vs in-array</td>
+          <td><code>errorsOnly</code></td>
+          <td style="text-align: right">123</td>
+          <td style="text-align: right">382</td>
+      </tr>
+      <tr>
+          <td>Trace-ID hashing</td>
+          <td><code>sampleOnly</code></td>
+          <td style="text-align: right">17</td>
+          <td style="text-align: right">15</td>
+      </tr>
+      <tr>
+          <td>Tag rules: equals / regex / 5xx regex</td>
+          <td><code>_RegexRule</code></td>
+          <td style="text-align: right">373 / 384 / 387</td>
+          <td style="text-align: right">376 / 386 / 385</td>
+      </tr>
+      <tr>
+          <td>Tag rules by match position 0 / 16 / 31</td>
+          <td><code>_TagMatchPosition</code></td>
+          <td style="text-align: right">971 / 1038 / 1106</td>
+          <td style="text-align: right">1034 / 1194 / 1327</td>
+      </tr>
+      <tr>
+          <td>Verdict allocation, 1 / 16 / 64 / 256 traces</td>
+          <td><code>_KeepSliceAllocation</code></td>
+          <td style="text-align: right">204 / 135 / 135 / 127</td>
+          <td style="text-align: right">517 / 384 / 381 / 384</td>
+      </tr>
+      <tr>
+          <td>Decision throughput, 1 / 16 / 64 / 128 / 256</td>
+          <td><code>_BatchSize</code></td>
+          <td style="text-align: right">1136 / 922 / 902 / 897 / 905</td>
+          <td style="text-align: right">1655 / 1327 / 1315 / 1325 / 1332</td>
+      </tr>
+  </tbody>
+</table>
+<p>Two shape facts fall out. Verdict allocation is one <code>allocs/op</code> at every batch size — the <code>make([]bool, len(batch.Traces))</code>
+in <code>Decide</code> — with <code>B/op</code> equal to the trace count, so it is already at its floor and per-trace cost only falls as the
+batch amortizes it. Decision throughput is flat from 16 traces upward; the <code>traces=1</code> column is that same fixed cost
+divided by one, not a batching penalty.</p>
+<p><strong>Cost attribution to call sites.</strong> From <code>-cpuprofile</code> at <code>-benchtime 30000x</code>, one profile per axis. Percentages are
+flat unless marked cumulative.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Axis</th>
+          <th>Dominant call site</th>
+          <th style="text-align: right">Share</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Latency envelope</td>
+          <td><code>runtime.duffcopy</code> under <code>sdk.(*TagColumn).At</code> (<code>hasSlowTrace</code> 91.8% cum)</td>
+          <td style="text-align: right">57.1%</td>
+      </tr>
+      <tr>
+          <td>Error rule, dedicated column</td>
+          <td><code>runtime.duffcopy</code> under <code>sdk.(*TagColumn).At</code> (<code>At</code> 51.9% cum)</td>
+          <td style="text-align: right">44.4%</td>
+      </tr>
+      <tr>
+          <td>Error rule, in-array</td>
+          <td><code>indexbytebody</code> (<code>arrayEntries</code> 55.3% cum, <code>matchEntries</code> 39.5% cum)</td>
+          <td style="text-align: right">39.5%</td>
+      </tr>
+      <tr>
+          <td>Tag rules</td>
+          <td><code>indexbytebody</code> (<code>arrayEntries</code> 66.7% cum, <code>matchEntries</code> 21.3% cum)</td>
+          <td style="text-align: right">40.0%</td>
+      </tr>
+      <tr>
+          <td>Trace-ID hashing</td>
+          <td><code>hash/fnv.(*sum64a).Write</code></td>
+          <td style="text-align: right">60.0%</td>
+      </tr>
+      <tr>
+          <td>Verdict allocation</td>
+          <td><code>make([]bool, …)</code> in <code>Decide</code></td>
+          <td style="text-align: right">1 alloc/op</td>
+      </tr>
+  </tbody>
+</table>
+<p>The <code>duffcopy</code> entries are one finding, not two: <code>sdk.Value</code> is <strong>112 bytes</strong> and <code>TagColumn.At</code> returns it by value, so
+every per-row column read on the duration and dedicated-error paths copies 112 bytes. That copy — not the decode — is
+the majority cost of both, and it is an SDK-side shape, so fixing it (an <code>AtInto(*Value)</code>, or accessors that avoid
+materializing the struct) is a framework change rather than a plugin-local one and belongs outside this workstream.</p>
+<p>On the array paths the remaining cost is the delimiter scan itself plus the string comparisons in <code>matchEntries</code>; the
+decode overhead that used to dominate here was removed by the escape-free path (<code>tagRulesOnly</code> 68.4 → 24.4 µs per
+3000-trace batch, -64%).</p>
+<p><strong>Remaining gap (why this phase is not closed).</strong> The hard invariant requires plugins to be measured &ldquo;against
+representative complete-trace batches from the mature seed&rdquo;. These benchmarks build their batches synthetically in
+<code>benchBatch</code>/<code>benchEntries</code> — realistic in SHAPE (production tag keys, both first-party configs, complete traces) but
+not drawn from the frozen selection. The machinery to close this exists — <code>tracefixture.EvaluateSampler</code> already drives
+a sampler over complete generated traces via <code>buildSamplerBlock</code> — so the work is to add a seed-backed benchmark
+alongside the synthetic ones, not to build a fixture. Until then the first exit-gate item stays open and no
+production-ratio claim should be made from the numbers above.</p>
 <hr>
 <h3 id="phase-10--final-integration">Phase 10 — Final Integration</h3>
 <p><strong>Scope.</strong> Run the serialized 24-hour SkyWalking workload with default settings and demonstrate that every acceptance
