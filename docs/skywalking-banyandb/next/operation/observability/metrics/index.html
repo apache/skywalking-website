@@ -35,7 +35,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   <meta itemprop="description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
 Scrape source — the FODC proxy. In a cluster deployment, metrics are collected by scraping the FODC proxy /metrics endpoint (see FODC overview), which is the single Prometheus scrape target. The proxy aggregates every BanyanDB node’s metrics and adds per-node identity labels, so all the PromQL below is written for that scheme:
 $job — the Prometheus scrape job for the FODC proxy. $role — the node role, matched via the container_name label (liaison or data). $pod — a BanyanDB node, matched via the pod_name label (the full node identity, e.g. banyandb-data-hot-0). Because the proxy is the only target, the Prometheus-synthesized instance, job, and up labels describe the proxy, not individual BanyanDB nodes — use $role / $pod to scope a query to a node. Original BanyanDB labels (group, kind, method, service, path, operation, remote_node, …) are preserved on every sample. $__rate_interval is the Grafana rate-interval variable. Every expression below carries the {job=~&#34;$job&#34;, container_name=~&#34;$role&#34;, pod_name=~&#34;$pod&#34;} selector; a few liaison-only metrics (the write queue and its sync loop) are pinned with the literal container_name=&#34;liaison&#34; instead.">
-  <meta itemprop="wordCount" content="2773">
+  <meta itemprop="wordCount" content="3865">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Metrics">
   <meta name="twitter:description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
@@ -1434,7 +1434,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d11dd1b</div>
+                  <div class="commit-id">Commit Id: d323982</div>
                 
 
 
@@ -1460,12 +1460,13 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <p>(If you are <em>not</em> running the FODC proxy, BanyanDB also exposes its own metrics on port <code>2121</code>; scrape each pod directly and substitute the Kubernetes <code>pod</code>/<code>instance</code> target labels for <code>$pod</code> below.)</p>
 </blockquote>
 <h2 id="dashboards">Dashboards</h2>
-<p>The metrics are presented through <strong>two complementary Grafana dashboards</strong>, split by aggregation dimension (see <a href="../providers">Metrics Providers</a>):</p>
+<p>The metrics are presented through <strong>two core Grafana dashboards</strong>, split by aggregation dimension (see <a href="../providers">Metrics Providers</a>):</p>
 <ul>
 <li><strong><a href="../../grafana-fodc-nodes.json">BanyanDB Cluster — Nodes</a></strong> — node/pod-level health and resources, aggregated by <strong><code>pod_name</code></strong>: <em>Fleet Overview</em>, <em>Per-node Health</em>, <em>Resources</em>, <em>Disk by Path</em>, and <em>Go Runtime</em>.</li>
 <li><strong><a href="../../grafana-fodc-workload.json">BanyanDB Cluster — Workload</a></strong> — business/data-level throughput and latency, aggregated by <strong><code>group</code></strong>: <em>Cluster Workload Summary</em>, <em>Liaison: Ingestion, Query &amp; Publish</em>, <em>Data: Storage</em>, <em>Data: Inverted Index</em>, and <em>Data: Internal Queue</em>.</li>
 </ul>
-<p>The sections below mirror the two dashboards row-for-row; each metric entry corresponds to one panel and uses that panel&rsquo;s expression. A standalone <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">Internal queue metrics reference</a> at the end documents the <code>queue_sub</code> / <code>queue_pub</code> model in depth.</p>
+<p>When trace sampling plugins are enabled, additionally install <strong><a href="../../grafana-fodc-trace-plugin.json">BanyanDB — Trace Sampling Plugins</a></strong>. It separates optional plugin execution, sampling outcomes, drop-set capacity, and finalization panels from the core workload dashboard.</p>
+<p>The sections below mirror the two core dashboards row-for-row; the <a href="#trace-plugin-metrics-reference">Trace Plugin Metrics</a> section is the complete reference behind the optional dashboard. A standalone <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">Internal queue metrics reference</a> at the end documents the <code>queue_sub</code> / <code>queue_pub</code> model in depth.</p>
 <hr>
 <h1 id="nodes-dashboard">Nodes dashboard</h1>
 <p>Node and process health, aggregated per <code>pod_name</code>. Use this dashboard to find an overloaded, low-on-disk, or restarting node.</p>
@@ -1610,6 +1611,303 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <p><strong>Expression1</strong>: <code>sum(rate(banyandb_measure_total_merged_parts{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_measure_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression2</strong>: <code>sum(rate(banyandb_stream_tst_total_merged_parts{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_stream_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression3</strong>: <code>sum(rate(banyandb_trace_tst_total_merged_parts{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_trace_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
+<h3 id="trace-plugin-metrics-reference">Trace Plugin Metrics (reference)</h3>
+<p>Trace merge and finalization sampling can run an ordered chain of plugins. The host-provided catalogs below cover plugin
+lifecycle, execution, sampling outcomes, resource-safety fallbacks, telemetry safety, and finalization state. These
+metrics are group-scoped and deliberately omit segment, shard, and schema labels. Link-level metrics carry the configured
+<code>plugin_name</code>, allowing a slow or faulty link to be isolated when several plugins are enabled.</p>
+<h4 id="plugin-lifecycle-and-loading">Plugin lifecycle and loading</h4>
+<p>These metrics use the <code>banyandb_trace_pipeline_</code> prefix and describe configuration reconciliation rather than calls to <code>Decide</code>.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_pipeline_sampler_active_count</code></td>
+          <td>Gauge</td>
+          <td><code>group</code></td>
+          <td>Number of active sampler plugins registered for the group.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_sampler_register_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Initial pipeline registrations, where <code>result</code> is <code>success</code> or <code>rejected</code>.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_sampler_update_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Updates to an existing pipeline, where <code>result</code> is <code>success</code> or <code>rejected</code>.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_sampler_remove_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Explicit pipeline removals.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_sampler_load_failed</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>name</code>, <code>reason</code></td>
+          <td>Individual plugin load failures. The pipeline reconciliation path fails open.</td>
+      </tr>
+  </tbody>
+</table>
+<h4 id="plugin-execution-and-batching">Plugin execution and batching</h4>
+<p>Chain-level metrics are emitted once per decision batch; execution metrics are emitted once per plugin link.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_batches</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Chain batches: <code>success</code>, <code>timeout</code>, or <code>circuit_open</code>.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_executions</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>result</code></td>
+          <td>Calls to each plugin&rsquo;s <code>Decide</code>, split by result.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_execution_duration_seconds</code></td>
+          <td>Histogram</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>result</code></td>
+          <td>Wall time inside each <code>Decide</code> call.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_batch_traces</code></td>
+          <td>Histogram</td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Trace count presented in each chain batch.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_link_bypasses</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>reason</code></td>
+          <td>Links bypassed after error, mismatch, or panic.</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Expression1 (execution rate by plugin/result)</strong>: <code>sum(rate(banyandb_trace_tst_pipeline_plugin_executions{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, plugin_name, result)</code></p>
+<p><strong>Expression2 (p99 execution duration by plugin)</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_trace_tst_pipeline_plugin_execution_duration_seconds_bucket{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;, result=&quot;success&quot;}[$__rate_interval])) by (group, plugin_name, le))</code></p>
+<p><strong>Expression3 (successful execution time per evaluated trace)</strong>: <code>sum by (group, plugin_name) (rate(banyandb_trace_tst_pipeline_plugin_execution_duration_seconds_sum{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;, result=&quot;success&quot;}[$__rate_interval])) / on (group) group_left sum by (group) (rate(banyandb_trace_tst_pipeline_traces_evaluated{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval]))</code></p>
+<p><strong>Expression4 (mean successful decision-batch size)</strong>: <code>sum by (group) (rate(banyandb_trace_tst_pipeline_traces_evaluated{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) / sum by (group) (rate(banyandb_trace_tst_pipeline_plugin_batches{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;, result=&quot;success&quot;}[$__rate_interval]))</code></p>
+<p><strong>Expression5 (chain timeout/circuit-open rate)</strong>: <code>sum(rate(banyandb_trace_tst_pipeline_plugin_batches{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;, result=~&quot;timeout|circuit_open&quot;}[$__rate_interval])) by (group, result)</code></p>
+<p><strong>Expression6 (fail-open link rate)</strong>: <code>sum(rate(banyandb_trace_tst_pipeline_plugin_link_bypasses{job=~&quot;$job&quot;, container_name=&quot;data&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, plugin_name, reason)</code></p>
+<p>Execution <code>result</code> is one of <code>success</code>, <code>decide_error</code>, <code>length_mismatch</code>, <code>panic</code>, or <code>late</code>. <code>late</code> means the plugin returned after the host had already timed out and abandoned its worker. <code>pipeline_plugin_link_bypasses{group,plugin_name,reason}</code> independently counts the three per-link fail-open causes: <code>decide_error</code>, <code>length_mismatch</code>, and <code>panic</code>. A chain batch can therefore be <code>success</code> while one link was bypassed and retained its input.</p>
+<h4 id="alert-recommendations">Alert recommendations</h4>
+<p>Not every useful plugin metric should become a universal alert:</p>
+<ul>
+<li><strong>Alert immediately:</strong> any <code>panic</code>, <code>length_mismatch</code>, or <code>late</code> execution. These indicate broken plugin behavior or a call that outlived the merge timeout. Example: <code>sum by (group, plugin_name, result) (increase(banyandb_trace_tst_pipeline_plugin_executions{job=~&quot;$job&quot;, container_name=&quot;data&quot;, result=~&quot;panic|length_mismatch|late&quot;}[5m])) &gt; 0</code>.</li>
+<li><strong>Alert immediately:</strong> any <code>circuit_open</code> batch because sampling is now being bypassed for the group. Example: <code>sum by (group) (increase(banyandb_trace_tst_pipeline_plugin_batches{job=~&quot;$job&quot;, container_name=&quot;data&quot;, result=&quot;circuit_open&quot;}[5m])) &gt; 0</code>.</li>
+<li><strong>Warn on sustained failures:</strong> <code>decide_error</code> or <code>timeout</code> may be transient, so alert on a nonzero sustained rate or an operator-chosen error ratio rather than a single occurrence. Always retain the <code>plugin_name</code> split for decide errors; timeout is chain-level because the host may abandon the chain before a link returns.</li>
+<li><strong>Dashboard/SLO, not a fixed default alert:</strong> execution latency, execution time per evaluated trace, and batch size depend on plugin logic and trace shape. Establish a per-plugin p99 SLO from a healthy baseline and keep it comfortably below <code>--trace-pipeline-decide-timeout</code> (default 5 seconds). A single repository-wide latency threshold would generate false positives for intentionally expensive plugins.</li>
+<li><strong>Dashboard only:</strong> raw execution and evaluated-trace rates. Their ratio explains batching and overhead, but low traffic or a merge-grace window naturally makes both zero.</li>
+</ul>
+<p>These are reference queries rather than universal preinstalled alert rules. Operators should copy the immediate health expressions into their alert manager and derive latency thresholds from a healthy baseline for each <code>(group, plugin_name)</code> pair.</p>
+<h4 id="trace-retention-outcomes-and-safety">Trace retention outcomes and safety</h4>
+<p>These <code>banyandb_trace_tst_</code> metrics supply the trace-level denominators and expose fail-open or bounded-retention behavior around plugin execution.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_traces_evaluated</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Traces evaluated by a successfully completed, batch-aligned plugin chain.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_traces_retained</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Logical traces retained in output by plugin verdicts or safety fallbacks.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_traces_dropped</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Evaluated traces removed from core and secondary-index output.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_traces_immature</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Traces not eligible for sampling because their fragments are still inside the maturity boundary.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_oversized_traces_bypassed</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Traces retained because their staged representation exceeded the per-trace budget.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_errors</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>reason</code></td>
+          <td>Chain-level plugin errors that caused fail-open retention.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_ambiguous</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Traces whose fragment state could not produce an unambiguous drop decision.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_sidx_pruned</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Secondary-index entries removed after confirmed trace drops.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_guard_bloom_probes</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Bloom-filter probes used to check trace fragments outside the selected parts.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_guard_deferred</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Proposed drops deferred because the fragment guard found a possible external fragment.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_guard_budget_exhausted</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Fragment-guard checks that exhausted their configured work budget.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_guard_publication_rejected</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Publications rejected after guard validation became stale.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_guard_lossless_retry</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Rejected publications retried without dropping traces.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_guard_bypassed</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Merges retained without sampling because the fragment guard was unavailable or inapplicable.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_traces_retained_by_ceiling</code></td>
+          <td>Counter</td>
+          <td><code>group</code></td>
+          <td>Proposed drops retained after the bounded drop-ID set reached its ceiling.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_merges_ceiling_reached</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>lane</code></td>
+          <td>Merges whose drop-ID set reached its ceiling, split by merge lane.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_drop_set_budget_bytes</code></td>
+          <td>Gauge</td>
+          <td><code>group</code></td>
+          <td>Resolved per-merge memory budget for confirmed dropped trace IDs.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_drop_set_entries</code></td>
+          <td>Histogram</td>
+          <td><code>group</code>, <code>lane</code></td>
+          <td>Dropped trace IDs held per merge; shows ceiling headroom.</td>
+      </tr>
+  </tbody>
+</table>
+<p>The effective drop ratio is <code>rate(banyandb_trace_tst_pipeline_traces_dropped[5m]) / rate(banyandb_trace_tst_pipeline_traces_evaluated[5m])</code>. Compare retained, dropped, and bypass counters together: a
+lower drop ratio can be intentional plugin behavior or a fail-open safety mechanism.</p>
+<h4 id="plugin-telemetry-host-health">Plugin telemetry host health</h4>
+<p>Plugins that implement <code>HostAware</code> may publish bounded business metrics and logs through the host façade. These counters show when the host enforces those bounds.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_telemetry_series_rejected_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Series rejected by host safety bounds.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_log_dropped_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Plugin log lines dropped by the host rate limiter.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_telemetry_panic_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Panics recovered inside the plugin telemetry adapter.</td>
+      </tr>
+  </tbody>
+</table>
+<h4 id="finalization-state">Finalization state</h4>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_pipeline_finalize_rounds</code></td>
+          <td>Gauge</td>
+          <td><code>group</code></td>
+          <td>Highest finalization round count observed across the group&rsquo;s cooled shards.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_finalize_terminal</code></td>
+          <td>Gauge</td>
+          <td><code>group</code></td>
+          <td><code>1</code> when any cooled shard is terminal and cannot run another finalization round; otherwise <code>0</code>.</td>
+      </tr>
+  </tbody>
+</table>
+<h4 id="plugin-defined-business-metrics">Plugin-defined business metrics</h4>
+<p>Metrics created by a plugin through <code>Host.Meter</code> are forced under the <code>banyandb_trace_pipeline_plugin_</code> prefix and always
+carry <code>group</code> and <code>plugin_name</code>; plugin-declared labels follow them. Names beyond that prefix are plugin-defined and
+therefore cannot be enumerated in the host catalog. The host caps each plugin instrument at 100 distinct label-value
+series and directs overflow to a bounded sentinel series. See
+<a href="../../../design/post-trace-pipeline#27-plugin-telemetry-meter--logger">Plugin Telemetry</a> for the complete contract.</p>
 <h2 id="data-inverted-index">Data: Inverted Index</h2>
 <p><code>Inverted Index</code> metrics monitor the series index of measures and streams, grouped by the <code>group</code> tag. Rapid growth or churn signals a cardinality problem that bloats the index and slows queries.</p>
 <h3 id="series-write-rate">Series Write Rate</h3>
@@ -1844,6 +2142,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
             <li><a href="#merge-file-rate">Merge File Rate</a></li>
             <li><a href="#merge-file-latency">Merge File Latency</a></li>
             <li><a href="#merge-file-partitions">Merge File Partitions</a></li>
+            <li><a href="#trace-plugin-metrics-reference">Trace Plugin Metrics (reference)</a></li>
           </ul>
         </li>
         <li><a href="#data-inverted-index">Data: Inverted Index</a>
@@ -1979,6 +2278,8 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 
     </div>
     
+
+
 
 
 

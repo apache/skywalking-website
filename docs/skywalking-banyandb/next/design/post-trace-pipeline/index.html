@@ -33,7 +33,7 @@ Unlike traditional streaming-based telemetry engines that perform span assembly 
   <meta itemprop="name" content="BanyanDB Storage-Node Post-Trace Pipeline & Storage Tier Mapping Specification">
   <meta itemprop="description" content="BanyanDB Storage-Node Post-Trace Pipeline &amp; Storage Tier Mapping Specification This document presents the complete technical design for the BanyanDB Storage-Node Post-Trace Pipeline and its integration with physical hardware storage tiers and time-aging schedulers.
 Unlike traditional streaming-based telemetry engines that perform span assembly inside active, memory-heavy windowing pipelines, BanyanDB relies on a native trace model. Spans are stored, sorted, and indexed by trace_id directly within the storage engine layout on individual data nodes.">
-  <meta itemprop="wordCount" content="11613">
+  <meta itemprop="wordCount" content="12011">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="BanyanDB Storage-Node Post-Trace Pipeline & Storage Tier Mapping Specification">
   <meta name="twitter:description" content="BanyanDB Storage-Node Post-Trace Pipeline &amp; Storage Tier Mapping Specification This document presents the complete technical design for the BanyanDB Storage-Node Post-Trace Pipeline and its integration with physical hardware storage tiers and time-aging schedulers.
@@ -1431,7 +1431,7 @@ Unlike traditional streaming-based telemetry engines that perform span assembly 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d11dd1b</div>
+                  <div class="commit-id">Commit Id: d323982</div>
                 
 
 
@@ -1654,7 +1654,7 @@ engine default (2h and 5m respectively). Each is consulted only when its corresp
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">type</span><span style="color:#fff"> </span><span style="color:#1f2328">Verdict</span><span style="color:#fff"> </span><span style="color:#cf222e">struct</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">Keep</span><span style="color:#fff"> </span><span style="color:#1f2328">[]</span><span style="color:#cf222e">bool</span><span style="color:#fff"> </span><span style="color:#57606a">// len(Keep) MUST == len(batch.Traces); Keep[i] retains Traces[i]</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>These types are real and live in <a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/pkg/pipeline/sdk"><code>pkg/pipeline/sdk</code></a>; the block above is the conceptual layout, and the canonical definitions plus the value-decode helpers (<code>TagColumn.At</code>, <code>DecodeTagValue</code>) are in that package. The shipped first-party samplers live at <a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a> and <a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/plugins/skywalking/zipkin-trace-sampler"><code>plugins/skywalking/zipkin-trace-sampler</code></a>; a standalone teaching example of the same contract — config parsing, <code>Project()</code>, and tag/span extraction — lives at <a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (note the example predates the shipped plugins and still uses snake_case config keys).</p>
+</span></span></span></code></pre></div><p>These types are real and live in <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/pkg/pipeline/sdk"><code>pkg/pipeline/sdk</code></a>; the block above is the conceptual layout, and the canonical definitions plus the value-decode helpers (<code>TagColumn.At</code>, <code>DecodeTagValue</code>) are in that package. The shipped first-party samplers live at <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a> and <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/plugins/skywalking/zipkin-trace-sampler"><code>plugins/skywalking/zipkin-trace-sampler</code></a>; a standalone teaching example of the same contract — config parsing, <code>Project()</code>, and tag/span extraction — lives at <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (note the example predates the shipped plugins and still uses snake_case config keys).</p>
 <p><strong>Verdict shape — boolean keep-mask.</strong> <code>Decide</code> returns a <code>[]bool</code> aligned to <code>batch.Traces</code>: <code>Keep[i]</code> retains trace <code>i</code>. This is the simplest fully-vectorized contract and makes the alignment invariant trivial to check (the engine rejects a verdict whose length ≠ <code>len(batch.Traces)</code>). The keep/drop is per <code>trace_id</code>, matching the merger&rsquo;s per-<code>trace_id</code> write granularity (§7.1).</p>
 <p><strong>Chain composition — sequential pipe.</strong> <code>TracePipelineConfig.plugins</code> (gating) and each <code>StageRule.plugins</code> (per-stage retention) are <em>ordered chains</em>. The engine materializes the <strong>union</strong> of every link&rsquo;s <code>Project()</code> once, then runs the links in declared order, handing each link the traces the previous link kept — a read-only sub-batch view, not a copy. The chain&rsquo;s survivors are what the event retains. For an all-sampler chain this is exactly the conjunction (AND) of the links&rsquo; keep-masks; declaring it as a pipe rather than a commutative AND is deliberate forward-room for non-filter kinds (§2.6), where a link could rewrite the batch the next link sees. <strong>Fail-open is per link:</strong> a link that panics, errors, or returns a length-mismatched verdict is bypassed (its input passes through unchanged) and logged, so one broken link degrades to &ldquo;keep what reached it,&rdquo; never a chain-wide drop. A single sampler is just a one-element chain.</p>
 <p><strong>Read-only batch contract.</strong> The plugin receives the native block&rsquo;s slices <strong>shared, not copied</strong> — so <code>Decide</code> MUST treat <code>TraceBatch</code> (and every <code>[]byte</code>/<code>[]string</code>/<code>TagColumn</code> inside it) as <strong>read-only</strong>. The keep-mask is the plugin&rsquo;s <strong>only</strong> output channel. Crucially, persistence is structurally immune to a misbehaving plugin: the engine applies the returned mask to its <strong>own</strong> untouched block data when writing the reduced part — it never serializes the plugin-visible slices back to disk. So even if a buggy plugin mutates its view in place, retained traces are written from the engine&rsquo;s original bytes, not the mutated ones; mutation is undefined behavior for the plugin&rsquo;s own logic but <strong>cannot corrupt stored data</strong>. Because plugins are operator-supplied trusted code (§2.4), the SDK does not defensively deep-copy the batch — the read-only contract plus mask-only output is the guarantee, not a copy.</p>
@@ -1741,7 +1741,60 @@ engine default (2h and 5m respectively). Each is consulted only when its corresp
 <p><strong>Series reclaim on teardown.</strong> The host never calls <code>Close</code> on <code>sdk.Counter</code>/<code>sdk.Gauge</code>/<code>sdk.Histogram</code> objects (Go has no finalizer contract here). When a pipeline config is removed, the host calls <code>sdk.Plugin.Close()</code> and then deletes every metric series registered by that plugin instance, reclaiming Prometheus memory without a process restart.</p>
 <p><strong>No ABI bump.</strong> The addition of <code>sdk.HostAware</code> / <code>sdk.Host</code> / <code>sdk.Meter</code> / <code>sdk.Logger</code> to <code>pkg/pipeline/sdk</code> is backward-compatible: old plugins that do not implement <code>sdk.HostAware</code> simply fail the type assertion and receive no Host. <code>sdk.ABIVersion</code> remains <strong>1</strong>.</p>
 <p><strong>D7 caveat — transitive zerolog dependency.</strong> The <code>.so</code> already links <code>zerolog</code> transitively via <code>pbv1</code> (<code>pkg/pb/v1</code>). The <code>sdk.Logger</code> façade avoids widening that coupling to plugin authors (no <code>zerolog.Logger</code> or <code>zerolog.Event</code> crosses the <code>.so</code> boundary) rather than eliminating the transitive link. Plugin authors should not rely on <code>zerolog</code> being present; use only the <code>sdk.Logger</code> interface.</p>
-<p>Reference plugins demonstrating well-behaved and adversarial use of the façade live at <a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/test/plugins/_telemetrysampler"><code>test/plugins/_telemetrysampler</code></a> (keeps all traces, emits bounded counter + sparse Info log) and <a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/test/plugins/_faultysampler"><code>test/plugins/_faultysampler</code></a> (panic in UseHost, log flood, cardinality explosion — verifies host bounds hold). Build them with <code>make build-trace-pipeline-telemetry-plugins</code>.</p>
+<p>Reference plugins demonstrating well-behaved and adversarial use of the façade live at <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/test/plugins/_telemetrysampler"><code>test/plugins/_telemetrysampler</code></a> (keeps all traces, emits bounded counter + sparse Info log) and <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/test/plugins/_faultysampler"><code>test/plugins/_faultysampler</code></a> (panic in UseHost, log flood, cardinality explosion — verifies host bounds hold). Build them with <code>make build-trace-pipeline-telemetry-plugins</code>.</p>
+<h3 id="host-provided-plugin-execution-metrics">Host-provided plugin execution metrics</h3>
+<p>The engine publishes a bounded metric catalog for plugin cost and health. Chain-level metrics are emitted once per decision batch; execution metrics are emitted once per plugin link. Every series carries the database <code>group</code>, while link metrics also carry the configured <code>plugin_name</code> so a chain containing several plugins can be diagnosed independently. They deliberately have no segment, shard, or schema labels. The plugin count and names are bounded by <code>TracePipelineConfig</code>; result and reason values are closed constants. Plugin-specific business metrics remain the responsibility of the bounded <code>Host.Meter</code> façade above.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_batches</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Decision batches presented to the chain. <code>result</code> is <code>success</code>, <code>timeout</code>, or <code>circuit_open</code>. A successful chain may still have failed-open links.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_executions</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>result</code></td>
+          <td>Calls to each plugin&rsquo;s <code>Decide</code>. <code>result</code> is <code>success</code>, <code>decide_error</code>, <code>length_mismatch</code>, <code>panic</code>, or <code>late</code>. <code>late</code> means the call completed only after the host had timed out and abandoned that worker.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_execution_duration_seconds</code></td>
+          <td>Histogram</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>result</code></td>
+          <td>Wall time inside that plugin&rsquo;s <code>Decide</code> call. A late call records its complete eventual duration rather than truncating at the host timeout.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_batch_traces</code></td>
+          <td>Histogram</td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Trace count offered in each decision batch, including batches bypassed by an open circuit.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_tst_pipeline_plugin_link_bypasses</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>reason</code></td>
+          <td>Individual chain links bypassed with <code>decide_error</code>, <code>length_mismatch</code>, or <code>panic</code>. The rest of the chain still runs and the failed link retains its input.</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>pipeline_traces_evaluated</code> remains the trace-level denominator: it increments only after the chain completes with a valid batch-aligned verdict. The following PromQL relationships turn the batch metrics into directly comparable overhead signals:</p>
+<ul>
+<li>Successful time per evaluated trace, split by plugin: <code>sum by (group, plugin_name) (rate(banyandb_trace_tst_pipeline_plugin_execution_duration_seconds_sum{result=&quot;success&quot;}[5m])) / on (group) group_left sum by (group) (rate(banyandb_trace_tst_pipeline_traces_evaluated[5m]))</code>.</li>
+<li>Calls per evaluated trace, split by plugin: <code>sum by (group, plugin_name) (rate(banyandb_trace_tst_pipeline_plugin_executions[5m])) / on (group) group_left sum by (group) (rate(banyandb_trace_tst_pipeline_traces_evaluated[5m]))</code>.</li>
+<li>Mean successful batch size: <code>sum by (group) (rate(banyandb_trace_tst_pipeline_traces_evaluated[5m])) / sum by (group) (rate(banyandb_trace_tst_pipeline_plugin_batches{result=&quot;success&quot;}[5m]))</code>.</li>
+<li>p99 successful execution latency by plugin: <code>histogram_quantile(0.99, sum by (group, plugin_name, le) (rate(banyandb_trace_tst_pipeline_plugin_execution_duration_seconds_bucket{result=&quot;success&quot;}[5m])))</code>.</li>
+<li>Plugin failure pressure: compare each plugin&rsquo;s <code>decide_error</code>, <code>length_mismatch</code>, <code>panic</code>, and <code>late</code> execution rates with its all-result execution rate. Separately compare chain-level <code>timeout</code> and <code>circuit_open</code> batch rates with the all-result batch rate.</li>
+</ul>
+<p>The duration is wall time inside <code>Decide</code>, not process CPU time. A timed-out native Go plugin cannot be forcibly stopped; if the abandoned call eventually returns, it is recorded as <code>late</code> with its full duration. CPU and allocation attribution requires independent profiling.</p>
 <h2 id="retention-decision-timing--trace-completeness">Retention-Decision Timing &amp; Trace Completeness</h2>
 <p>Both the plugin gating policy (§1.1) and the per-stage retention plugin (§1.2) operate on the <strong>whole</strong> trace, not on individual spans as they arrive: <code>D_total</code> needs the earliest start and latest end, <code>has_error</code> scans all spans, and tag matchers scan all spans. Spans of one trace, however, arrive at the storage node anywhere from milliseconds to hours apart, and BanyanDB writes each span into the segment selected by its <strong>event time</strong> (the <code>start_time</code> tag), not its arrival time (<code>banyand/trace/write_standalone.go</code>). There is no live partial-trace buffer; a trace exists only as spans co-located by <code>trace_id</code> inside a segment&rsquo;s parts.</p>
 <h3 id="31-when-retention-decisions-are-safe">3.1 When Retention Decisions Are Safe</h3>
@@ -1897,9 +1950,9 @@ satisfied by the projected <code>is_error</code> tag rather than by reading span
 <code>max(start_time + latency) - min(start_time)</code>, computed from two cheap tag columns. It does <strong>not</strong> use
 <code>MaxTS - MinTS</code>, which is the spread of per-row <em>start</em> timestamps (and zero for a single-segment trace), not a duration.</p>
 <p>The <code>sw-trace-sampler.so</code> link is implemented at
-<a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a>. A teaching example of the same SDK
+<a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a>. A teaching example of the same SDK
 contract lives at
-<a href="https://github.com/apache/skywalking-banyandb/tree/d11dd1b049f951b953dd35d42f5b972ead8c068e/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (§2.5). Each
+<a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (§2.5). Each
 <code>StageRule.plugins</code> chain has the same shape: one shared sampler whose config tightens from Hot (<code>durationThresholdMs</code>
 100, <code>keepErrors</code>, and the <code>db.type</code> plus <code>mq.queue</code> keep-tag rules) to Warm (<code>keepErrors</code> only), with each link projecting
 only the tags its config references and keeping <code>Spans</code> false.</p>
@@ -2255,6 +2308,7 @@ bounded counters shared with ordinary merge sampling.</p>
             <li><a href="#25-native-plugin-contract--chain-composition">2.5 Native Plugin Contract &amp; Chain Composition</a></li>
             <li><a href="#26-extending-with-a-new-plugin-kind">2.6 Extending with a New Plugin Kind</a></li>
             <li><a href="#27-plugin-telemetry-meter--logger">2.7 Plugin Telemetry (Meter + Logger)</a></li>
+            <li><a href="#host-provided-plugin-execution-metrics">Host-provided plugin execution metrics</a></li>
           </ul>
         </li>
         <li><a href="#retention-decision-timing--trace-completeness">Retention-Decision Timing &amp; Trace Completeness</a>
@@ -2401,6 +2455,8 @@ bounded counters shared with ordinary merge sampling.</p>
 
     </div>
     
+
+
 
 
 

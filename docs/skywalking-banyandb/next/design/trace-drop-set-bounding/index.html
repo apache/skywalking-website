@@ -33,7 +33,7 @@ Implemented, except the validation. The mechanism (DS-1, DS-1b), the budget reso
   <meta itemprop="name" content="Trace Merge Drop-Set Bounding">
   <meta itemprop="description" content="Trace Merge Drop-Set Bounding Status This document specifies a bound on the merge-wide dropped-trace-ID collector introduced by Phase 6 of the merge optimization plan, which was unbounded in the number of dropped traces per merge.
 Implemented, except the validation. The mechanism (DS-1, DS-1b), the budget resolver (DS-2), the ceiling seam (DS-3), observability (DS-4), activation (DS-5), and the production instruments of section 6 are in the tree. The ceiling is therefore live on every merge.">
-  <meta itemprop="wordCount" content="5152">
+  <meta itemprop="wordCount" content="5169">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Merge Drop-Set Bounding">
   <meta name="twitter:description" content="Trace Merge Drop-Set Bounding Status This document specifies a bound on the merge-wide dropped-trace-ID collector introduced by Phase 6 of the merge optimization plan, which was unbounded in the number of dropped traces per merge.
@@ -1431,7 +1431,7 @@ Implemented, except the validation. The mechanism (DS-1, DS-1b), the budget reso
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d11dd1b</div>
+                  <div class="commit-id">Commit Id: d323982</div>
                 
 
 
@@ -1883,12 +1883,12 @@ mechanism, observability is the <em>only</em> thing standing between a capped sh
   <tbody>
       <tr>
           <td><code>pipeline_traces_retained_by_ceiling</code> (counter)</td>
-          <td><code>group,seg,shard</code></td>
-          <td>How much deletion was lost, and where. Distinct from retained-by-verdict; both also increment <code>pipeline_traces_retained</code></td>
+          <td><code>group</code></td>
+          <td>How much deletion was lost. Distinct from retained-by-verdict; both also increment <code>pipeline_traces_retained</code></td>
       </tr>
       <tr>
           <td><code>pipeline_merges_ceiling_reached</code> (counter)</td>
-          <td><code>group,seg,shard,lane</code></td>
+          <td><code>group,lane</code></td>
           <td>Which lane is capping — <code>finalize</code> is the one that matters</td>
       </tr>
       <tr>
@@ -1898,7 +1898,7 @@ mechanism, observability is the <em>only</em> thing standing between a capped sh
       </tr>
       <tr>
           <td><code>pipeline_drop_set_entries</code> (histogram)</td>
-          <td><code>group,seg,shard,lane</code></td>
+          <td><code>group,lane</code></td>
           <td>How close merges are running to that ceiling</td>
       </tr>
   </tbody>
@@ -1907,10 +1907,11 @@ mechanism, observability is the <em>only</em> thing standing between a capped sh
 deletion has already been lost, so on their own they are a lagging indicator. Watching the upper buckets approach
 <code>pipeline_drop_set_budget_bytes / dropSetBytesPerEntry</code> is what gives an operator warning <em>before</em> the ceiling bites. A
 zero budget emits nothing rather than a zero gauge, so &ldquo;no ceiling&rdquo; never reads as &ldquo;a zero-byte ceiling&rdquo;.</p>
-<p>The shard dimension is carried because the deletion bound is per shard (§5.2); without it a dashboard shows that a group
-is under-deleting but not where. These series are deleted per tsTable in <code>deleteMetrics</code>, so cardinality is bounded by
-live segments rather than growing with rotation.</p>
-<p>On <code>banyand_trace_pipeline_</code>, per shard, published by the scan pre-filter (§7):</p>
+<p>The storage boundary remains per merge, but observability is deliberately rolled up to the group. Segment and shard
+labels would multiply long-lived series with storage rotation and are not needed to decide whether the group needs more
+protector headroom. The lane label remains where it distinguishes ordinary and finalize work. These series are deleted
+with the group-level table metrics rather than when an individual segment or shard closes.</p>
+<p>On <code>banyand_trace_pipeline_</code>, per group, published once after a complete scan (§7):</p>
 <table>
   <thead>
       <tr>
@@ -1922,13 +1923,13 @@ live segments rather than growing with rotation.</p>
   <tbody>
       <tr>
           <td><code>finalize_rounds</code> (gauge)</td>
-          <td><code>group,shard</code></td>
-          <td>How much of the shard&rsquo;s lifetime round budget is spent</td>
+          <td><code>group</code></td>
+          <td>Highest round count among the group&rsquo;s cooled shards</td>
       </tr>
       <tr>
           <td><code>finalize_terminal</code> (gauge)</td>
-          <td><code>group,shard</code></td>
-          <td>Whether the loss is now permanent — this shard can never delete another trace</td>
+          <td><code>group</code></td>
+          <td>Whether any cooled shard is terminal and can never delete another trace</td>
       </tr>
   </tbody>
 </table>
@@ -2328,6 +2329,8 @@ by this design; worth deciding separately.</li>
 
     </div>
     
+
+
 
 
 

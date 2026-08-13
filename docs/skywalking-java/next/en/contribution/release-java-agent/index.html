@@ -37,7 +37,7 @@ Use the following block as a template and place it in ~/.m2/settings.xml.
 Set up your development environment Follow the steps in the Apache maven deployment environment document to set gpg tool and encrypt passwords.
 Use the following block as a template and place it in ~/.m2/settings.xml.
 &lt;settings&gt; ... &lt;servers&gt; &lt;!-- To publish a snapshot of some part of Maven --&gt; &lt;server&gt; &lt;id&gt;apache.snapshots.https&lt;/id&gt; &lt;username&gt; &lt;!-- YOUR APACHE LDAP USERNAME --&gt; &lt;/username&gt; &lt;password&gt; &lt;!-- YOUR APACHE LDAP PASSWORD (encrypted) --&gt; &lt;/password&gt; &lt;/server&gt; &lt;!-- To stage a release of some part of Maven --&gt; &lt;server&gt; &lt;id&gt;apache.releases.https&lt;/id&gt; &lt;username&gt; &lt;!-- YOUR APACHE LDAP USERNAME --&gt; &lt;/username&gt; &lt;password&gt; &lt;!-- YOUR APACHE LDAP PASSWORD (encrypted) --&gt; &lt;/password&gt; &lt;/server&gt; ... &lt;/servers&gt; &lt;/settings&gt; Add your GPG public key Add your GPG public key into the SkyWalking GPG KEYS file. If you are a committer, use your Apache ID and password to log in this svn, and update the file. Don’t override the existing file. Upload your GPG public key to the public GPG site, such as MIT’s site. This site should be in the Apache maven staging repository checklist. Release using the release script The release script tools/releasing/release.sh automates the full release workflow. The release is a two-step process with a vote in between.">
-  <meta itemprop="wordCount" content="649">
+  <meta itemprop="wordCount" content="1068">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SkyWalking Java Agent Release Guide">
   <meta name="twitter:description" content="Apache SkyWalking Java Agent Release Guide If you’re a committer, you can learn how to release SkyWalking in The Apache Way and start the voting process by reading this document.
@@ -912,7 +912,7 @@ Use the following block as a template and place it in ~/.m2/settings.xml.
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 3db419e</div>
+                  <div class="commit-id">Commit Id: afede1b</div>
                 
 
 
@@ -1019,6 +1019,13 @@ max-cache-ttl 86400
 <li><strong>upload</strong> — upload to Apache SVN <code>dist/dev</code> (prompts for SVN credentials)</li>
 <li><strong>email vote</strong> — print vote email template with pre-filled version, commit ID, submodule commit, and checksums</li>
 </ol>
+<p>Before the long build starts, <strong>prepare</strong> asks for the GitHub milestone ID of the next
+development version, which it writes into the reset <code>CHANGES.md</code>. Look up the
+<code>Java - &lt;next_version&gt;</code> milestone at <a href="https://github.com/apache/skywalking/milestones">https://github.com/apache/skywalking/milestones</a> and
+enter its number. The ID is checked against that milestone&rsquo;s title, and you are warned if
+they disagree. Set <code>NEXT_MILESTONE=&lt;id&gt;</code> to answer non-interactively; leave the prompt
+blank to keep the <code>milestone/xxx</code> placeholder and edit it by hand before merging the
+release PR.</p>
 <p>Copy the generated email and send it to <code>dev@skywalking.apache.org</code>. Voting remains open for at least 72 hours. At least 3 (+1 binding) PMC votes with more +1 than -1 are required.</p>
 <h2 id="vote-check">Vote Check</h2>
 <p>All PMC members and committers should check these before casting +1 votes.</p>
@@ -1034,13 +1041,48 @@ are found in <code>https://dist.apache.org/repos/dist/dev/skywalking/java-agent/
 <li>Check the Apache License Header. Run <code>docker run --rm -v $(pwd):/github/workspace apache/skywalking-eyes header check</code>. (No binaries in source codes)</li>
 </ol>
 <h2 id="vote-passed">vote-passed</h2>
+<p>Every step after <code>prepare</code> identifies the release by its <strong>tag</strong> (<code>vx.y.z</code>), never by the
+checked-out branch. By the time you run <code>vote-passed</code>, the release PR has normally been
+merged and <code>release/x.y.z</code> deleted, and <code>main</code> has already moved on to the next
+<code>-SNAPSHOT</code>; the tag is the only thing that still pins the release. The version defaults to
+the highest <code>vx.y.z</code> tag in the repository, and can be overridden with a positional
+argument (<code>./release.sh docker 9.7.0</code>) or <code>RELEASE_VERSION=9.7.0</code>.</p>
 <p>After the vote passes, run <code>vote-passed</code> which executes:</p>
 <ol>
 <li><strong>promote</strong> — move packages from <code>dist/dev</code> to <code>dist/release</code> in Apache SVN (prompts for SVN credentials), then release the Nexus staging repository at <a href="https://repository.apache.org">https://repository.apache.org</a> and update the website download page</li>
-<li><strong>docker</strong> — build and push all Docker image variants (alpine, java8, java11, java17, java21, java25)</li>
+<li><strong>github-release</strong> — publish the GitHub Release for the tag, using <code>changes/changes-x.y.z.md</code> as its notes</li>
 <li><strong>email announce</strong> — print announcement email template. Copy and send to <code>dev@skywalking.apache.org</code> and <code>announce@apache.org</code></li>
 <li><strong>cleanup</strong> (optional) — if old version is provided, remove it from <code>dist/release</code>. Update download page links to point to <code>https://archive.apache.org/dist/skywalking</code></li>
 </ol>
+<h3 id="docker-images">Docker images</h3>
+<p>Docker images are published by GitHub Actions, not from your machine. Publishing the
+GitHub Release fires the <code>release: released</code> trigger in
+<a href="https://github.com/apache/skywalking-java/tree/afede1badd98cc03c9a65bca286e3e28b10ad5c2/.github/workflows/publish-docker.yaml"><code>.github/workflows/publish-docker.yaml</code></a>,
+which builds every base variant and pushes
+<code>apache/skywalking-java-agent:x.y.z-{alpine,java8,java11,java17,java21,java25}</code> to Docker
+Hub for <code>linux/amd64</code> and <code>linux/arm64</code>. Watch that workflow; if it fails you can fall back
+to pushing from your machine with <code>./tools/releasing/release.sh docker x.y.z</code>, which needs
+you to be logged in to Docker Hub with push access to the <code>apache</code> organisation.</p>
+<p>The image contains the exact tarball that was voted on. The workflow downloads
+<code>apache-skywalking-java-agent-x.y.z.tgz</code> from <code>dist/release</code>, checks it against the
+published <code>.sha512</code>, and verifies the <code>.asc</code> signature against the project
+<a href="https://downloads.apache.org/skywalking/KEYS">KEYS</a> file before it goes into an image — it
+does not rebuild the agent from source.</p>
+<p>The same workflow keeps publishing per-commit development images to
+<code>ghcr.io/apache/skywalking-java</code> on every push to <code>main</code>; only the <code>release</code> event
+publishes official versioned images.</p>
+<h4 id="docker-hub-credentials">Docker Hub credentials</h4>
+<p>The release path needs the <code>DOCKERHUB_USER</code> and <code>DOCKERHUB_TOKEN</code> repository secrets. These
+are the names used across the other Apache SkyWalking repositories (<code>apache/skywalking</code>,
+<code>skywalking-python</code>, <code>skywalking-mcp</code>, &hellip;). They are <strong>not</strong> self-service: <code>.asf.yaml</code>
+cannot set secrets. File an <a href="https://issues.apache.org/jira/browse/INFRA">ASF INFRA JIRA</a>
+ticket asking for them to be added to <code>apache/skywalking-java</code>, referencing that
+<code>apache/skywalking</code> already has them; INFRA holds the Docker Hub account credentials. See
+<a href="https://infra.apache.org/github-actions-secrets.html">GitHub Actions and Secrets</a>.</p>
+<p>Until they exist, the release run fails early with an explicit error and you should publish
+with <code>./tools/releasing/release.sh docker x.y.z</code> instead. Because <code>github-release</code> is
+idempotent, you can also add the secrets later and just re-run the failed workflow from the
+Actions tab — there is no need to delete and recreate the GitHub Release.</p>
 
 </div>
 
@@ -1086,7 +1128,11 @@ are found in <code>https://dist.apache.org/repos/dist/dev/skywalking/java-agent/
           </ul>
         </li>
         <li><a href="#vote-check">Vote Check</a></li>
-        <li><a href="#vote-passed">vote-passed</a></li>
+        <li><a href="#vote-passed">vote-passed</a>
+          <ul>
+            <li><a href="#docker-images">Docker images</a></li>
+          </ul>
+        </li>
       </ul>
     </li>
   </ul>
@@ -1197,6 +1243,8 @@ are found in <code>https://dist.apache.org/repos/dist/dev/skywalking/java-agent/
 
     </div>
     
+
+
 
 
 
