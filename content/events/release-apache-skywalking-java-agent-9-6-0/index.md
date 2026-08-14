@@ -26,4 +26,4 @@ Changes by Version
 * Add JDK25 plugin tests for Spring 6.
 * Ignore classes starting with "sun.nio.cs" in bytebuddy due to potential class loading deadlock.
 
-All issues and pull requests are [here](https://github.com/apache/skywalking-java/milestone/10?closed=1)
+All issues and pull requests are [here](https://github.com/apache/skywalking/milestone/242?closed=1)
