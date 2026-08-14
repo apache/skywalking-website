@@ -33,7 +33,7 @@ Unlike traditional streaming-based telemetry engines that perform span assembly 
   <meta itemprop="name" content="BanyanDB Storage-Node Post-Trace Pipeline & Storage Tier Mapping Specification">
   <meta itemprop="description" content="BanyanDB Storage-Node Post-Trace Pipeline &amp; Storage Tier Mapping Specification This document presents the complete technical design for the BanyanDB Storage-Node Post-Trace Pipeline and its integration with physical hardware storage tiers and time-aging schedulers.
 Unlike traditional streaming-based telemetry engines that perform span assembly inside active, memory-heavy windowing pipelines, BanyanDB relies on a native trace model. Spans are stored, sorted, and indexed by trace_id directly within the storage engine layout on individual data nodes.">
-  <meta itemprop="wordCount" content="12011">
+  <meta itemprop="wordCount" content="12026">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="BanyanDB Storage-Node Post-Trace Pipeline & Storage Tier Mapping Specification">
   <meta name="twitter:description" content="BanyanDB Storage-Node Post-Trace Pipeline &amp; Storage Tier Mapping Specification This document presents the complete technical design for the BanyanDB Storage-Node Post-Trace Pipeline and its integration with physical hardware storage tiers and time-aging schedulers.
@@ -279,6 +279,7 @@ Unlike traditional streaming-based telemetry engines that perform span assembly 
       <div class="td-main">
         <div class="row flex-xl-nowrap">
           <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
 
 
 
@@ -1431,7 +1432,7 @@ Unlike traditional streaming-based telemetry engines that perform span assembly 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d323982</div>
+                  <div class="commit-id">Commit Id: 3b4e4d9</div>
                 
 
 
@@ -1654,7 +1655,7 @@ engine default (2h and 5m respectively). Each is consulted only when its corresp
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">type</span><span style="color:#fff"> </span><span style="color:#1f2328">Verdict</span><span style="color:#fff"> </span><span style="color:#cf222e">struct</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">Keep</span><span style="color:#fff"> </span><span style="color:#1f2328">[]</span><span style="color:#cf222e">bool</span><span style="color:#fff"> </span><span style="color:#57606a">// len(Keep) MUST == len(batch.Traces); Keep[i] retains Traces[i]</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>These types are real and live in <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/pkg/pipeline/sdk"><code>pkg/pipeline/sdk</code></a>; the block above is the conceptual layout, and the canonical definitions plus the value-decode helpers (<code>TagColumn.At</code>, <code>DecodeTagValue</code>) are in that package. The shipped first-party samplers live at <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a> and <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/plugins/skywalking/zipkin-trace-sampler"><code>plugins/skywalking/zipkin-trace-sampler</code></a>; a standalone teaching example of the same contract — config parsing, <code>Project()</code>, and tag/span extraction — lives at <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (note the example predates the shipped plugins and still uses snake_case config keys).</p>
+</span></span></span></code></pre></div><p>These types are real and live in <a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/pkg/pipeline/sdk"><code>pkg/pipeline/sdk</code></a>; the block above is the conceptual layout, and the canonical definitions plus the value-decode helpers (<code>TagColumn.At</code>, <code>DecodeTagValue</code>) are in that package. The shipped first-party samplers live at <a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a> and <a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/plugins/skywalking/zipkin-trace-sampler"><code>plugins/skywalking/zipkin-trace-sampler</code></a>; a standalone teaching example of the same contract — config parsing, <code>Project()</code>, and tag/span extraction — lives at <a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (note the example predates the shipped plugins and still uses snake_case config keys).</p>
 <p><strong>Verdict shape — boolean keep-mask.</strong> <code>Decide</code> returns a <code>[]bool</code> aligned to <code>batch.Traces</code>: <code>Keep[i]</code> retains trace <code>i</code>. This is the simplest fully-vectorized contract and makes the alignment invariant trivial to check (the engine rejects a verdict whose length ≠ <code>len(batch.Traces)</code>). The keep/drop is per <code>trace_id</code>, matching the merger&rsquo;s per-<code>trace_id</code> write granularity (§7.1).</p>
 <p><strong>Chain composition — sequential pipe.</strong> <code>TracePipelineConfig.plugins</code> (gating) and each <code>StageRule.plugins</code> (per-stage retention) are <em>ordered chains</em>. The engine materializes the <strong>union</strong> of every link&rsquo;s <code>Project()</code> once, then runs the links in declared order, handing each link the traces the previous link kept — a read-only sub-batch view, not a copy. The chain&rsquo;s survivors are what the event retains. For an all-sampler chain this is exactly the conjunction (AND) of the links&rsquo; keep-masks; declaring it as a pipe rather than a commutative AND is deliberate forward-room for non-filter kinds (§2.6), where a link could rewrite the batch the next link sees. <strong>Fail-open is per link:</strong> a link that panics, errors, or returns a length-mismatched verdict is bypassed (its input passes through unchanged) and logged, so one broken link degrades to &ldquo;keep what reached it,&rdquo; never a chain-wide drop. A single sampler is just a one-element chain.</p>
 <p><strong>Read-only batch contract.</strong> The plugin receives the native block&rsquo;s slices <strong>shared, not copied</strong> — so <code>Decide</code> MUST treat <code>TraceBatch</code> (and every <code>[]byte</code>/<code>[]string</code>/<code>TagColumn</code> inside it) as <strong>read-only</strong>. The keep-mask is the plugin&rsquo;s <strong>only</strong> output channel. Crucially, persistence is structurally immune to a misbehaving plugin: the engine applies the returned mask to its <strong>own</strong> untouched block data when writing the reduced part — it never serializes the plugin-visible slices back to disk. So even if a buggy plugin mutates its view in place, retained traces are written from the engine&rsquo;s original bytes, not the mutated ones; mutation is undefined behavior for the plugin&rsquo;s own logic but <strong>cannot corrupt stored data</strong>. Because plugins are operator-supplied trusted code (§2.4), the SDK does not defensively deep-copy the batch — the read-only contract plus mask-only output is the guarantee, not a copy.</p>
@@ -1741,7 +1742,7 @@ engine default (2h and 5m respectively). Each is consulted only when its corresp
 <p><strong>Series reclaim on teardown.</strong> The host never calls <code>Close</code> on <code>sdk.Counter</code>/<code>sdk.Gauge</code>/<code>sdk.Histogram</code> objects (Go has no finalizer contract here). When a pipeline config is removed, the host calls <code>sdk.Plugin.Close()</code> and then deletes every metric series registered by that plugin instance, reclaiming Prometheus memory without a process restart.</p>
 <p><strong>No ABI bump.</strong> The addition of <code>sdk.HostAware</code> / <code>sdk.Host</code> / <code>sdk.Meter</code> / <code>sdk.Logger</code> to <code>pkg/pipeline/sdk</code> is backward-compatible: old plugins that do not implement <code>sdk.HostAware</code> simply fail the type assertion and receive no Host. <code>sdk.ABIVersion</code> remains <strong>1</strong>.</p>
 <p><strong>D7 caveat — transitive zerolog dependency.</strong> The <code>.so</code> already links <code>zerolog</code> transitively via <code>pbv1</code> (<code>pkg/pb/v1</code>). The <code>sdk.Logger</code> façade avoids widening that coupling to plugin authors (no <code>zerolog.Logger</code> or <code>zerolog.Event</code> crosses the <code>.so</code> boundary) rather than eliminating the transitive link. Plugin authors should not rely on <code>zerolog</code> being present; use only the <code>sdk.Logger</code> interface.</p>
-<p>Reference plugins demonstrating well-behaved and adversarial use of the façade live at <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/test/plugins/_telemetrysampler"><code>test/plugins/_telemetrysampler</code></a> (keeps all traces, emits bounded counter + sparse Info log) and <a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/test/plugins/_faultysampler"><code>test/plugins/_faultysampler</code></a> (panic in UseHost, log flood, cardinality explosion — verifies host bounds hold). Build them with <code>make build-trace-pipeline-telemetry-plugins</code>.</p>
+<p>Reference plugins demonstrating well-behaved and adversarial use of the façade live at <a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/test/plugins/_telemetrysampler"><code>test/plugins/_telemetrysampler</code></a> (keeps all traces, emits bounded counter + sparse Info log) and <a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/test/plugins/_faultysampler"><code>test/plugins/_faultysampler</code></a> (panic in UseHost, log flood, cardinality explosion — verifies host bounds hold). Build them with <code>make build-trace-pipeline-telemetry-plugins</code>.</p>
 <h3 id="host-provided-plugin-execution-metrics">Host-provided plugin execution metrics</h3>
 <p>The engine publishes a bounded metric catalog for plugin cost and health. Chain-level metrics are emitted once per decision batch; execution metrics are emitted once per plugin link. Every series carries the database <code>group</code>, while link metrics also carry the configured <code>plugin_name</code> so a chain containing several plugins can be diagnosed independently. They deliberately have no segment, shard, or schema labels. The plugin count and names are bounded by <code>TracePipelineConfig</code>; result and reason values are closed constants. Plugin-specific business metrics remain the responsibility of the bounded <code>Host.Meter</code> façade above.</p>
 <table>
@@ -1794,7 +1795,7 @@ engine default (2h and 5m respectively). Each is consulted only when its corresp
 <li>p99 successful execution latency by plugin: <code>histogram_quantile(0.99, sum by (group, plugin_name, le) (rate(banyandb_trace_tst_pipeline_plugin_execution_duration_seconds_bucket{result=&quot;success&quot;}[5m])))</code>.</li>
 <li>Plugin failure pressure: compare each plugin&rsquo;s <code>decide_error</code>, <code>length_mismatch</code>, <code>panic</code>, and <code>late</code> execution rates with its all-result execution rate. Separately compare chain-level <code>timeout</code> and <code>circuit_open</code> batch rates with the all-result batch rate.</li>
 </ul>
-<p>The duration is wall time inside <code>Decide</code>, not process CPU time. A timed-out native Go plugin cannot be forcibly stopped; if the abandoned call eventually returns, it is recorded as <code>late</code> with its full duration. CPU and allocation attribution requires independent profiling.</p>
+<p>The duration is wall time inside <code>Decide</code>, not process CPU time. A timed-out native Go plugin cannot be forcibly stopped; if the abandoned call eventually returns, it is recorded as <code>late</code> with its full duration. CPU and allocation attribution still belongs in the plugin&rsquo;s independent benchmark.</p>
 <h2 id="retention-decision-timing--trace-completeness">Retention-Decision Timing &amp; Trace Completeness</h2>
 <p>Both the plugin gating policy (§1.1) and the per-stage retention plugin (§1.2) operate on the <strong>whole</strong> trace, not on individual spans as they arrive: <code>D_total</code> needs the earliest start and latest end, <code>has_error</code> scans all spans, and tag matchers scan all spans. Spans of one trace, however, arrive at the storage node anywhere from milliseconds to hours apart, and BanyanDB writes each span into the segment selected by its <strong>event time</strong> (the <code>start_time</code> tag), not its arrival time (<code>banyand/trace/write_standalone.go</code>). There is no live partial-trace buffer; a trace exists only as spans co-located by <code>trace_id</code> inside a segment&rsquo;s parts.</p>
 <h3 id="31-when-retention-decisions-are-safe">3.1 When Retention Decisions Are Safe</h3>
@@ -1803,7 +1804,7 @@ engine default (2h and 5m respectively). Each is consulted only when its corresp
 <li><strong>In-merge filter, during Hot-phase compaction</strong> — when <code>PIPELINE_EVENT_MERGE</code> is enabled (the default), the plugin gating policy is evaluated in-line during Hot-phase LSM compaction (Warm/Cold compactions stay lossless). Compaction is part-count-driven, so it can fire while a trace is still growing; per-trace drops are deferred until <code>traceMaxTs &lt; now − merge_grace</code> (§7.1).</li>
 <li><strong>Plugin gating, at finalization</strong> — when <code>PIPELINE_EVENT_FINALIZE</code> is enabled, the plugin gating policy is evaluated on a
 <strong>Hot</strong> segment only after its event-time window has closed and it is older than both the configured <code>finalize_grace</code>
-and the resolved <code>merge_grace</code> (§7.3). A destructive decision additionally requires the maximum-fragment-gap guard.
+and the resolved <code>merge_grace</code> (§7.3). A destructive decision additionally requires the fragment-boundary guard.
 BanyanDB has no hard &ldquo;segment sealed&rdquo; event, so maturity remains a heuristic rather than a completeness guarantee.</li>
 <li><strong>Per-stage retention, at migration-out</strong> — by the time a segment is migrated to the next stage (≥ its stage&rsquo;s TTL, orders of magnitude longer than <code>finalize_grace</code>), every trace it holds has settled, so per-stage plugin evaluation is final.</li>
 </ul>
@@ -1950,9 +1951,9 @@ satisfied by the projected <code>is_error</code> tag rather than by reading span
 <code>max(start_time + latency) - min(start_time)</code>, computed from two cheap tag columns. It does <strong>not</strong> use
 <code>MaxTS - MinTS</code>, which is the spread of per-row <em>start</em> timestamps (and zero for a single-segment trace), not a duration.</p>
 <p>The <code>sw-trace-sampler.so</code> link is implemented at
-<a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a>. A teaching example of the same SDK
+<a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/plugins/skywalking/sw-trace-sampler"><code>plugins/skywalking/sw-trace-sampler</code></a>. A teaching example of the same SDK
 contract lives at
-<a href="https://github.com/apache/skywalking-banyandb/tree/d323982a5b8e361defdf257df8e247e8d7726b34/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (§2.5). Each
+<a href="https://github.com/apache/skywalking-banyandb/tree/3b4e4d973136ef2a37873f84872072b987a78a02/pkg/pipeline/sdk/_example/segment-tail-sampler"><code>pkg/pipeline/sdk/_example/segment-tail-sampler</code></a> (§2.5). Each
 <code>StageRule.plugins</code> chain has the same shape: one shared sampler whose config tightens from Hot (<code>durationThresholdMs</code>
 100, <code>keepErrors</code>, and the <code>db.type</code> plus <code>mq.queue</code> keep-tag rules) to Warm (<code>keepErrors</code> only), with each link projecting
 only the tags its config references and keeping <code>Spans</code> false.</p>
@@ -2070,11 +2071,13 @@ only the tags its config references and keeping <code>Spans</code> false.</p>
 <li><code>blockWriter.mustWriteBlock</code> — the slow path that emits a decoded, accumulated block for a <code>trace_id</code>.</li>
 </ul>
 <pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
-    IP[&#34;Selected Parts&#34;] --&gt; MG{&#34;Merge eligible?&lt;br/&gt;newest selected part at or before now − merge_grace&#34;}
-    MG --&gt;|&#34;NO (whole merge is hot)&#34;| LR[&#34;Merge losslessly; defer every verdict&#34;]
+    IP[&#34;Selected Parts&#34;] --&gt; MG{&#34;Can any selected part contain&lt;br/&gt;data at or before now − merge_grace?&#34;}
+    MG --&gt;|&#34;NO&#34;| LR[&#34;Merge losslessly; defer every verdict&#34;]
     MG --&gt;|&#34;YES&#34;| BR[&#34;blockReader.nextBlockMetadata&lt;br/&gt;streams blocks ordered by trace_id&#34;]
     BR --&gt; PA[&#34;Per-trace assembly&lt;br/&gt;existing pending-block accumulation in mergeBlocks&#34;]
-    PA --&gt; CHK[&#34;plugin gating policy check&#34;]
+    PA --&gt; TM{&#34;trace max timestamp&lt;br/&gt;at or before frontier?&#34;}
+    TM --&gt;|&#34;NO&#34;| RET[&#34;RETAIN unchanged&#34;]
+    TM --&gt;|&#34;YES&#34;| CHK[&#34;plugin gating policy check&#34;]
     CHK --&gt;|&#34;KEEP&#34;| WB[&#34;mustWriteBlock / mustWriteRawBlock&#34;]
     CHK --&gt;|&#34;provisional DROP&#34;| BG[&#34;fragment boundary guard&#34;]
     BG --&gt;|&#34;uncertain or possible outside fragment&#34;| RET[&#34;RETAIN unchanged&#34;]
@@ -2090,18 +2093,17 @@ only the tags its config references and keeping <code>Spans</code> false.</p>
 <li>
 <p><strong>Filtering waits for <code>merge_grace</code>, but age is not completeness proof.</strong> Compaction is part-count-driven
 (<code>getPartsToMerge</code>), not time-driven, so a merge routinely runs on the active write window while more fragments may
-arrive. The current runtime conservatively tests the selected parts as a whole: if any selected part&rsquo;s maximum
-timestamp is newer than <code>now − merge_grace</code>, the entire merge remains lossless. The engine default is 2h when the
-group does not set <code>merge_grace</code>; an explicit group value still wins. No timer reruns a skipped merge, so actual
-filtering latency is at least the grace plus the wait for a later eligible compaction. A future per-trace maturity
-check may reduce this delay after complete trace assembly.</p>
+arrive. Part minimum timestamps provide only an early shortcut: the runtime bypasses the whole filter when no
+selected part can contain data at or before <code>now − merge_grace</code>. Otherwise it assembles complete trace-ID groups and
+offers only groups whose maximum timestamp is at or before that frontier to the plugin. Newer groups pass through
+unchanged. The engine default is 2h when the group does not set <code>merge_grace</code>; an explicit group value still wins.
+No timer reruns an immature trace exactly when it crosses the frontier, so actual filtering latency includes the wait
+for a later eligible compaction.</p>
 <p>Passing this age check does not prove that a trace has stopped growing and must not make a DROP final by itself. A
-destructive DROP also requires the fragment boundary guard and its independently enforced maximum-fragment-gap,
-segment-coverage, and snapshot contracts. The resolved per-group merge grace controls maturity; the separately
-declared maximum fragment gap controls guard-range expansion and publication revalidation. The runtime receives the
-external gap contract through
-<code>trace-pipeline-max-fragment-gap</code>. Its default is zero, which keeps in-merge sampling disabled; a positive value must
-not exceed the resolved merge grace.</p>
+destructive DROP also requires the fragment boundary guard plus its segment-coverage and snapshot contracts. The
+resolved per-group merge grace controls both maturity and guard-range expansion through publication revalidation.
+The engine assumes fragments of one trace do not arrive farther apart than this grace. When the group omits a
+positive <code>merge_grace</code>, the fixed engine default is 2h; there is no separate node flag for either value.</p>
 </li>
 <li>
 <p><strong>Derived part state reflects only retained traces.</strong> When a trace is dropped, its entries are excluded from <code>partMetadata</code> counts, the <code>traceIDFilter</code> bloom filter (<code>mustWriteTraceIDFilter</code>), and the <code>tagType</code> set written at <code>Flush</code>. The filter runs before these are finalized so the consolidated part stays self-consistent.</p>
@@ -2155,7 +2157,7 @@ retried once without sampling. Maturity grace alone cannot rule out a later or f
 <p><strong>Design decision (accepted):</strong> Drive finalization from an event-time maturity threshold, not from a non-existent seal
 event. A segment is eligible only after its end is older than the greater of <code>finalize_grace</code> and resolved
 <code>merge_grace</code>. The scanner periodically finds mature Hot segments and runs bounded per-shard rounds. Destructive DROP
-still requires the same maximum-fragment-gap, outside-part, and publication checks as an ordinary merge. This is
+still requires the same merge-grace boundary, outside-part, and publication checks as an ordinary merge. This is
 best-effort snapshot protection, not proof against fragments that arrive after publication. Per-stage <code>StageRule</code>
 plugins fire later at migration-out (§7.2).</p>
 </blockquote>
@@ -2169,9 +2171,8 @@ plugins fire later at migration-out (§7.2).</p>
 </li>
 <li>
 <p>Finalization maturity is the greater of <code>finalize_grace</code> and <code>merge_grace</code>; with the defaults, destructive sampling
-therefore waits at least 2h rather than becoming eligible after 5m. The independently declared maximum fragment gap
-controls boundary expansion. A positive value no greater than merge grace is required, otherwise the round remains
-lossless. Surviving traces continue through the lifecycle and may be filtered again at later rounds or migration-out.</p>
+therefore waits at least 2h rather than becoming eligible after 5m. Resolved merge grace also controls boundary
+expansion. Surviving traces continue through the lifecycle and may be filtered again at later rounds or migration-out.</p>
 </li>
 <li>
 <p>The <code>finalize_grace</code> period trades latency for completeness: a larger <code>finalize_grace</code> catches more late spans before finalizing but delays space reclamation. The cron tick doubles as a catch-up sweep — after a node restart it still finds settled-but-unfinalized segments and applies the filter, after which normal retention/GC proceeds.</p>
@@ -2181,9 +2182,9 @@ lossless. Surviving traces continue through the lifecycle and may be filtered ag
 <p>To illustrate the relationship, here is the complete processing loop executed by the post-trace engine on a BanyanDB Data Node across a trace&rsquo;s lifetime (Example trace from Scenario 6.1: <code>5fcdb353-…</code>, <code>POST /test</code> on <code>agent::app</code>, <code>is_error=1</code>, with <code>enabled_events = [PIPELINE_EVENT_MERGE, PIPELINE_EVENT_FINALIZE]</code>):</p>
 <pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
     subgraph A[&#34;A. In-merge filter at HOT-PHASE LSM COMPACTION (PIPELINE_EVENT_MERGE enabled)&#34;]
-        A1[&#34;1. mergeBlocks streams by trace_id.&lt;br/&gt;Are all selected parts older than merge_grace (default 2h)?&#34;]
-        A1 --&gt;|&#34;NO&#34;| A2[&#34;Pass blocks through unchanged; defer the verdict&#34;]
-        A1 --&gt;|&#34;YES (settled parts)&#34;| A3[&#34;Engine builds a projected TraceBatch; plugin Decide returns a keep-mask.&lt;br/&gt;The §6.1 sw-trace-sampler keeps this trace because is_error is set (config keeps errors).&lt;br/&gt;A provisional DROP passes through the fragment guard; only a confirmed DROP reclaims space.&#34;]
+        A1[&#34;1. mergeBlocks streams and assembles complete trace_id groups.&lt;br/&gt;Is this trace&#39;s maximum timestamp at or before now − merge_grace (default 2h)?&#34;]
+        A1 --&gt;|&#34;NO&#34;| A2[&#34;Pass this trace through unchanged; defer its verdict&#34;]
+        A1 --&gt;|&#34;YES&#34;| A3[&#34;Engine adds the trace to a projected TraceBatch; plugin Decide returns a keep-mask.&lt;br/&gt;The §6.1 sw-trace-sampler keeps this trace because is_error is set (config keeps errors).&lt;br/&gt;A provisional DROP passes through the fragment guard; only a confirmed DROP reclaims space.&#34;]
     end
     subgraph B[&#34;B. Plugin gating pass at HOT FINALIZATION (PIPELINE_EVENT_FINALIZE enabled, once per settled Hot segment)&#34;]
         B2[&#34;2. Post-trace scanner observes a segment older than max(finalize_grace, merge_grace), not terminal&#34;]
@@ -2229,15 +2230,10 @@ O(1) on the flush path only once the shard has been finalized).</li>
 </ul>
 <p><strong>Knobs</strong> (the proto carries <code>finalize_grace</code>; the rest are engine defaults in v1):</p>
 <ul>
-<li><code>finalize_grace</code> (default <strong>5m</strong>) — per-segment settling and cooldown window. For a
+<li><code>finalize_grace</code> (fixed engine default <strong>5m</strong>) — per-segment settling and cooldown window. For a
 destructive round, segment and part maturity uses the greater of <code>finalize_grace</code> and
-resolved <code>merge_grace</code>; the default therefore remains 2h. The independently enforced
-maximum fragment gap controls guard-range expansion rather than maturity.</li>
-<li><code>--trace-pipeline-max-fragment-gap</code> — required for both merge and finalization sampling.
-Zero disables destructive sampling, and a value greater than resolved <code>merge_grace</code>
-fails open.</li>
-<li><code>--trace-pipeline-finalize-grace-default</code> — node default when a group sets no
-<code>finalize_grace</code>.</li>
+resolved <code>merge_grace</code>; the default therefore remains 2h. Resolved <code>merge_grace</code> also
+controls fragment-guard range expansion.</li>
 <li><strong>FLOOR</strong> (default <strong>8 MiB</strong> uncompressed) — absolute minimum newly-arrived unsampled
 bytes to warrant a re-round; smaller trickles are left (accepted miss).</li>
 <li><strong>RATIO</strong> (default <strong>0.10</strong>) — for large segments, re-round only when new unsampled
@@ -2246,6 +2242,10 @@ bytes reach this fraction of the segment total.</li>
 <li><strong>max_finalize_rounds</strong> (default <strong>8</strong>) — hard per-shard lifetime cap; after it the
 shard is marked terminal and never re-scanned.</li>
 </ul>
+<p>The only node flags for the native pipeline are <code>--trace-pipeline-native-plugin-enabled</code>,
+<code>--trace-pipeline-trusted-plugin-dir</code>, <code>--trace-pipeline-decide-timeout</code>, and
+<code>--trace-pipeline-decide-timeout-circuit-break</code>. Grace values belong to the group pipeline configuration and use fixed
+engine fallbacks when omitted.</p>
 <p><strong>Observability.</strong> Finalize rounds emit the existing merge metrics under
 <code>type=&quot;finalize&quot;</code>/<code>lane=&quot;finalize&quot;</code> (<code>total_merged</code>, <code>total_merge_latency</code>,
 <code>total_merged_parts</code>), distinct from the hot-merge labels. Guard bypass, Bloom probes,
@@ -2455,6 +2455,104 @@ bounded counters shared with ordinary merge sampling.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -33,7 +33,7 @@ The first generated fixtures and their reports are invalid for performance concl
   <meta itemprop="name" content="Trace Pipeline Merge Performance Test">
   <meta itemprop="description" content="Trace Pipeline Merge Performance Test Status Proposed iterative benchmark design. The benchmark is local and opt-in because it requires the downloaded real-trace shard and creates a 24-hour merge workload on local disk. Results from each phase are used to find and fix performance problems before the next phase begins; this is not a single final benchmark run.
 The first generated fixtures and their reports are invalid for performance conclusions because their timestamp mapper used publication - mergeGrace &#43; 1ns as a fallback. Although their absolute bounds covered nearly 24 hours, 1,146 of 3,219 writes had a maximum timestamp exactly one nanosecond inside the two-hour maturity frontier, and 52 writes had a maximum timestamp later than publication. Those reports remain discarded.">
-  <meta itemprop="wordCount" content="12558">
+  <meta itemprop="wordCount" content="12814">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Pipeline Merge Performance Test">
   <meta name="twitter:description" content="Trace Pipeline Merge Performance Test Status Proposed iterative benchmark design. The benchmark is local and opt-in because it requires the downloaded real-trace shard and creates a 24-hour merge workload on local disk. Results from each phase are used to find and fix performance problems before the next phase begins; this is not a single final benchmark run.
@@ -279,6 +279,7 @@ The first generated fixtures and their reports are invalid for performance concl
       <div class="td-main">
         <div class="row flex-xl-nowrap">
           <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
 
 
 
@@ -1431,7 +1432,7 @@ The first generated fixtures and their reports are invalid for performance concl
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d323982</div>
+                  <div class="commit-id">Commit Id: 3b4e4d9</div>
                 
 
 
@@ -1497,8 +1498,9 @@ events gives six mature merges, all of which were mixed with at least one hot pa
 The six mature selections processed 224,788 mature input rows across their merge rounds.</p>
 <p>This definition is deliberately independent of whether sampling executes. The event&rsquo;s mature/hot input-part and row
 counters describe the selected data, while its sampling classification, bypass reason, and plugin-call count describe
-what the pipeline did. Under the current whole-selection grace guard, a mixed merge is mature for workload coverage but
-still bypasses sampling because it also contains a hot part.</p>
+what the pipeline did. Under the whole-selection grace guard used by this historical run, a mixed merge was mature for
+workload coverage but still bypassed sampling because it also contained a hot part. The runtime now gates eligibility
+per complete trace group; these measurements must not be reused as post-fix performance results.</p>
 <p>The corrected report with per-input maturity counters confirms six mature-containing selections, so the pilot is below
 the unchanged ten-mature-round gate but does not establish that the empty-shard topology produces no mature work. Do not
 infer pre-roll necessity from the obsolete zero count. Decide the next fixture iteration from the corrected six-round
@@ -1524,7 +1526,7 @@ enough comparable outputs accumulate.</p>
 merge outputs and no raw part. It is still hot because four of those outputs carry data newer than the frontier.</p>
 <h3 id="full-day-adaptive-budget-validation">Full-Day Adaptive-Budget Validation</h3>
 <p>The first retain-all full-day replay confirmed that the serialized production MERGE trajectory alone cannot validate
-adaptive batching: all 286 selections contained at least one hot part, so the whole-selection grace guard correctly made
+adaptive batching: all 286 selections contained at least one hot part, so the whole-selection grace guard then in use made
 zero plugin calls. Advancing the logical clock by two hours did not create another size-policy selection because the
 ordinary merges had already reduced the shard to 20 parts. Treating that zero-call run as plugin coverage would be a test
 defect.</p>
@@ -2331,7 +2333,6 @@ oversized-bypassed;</li>
 <li><code>no_sampler</code>;</li>
 <li><code>event_disabled</code>;</li>
 <li><code>merge_grace</code>;</li>
-<li><code>fragment_gap_contract</code>;</li>
 <li><code>guard_unavailable</code>;</li>
 <li><code>all_traces_oversized</code>;</li>
 <li><code>lossless_retry</code>;</li>
@@ -2511,6 +2512,10 @@ drain time for the serialized full-loop run.</li>
 <li>traces evaluated, retained, dropped, and oversized-bypassed;</li>
 <li>traces retained by duration, error, tag, and healthy-hash rules, plus traces reaching each rule;</li>
 <li>plugin calls and traces per call;</li>
+<li>chain decision batches and batch trace-count distribution by <code>success</code>, <code>timeout</code>, or <code>circuit_open</code>;</li>
+<li>per-plugin execution calls, total/mean/maximum wall time, p99 distribution, and time per evaluated trace, keyed by the
+configured <code>plugin_name</code> rather than combined across the chain;</li>
+<li>per-plugin fail-open bypasses by <code>decide_error</code>, <code>length_mismatch</code>, or <code>panic</code>, plus late completions after timeout;</li>
 <li>grace-bypassed merge and trace counts;</li>
 <li>metadata-estimated staging bytes, resource-derived staging hard limit, adaptive decision-batch limit, planned batch
 count, and effective trace-count limit;</li>
@@ -2521,6 +2526,13 @@ count, and effective trace-count limit;</li>
 </ul>
 <p>The benchmark plugins must export final call, evaluated-trace, and decision checksums so the monitor can reconcile their
 work with engine counters and the compiler cannot eliminate benchmark-only decision calculations.</p>
+<p>Phase 10 records the production-equivalent plugin measurements directly in the merge observer as well as exposing the
+runtime metric families. Each merge event contains chain batch count/result/trace totals plus execution call count, total
+duration, maximum duration, result, and bypass reason per <code>plugin_name</code>; the run report aggregates the same dimensions by
+phase. The HTML report uses those records for its plugin cost diagram and chain/link health tables. This avoids running a
+Prometheus scraper inside the constrained
+benchmark container while preserving the same dimensions used by production dashboards. Duration is wall time inside
+<code>Decide</code>, so it is diagnostic attribution, not a substitute for process CPU profiles.</p>
 <h2 id="profiles">Profiles</h2>
 <p>Collect separate primary and cooldown profiles for each variant rather than combining the phases:</p>
 <ul>
@@ -2572,6 +2584,11 @@ controller lag and errors are reported separately.</li>
 <li>Pipeline-disabled and AlwaysKeep runs have identical ordered primary-phase MERGE selection fingerprints and logical
 outputs. The plugin-only FINALIZE event is excluded from this fingerprint comparison. Dropping variants may diverge,
 but their first point and subsequent trajectories are recorded.</li>
+<li>Pipeline-disabled runs contain no plugin-execution records. For each plugin-enabled run, every configured plugin has
+a stable nonempty name, every execution result is <code>success</code>, no bypass reason is present, and the sum of per-plugin
+execution calls equals the existing merge-observer <code>pluginCalls</code> total. Any <code>decide_error</code>, <code>length_mismatch</code>, <code>panic</code>,
+<code>late</code>, <code>timeout</code>, or <code>circuit_open</code> result rejects the run. The report must retain per-plugin total and maximum time;
+latency itself is compared with the healthy baseline and is not assigned a universal absolute pass threshold.</li>
 </ol>
 <h2 id="comparison-and-acceptance">Comparison and Acceptance</h2>
 <p>First report absolute values and run-to-run variance for the pipeline-disabled revision under test. Only after that
@@ -2833,6 +2850,104 @@ separately and must not be used to claim normal two-hour-grace behavior.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

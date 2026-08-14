@@ -24,7 +24,7 @@
 <title>Trace Fragment Guard for Sampling Design | Apache SkyWalking</title><meta property="og:url" content="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/trace-fragment-sampling-guard/">
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="Trace Fragment Guard for Sampling Design">
-  <meta property="og:description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented behind an opt-in maximum-fragment-gap safety contract.
+  <meta property="og:description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract.
 Context and Problem Statement BanyanDB’s trace merge policy selects file parts primarily by compressed size to control write amplification. The selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.
 A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard rewrite.">
   <meta property="og:locale" content="en">
@@ -32,13 +32,13 @@ A trace can have fragments in both selected and unselected parts. Sampling only 
     <meta property="article:section" content="docs">
 
   <meta itemprop="name" content="Trace Fragment Guard for Sampling Design">
-  <meta itemprop="description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented behind an opt-in maximum-fragment-gap safety contract.
+  <meta itemprop="description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract.
 Context and Problem Statement BanyanDB’s trace merge policy selects file parts primarily by compressed size to control write amplification. The selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.
 A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard rewrite.">
-  <meta itemprop="wordCount" content="4953">
+  <meta itemprop="wordCount" content="4848">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Fragment Guard for Sampling Design">
-  <meta name="twitter:description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented behind an opt-in maximum-fragment-gap safety contract.
+  <meta name="twitter:description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract.
 Context and Problem Statement BanyanDB’s trace merge policy selects file parts primarily by compressed size to control write amplification. The selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.
 A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard rewrite.">
 
@@ -56,7 +56,7 @@ A trace can have fragments in both selected and unselected parts. Sampling only 
 <script src="/js/jquery-3.6.0.min.js"></script>
 
 <link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/trace-fragment-sampling-guard/">
-<meta name="description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented behind an opt-in maximum-fragment-gap safety contract. Context and Problem…">
+<meta name="description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract. Context and Problem Statement…">
 
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Trace Fragment Guard for Sampling Design","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/trace-fragment-sampling-guard/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/trace-fragment-sampling-guard/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/trace-fragment-sampling-guard/","name":"Trace Fragment Guard for Sampling Design","position":3}]}]}</script>
 
@@ -282,6 +282,7 @@ A trace can have fragments in both selected and unselected parts. Sampling only 
       <div class="td-main">
         <div class="row flex-xl-nowrap">
           <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
 
 
 
@@ -1434,7 +1435,7 @@ A trace can have fragments in both selected and unselected parts. Sampling only 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d323982</div>
+                  <div class="commit-id">Commit Id: 3b4e4d9</div>
                 
 
 
@@ -1449,7 +1450,7 @@ A trace can have fragments in both selected and unselected parts. Sampling only 
 <div class="td-content">
 	<h1 id="trace-fragment-guard-for-sampling-design">Trace Fragment Guard for Sampling Design</h1>
 <h2 id="status">Status</h2>
-<p>Core enforcement implemented behind an opt-in maximum-fragment-gap safety contract.</p>
+<p>Core enforcement implemented using the resolved merge-grace safety contract.</p>
 <h2 id="context-and-problem-statement">Context and Problem Statement</h2>
 <p>BanyanDB&rsquo;s trace merge policy selects file parts primarily by compressed size to control write amplification. The
 selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.</p>
@@ -1488,26 +1489,20 @@ merge.</p>
 strictly safe only when grace is at least an enforced maximum separation between fragments of the same trace. Sealing
 an event-time range prevents future arrivals, but does not prove that an already-visible same-trace fragment is absent
 from a part farther than grace.</p>
-<p>This document calls the value used for interval expansion guard grace. The implementation sources it from the separately
-enforced <code>trace-pipeline-max-fragment-gap</code>; merge grace remains only the whole-selection maturity delay. A strict
-deployment must establish the maximum-gap guarantee independently because configuring the flag does not enforce it.</p>
+<p>This document calls the value used for interval expansion guard grace. The implementation uses the resolved per-group
+<code>merge_grace</code> for both interval expansion and the per-trace maturity delay. A deployment must ensure fragments of one
+trace do not arrive farther apart than this grace; the engine cannot infer or enforce that ingestion property.</p>
 <p>The engine default for merge grace is 2h when a group does not configure a positive override. A merge must resolve the
 group override or engine default once and carry that immutable value through filtering and publication revalidation.
-The current runtime uses merge grace as a whole-selection maturity gate: one selected part newer than <code>now − grace</code>
-makes the entire merge lossless. Because compaction is part-count-driven rather than timer-driven, an ineligible merge
-is not guaranteed to run again at the two-hour frontier. Its effective filtering delay is at least two hours plus the
-wait for a later eligible compaction; finalization is an independent backstop.</p>
-<p>Keeping these values separate prevents the 2h maturity default from unnecessarily expanding every trace range by two
-hours. It also permits an early whole-merge bypass when a segment is too narrow to contain any trace range expanded by
-the enforced maximum gap, avoiding projection, staging, sampler, and Bloom work when no DROP could be authorized.</p>
-<p>Without that contract, enforcement defers provisional DROP traces. Shadow mode may still calculate and report the
-best-effort result based on observed workload behavior, but it must not use that result for destructive deletion. A
-future fallback may instead probe every outside Bloom filter without temporal pruning.</p>
-<p>The runtime defaults the maximum-fragment-gap declaration to zero. At zero, or when the declaration is greater than the
-resolved merge grace, it does not construct the merge or finalization sampler and guard, so rewriting remains lossless
-without paying projection, staging, or Bloom-probe costs. A positive declaration no greater than the resolved grace
-enables the guarded path. The declaration is an operator assertion about the ingestion contract; the flag itself does
-not enforce late-write rejection.</p>
+The runtime uses selected-part minimum timestamps only to avoid building a filter when no selected part can contain a
+mature trace. Once staging groups by <code>trace_id</code>, it sends only groups whose maximum timestamp is at or before
+<code>now − grace</code> to the sampler; newer groups are retained unchanged. Because compaction is part-count-driven rather than
+timer-driven, an ineligible trace is not guaranteed to be reconsidered at the two-hour frontier. Finalization remains
+an independent backstop.</p>
+<p>Using one value makes the configured maturity contract match the boundary checked before a destructive DROP. It also
+permits an early whole-merge bypass when no selected part can contain a mature trace,
+avoiding projection, staging, sampler, and Bloom work when no DROP could be authorized. Without a trustworthy
+fragment-arrival contract, operators should not enable destructive sampling for that group.</p>
 <p>The design uses symmetric time expansion because the size-based picker can select an arbitrary temporal subset. An
 outside fragment may be earlier or later than the selected fragment.</p>
 <h3 id="concurrency-boundary">Concurrency Boundary</h3>
@@ -1618,12 +1613,11 @@ guard.</li>
 <p>The merge request captures and pins the selected inputs, the base snapshot epoch, the event-time coverage of the pinned
 catalog, and lightweight metadata for every outside part. Outside metadata consists of the part identity, minimum and
 maximum event timestamps, segment identity, availability state, and a reference to its trace-ID Bloom filter. The
-catalog also records the enforced maximum fragment gap; the guard refuses temporal pruning when configured grace is
-smaller.</p>
+catalog also records the enforced fragment gap, which is the same resolved merge grace used by the maturity gate.</p>
 <p>Before incurring sampler work, the runtime also checks that native sampling is enabled, a sampler exists, the relevant
-event is enabled, the maximum-fragment-gap declaration is positive and no greater than merge grace, the segment has a
-non-empty guardable interior, and every selected part is old enough for the whole-selection maturity gate. Finalization
-uses the greater of merge grace and finalize grace for maturity. Failure of any check leaves the lossless path unchanged.</p>
+event is enabled, the segment has a non-empty merge-grace-expanded interior, and at least one selected part may contain
+a mature trace. Trace-ID staging then applies the maturity boundary to each assembled trace. Finalization uses the
+greater of merge grace and finalize grace for maturity. Failure of any check leaves the lossless path unchanged.</p>
 <p>The merge assembles selected blocks by trace ID and computes one selected trace range. The sampler evaluates the
 assembled trace. Sampler KEEP traces are written immediately according to normal ordered-output rules. For each
 provisional DROP, the guard identifies only outside parts whose event-time envelopes intersect the grace-expanded
@@ -1861,7 +1855,7 @@ later merges. Total lifetime write amplification can therefore increase indirect
 <li>invalid timestamp deferrals;</li>
 <li>segment-boundary deferrals;</li>
 <li>boundary-check budget deferrals;</li>
-<li>whole-merge maturity deferrals and age past the eligibility frontier;</li>
+<li>immature traces retained past the eligibility frontier;</li>
 <li>confirmed drops;</li>
 <li>snapshot revalidation attempts and failures;</li>
 <li>discarded provisional outputs;</li>
@@ -1883,7 +1877,7 @@ probe count. Per-reason trace-level labels are intentionally avoided.</p>
 <li>Verify inclusive grace-boundary behavior.</li>
 <li>Verify overflow-safe handling near minimum and maximum timestamp values.</li>
 <li>Verify nested outside intervals and non-contiguous selected parts.</li>
-<li>Verify temporal pruning is rejected when guard grace is smaller than the enforced maximum fragment gap.</li>
+<li>Verify temporal pruning is rejected when guard grace is smaller than the catalog&rsquo;s enforced gap.</li>
 <li>Verify that sampler KEEP performs no Bloom probes.</li>
 <li>Verify that provisional DROP with no time candidate is dropped.</li>
 <li>Verify that all-negative candidate filters permit DROP.</li>
@@ -1899,9 +1893,8 @@ probe count. Per-reason trace-level labels are intentionally avoided.</p>
 <li>Verify that cancellation and every boundary-check budget limit fail open.</li>
 <li>Verify that closing a guard releases its pinned catalog exactly once.</li>
 <li>Verify that an unset group value resolves to the 2h engine default and an explicit group value takes precedence.</li>
-<li>Verify whole-merge maturity at one nanosecond before, exactly at, and one nanosecond after the 2h frontier.</li>
-<li>Verify exact earlier and later 2h guard boundaries and reject temporal pruning when the enforced maximum gap is
-2h plus one nanosecond.</li>
+<li>Verify per-trace maturity at one nanosecond before, exactly at, and one nanosecond after the 2h frontier.</li>
+<li>Verify exact earlier and later 2h guard boundaries.</li>
 <li>Verify that finalization applies the same outside-part guard and defers a trace found in a skipped part.</li>
 <li>Verify that a segment with no guardable interior bypasses projection, sampler, and Bloom work.</li>
 </ol>
@@ -1950,13 +1943,15 @@ inputs are retried losslessly.</li>
 <li>Replay all 26 captured parts and their 37,288 unique trace IDs at the deterministic active-ingestion clock.</li>
 <li>Verify that the default picker dispatches no merge from the frozen snapshot; do not label a scoring candidate as an
 ordinary merge selection.</li>
-<li>Verify that the recent twelve-part small-file window bypasses the sampler and guard with zero drops and Bloom probes.</li>
+<li>Verify that the recent twelve-part small-file window contains no mature trace, so it bypasses the sampler and guard
+with zero drops and Bloom probes.</li>
 <li>Derive the six cooled inputs from the 2h frontier, assert their exact identities and 34,856,465-byte total, and retain
 all 20 other parts in the outside catalog.</li>
 <li>Compare every selected/outside decision with the exact trace-placement oracle and require zero false negatives.</li>
 <li>Assert 6,652 candidate pairs and Bloom probes, 34 retained traces, 31,798 drops, and three false deferrals for the
 hybrid guard.</li>
-<li>Add one recent small part to the cooled selection and verify that the whole merge bypasses sampling.</li>
+<li>Add one recent small part to the cooled selection and verify that mature traces are sampled while traces newer than
+the frontier pass through unchanged.</li>
 <li>Verify the observed 71.225s fragment gap and document that fixture observation is not a maximum-gap proof.</li>
 <li>Add a synthetic narrow outside part whose same-trace fragment is beyond grace and document that it falls outside the
 time-safety contract.</li>
@@ -1983,12 +1978,13 @@ backlog, and time from maturity frontier to the next eligible compaction.</li>
 <li>Core and secondary-index snapshots agree on every confirmed DROP.</li>
 <li>Snapshot conflicts fail open without losing input data.</li>
 <li>The captured-shard regression has zero false negatives against the exact placement oracle.</li>
-<li>With 2h merge grace and an explicitly declared 2h maximum fragment gap, the cooled captured-shard case produces
+<li>With 2h merge grace used for both maturity and boundary expansion, the cooled captured-shard case produces
 exactly 6,652 time-candidate pairs and Bloom probes, versus 629,241 probes for all-Bloom confirmation.</li>
 <li>Missing timestamp metadata and segment-boundary ambiguity never produce destructive deletion.</li>
 <li>Benchmarks show no increase in selected merge bytes or merge fan-out.</li>
-<li>Probe-budget exhaustion and lack of a positive maximum-fragment-gap contract retain affected traces.</li>
-<li>Any selected part newer than the maturity frontier causes zero sampler calls, guard calls, Bloom probes, and drops.</li>
+<li>Probe-budget exhaustion retains affected traces.</li>
+<li>A selected part newer than the maturity frontier does not suppress eligible traces; only trace groups whose maximum
+timestamp is newer than the frontier bypass sampler and guard calls.</li>
 <li>Finalization cannot publish a DROP that the ordinary merge guard would defer for the same visible catalog.</li>
 <li>Publication rejection leaves the selected inputs authoritative and completes one lossless retry.</li>
 </ol>
@@ -1998,7 +1994,7 @@ exactly 6,652 time-candidate pairs and Bloom probes, versus 629,241 probes for a
 block merges.</li>
 <li>Assemble every selected physical block for one trace into a complete sampler and guard input.</li>
 <li>Build and pin the outside catalog with conservative coverage, fallible membership adapters, the base epoch, and an
-explicit enforced maximum fragment gap.</li>
+enforced gap equal to resolved merge grace.</li>
 <li>Implement provisional DROP resolution, including validation, saturating expansion, interval candidate discovery,
 tri-state membership checks, cumulative probe budgets, and guard-owned confirmed DROP tokens.</li>
 <li>Drive core and secondary-index pruning only from those tokens.</li>
@@ -2011,8 +2007,8 @@ the introducer for a constant-time publication-fence check.</li>
 <p>The feature should first run in shadow mode. Shadow mode records provisional sampler results, temporal candidates, Bloom
 outcomes, and the final action that enforcement would take, but it does not drop traces.</p>
 <p>After captured-shard replay and production shadow metrics confirm acceptable candidate and deferral rates, enforcement
-can be enabled for a limited set of trace groups by declaring a verified positive maximum fragment gap no greater than
-their resolved merge grace. Rollout should monitor Bloom probes, deferred traces, epoch conflicts, merge latency, sampler
+can be enabled for a limited set of trace groups whose verified fragment-arrival bound fits within their resolved merge
+grace. Rollout should monitor Bloom probes, deferred traces, epoch conflicts, merge latency, sampler
 effectiveness, and finalization backlog.</p>
 <p>Rollback disables boundary-aware destructive filtering and returns merges to fail-open retention without changing the
 part-selection policy or invalidating existing parts.</p>
@@ -2224,6 +2220,104 @@ transitional merges.</li>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
