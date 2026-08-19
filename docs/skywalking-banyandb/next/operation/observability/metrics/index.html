@@ -35,7 +35,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   <meta itemprop="description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
 Scrape source — the FODC proxy. In a cluster deployment, metrics are collected by scraping the FODC proxy /metrics endpoint (see FODC overview), which is the single Prometheus scrape target. The proxy aggregates every BanyanDB node’s metrics and adds per-node identity labels, so all the PromQL below is written for that scheme:
 $job — the Prometheus scrape job for the FODC proxy. $role — the node role, matched via the container_name label (liaison or data). $pod — a BanyanDB node, matched via the pod_name label (the full node identity, e.g. banyandb-data-hot-0). Because the proxy is the only target, the Prometheus-synthesized instance, job, and up labels describe the proxy, not individual BanyanDB nodes — use $role / $pod to scope a query to a node. Original BanyanDB labels (group, kind, method, service, path, operation, remote_node, …) are preserved on every sample. $__rate_interval is the Grafana rate-interval variable. Every expression below carries the {job=~&#34;$job&#34;, container_name=~&#34;$role&#34;, pod_name=~&#34;$pod&#34;} selector; a few liaison-only metrics (the write queue and its sync loop) are pinned with the literal container_name=&#34;liaison&#34; instead.">
-  <meta itemprop="wordCount" content="3865">
+  <meta itemprop="wordCount" content="4157">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Metrics">
   <meta name="twitter:description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
@@ -1439,7 +1439,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: dcc10d4</div>
+                  <div class="commit-id">Commit Id: da86fc4</div>
                 
 
 
@@ -1913,6 +1913,60 @@ carry <code>group</code> and <code>plugin_name</code>; plugin-declared labels fo
 therefore cannot be enumerated in the host catalog. The host caps each plugin instrument at 100 distinct label-value
 series and directs overflow to a bounded sentinel series. See
 <a href="../../../design/post-trace-pipeline#27-plugin-telemetry-meter--logger">Plugin Telemetry</a> for the complete contract.</p>
+<p>The first-party <code>sw-trace-sampler</code> and <code>zipkin-trace-sampler</code> publish the following bounded decision and row metrics:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_trace_sampler_decisions_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>verdict</code>, <code>rule</code></td>
+          <td>Trace evaluations attributed to the first matching sampler rule.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_trace_sampler_rows_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>All span or segment rows carried by trace evaluations when a projected row-aligned column is available.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_trace_sampler_rows_dropped_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>rule</code></td>
+          <td>Rows belonging to traces the sampler proposed dropping, attributed to the fixed drop rule.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_pipeline_plugin_trace_sampler_row_count_unavailable_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Trace evaluations whose metadata-only projection exposed no row count; these traces are omitted from <code>rows_total</code>.</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>verdict</code> is <code>keep</code> or <code>drop</code>. <code>rule</code> is one of the fixed built-in values <code>duration</code>, <code>error</code>, <code>healthy_sample</code>,
+<code>healthy_rejected</code>, <code>no_keep_rule</code>, <code>decode_failure_duration</code>, <code>decode_failure_error</code>, and <code>decode_failure_tags</code>, or a
+fixed positional tag-rule slot from <code>tag_00</code> through <code>tag_31</code>. Tag slots follow <code>keepTagRules</code> configuration order; tag
+keys and values are never copied into metric labels. Configurations with more than 32 tag rules are rejected.</p>
+<p>This counter reports sampler evaluations, not unique traces or committed storage deletions. A trace may be evaluated in
+multiple merge or finalization rounds, and BanyanDB safety guards may retain a trace for which a plugin returned a drop
+verdict. Compare requested drops by rule with the engine&rsquo;s committed drop rate rather than treating them as equal:</p>
+<p><code>sum by (group, plugin_name, rule) (rate(banyandb_trace_pipeline_plugin_trace_sampler_decisions_total{verdict=&quot;drop&quot;}[5m]))</code></p>
+<p><code>sum by (group) (rate(banyandb_trace_tst_pipeline_traces_dropped[5m]))</code></p>
+<p>For the first-party default SkyWalking policy, projected duration and error columns make the row count available. The
+proposed dropped-row ratio is:</p>
+<p><code>sum by (group, plugin_name) (rate(banyandb_trace_pipeline_plugin_trace_sampler_rows_dropped_total[5m]))</code>
+<code> / sum by (group, plugin_name) (rate(banyandb_trace_pipeline_plugin_trace_sampler_rows_total[5m]))</code></p>
+<p>Break down the dropped rows by the responsible rule with
+<code>sum by (group, plugin_name, rule) (rate(banyandb_trace_pipeline_plugin_trace_sampler_rows_dropped_total[5m]))</code>.
+Alert on any increase of <code>trace_sampler_row_count_unavailable_total</code> before treating the ratio as complete. Like the
+decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the committed storage deletion ratio after guards.</p>
 <h2 id="data-inverted-index">Data: Inverted Index</h2>
 <p><code>Inverted Index</code> metrics monitor the series index of measures and streams, grouped by the <code>group</code> tag. Rapid growth or churn signals a cardinality problem that bloats the index and slows queries.</p>
 <h3 id="series-write-rate">Series Write Rate</h3>
@@ -2283,8 +2337,6 @@ series and directs overflow to a bounded sentinel series. See
 
     </div>
     
-
-
 
 
 
