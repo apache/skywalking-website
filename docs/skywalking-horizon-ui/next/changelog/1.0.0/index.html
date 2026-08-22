@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="1.0.0">
   <meta itemprop="description" content="1.0.0 AI assistant (new) Ask about your system in plain language and get answers built from the real dashboard widgets — not just text. A new floating AI Assistant launcher (right edge, after login) opens a chat: describe what you want to know (“what’s unhealthy right now?”, “investigate latency for a service”) and the assistant reads live OAP data through the same query path the dashboards use, then streams back an ordered narrative with inline charts, top-N lists and tables drawn by the same widget components you see across the UI. Figures are numbered so the prose can reference them. Open it as a side drawer, expand to a full page (/ai), or open in a new tab; past conversations are kept locally in your browser. Read-only, and it inherits your permissions. The assistant can list layers/services, read active alarms (the “what’s unhealthy” signal), browse the per-layer metric catalog (the curated MQE for each metric), drill a service down to its instances/endpoints, and render those metrics — every data tool checks the same read verb you already hold, so the assistant never sees more than you can, and it never changes configuration, rules, or dashboards. It renders the real feature views inline — same components, focused on the service. Rather than a link you open, the assistant mounts the actual product views inside the chat, read-only and scoped to the service: ask for topology and it embeds the real service map focused one hop (hex nodes, edges, RPM/latency, zoom controls); ask how a service maps across layers and it shows the real Smartscape hierarchy fan; ask for traces and it embeds the Traces view — the trace list and the span waterfall, with the click-a-trace → open-its-spans interaction intact — for both trace modes: a native SkyWalking layer embeds by service, and a Zipkin-tracing layer (mesh / k8s) is embedded too by first listing the Zipkin services and matching yours to a Zipkin-side name (they key on their own service universe); ask for logs and it embeds the layer Logs view — the stored log stream with its row → detail popout; for a browser app, ask for browser errors and it embeds the client-side JS error list with its row → stack-trace detail; ask for deployment and it embeds the real Deployment view — the instance-to-instance call graph within the service, with pan/zoom and node/edge detail; ask for API dependencies and it embeds the real API-dependency view — the service’s busiest endpoint and its upstream/downstream dependency chain, where you can expand any node; name a source and destination service and it embeds the real Instance map — the instances of each service and the calls between them. One renderer per surface across the product, so what you see in the chat is exactly what the layer tab shows. Read live Kubernetes pod logs, right in the chat. For a k8s workload the assistant pulls a pod container’s on-demand logs (the error stack) and shows the fetched lines inline as a read-only result — the same on-demand-log path as the Pod Logs tab, so nothing is stored and it inherits your logs:read permission. It’s a result, not a console: no tail or refresh controls (operate a live tail in the Pod Logs tab); when a content filter was applied the block shows it, so an empty result reads as “nothing matched this filter” rather than a silent pod. On-demand logs are gated off by default on OAP; when they’re disabled the assistant says so instead of failing. K8S (cluster/node) and K8S_SERVICE (service/pod) metrics read through the normal catalog like any other layer. It can propose profiling — the right kind for the target — and only you start it. When metrics and traces can’t localise a cause, the assistant presents a decision card explaining what it found, why profiling would help, and what it expects to reveal; nothing runs until you approve it in the popout, and only if you hold the profiling permission. It picks the profiling flavour that fits the target — trace sampling, async-profiler for a JVM service, pprof for a Go service, eBPF on/off-CPU, or network profiling — by reading which types the layer is set up for and the service’s runtime language, and resolves the target instances for you. On approve it starts that task; once it has collected, ask the assistant to analyze it and it renders the result inline, captured so it replays identically on reload: for a code profile, the flame graph the Profiling tab draws (with the hottest frames called out in the units that profiler actually reports), and for a trace profile the profiled trace’s span waterfall beside the flame — the trace&#43;profiling combination; for network profiling, the captured process-conversation graph. When there’s nothing to show — no Rover/eBPF agent, or a task that ran but collected nothing — it says so in plain text rather than pointing you at a live view that would drift from what it read. It never triggers anything on its own. Your backend decides what profiling is allowed — the assistant no longer refuses on its own guesses. Previously the assistant could decline to even show a profiling card: because the layer’s template didn’t list that profiling type, because the instances reported a runtime the profiler doesn’t match, because no process had advertised eBPF support recently, or because no process had reported in the last 30 minutes — and it phrased those as facts about your deployment (“the GENERAL layer does not support network profiling”). None of those are checks OAP performs when a task is created, so operators were blocked from tasks their backend would have accepted, by Horizon’s own configuration. The assistant now shows the card and tells you what it’s unsure about — that the layer isn’t set up for this type, that the runtime looks like a mismatch so the profiler will probably collect nothing, that no Rover agent seems to be reporting — and lets you decide. If the backend really does refuse, you get OAP’s own reason (“The instance doesn’t have processes.”), which is both accurate and actionable, instead of a guess. The assistant is also now honest about what a window means per flavour: OAP runs every network profiling task for a fixed 10 minutes and ignores any duration, and an empty process graph shortly after approval means “too early”, not “unsupported”. Off-CPU eBPF profiles are ranked by time blocked, not by how often a thread yielded. An OFF_CPU profile is what you reach for when the question is “what is this service waiting on”, but its frames were ranked by scheduler switch count — so a method that yields thousands of times for microseconds outranked the one that blocks for a second, inverting the answer. Off-CPU results now aggregate by duration. Relatedly, the assistant now names each profiler’s real unit when it reads a flame back to you instead of assuming one: trace self time is milliseconds; pprof is a sample count; async-profiler depends on what was captured — CPU-family events (CPU, WALL, CTIMER, ITIMER) are a sample count, but ALLOC is bytes allocated and LOCK is nanoseconds of contention, since those two record a value rather than a count. A task that captured more than one distinct event (say CPU &#43; ALLOC) renders one at a time and names the others. An approved profiling task starts immediately, timed by your backend rather than your laptop. The task’s start time was sent as the browser’s wall clock, but OAP treats it as “begin after this moment” and only dispatches tasks starting within ±5 minutes of its own clock — so on a workstation whose clock had drifted (a suspended VM, a container host without NTP) the task was accepted, returned an id, the card said “started”, and nothing ever ran. Both trace and eBPF tasks now use OAP’s “start as soon as possible” semantics, so there is no clock to disagree about. An event the assistant doesn’t recognise is no longer silently swapped for CPU. Asking for a profiling event outside its known list produced a card that read as requested but fired a CPU profile instead. The event is now passed through for OAP to accept or reject by name, and the assistant flags that it didn’t recognise it — a clear rejection beats a wrong profile. Relatedly, when a HEAP or ALLOCS pprof profile is read back, the assistant now states that the ranking is a count of sample records rather than bytes, so it can’t be misreported as memory held. Long eBPF profiles say when only part of the range was analyzed. A wide eBPF task could exceed what OAP fetches in a single analysis, and the excess was dropped server-side with nothing on screen to indicate it — a partial flame graph presented as complete. The assistant now bounds the request to the most recent profiling schedules and tells you when it did. An empty network process graph is no longer reported as a missing agent. Because a network task runs for a fixed 10 minutes, analyzing shortly after approval legitimately finds nothing yet; that now reads as “still collecting”, and a missing Rover agent is offered as the likely cause only once the window has actually elapsed. A profiling task that is still collecting is no longer reported as one that found nothing. Asking the assistant to analyze a task shortly after you approved it — the obvious thing to do — could come back with “the task ran but produced no analyzable stacks; do not retry”, because any progress log was read as “it finished”. The first log a task gets means only that it was handed to the agent. The assistant now distinguishes the three real states: still collecting (wait and ask again), finished with nothing above the sampling threshold (don’t keep retrying), and failed on the agent — an execution error, or a profile too large for OAP to accept, which it now surfaces with the instance and what to do about it instead of silently reporting an empty profile. Allocation and multi-event profiles are read whole. An async-profiler ALLOC profile was showing only half its data: OAP splits allocations into in-TLAB and outside-TLAB trees, and only the first was read — so the large-object allocation paths, usually the reason for opening an allocation profile, were missing. A task started with several events (say CPU &#43; ALLOC &#43; LOCK) likewise rendered only the first. Both now render every tree the task produced. Network profiling results no longer come back empty on a wide time range. The process-conversation graph is built from metrics OAP only keeps at minute granularity, so reading it against an hour- or day-scale chat window returned nothing — which the assistant then reported as “no Rover agent / network profiling unavailable”. The read is now always minute-granular. Trace profile analysis stopped asking OAP the same question many times over. One analysis query was issued per profiled span, though OAP marks profiling per segment — so a segment with 20 spans cost 20 near-identical queries, exhausted the analysis budget 20× faster, and could trip OAP’s “only part of the snapshots were analyzed” warning, which was then relayed to you as a truncated profile that was never truncated. One query per segment now. A point-in-time pprof profile (HEAP, GOROUTINE, ALLOCS, THREADCREATE) is labelled as one instead of showing a “0 min” collection window, which read as a task that collected for no time. Relatedly, the process list used to confirm an instance can be network-profiled no longer counts virtual processes, which OAP’s own check excludes — it was possible to be offered an instance OAP would then reject. pprof collection windows are validated in the unit OAP actually uses. The pprof task duration is measured in minutes and capped at 15 by OAP, but Horizon was bounding it as if it were 600 seconds — so an over-long request sailed through and came back as an opaque backend error after you approved it. It is now bounded at OAP’s real limit. Likewise, an async or pprof task targeting more instances than a single task allows is now rejected with a clear reason instead of quietly profiling only the first 32 while the card said the whole fleet, and an eBPF task shorter than OAP’s 60-second minimum is refused up front with that reason rather than after approval. Guided root-cause analysis. Ask “what’s the root cause?” and the assistant follows built-in investigation playbooks — a master method (locate the root service → calling chain → error stack; walk the dependency topology upstream and fix a sick upstream first; a remote / Virtual_* dependency exposes only its client-side edge metric) plus latency, error-rate/SLA, saturation, middleware, Kubernetes-workload, and service-mesh specializations. It can also follow the cross-layer hierarchy from a service down into its backing infra/database layer, where memory / disk / connection causes live. Because a database / cache / MQ is a topology leaf with nothing downstream to walk, the middleware playbook now bottoms out there and pivots to its logs &#43; Kubernetes hierarchy (its pods’ memory / disk / connection pressure) &#43; the network edge; the Kubernetes-workload playbook works pod restarts / OOMKilled / CrashLoopBackOff → pod logs → limits-vs-usage headroom → node pressure. Bring your own LLM — vendor-neutral, and off by default. Enable it with the new ai: config block (HORIZON_AI_*). The default transport is OpenAI-compatible (any OpenAI-shaped endpoint — a hosted model, a local model, or an AI gateway; set model &#43; base URL &#43; API key); Amazon Bedrock is also supported (provider: bedrock). The API key is a secret, env-only, redacted from logs. The launcher shows for every signed-in user so the AI-powered APM is discoverable; until an admin points it at a model the panel opens read-only with a short “ask your administrator to set it up” notice, and who may actually use it once configured is controlled by RBAC (ai:read, granted to every role by default). Both prompts are yours. The assistant’s system prompt (ai.systemPrompt) and the starter example chips shown in an empty chat (ai.starters) ship with sensible defaults and can be replaced entirely in horizon.yaml. Starter chips can ask for a service first. A starter that names a &lt;service&gt; (e.g. “Investigate latency for &lt;service&gt;”) opens a one-field fill-in on click: type the service free-form — a partial name or a description is fine — and it’s dropped into the prompt before sending. You don’t have to know the exact name or its layer; the assistant matches what you typed to a real service through its own cross-layer search. Plain starters without a placeholder still send in one click. The bundled starters include these service-scoped prompts; operator-supplied ai.starters can use the same &lt;service&gt; / &lt;layer&gt; convention. Your question stays in view while the answer streams. The message you just sent pins to the top of the chat and stays there as a sticky header — while its answer streams in and as you scroll through it — so you never lose sight of what you asked; opening or switching to a past conversation pins that chat’s last question the same way. Each turn now carries a timestamp: when you sent the question, and when its answer finished. The assistant orients on a layer’s template before reading it — so it answers in the layer’s own terms. A new capability lookup surfaces, per layer: what a Service / Instance / Endpoint is CALLED there (a K8S_SERVICE instance is a Pod, a mesh instance a Sidecar, a K8S service a Cluster), which components the layer carries, whether its traces are native or Zipkin (so the assistant picks the right trace tool instead of guessing from the layer name), and each relationship’s metric legend — which metric is the HEALTH signal vs the LOAD, with its threshold bands. So a topology answer reads “success rate 98.3% → below the 99% warn band” against the operator’s configured thresholds rather than a guess, and narrates in the layer’s vocabulary. Embedded maps are captured evidence now — they replay exactly on reload, offline, with their edge sparklines. When the assistant draws a topology, deployment, instance map, API-dependency chain or cross-layer hierarchy, it now captures the whole graph the moment it reads it — every node and edge WITH its metric values and the per-edge trend series — and the chat block carries that snapshot. So reopening the conversation later re-renders the identical point-in-time map (each stamped “captured &lt;time&gt;”) without going back to OAP: click an edge and its sparkline part-graphs are right there, even if the window has rolled past or OAP is unreachable. The API-dependency chain also freezes which endpoint it drew, so a reload shows the same chain rather than whatever is busiest now. (Previously these views silently re-queried live on reload, quietly showing current data under an old question.) The assistant also now reads the real relationship metrics — a topology answer cites each dependency’s actual traffic, latency and success rate instead of just naming the neighbours. Embedded traces, logs and browser errors are captured evidence too — the list AND its detail replay offline on reload. When the assistant shows a service’s traces, Zipkin traces, logs or browser errors, it now freezes the list the moment it reads it and the chat block carries that snapshot — so reopening the conversation replays the exact same rows (each stamped “captured &lt;time&gt;”) with no fresh query, and clicking a row opens its detail (the span waterfall, the log record, the stack trace) straight from the frozen data, even offline. Every trace source freezes 10. Where the protocol returns spans with the list they come along; on the older protocol that returns only the list, Horizon fetches each trace’s spans up front, so its waterfall opens offline just the same. Logs and browser errors freeze up to 100 rows. (Previously these re-queried live on reload, showing current data under an old question.) Every captured block now wears a replay badge. Each frozen point-in-time block — figures, maps, the profiling flame, traces/logs/browser errors, and pod logs — carries a small replay icon next to its “captured &lt;time&gt;” stamp, so it’s unmistakable at a glance that you’re looking at a snapshot the assistant took, not live data. Because the assistant captures every answer’s data server-side and feeds the UI that snapshot, these blocks are always replaying — the badge shows from the first render, not just after a reload. A charted metric is the real dashboard widget — with its explanation, exact MQE and capture time. When the assistant shows a metric from a layer’s catalog it now renders that dashboard widget directly, carrying its full configuration (unit, number formatting, value thresholds and legends) instead of a rebuilt approximation — so the chart in the chat matches the dashboard exactly. Each figure documents what it is: the metric’s plain-language explanation, the precise MQE expression that produced it, and a “captured &lt;time&gt;” stamp. That last part matters on reload — a figure you reopen from history shows the frozen data from when it was read (a point-in-time snapshot, not a fresh query), and the capture time makes that unambiguous. Conversation history now persists per user in your browser, with controls. Past chats move to the browser’s IndexedDB — far larger than before, so long conversations with embedded charts survive — and are scoped to your username, so a shared browser keeps each person’s history separate. A Save history toggle (on by default) turns persistence off entirely; a usage meter shows how much of the client budget (default 500 MB, HORIZON_AI_HISTORY_MAX_MB) is in use; Clear all (with a confirm step) wipes it, and a single conversation still deletes from the History sidebar. History is stored unencrypted in the browser — a note says so — so turn it off on shared workstations; a more secure server-side history mode is planned. Two tabs can’t quietly overwrite each other’s chats. History is read once when the assistant opens, and each conversation is stored under its own id, so saving one never touches another. Before every save the assistant checks whether that same conversation was continued somewhere else — in a second tab — and if the two have diverged nothing is overwritten: the conversation is marked Not saved in the History sidebar and the chat asks which version you want to keep, this one or the other tab’s. A conversation whose turn is still in flight shows In progress until it’s written. An OAP outage is reported as an outage, not as an empty deployment. When Horizon could not reach OAP’s admin endpoint — or an administrator had disabled a layer’s template, or a layer was never synced — every one of those produced the same answer from the assistant: no metrics available for this layer. During an admin-port outage, which darkens every layer at once, that read as “your services aren’t reporting anything” and sent operators looking for a problem in their own system. The assistant now names which of the four it hit, says how much is affected, and stops instead of trying layer after layer against a store that is down. A new check_horizon_health tool reports admin reachability, any unreachable OAP modules and the template source mode, so “is this layer idle or is Horizon blind?” is a question it can actually answer. The assistant’s instructions are now split by where its answer lands. What to investigate — the entity model, catalog discipline, the root-cause method — is one shared text; how output is presented is a separate section chosen per surface. This matters because the panel’s strongest rule, show it rather than describing it, is only true where calling a tool draws something: in a terminal the same rule produces the wall of text it exists to prevent. Nothing changes for the chat panel, whose section is the previous wording verbatim. If you override the system prompt in horizon.yaml, your text now replaces the shared core and the presentation section is still appended — so a customized prompt can no longer accidentally drop the rule that stops the assistant narrating charts it never drew. Five rendering tools became one. show_line, show_card, show_top, show_table and show_record differed only in which figure shape the MQE called for, and each carried its own copy of the same nine parameters. They are now show_figure(type, …), where type follows the expression’s shape exactly as before. The assistant’s whole tool list dropped from about 12,000 tokens to 8,000 — roughly 35% — which is 4,000 tokens per turn returned to the conversation itself. An agent reading over MCP gets the data Six kinds of block reached a terminal as nothing at all before. Topology, deployment, instance topology, endpoint dependencies, process topology and profiling results were passed over, because the tools that produce them already summarise themselves in prose. The capture now travels in full — the nodes, the calls between them, and their metric values — so an agent can lay out which side of a call was slow, which pod is loaded and which frame holds the time, instead of relaying a sentence about them. Profiling Continuous-profiling saves are now consistent under a failed confirmation, a mid-save edit, or a mid-save service switch. A save that succeeded but whose confirmation read failed no longer reseeds the editor from stale, pre-save data — the applied badge now stays honest rather than showing an old policy as current. An edit made while Apply is still in flight is no longer discarded by that same reseed, and neither is switching to a different service mid-save: the confirmation now always checks the exact service that was saved, not whatever the picker currently shows. The service picker’s labels and filter counts also refresh right after Apply, instead of only after a remount.">
-  <meta itemprop="wordCount" content="24685">
+  <meta itemprop="wordCount" content="25078">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="1.0.0">
   <meta name="twitter:description" content="1.0.0 AI assistant (new) Ask about your system in plain language and get answers built from the real dashboard widgets — not just text. A new floating AI Assistant launcher (right edge, after login) opens a chat: describe what you want to know (“what’s unhealthy right now?”, “investigate latency for a service”) and the assistant reads live OAP data through the same query path the dashboards use, then streams back an ordered narrative with inline charts, top-N lists and tables drawn by the same widget components you see across the UI. Figures are numbered so the prose can reference them. Open it as a side drawer, expand to a full page (/ai), or open in a new tab; past conversations are kept locally in your browser. Read-only, and it inherits your permissions. The assistant can list layers/services, read active alarms (the “what’s unhealthy” signal), browse the per-layer metric catalog (the curated MQE for each metric), drill a service down to its instances/endpoints, and render those metrics — every data tool checks the same read verb you already hold, so the assistant never sees more than you can, and it never changes configuration, rules, or dashboards. It renders the real feature views inline — same components, focused on the service. Rather than a link you open, the assistant mounts the actual product views inside the chat, read-only and scoped to the service: ask for topology and it embeds the real service map focused one hop (hex nodes, edges, RPM/latency, zoom controls); ask how a service maps across layers and it shows the real Smartscape hierarchy fan; ask for traces and it embeds the Traces view — the trace list and the span waterfall, with the click-a-trace → open-its-spans interaction intact — for both trace modes: a native SkyWalking layer embeds by service, and a Zipkin-tracing layer (mesh / k8s) is embedded too by first listing the Zipkin services and matching yours to a Zipkin-side name (they key on their own service universe); ask for logs and it embeds the layer Logs view — the stored log stream with its row → detail popout; for a browser app, ask for browser errors and it embeds the client-side JS error list with its row → stack-trace detail; ask for deployment and it embeds the real Deployment view — the instance-to-instance call graph within the service, with pan/zoom and node/edge detail; ask for API dependencies and it embeds the real API-dependency view — the service’s busiest endpoint and its upstream/downstream dependency chain, where you can expand any node; name a source and destination service and it embeds the real Instance map — the instances of each service and the calls between them. One renderer per surface across the product, so what you see in the chat is exactly what the layer tab shows. Read live Kubernetes pod logs, right in the chat. For a k8s workload the assistant pulls a pod container’s on-demand logs (the error stack) and shows the fetched lines inline as a read-only result — the same on-demand-log path as the Pod Logs tab, so nothing is stored and it inherits your logs:read permission. It’s a result, not a console: no tail or refresh controls (operate a live tail in the Pod Logs tab); when a content filter was applied the block shows it, so an empty result reads as “nothing matched this filter” rather than a silent pod. On-demand logs are gated off by default on OAP; when they’re disabled the assistant says so instead of failing. K8S (cluster/node) and K8S_SERVICE (service/pod) metrics read through the normal catalog like any other layer. It can propose profiling — the right kind for the target — and only you start it. When metrics and traces can’t localise a cause, the assistant presents a decision card explaining what it found, why profiling would help, and what it expects to reveal; nothing runs until you approve it in the popout, and only if you hold the profiling permission. It picks the profiling flavour that fits the target — trace sampling, async-profiler for a JVM service, pprof for a Go service, eBPF on/off-CPU, or network profiling — by reading which types the layer is set up for and the service’s runtime language, and resolves the target instances for you. On approve it starts that task; once it has collected, ask the assistant to analyze it and it renders the result inline, captured so it replays identically on reload: for a code profile, the flame graph the Profiling tab draws (with the hottest frames called out in the units that profiler actually reports), and for a trace profile the profiled trace’s span waterfall beside the flame — the trace&#43;profiling combination; for network profiling, the captured process-conversation graph. When there’s nothing to show — no Rover/eBPF agent, or a task that ran but collected nothing — it says so in plain text rather than pointing you at a live view that would drift from what it read. It never triggers anything on its own. Your backend decides what profiling is allowed — the assistant no longer refuses on its own guesses. Previously the assistant could decline to even show a profiling card: because the layer’s template didn’t list that profiling type, because the instances reported a runtime the profiler doesn’t match, because no process had advertised eBPF support recently, or because no process had reported in the last 30 minutes — and it phrased those as facts about your deployment (“the GENERAL layer does not support network profiling”). None of those are checks OAP performs when a task is created, so operators were blocked from tasks their backend would have accepted, by Horizon’s own configuration. The assistant now shows the card and tells you what it’s unsure about — that the layer isn’t set up for this type, that the runtime looks like a mismatch so the profiler will probably collect nothing, that no Rover agent seems to be reporting — and lets you decide. If the backend really does refuse, you get OAP’s own reason (“The instance doesn’t have processes.”), which is both accurate and actionable, instead of a guess. The assistant is also now honest about what a window means per flavour: OAP runs every network profiling task for a fixed 10 minutes and ignores any duration, and an empty process graph shortly after approval means “too early”, not “unsupported”. Off-CPU eBPF profiles are ranked by time blocked, not by how often a thread yielded. An OFF_CPU profile is what you reach for when the question is “what is this service waiting on”, but its frames were ranked by scheduler switch count — so a method that yields thousands of times for microseconds outranked the one that blocks for a second, inverting the answer. Off-CPU results now aggregate by duration. Relatedly, the assistant now names each profiler’s real unit when it reads a flame back to you instead of assuming one: trace self time is milliseconds; pprof is a sample count; async-profiler depends on what was captured — CPU-family events (CPU, WALL, CTIMER, ITIMER) are a sample count, but ALLOC is bytes allocated and LOCK is nanoseconds of contention, since those two record a value rather than a count. A task that captured more than one distinct event (say CPU &#43; ALLOC) renders one at a time and names the others. An approved profiling task starts immediately, timed by your backend rather than your laptop. The task’s start time was sent as the browser’s wall clock, but OAP treats it as “begin after this moment” and only dispatches tasks starting within ±5 minutes of its own clock — so on a workstation whose clock had drifted (a suspended VM, a container host without NTP) the task was accepted, returned an id, the card said “started”, and nothing ever ran. Both trace and eBPF tasks now use OAP’s “start as soon as possible” semantics, so there is no clock to disagree about. An event the assistant doesn’t recognise is no longer silently swapped for CPU. Asking for a profiling event outside its known list produced a card that read as requested but fired a CPU profile instead. The event is now passed through for OAP to accept or reject by name, and the assistant flags that it didn’t recognise it — a clear rejection beats a wrong profile. Relatedly, when a HEAP or ALLOCS pprof profile is read back, the assistant now states that the ranking is a count of sample records rather than bytes, so it can’t be misreported as memory held. Long eBPF profiles say when only part of the range was analyzed. A wide eBPF task could exceed what OAP fetches in a single analysis, and the excess was dropped server-side with nothing on screen to indicate it — a partial flame graph presented as complete. The assistant now bounds the request to the most recent profiling schedules and tells you when it did. An empty network process graph is no longer reported as a missing agent. Because a network task runs for a fixed 10 minutes, analyzing shortly after approval legitimately finds nothing yet; that now reads as “still collecting”, and a missing Rover agent is offered as the likely cause only once the window has actually elapsed. A profiling task that is still collecting is no longer reported as one that found nothing. Asking the assistant to analyze a task shortly after you approved it — the obvious thing to do — could come back with “the task ran but produced no analyzable stacks; do not retry”, because any progress log was read as “it finished”. The first log a task gets means only that it was handed to the agent. The assistant now distinguishes the three real states: still collecting (wait and ask again), finished with nothing above the sampling threshold (don’t keep retrying), and failed on the agent — an execution error, or a profile too large for OAP to accept, which it now surfaces with the instance and what to do about it instead of silently reporting an empty profile. Allocation and multi-event profiles are read whole. An async-profiler ALLOC profile was showing only half its data: OAP splits allocations into in-TLAB and outside-TLAB trees, and only the first was read — so the large-object allocation paths, usually the reason for opening an allocation profile, were missing. A task started with several events (say CPU &#43; ALLOC &#43; LOCK) likewise rendered only the first. Both now render every tree the task produced. Network profiling results no longer come back empty on a wide time range. The process-conversation graph is built from metrics OAP only keeps at minute granularity, so reading it against an hour- or day-scale chat window returned nothing — which the assistant then reported as “no Rover agent / network profiling unavailable”. The read is now always minute-granular. Trace profile analysis stopped asking OAP the same question many times over. One analysis query was issued per profiled span, though OAP marks profiling per segment — so a segment with 20 spans cost 20 near-identical queries, exhausted the analysis budget 20× faster, and could trip OAP’s “only part of the snapshots were analyzed” warning, which was then relayed to you as a truncated profile that was never truncated. One query per segment now. A point-in-time pprof profile (HEAP, GOROUTINE, ALLOCS, THREADCREATE) is labelled as one instead of showing a “0 min” collection window, which read as a task that collected for no time. Relatedly, the process list used to confirm an instance can be network-profiled no longer counts virtual processes, which OAP’s own check excludes — it was possible to be offered an instance OAP would then reject. pprof collection windows are validated in the unit OAP actually uses. The pprof task duration is measured in minutes and capped at 15 by OAP, but Horizon was bounding it as if it were 600 seconds — so an over-long request sailed through and came back as an opaque backend error after you approved it. It is now bounded at OAP’s real limit. Likewise, an async or pprof task targeting more instances than a single task allows is now rejected with a clear reason instead of quietly profiling only the first 32 while the card said the whole fleet, and an eBPF task shorter than OAP’s 60-second minimum is refused up front with that reason rather than after approval. Guided root-cause analysis. Ask “what’s the root cause?” and the assistant follows built-in investigation playbooks — a master method (locate the root service → calling chain → error stack; walk the dependency topology upstream and fix a sick upstream first; a remote / Virtual_* dependency exposes only its client-side edge metric) plus latency, error-rate/SLA, saturation, middleware, Kubernetes-workload, and service-mesh specializations. It can also follow the cross-layer hierarchy from a service down into its backing infra/database layer, where memory / disk / connection causes live. Because a database / cache / MQ is a topology leaf with nothing downstream to walk, the middleware playbook now bottoms out there and pivots to its logs &#43; Kubernetes hierarchy (its pods’ memory / disk / connection pressure) &#43; the network edge; the Kubernetes-workload playbook works pod restarts / OOMKilled / CrashLoopBackOff → pod logs → limits-vs-usage headroom → node pressure. Bring your own LLM — vendor-neutral, and off by default. Enable it with the new ai: config block (HORIZON_AI_*). The default transport is OpenAI-compatible (any OpenAI-shaped endpoint — a hosted model, a local model, or an AI gateway; set model &#43; base URL &#43; API key); Amazon Bedrock is also supported (provider: bedrock). The API key is a secret, env-only, redacted from logs. The launcher shows for every signed-in user so the AI-powered APM is discoverable; until an admin points it at a model the panel opens read-only with a short “ask your administrator to set it up” notice, and who may actually use it once configured is controlled by RBAC (ai:read, granted to every role by default). Both prompts are yours. The assistant’s system prompt (ai.systemPrompt) and the starter example chips shown in an empty chat (ai.starters) ship with sensible defaults and can be replaced entirely in horizon.yaml. Starter chips can ask for a service first. A starter that names a &lt;service&gt; (e.g. “Investigate latency for &lt;service&gt;”) opens a one-field fill-in on click: type the service free-form — a partial name or a description is fine — and it’s dropped into the prompt before sending. You don’t have to know the exact name or its layer; the assistant matches what you typed to a real service through its own cross-layer search. Plain starters without a placeholder still send in one click. The bundled starters include these service-scoped prompts; operator-supplied ai.starters can use the same &lt;service&gt; / &lt;layer&gt; convention. Your question stays in view while the answer streams. The message you just sent pins to the top of the chat and stays there as a sticky header — while its answer streams in and as you scroll through it — so you never lose sight of what you asked; opening or switching to a past conversation pins that chat’s last question the same way. Each turn now carries a timestamp: when you sent the question, and when its answer finished. The assistant orients on a layer’s template before reading it — so it answers in the layer’s own terms. A new capability lookup surfaces, per layer: what a Service / Instance / Endpoint is CALLED there (a K8S_SERVICE instance is a Pod, a mesh instance a Sidecar, a K8S service a Cluster), which components the layer carries, whether its traces are native or Zipkin (so the assistant picks the right trace tool instead of guessing from the layer name), and each relationship’s metric legend — which metric is the HEALTH signal vs the LOAD, with its threshold bands. So a topology answer reads “success rate 98.3% → below the 99% warn band” against the operator’s configured thresholds rather than a guess, and narrates in the layer’s vocabulary. Embedded maps are captured evidence now — they replay exactly on reload, offline, with their edge sparklines. When the assistant draws a topology, deployment, instance map, API-dependency chain or cross-layer hierarchy, it now captures the whole graph the moment it reads it — every node and edge WITH its metric values and the per-edge trend series — and the chat block carries that snapshot. So reopening the conversation later re-renders the identical point-in-time map (each stamped “captured &lt;time&gt;”) without going back to OAP: click an edge and its sparkline part-graphs are right there, even if the window has rolled past or OAP is unreachable. The API-dependency chain also freezes which endpoint it drew, so a reload shows the same chain rather than whatever is busiest now. (Previously these views silently re-queried live on reload, quietly showing current data under an old question.) The assistant also now reads the real relationship metrics — a topology answer cites each dependency’s actual traffic, latency and success rate instead of just naming the neighbours. Embedded traces, logs and browser errors are captured evidence too — the list AND its detail replay offline on reload. When the assistant shows a service’s traces, Zipkin traces, logs or browser errors, it now freezes the list the moment it reads it and the chat block carries that snapshot — so reopening the conversation replays the exact same rows (each stamped “captured &lt;time&gt;”) with no fresh query, and clicking a row opens its detail (the span waterfall, the log record, the stack trace) straight from the frozen data, even offline. Every trace source freezes 10. Where the protocol returns spans with the list they come along; on the older protocol that returns only the list, Horizon fetches each trace’s spans up front, so its waterfall opens offline just the same. Logs and browser errors freeze up to 100 rows. (Previously these re-queried live on reload, showing current data under an old question.) Every captured block now wears a replay badge. Each frozen point-in-time block — figures, maps, the profiling flame, traces/logs/browser errors, and pod logs — carries a small replay icon next to its “captured &lt;time&gt;” stamp, so it’s unmistakable at a glance that you’re looking at a snapshot the assistant took, not live data. Because the assistant captures every answer’s data server-side and feeds the UI that snapshot, these blocks are always replaying — the badge shows from the first render, not just after a reload. A charted metric is the real dashboard widget — with its explanation, exact MQE and capture time. When the assistant shows a metric from a layer’s catalog it now renders that dashboard widget directly, carrying its full configuration (unit, number formatting, value thresholds and legends) instead of a rebuilt approximation — so the chart in the chat matches the dashboard exactly. Each figure documents what it is: the metric’s plain-language explanation, the precise MQE expression that produced it, and a “captured &lt;time&gt;” stamp. That last part matters on reload — a figure you reopen from history shows the frozen data from when it was read (a point-in-time snapshot, not a fresh query), and the capture time makes that unambiguous. Conversation history now persists per user in your browser, with controls. Past chats move to the browser’s IndexedDB — far larger than before, so long conversations with embedded charts survive — and are scoped to your username, so a shared browser keeps each person’s history separate. A Save history toggle (on by default) turns persistence off entirely; a usage meter shows how much of the client budget (default 500 MB, HORIZON_AI_HISTORY_MAX_MB) is in use; Clear all (with a confirm step) wipes it, and a single conversation still deletes from the History sidebar. History is stored unencrypted in the browser — a note says so — so turn it off on shared workstations; a more secure server-side history mode is planned. Two tabs can’t quietly overwrite each other’s chats. History is read once when the assistant opens, and each conversation is stored under its own id, so saving one never touches another. Before every save the assistant checks whether that same conversation was continued somewhere else — in a second tab — and if the two have diverged nothing is overwritten: the conversation is marked Not saved in the History sidebar and the chat asks which version you want to keep, this one or the other tab’s. A conversation whose turn is still in flight shows In progress until it’s written. An OAP outage is reported as an outage, not as an empty deployment. When Horizon could not reach OAP’s admin endpoint — or an administrator had disabled a layer’s template, or a layer was never synced — every one of those produced the same answer from the assistant: no metrics available for this layer. During an admin-port outage, which darkens every layer at once, that read as “your services aren’t reporting anything” and sent operators looking for a problem in their own system. The assistant now names which of the four it hit, says how much is affected, and stops instead of trying layer after layer against a store that is down. A new check_horizon_health tool reports admin reachability, any unreachable OAP modules and the template source mode, so “is this layer idle or is Horizon blind?” is a question it can actually answer. The assistant’s instructions are now split by where its answer lands. What to investigate — the entity model, catalog discipline, the root-cause method — is one shared text; how output is presented is a separate section chosen per surface. This matters because the panel’s strongest rule, show it rather than describing it, is only true where calling a tool draws something: in a terminal the same rule produces the wall of text it exists to prevent. Nothing changes for the chat panel, whose section is the previous wording verbatim. If you override the system prompt in horizon.yaml, your text now replaces the shared core and the presentation section is still appended — so a customized prompt can no longer accidentally drop the rule that stops the assistant narrating charts it never drew. Five rendering tools became one. show_line, show_card, show_top, show_table and show_record differed only in which figure shape the MQE called for, and each carried its own copy of the same nine parameters. They are now show_figure(type, …), where type follows the expression’s shape exactly as before. The assistant’s whole tool list dropped from about 12,000 tokens to 8,000 — roughly 35% — which is 4,000 tokens per turn returned to the conversation itself. An agent reading over MCP gets the data Six kinds of block reached a terminal as nothing at all before. Topology, deployment, instance topology, endpoint dependencies, process topology and profiling results were passed over, because the tools that produce them already summarise themselves in prose. The capture now travels in full — the nodes, the calls between them, and their metric values — so an agent can lay out which side of a call was slow, which pod is loaded and which frame holds the time, instead of relaying a sentence about them. Profiling Continuous-profiling saves are now consistent under a failed confirmation, a mid-save edit, or a mid-save service switch. A save that succeeded but whose confirmation read failed no longer reseeds the editor from stale, pre-save data — the applied badge now stays honest rather than showing an old policy as current. An edit made while Apply is still in flight is no longer discarded by that same reseed, and neither is switching to a different service mid-save: the confirmation now always checks the exact service that was saved, not whatever the picker currently shows. The service picker’s labels and filter counts also refresh right after Apply, instead of only after a remount.">
@@ -669,6 +669,17 @@
 
     <li>
         
+
+            
+            <a href="#">Overviews<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
             <a href="/docs/skywalking-horizon-ui/next/dashboards/overview-services">Services Dashboard</a>
         
     </li>
@@ -683,9 +694,8 @@
 
     
 
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/activemq">ActiveMQ</a>
+</ul>
+
         
     </li>
 
@@ -693,7 +703,18 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/airflow">Airflow</a>
+
+            
+            <a href="#">Application<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/general">General Service</a>
         
     </li>
 
@@ -701,7 +722,14 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/alipay_mini_program">Alipay Mini Program</a>
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/browser">Browser</a>
+        
+    </li>
+
+    
+
+</ul>
+
         
     </li>
 
@@ -709,18 +737,13 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/apisix">APISIX</a>
-        
-    </li>
 
-    
+            
+            <a href="#">AWS<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
 
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/aws_gateway">AWS API Gateway</a>
-        
-    </li>
-
+            
+<ul class="sidebar-submenu">
     
 
     <li>
@@ -741,15 +764,22 @@
 
     <li>
         
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/aws_gateway">AWS API Gateway</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-horizon-ui/next/dashboards/aws_s3">AWS S3</a>
         
     </li>
 
     
 
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/banyandb">BanyanDB</a>
+</ul>
+
         
     </li>
 
@@ -757,26 +787,13 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/bookkeeper">BookKeeper</a>
-        
-    </li>
 
-    
+            
+            <a href="#">Databases<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
 
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/browser">Browser</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/cilium_service">Cilium Service</a>
-        
-    </li>
-
+            
+<ul class="sidebar-submenu">
     
 
     <li>
@@ -790,118 +807,6 @@
     <li>
         
             <a href="/docs/skywalking-horizon-ui/next/dashboards/elasticsearch">Elasticsearch</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/envoy_ai_gateway">Envoy AI Gateway</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/flink">Flink</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/general">General Service</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/so11y_go_agent">Go Agent (Self-Observability)</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/ios">iOS</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/mesh_cp">Istio Control Plane</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/mesh_dp">Istio Data Plane</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/mesh">Istio Managed Services</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/so11y_java_agent">Java Agent (Self-Observability)</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/kafka">Kafka</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/kong">Kong</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/k8s">Kubernetes</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/k8s_service">Kubernetes Services</a>
-        
-    </li>
-
-    
-
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/os_linux">Linux</a>
         
     </li>
 
@@ -925,15 +830,72 @@
 
     <li>
         
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/postgresql">PostgreSQL</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/redis">Redis</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Gateways<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/apisix">APISIX</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/envoy_ai_gateway">Envoy AI Gateway</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/kong">Kong</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-horizon-ui/next/dashboards/nginx">Nginx</a>
         
     </li>
 
     
 
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/so11y_oap">OAP (Self-Observability)</a>
+</ul>
+
         
     </li>
 
@@ -941,7 +903,126 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/postgresql">PostgreSQL</a>
+
+            
+            <a href="#">Istio<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/mesh">Istio Managed Services</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/mesh_cp">Istio Control Plane</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/mesh_dp">Istio Data Plane</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Kubernetes<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/cilium_service">Cilium Service</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/k8s">Kubernetes</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/k8s_service">Kubernetes Services</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">MQ<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/activemq">ActiveMQ</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/bookkeeper">BookKeeper</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/flink">Flink</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/kafka">Kafka</a>
         
     </li>
 
@@ -965,7 +1046,14 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/redis">Redis</a>
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/rocketmq">RocketMQ</a>
+        
+    </li>
+
+    
+
+</ul>
+
         
     </li>
 
@@ -973,7 +1061,118 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/rocketmq">RocketMQ</a>
+
+            
+            <a href="#">Mobile<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/alipay_mini_program">Alipay Mini Program</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/ios">iOS</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/wechat_mini_program">WeChat Mini Program</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">OS<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/os_linux">Linux</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/os_windows">Windows</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Self-Observability<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/banyandb">BanyanDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/so11y_go_agent">Go Agent (Self-Observability)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/so11y_java_agent">Java Agent (Self-Observability)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/so11y_oap">OAP (Self-Observability)</a>
         
     </li>
 
@@ -985,6 +1184,24 @@
         
     </li>
 
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Virtual targets<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
     
 
     <li>
@@ -1019,9 +1236,8 @@
 
     
 
-    <li>
-        
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/wechat_mini_program">WeChat Mini Program</a>
+</ul>
+
         
     </li>
 
@@ -1029,7 +1245,25 @@
 
     <li>
         
-            <a href="/docs/skywalking-horizon-ui/next/dashboards/os_windows">Windows</a>
+
+            
+            <a href="#">Workflow Scheduler<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/dashboards/airflow">Airflow</a>
+        
+    </li>
+
+    
+
+</ul>
+
         
     </li>
 
@@ -1306,7 +1540,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: bb3cf03</div>
+                  <div class="commit-id">Commit Id: 01ccef3</div>
                 
 
 
@@ -1899,6 +2133,9 @@
 <h3 id="bundled-layer-dashboards">Bundled layer dashboards</h3>
 <ul>
 <li>
+<p><strong>The dashboard docs are now grouped the way the sidebar is.</strong> Forty-six pages sat in one flat alphabetical list, so ActiveMQ came before Airflow and the six database dashboards were scattered through it. They are now catalogued under the same groups the layer templates carry — Databases, Gateways, MQ, Kubernetes, Istio, AWS, Mobile, OS, Self-Observability, Virtual targets, Workflow Scheduler — plus Overviews for the two cross-layer dashboards and Application for the general-service and browser ones. The grouping is read from the templates themselves, so the docs cannot drift from what the sidebar shows.</p>
+</li>
+<li>
 <p><strong>Single-value metrics now render as cards, not flat lines, on several layer dashboards.</strong> Widgets whose expression collapses the window to one number (a <code>latest(...)</code> total) had been mis-ported as line charts — drawn as a lone dot that misreads as a time series and shares one axis with an unrelated average trend. Each is now split into a proper single-value <strong>card</strong> (the total) plus a trend <strong>line</strong> (the average), matching the metric&rsquo;s shape, the way booster-ui rendered them. Affects the <strong>Virtual GenAI</strong> (Input / Output Tokens, Estimated Cost — provider and model scopes), <strong>Elasticsearch</strong> (deleted documents), <strong>ClickHouse</strong> (Zookeeper sessions / watches), <strong>RabbitMQ</strong> (connection / publisher / consumer / channel / queue totals, allocated memory), <strong>RocketMQ</strong> (max CommitLog disk ratio, max producer / consumer message size), and <strong>APISIX</strong> (etcd reachability) dashboards; every changed dashboard row still tiles to full width.</p>
 </li>
 <li>
@@ -1935,6 +2172,21 @@
 <h3 id="compare-on-a-layer-dashboard">Compare on a layer dashboard</h3>
 <ul>
 <li><strong>One-click exit from comparison.</strong> The compare bar gains a <strong>Clear all</strong> button that drops every locked entity — including the current one, whose chip has no per-entity × — and returns the page to the single-entity view. Previously, when your only lock was the current entity, there was no way to leave compare from the bar.</li>
+</ul>
+<h3 id="configuration-and-hot-reload">Configuration and hot reload</h3>
+<ul>
+<li>
+<p><strong>A config edit that repoints OAP now reaches MQE straight away.</strong> Metrics Inspect resolved its MQE target through a 60-second cache that was not keyed by the configuration it came from, so after a hot reload it kept querying the previous OAP for up to a minute while every other call had already moved. The cache now keys on the OAP settings it resolved from, the way the capability and time-window caches already did.</p>
+</li>
+<li>
+<p><strong>A config file that vanishes can no longer replace your settings with defaults.</strong> The loader treats a missing file as &ldquo;run on built-in defaults&rdquo;, which is right at startup — validation then tells you no users are configured. On a <em>reload</em> it would have been silent and total, because defaults are a perfectly valid config: every user, OAP URL, role and key would have been swapped for one. Reload now refuses a missing file and keeps serving what it has, which is what the page always promised.</p>
+</li>
+<li>
+<p><strong>The hot-reload documentation matches what the code does.</strong> Capability probes were listed as needing a restart; they are cached for five minutes and keyed by the OAP query URL, so an OAP upgrade is picked up on its own and repointing OAP re-probes at once. <code>server.staticDir</code> genuinely does need a restart and was missing. The source-map page led a note with &ldquo;Restart-only knobs&rdquo; and then said those same three knobs apply live. And <code>debugLog</code>, <code>security.trustedLinkDomains</code> and one caveat about turning <code>sourceMaps.enabled</code> on live were absent from the list entirely.</p>
+</li>
+<li>
+<p><strong><code>security</code>, <code>mcp.name</code> and <code>oauth.clientMetadataHosts</code> appear in the configuration reference.</strong> All three were real, and two of them documented elsewhere, but none appeared in the section table or the top-level shape — so anyone reading the reference to find out what is configurable never learned they existed.</p>
+</li>
 </ul>
 <h3 id="dashboard-setup">Dashboard setup</h3>
 <ul>
@@ -2066,6 +2318,7 @@
             <li><a href="#bundled-layer-dashboards">Bundled layer dashboards</a></li>
             <li><a href="#layer-dashboard-editor">Layer dashboard editor</a></li>
             <li><a href="#compare-on-a-layer-dashboard">Compare on a layer dashboard</a></li>
+            <li><a href="#configuration-and-hot-reload">Configuration and hot reload</a></li>
             <li><a href="#dashboard-setup">Dashboard setup</a></li>
             <li><a href="#extra-dashboard-pages-per-layer-component">Extra dashboard pages per layer component</a></li>
           </ul>
@@ -2180,6 +2433,8 @@
 
     </div>
     
+
+
 
 
 
