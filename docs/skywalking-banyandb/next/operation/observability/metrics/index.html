@@ -35,7 +35,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   <meta itemprop="description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
 Scrape source — the FODC proxy. In a cluster deployment, metrics are collected by scraping the FODC proxy /metrics endpoint (see FODC overview), which is the single Prometheus scrape target. The proxy aggregates every BanyanDB node’s metrics and adds per-node identity labels, so all the PromQL below is written for that scheme:
 $job — the Prometheus scrape job for the FODC proxy. $role — the node role, matched via the container_name label (liaison or data). $pod — a BanyanDB node, matched via the pod_name label (the full node identity, e.g. banyandb-data-hot-0). Because the proxy is the only target, the Prometheus-synthesized instance, job, and up labels describe the proxy, not individual BanyanDB nodes — use $role / $pod to scope a query to a node. Original BanyanDB labels (group, kind, method, service, path, operation, remote_node, …) are preserved on every sample. $__rate_interval is the Grafana rate-interval variable. Every expression below carries the {job=~&#34;$job&#34;, container_name=~&#34;$role&#34;, pod_name=~&#34;$pod&#34;} selector; a few liaison-only metrics (the write queue and its sync loop) are pinned with the literal container_name=&#34;liaison&#34; instead.">
-  <meta itemprop="wordCount" content="4157">
+  <meta itemprop="wordCount" content="4516">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Metrics">
   <meta name="twitter:description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
@@ -1447,7 +1447,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 523a151</div>
+                  <div class="commit-id">Commit Id: 3b83e18</div>
                 
 
 
@@ -1593,15 +1593,18 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <strong>Expression2 (bytes)</strong>: <code>sum(rate(banyandb_queue_pub_sent_bytes{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
 <h3 id="write-queue-length-wqueue">Write Queue Length (wqueue)</h3>
 <p>The liaison buffers writes in an <strong>on-disk write queue (wqueue)</strong> before syncing each part to the data nodes. These gauges (scoped with the literal <code>container_name=&quot;liaison&quot;</code>) expose the queue depth per <code>pod_name</code>/<code>group</code>. The wqueue accumulates on disk — it does not drop data after a fixed window — so a sustained rise in any of these, especially <code>pending</code>, signals a slow or unavailable downstream data node and can eventually fill the liaison disk (<code>STATUS_DISK_FULL</code>). The matching <code>*_total_sync_loop_*</code> counters (<code>started</code>/<code>finished</code>/<code>latency</code>/<code>bytes</code>, and the lazily-registered <code>*_total_sync_loop_err</code>) describe the loop that drains it.</p>
+<p>The <code>banyandb_{measure,stream_tst,trace_tst}_file_sync_queue_latency_seconds</code> histograms measure a different boundary: from a core part&rsquo;s commit into the liaison wqueue until that part receives a successful file-sync acknowledgement from each target data node. This includes queue residence, merge/flush scheduling, transfer, and retries. A merged part retains the oldest enqueue time of its inputs. Samples are labeled by <code>remote_node</code>; failed acknowledgements and legacy parts without an enqueue timestamp are not sampled.</p>
 <p><strong>Expression1 (file parts)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_total_file_parts{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code>
 <strong>Expression2 (mem parts)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_total_mem_part{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code>
-<strong>Expression3 (pending)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_pending_data_count{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code></p>
+<strong>Expression3 (pending)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_pending_data_count{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code>
+<strong>Expression4 (queue-to-data p99)</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_{measure,stream_tst,trace_tst}_file_sync_queue_latency_seconds_bucket{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, pod_name, group, remote_node))</code></p>
 <blockquote>
-<p>The panel charts all three families for <code>measure</code>, <code>stream_tst</code> and <code>trace_tst</code> as separate series (nine queries); the <code>{measure,stream_tst,trace_tst}</code> brace above is shorthand for the three concrete metric names.</p>
+<p>The backlog panel charts all three gauge families for <code>measure</code>, <code>stream_tst</code> and <code>trace_tst</code> as separate series (nine queries). The neighboring latency panel adds the three queue-to-data histograms. The <code>{measure,stream_tst,trace_tst}</code> brace above is shorthand for the three concrete metric names.</p>
 </blockquote>
-<h3 id="publish-send-latency-p99">Publish Send Latency p99</h3>
-<p>The 99th-percentile tier-2 send latency, per <code>operation</code>, from the publisher latency histogram.</p>
-<p><strong>Expression</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_queue_pub_total_latency_bucket{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, operation))</code></p>
+<h3 id="publish--wqueue-to-data-latency-p99">Publish &amp; Wqueue-to-data Latency p99</h3>
+<p>The 99th-percentile tier-2 publisher RPC latency is shown beside the full queue-to-data latency for measure, stream and trace core parts. The first series starts when an RPC is sent; the other three start when the part enters the liaison wqueue.</p>
+<p><strong>Expression1 (publisher RPC)</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_queue_pub_total_latency_bucket{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, operation, group))</code>
+<strong>Expression2 (queue-to-data)</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_{measure,stream_tst,trace_tst}_file_sync_queue_latency_seconds_bucket{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, group, remote_node))</code></p>
 <h2 id="data-storage">Data: Storage</h2>
 <p><code>Storage</code> metrics monitor the data nodes&rsquo; on-disk state, grouped by the <code>group</code> tag. View different <code>pod_name</code>s to find a hot node or uneven data distribution.</p>
 <h3 id="total-data">Total Data</h3>
@@ -2007,6 +2010,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
 <blockquote>
 <p><code>batch-write</code> covers both plain writes and the secondary-index sync (measure/stream series-index, stream local-index, trace sidx-series). All of these carry their business <code>group</code>, so the per-group breakdown is complete for every operation.</p>
 </blockquote>
+<p>The batch-write section also exposes per-batch and per-message throughput. Its phase-latency panel keeps the legacy publisher/subscriber <code>total_batch_latency</code> p99 and adds the publisher&rsquo;s first-frame-to-seal <code>batch_open_duration_seconds</code> p99 and seal-to-terminal <code>batch_admission_duration_seconds</code> p99. The admission-timeout panel uses <code>rate(banyandb_queue_pub_batch_admission_timeout_total[$__rate_interval])</code> by <code>group</code> and <code>remote_node</code>; it is empty until the first deadline is reached.</p>
 <hr>
 <h1 id="internal-queue-metrics-reference-queue_sub--queue_pub">Internal queue metrics reference (<code>queue_sub</code> / <code>queue_pub</code>)</h1>
 <p>Liaison nodes run an internal gRPC <strong>queue server</strong> (<code>server-queue-sub</code>, wired via <code>sub.NewServerWithPorts</code> in <code>pkg/cmdsetup/liaison.go</code>) and <strong>queue clients</strong> (<code>server-queue-pub</code>) for the tier-1/tier-2 pipelines. Prometheus metrics use the namespaces <code>banyandb_queue_sub_*</code> and <code>banyandb_queue_pub_*</code> (built from <code>observability.RootScope</code> + <code>queue_sub</code> / <code>queue_pub</code> sub-scopes). Data nodes expose the same families where the corresponding services run.</p>
@@ -2084,9 +2088,39 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
           <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
           <td>Bytes sent, <strong>file-sync only</strong>.</td>
       </tr>
+      <tr>
+          <td><code>total_batch_started</code>, <code>total_batch_finished</code></td>
+          <td>Counter</td>
+          <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
+          <td>Batch streams opened / terminal responses received.</td>
+      </tr>
+      <tr>
+          <td><code>total_batch_latency</code></td>
+          <td>Histogram</td>
+          <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
+          <td>Legacy stream-creation-to-terminal-response duration. It includes both time that the client holds the stream open and post-seal admission time.</td>
+      </tr>
+      <tr>
+          <td><code>batch_open_duration_seconds</code></td>
+          <td>Histogram</td>
+          <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
+          <td>First successfully sent frame to the batch seal. Long-lived client streams are expected and use buckets through 24 hours.</td>
+      </tr>
+      <tr>
+          <td><code>batch_admission_duration_seconds</code></td>
+          <td>Histogram</td>
+          <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
+          <td>Batch seal to terminal response, transport failure, or admission deadline. This is the phase governed by the batch publisher timeout.</td>
+      </tr>
+      <tr>
+          <td><code>batch_admission_timeout_total</code></td>
+          <td>Counter</td>
+          <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
+          <td>Admission deadlines reached, once per still-pending target. Lazily registered and therefore absent on a healthy cluster.</td>
+      </tr>
   </tbody>
 </table>
-<p><strong>Troubleshooting:</strong> <code>total_err</code> by <code>error_type</code> separates transport failures (<code>recv_error</code>) from application-level <code>SendResponse</code> errors (<code>server_rejected</code>) and exhausted retries (<code>retry_exhausted</code>). A persistent <code>total_started − total_finished</code> gap, or rising <code>total_latency</code> p99 for a given <code>remote_node</code> / <code>remote_tier</code>, indicates slow or unavailable data nodes.</p>
+<p><strong>Troubleshooting:</strong> <code>total_err</code> by <code>error_type</code> separates transport failures (<code>recv_error</code>) from application-level <code>SendResponse</code> errors (<code>server_rejected</code>) and exhausted retries (<code>retry_exhausted</code>). For <code>batch-write</code>, use <code>batch_open_duration_seconds</code> to identify client-side stream lifetime and <code>batch_admission_duration_seconds</code> plus <code>batch_admission_timeout_total</code> to isolate post-seal liaison admission. Do not use the legacy <code>total_batch_latency</code> alone for this distinction. For <code>file-sync</code>, <code>total_latency</code> measures only the transfer RPC; the engine-level <code>file_sync_queue_latency_seconds</code> families above include the part&rsquo;s preceding wqueue residence.</p>
 <p>Metrics are only registered when <code>metadata</code> implements <code>metadata.Service</code> and <code>MetricsRegistry()</code> is non-nil (e.g. after <code>SetMetricsRegistry</code> in bootstrap). <code>NewWithoutMetadata()</code> leaves <code>queue_pub</code> metrics disabled and logs a warning (<code>queue_pub metrics disabled: ...</code>). The <code>total_err</code> counters above are registered lazily on first occurrence, so they are simply absent (not zero) on a healthy cluster.</p>
 <h3 id="example-promql-snippets">Example PromQL snippets</h3>
 <p>Saturation (scope by node with the proxy labels):</p>
@@ -2097,10 +2131,14 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
 <li><strong>Publisher success rate:</strong> <code>sum(rate(banyandb_queue_pub_total_finished{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (operation)</code></li>
 <li><strong>Publisher errors by type:</strong> <code>sum(rate(banyandb_queue_pub_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (operation, error_type)</code></li>
 <li><strong>Publisher file-sync bytes sent (by tier):</strong> <code>sum(rate(banyandb_queue_pub_sent_bytes{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (remote_tier)</code></li>
+<li><strong>Batch-open p99:</strong> <code>histogram_quantile(0.99, sum(rate(banyandb_queue_pub_batch_open_duration_seconds_bucket{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, group))</code></li>
+<li><strong>Post-seal admission p99:</strong> <code>histogram_quantile(0.99, sum(rate(banyandb_queue_pub_batch_admission_duration_seconds_bucket{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, group))</code></li>
+<li><strong>Admission timeouts by target:</strong> <code>sum(rate(banyandb_queue_pub_batch_admission_timeout_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, remote_node)</code></li>
 </ul>
 <p><strong>Suggested alerts (tune thresholds per cluster):</strong></p>
 <ul>
 <li>Non-zero sustained <code>rate(banyandb_queue_pub_total_err{error_type=&quot;retry_exhausted&quot;}[5m])</code> on liaison.</li>
+<li>Non-zero <code>increase(banyandb_queue_pub_batch_admission_timeout_total[5m])</code>, or post-seal admission p99 approaching the configured write timeout.</li>
 <li>A sustained <code>rate(banyandb_queue_sub_total_started[5m]) - rate(banyandb_queue_sub_total_finished[5m])</code> gap (subscribe backlog), or <code>total_latency</code> p99 above an environment-specific ceiling, for a single <code>group</code> / <code>operation</code>.</li>
 </ul>
 <h3 id="aggregate-pipeline-error-rate-optional">Aggregate pipeline error rate (optional)</h3>
@@ -2200,7 +2238,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
             <li><a href="#write-rate-by-group">Write Rate by Group</a></li>
             <li><a href="#publish-throughput--success">Publish Throughput &amp; Success</a></li>
             <li><a href="#write-queue-length-wqueue">Write Queue Length (wqueue)</a></li>
-            <li><a href="#publish-send-latency-p99">Publish Send Latency p99</a></li>
+            <li><a href="#publish--wqueue-to-data-latency-p99">Publish &amp; Wqueue-to-data Latency p99</a></li>
           </ul>
         </li>
         <li><a href="#data-storage">Data: Storage</a>

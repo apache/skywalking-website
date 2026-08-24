@@ -35,7 +35,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
   <meta itemprop="description" content="Login audit Horizon can keep a durable record of who signed in, when, and from where. It is optional, off by default, and backed by a shared database rather than a file — one page under one permission, readable by an administrator.
 It records sign-ins, not changes. “Who changed what” is not this feature: template and rule edits land in OAP’s own records.
 What is recorded, and what deliberately is not Only what a valid credential produced. That is the rule the whole feature is shaped around, and it has a security reason: Horizon can face the internet, and this feature adds no rate limit. If an unauthenticated caller could cause a row, they could fill your database from a laptop.">
-  <meta itemprop="wordCount" content="2444">
+  <meta itemprop="wordCount" content="3081">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Login audit">
   <meta name="twitter:description" content="Login audit Horizon can keep a durable record of who signed in, when, and from where. It is optional, off by default, and backed by a shared database rather than a file — one page under one permission, readable by an administrator.
@@ -1554,7 +1554,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 4aeb6c5</div>
+                  <div class="commit-id">Commit Id: acf584b</div>
                 
 
 
@@ -1614,7 +1614,6 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 <p>So a row exists for:</p>
 <ul>
 <li>every <strong>successful</strong> sign-in — password, LDAP, break-glass, single sign-on;</li>
-<li>every <strong>use of a token</strong>, counted per hour rather than one row per request — per credential for an API token, and per <strong>person</strong> for an OAuth token (see below);</li>
 <li>exactly <strong>two refusals</strong>, both of which happen <em>after</em> authentication has already succeeded:
 <ul>
 <li>the account authenticated but has no roles;</li>
@@ -1640,7 +1639,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
       </tr>
       <tr>
           <td>Auth Channel</td>
-          <td>password, LDAP, break-glass, single sign-on, API token, OAuth token. Single sign-on also names the protocol that proved the identity — <strong>OIDC</strong> means a signed ID token Horizon verified, <strong>OAuth</strong> means an address read from the provider&rsquo;s userinfo call, which is the weaker of the two</td>
+          <td>password, LDAP, break-glass, single sign-on. Single sign-on also names the protocol that proved the identity — <strong>OIDC</strong> means a signed ID token Horizon verified, <strong>OAuth</strong> means an address read from the provider&rsquo;s userinfo call, which is the weaker of the two</td>
       </tr>
       <tr>
           <td>Provider</td>
@@ -1648,7 +1647,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
       </tr>
       <tr>
           <td>Login ID</td>
-          <td>the login name, the verified email address, an API token&rsquo;s id, or — for an OAuth token — the account it was issued for. &ldquo;Auth Channel&rdquo; says which</td>
+          <td>the login name, or the verified email address on the single sign-on path. &ldquo;Auth Channel&rdquo; says which</td>
       </tr>
       <tr>
           <td>Roles</td>
@@ -1663,18 +1662,14 @@ What is recorded, and what deliberately is not Only what a valid credential prod
           <td>where the sign-in came from (see <a href="#addresses-behind-a-proxy">Addresses behind a proxy</a>)</td>
       </tr>
       <tr>
-          <td>Uses</td>
-          <td>on an hourly-total row only, how many times that credential was used in the hour. Blank on a sign-in, which is always one</td>
-      </tr>
-      <tr>
           <td>Recorded by</td>
           <td>which Horizon process wrote the row, and its address</td>
       </tr>
   </tbody>
 </table>
+<p><strong>Token use is not recorded here, and that is the boundary the page draws.</strong> Presenting an API token on a request is not a login — nobody signs in — so it produces no audit row. What a token did is a matter of <em>traffic</em>, and it is counted on the page&rsquo;s <strong>Token usage</strong> tab instead: one row per token per hour, not one per request. A token that is refused is not counted either, and — as noted above — currently leaves no line anywhere; watch the request logs for those.</p>
 <p>It records the <strong>sign-in</strong>, and nothing about the systems around it: no OAP state, and no configuration detail of the identity provider beyond which one it was.</p>
-<p><strong>An OAuth token is recorded per person, not per credential</strong>, and that is deliberate rather than an omission. Horizon mints a fresh token identifier on every access-token call, so counting by credential would make the table grow with request volume instead of with the number of people using it — a client that refreshes on every request would produce thousands of rows a day on its own. The row therefore names the account the token was issued for. Telling one OAuth client from another is therefore not something this log can do.</p>
-<p><strong>Passwords, tokens, session identifiers and single sign-on exchange material are never recorded.</strong> Neither is the hash a token is verified against. The token <em>id</em> is recorded, which names a credential without being one.</p>
+<p><strong>Passwords, tokens, session identifiers and single sign-on exchange material are never recorded.</strong> Neither is the hash a token is verified against. Where a credential has to be named at all — on the Token usage tab — it is named by its <em>id</em>, which identifies a credential without being one.</p>
 <p><strong>Email addresses appear only for single sign-on</strong>, where the verified address is the identity Horizon uses. Local and LDAP accounts have no email field for Horizon to record.</p>
 <p><strong>The protocol is recorded per sign-in, not looked up from the provider afterwards.</strong> A provider can be reconfigured or removed, and the row has to keep saying what was true at the time — the same reason the granted roles are stored rather than re-derived. One provider can also serve both: Okta and Keycloak do OIDC and plain OAuth2 alike, so the vendor&rsquo;s name does not settle how strongly an identity was proven.</p>
 <p><strong>&ldquo;Recorded by&rdquo; names the Horizon process and where it can be reached.</strong> The process half changes on every restart, which is what lets replicas count independently without ever colliding. The address half is the pod address when Kubernetes supplies one through <code>POD_IP</code>, and otherwise the first external address of the host — set <code>POD_IP</code> yourself on a machine with several interfaces, where picking one is a guess. Loopback and link-local addresses are never recorded: neither says where the process can be reached from anywhere else, and a row claiming <code>127.0.0.1</code> wrote it is worse than one that leaves the column empty.</p>
@@ -1776,13 +1771,26 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 <p><strong>A database can never delay a sign-in.</strong> Sign-ins are buffered in memory and written in the background, so the login path never waits on the database at all — an unreachable database is invisible to someone signing in. The cost is that an abrupt crash loses whatever is still buffered. While the database is reachable that is small — at most <code>eventBatchRows</code> rows or <code>eventBatchSeconds</code> seconds, whichever comes first. While it is unreachable, records accumulate in memory instead, up to a 10,000-row ceiling, and a crash then loses however much of that has built up.</p>
 <p><strong><code>maxRowsPerHour</code> bounds what one Horizon process can add to the table in an hour.</strong> A fifty-person team produces on the order of a hundred rows a <em>day</em>, so the default is orders of magnitude of headroom — if it is ever reached, something is wrong and the page tells you. Past the limit, records are dropped rather than queued, and the page shows the count.</p>
 <h2 id="reading-the-page">Reading the page</h2>
-<p><strong>Admin → Login audit.</strong> Top to bottom: an hourly summary, the filters, then the list.</p>
+<p><strong>Admin → Login audit.</strong> Two tabs, because the two records answer different questions at different grains: <strong>Login</strong> is people arriving, <strong>Token usage</strong> is hours of machine traffic.</p>
+<h3 id="login">Login</h3>
+<p>Top to bottom: an hourly summary, the filters, then the list.</p>
 <p>The summary is stacked by how people signed in, over the last 2, 6 or 12 hours. It is <strong>estimated, and summed across nodes</strong> — each Horizon process counts what it tried to record, and the page adds those counters together for the hour, so a bar is the whole deployment&rsquo;s total rather than any one node&rsquo;s. The counters are close to the stored rows without being reconciled against them. The one per-node figure on the page is in the footer, which reports the process you happen to be talking to. The list below is the record itself — the rows as they were written, not a separate count reconciled against them.</p>
 <p>Records refused by the hourly limit are deliberately <em>not</em> drawn as a bar. They appear as a note instead when the count is non-zero, because they describe records that were never written, and charting them beside records that were would read as extra volume.</p>
-<p>Two other counts are kept but <strong>not shown on the page</strong>: writes whose outcome could not be confirmed, and token uses discarded when a long outage exhausted the in-memory buffers. They are <em>unconfirmed</em> rather than known-lost — a write that commits and then times out leaves the row in the database and the count here, and nothing on Horizon&rsquo;s side can tell that from a write that never landed. Both reach the application log rather than the page: the recovery line names how many accumulated during an outage.</p>
-<p><strong>Filters</strong> are <strong>Time range</strong>, <strong>Auth Channel</strong> and <strong>Login ID</strong> — the same three the list is headed with. <code>Login ID</code> matches <strong>exactly</strong> — it names one principal, so a partial name finds nothing. A token id is shown in full on its row and can be copied from there. There is deliberately nothing else: this page is read, not queried, and every extra predicate is an index to carry and another way to ask the database something slow. The other fields on a row are for reading once you have found it.</p>
-<p><strong>The list holds two shapes of row, and marks them apart.</strong> Most rows are a single sign-in at a single instant. Rows tagged <strong>hourly total</strong> are not: they summarise one credential&rsquo;s use over one hour, and are the only way token traffic is recorded. Such a row shows the hour rather than a timestamp, a count in <code>Uses</code>, and no client address — a credential-hour has no single address, so the cell is blank because the question does not apply, not because the answer is unknown.</p>
+<p>One other count is kept but <strong>not shown on the page</strong>: writes whose outcome could not be confirmed. They are <em>unconfirmed</em> rather than known-lost — a write that commits and then times out leaves the row in the database and the count here, and nothing on Horizon&rsquo;s side can tell that from a write that never landed. It reaches the application log rather than the page: the recovery line names how many accumulated during an outage.</p>
+<p><strong>Filters</strong> are <strong>Time range</strong>, <strong>Auth Channel</strong> and <strong>Login ID</strong> — the same three the list is headed with. <code>Login ID</code> matches <strong>exactly</strong> — it names one principal, so a partial name finds nothing. There is deliberately nothing else: this page is read, not queried, and every extra predicate is an index to carry and another way to ask the database something slow. The other fields on a row are for reading once you have found it.</p>
 <p>The list pages 50 at a time and reports only whether there is more, never a total. Selecting a row expands the investigation fields.</p>
+<h3 id="token-usage">Token usage</h3>
+<p>Presenting an API token is not a sign-in, so it produces no audit row — what a token did is a matter of traffic. This tab counts that traffic: <strong>one row per token per hour</strong>, newest hour first.</p>
+<p><strong>Only API tokens from the tokens file are counted.</strong> The other bearer Horizon accepts is the access token its own authorization server issues to an agent or MCP client at sign-in. That one is deliberately left out: the sign-in behind it is already a row on the Login tab, so counting its requests here as well would report one person&rsquo;s session as machine traffic. Browser sessions never reach this tab at all — they carry a cookie, not a token.</p>
+<p>Pick a <strong>Time range</strong> — the last 2, 6 or 12 hours, or <strong>Custom…</strong> for an explicit start and end. Twelve hours is the widest span the page will read; a custom range longer than that is refused rather than silently trimmed, and a request that reaches the server for more is clamped to the last twelve.</p>
+<p><strong>The range you get is widened to whole groups, and the picker shows it back.</strong> A group is an hour, so asking for 10:50–11:10 is answered as 10:00–12:00 — both hours it touches, rather than the one it happens to end in. After a query the start and end you see are the ones actually read.</p>
+<p><strong>A group is one whole hour, and the hours are UTC shown on your clock.</strong> Where your offset is a whole number of hours the groups fall on the hour, as you would expect. Where it is not — India at +05:30, Adelaide at +09:30, Nepal at +05:45 — a group runs from half or quarter past to half or quarter past, because an hour bucket has to begin somewhere and that somewhere is the top of the UTC hour. The group headings always state the span they cover — and on the day a clock goes back, where both ends of the repeated hour read the same, the heading carries each end&rsquo;s offset so the two are still distinguishable.</p>
+<p>Each hour is one group. Its header gives the hour, a bar showing that hour against the busiest in the range, and two figures that always describe the <strong>whole</strong> hour: <strong>Uses</strong>, every request whose token was accepted, and <strong>Credentials</strong>, how many distinct tokens made them.</p>
+<p><strong>Accepted means the credential was recognised, not that the request succeeded.</strong> A token is counted the moment it resolves to a live account — before permissions are consulted — so a request that is then refused for lack of a role, or that fails further on, is still a use. That is deliberate: the tab answers &ldquo;what is this credential doing&rdquo;, and a token hammering endpoints it may not touch is exactly the thing you want visible. A token that fails to resolve at all is never counted, so the figures cannot be moved by someone without a valid credential.</p>
+<p>The rows beneath name only the <strong>busiest ten</strong> tokens, and the line above the table always says which case you are looking at — <em>&ldquo;Every credential used in this hour is listed&rdquo;</em> when nothing was dropped, or <em>&ldquo;Top 10 of N credentials — the rest are counted in the total, not listed&rdquo;</em> when there were more. The unlisted ones are still inside the hour&rsquo;s <strong>Uses</strong> and <strong>Credentials</strong>, so the sample never disagrees with the totals above it.</p>
+<p>Per row, in order: the token <strong>id</strong> — which names a credential without being one — its <strong>Uses</strong> for that hour, that as a <strong>Rate</strong> per second, and the <strong>User</strong> it acts as.</p>
+<p><strong>Treat a token id as permanent, and never give it to a second person.</strong> The id is what every hour of history is filed under, and history is not rewritten: if you edit a token&rsquo;s owner in the tokens file, or delete a token and later add a new one reusing its id, the hours already recorded keep the name they were written with, and the same id then spans two owners with nothing on the page to separate them. Retire an id rather than reassigning it — issuing a new token gives you a new one for free. The two measures sit beside the credential they belong to, and the rate is written to the same precision on every row so the column reads as one scale; a rate too small to show at that precision is written as a floor (<code>&lt;0.001/s</code>) rather than as zero.</p>
+<p>An hour with no token traffic still appears, saying so. An hour that is still in progress counts only what has happened so far.</p>
 <h2 id="permissions">Permissions</h2>
 <p>One permission, <code>audit:read</code>, and <strong>a wildcard does not include it.</strong> A role granted <code>&quot;*:read&quot;</code> gets every other read in Horizon and not this one; the same is true of the read-only scope an MCP client is granted by default. Only the built-in <strong>administrator</strong> role, a bare <code>&quot;*&quot;</code>, or the verb named explicitly will do:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">roles</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -1851,7 +1859,12 @@ What is recorded, and what deliberately is not Only what a valid credential prod
             <li><a href="#settings">Settings</a></li>
           </ul>
         </li>
-        <li><a href="#reading-the-page">Reading the page</a></li>
+        <li><a href="#reading-the-page">Reading the page</a>
+          <ul>
+            <li><a href="#login">Login</a></li>
+            <li><a href="#token-usage">Token usage</a></li>
+          </ul>
+        </li>
         <li><a href="#permissions">Permissions</a></li>
         <li><a href="#addresses-behind-a-proxy">Addresses behind a proxy</a></li>
         <li><a href="#when-the-database-is-unreachable">When the database is unreachable</a></li>
