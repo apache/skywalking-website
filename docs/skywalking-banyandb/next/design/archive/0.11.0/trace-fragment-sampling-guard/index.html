@@ -1,0 +1,12233 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="twitter:site" content="skywalking.apache.org">
+<meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+<meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+
+<meta name="generator" content="Hugo 0.159.0">
+
+<META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
+<link rel="stylesheet" href="/css/iconfont/iconfont.css">
+
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png">
+<link rel="manifest" href="/favicons/site.webmanifest">
+<link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+<title>Trace Fragment Guard for Sampling Design | Apache SkyWalking</title><meta property="og:url" content="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/archive/0.11.0/trace-fragment-sampling-guard/">
+  <meta property="og:site_name" content="Apache SkyWalking">
+  <meta property="og:title" content="Trace Fragment Guard for Sampling Design">
+  <meta property="og:description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract.
+Context and Problem Statement BanyanDB’s trace merge policy selects file parts primarily by compressed size to control write amplification. The selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.
+A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard rewrite.">
+  <meta property="og:locale" content="en">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="docs">
+
+  <meta itemprop="name" content="Trace Fragment Guard for Sampling Design">
+  <meta itemprop="description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract.
+Context and Problem Statement BanyanDB’s trace merge policy selects file parts primarily by compressed size to control write amplification. The selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.
+A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard rewrite.">
+  <meta itemprop="wordCount" content="4848">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Trace Fragment Guard for Sampling Design">
+  <meta name="twitter:description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract.
+Context and Problem Statement BanyanDB’s trace merge policy selects file parts primarily by compressed size to control write amplification. The selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.
+A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard rewrite.">
+
+
+
+<link rel="preload" href="/scss/main.min.e0d2b480b8ad4d4a226dbf2ff697a83e41e38ad81eeeb3fa05bba61201e348b5.css" as="style">
+<link href="/scss/main.min.e0d2b480b8ad4d4a226dbf2ff697a83e41e38ad81eeeb3fa05bba61201e348b5.css" rel="stylesheet" integrity="">
+
+
+
+<link rel="stylesheet" href="/css/docSearch.css" />
+<link rel="stylesheet" href="/css/highlight-github.css" />
+
+
+<script src="/js/jquery-3.6.0.min.js"></script>
+
+<link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/archive/0.11.0/trace-fragment-sampling-guard/">
+<meta name="description" content="Trace Fragment Guard for Sampling Design Status Core enforcement implemented using the resolved merge-grace safety contract. Context and Problem Statement…">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Trace Fragment Guard for Sampling Design","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/archive/0.11.0/trace-fragment-sampling-guard/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/archive/0.11.0/trace-fragment-sampling-guard/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/archive/0.11.0/trace-fragment-sampling-guard/","name":"Trace Fragment Guard for Sampling Design","position":3}]}]}</script>
+
+
+<link rel="alternate" type="application/rss+xml" href="https://skywalking.apache.org/feed.xml" title="Apache SkyWalking">
+
+
+
+  </head>
+  <body class="td-page  project-doc">
+    <header>
+      
+<nav class="js-navbar-scroll navbar navbar-expand  flex-column flex-md-row td-navbar">
+    <div class="sidebar-button">
+      <i class="iconfont icon-menu"></i>
+    </div>
+    <a class="navbar-brand" href="/">
+        <span class="navbar-logo"><img width="130" src="/images/logo.svg" alt="SkyWalking"></span> 
+    </a>
+    <div class="td-navbar-nav-scroll navbar-nav-wrapper" id="navigation">
+        <ul class="navbar-nav mt-lg-0">
+             
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link active" href="/docs" ><span class="active">Documentation</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/events" ><span>Events</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/blog" ><span>Blogs</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/downloads" ><span>Downloads</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/team" ><span>Team</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/users" ><span>Users</span></a>
+			</li>
+            
+            
+            
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+                <a class="nav-link" href="/zh/"><span>中文博客</span></a>
+            </li>
+
+            
+			
+        </ul>
+    </div>
+
+    <div class="navbar-nav d-none d-lg-block search-input-box">
+        
+<div id="docsearch"></div>
+
+
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <span class="link dropdown sw-navdd">
+                <a class="link-name nav-link dropdown-toggle sw-navdd-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <img class="sw-navdd-asf" src="/images/asf-oakleaf.svg" alt="" aria-hidden="true"> Apache
+                </a>
+                <div class="dropdown-menu sw-navmenu sw-navmenu--wide">
+                    <div class="sw-navmenu-head">
+                        <img src="/images/asf-oakleaf.svg" alt="Apache Software Foundation feather">
+                        <div><strong>The Apache Software Foundation</strong><span>governance · trademarks · sponsorship</span></div>
+                    </div>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Software Foundation</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/issues" target="_blank" rel="noopener noreferrer">
+                        <span>GitHub Issue Tracker</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/discussions" target="_blank" rel="noopener noreferrer">
+                        <span>Discussion</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank" rel="noopener noreferrer">
+                        <span>Dev Mailing List</span>
+                        <em>lists.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home" target="_blank" rel="noopener noreferrer">
+                        <span>WIKI</span>
+                        <em>cwiki.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/licenses/" target="_blank" rel="noopener noreferrer">
+                        <span>License</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/events/current-event" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Events</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/security/" target="_blank" rel="noopener noreferrer">
+                        <span>Security</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noopener noreferrer">
+                        <span>Sponsor and Donate</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/thanks.html" target="_blank" rel="noopener noreferrer">
+                        <span>Thanks</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://apache.org/foundation/policies/privacy.html" target="_blank" rel="noopener noreferrer">
+                        <span>Privacy</span>
+                        <em>apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                </div>
+            </span>
+            
+        
+    </div>
+</nav>
+
+    </header>
+    <div class="container-fluid td-outer">
+
+      <div class="td-main">
+        <div class="row flex-xl-nowrap">
+          <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  <div class="description-wrapper">
+                    <h5>
+                    <img width="26" height="26" src="/images/project/banyan-db.svg">
+                    BanyanDB
+                    </h5>
+                    <p>An observability database aims to ingest, analyze and store Metrics, Tracing and Logging data.</p>
+                  </div>
+                  
+                  <div class="version-wrapper">Version: 
+                  <select class="version-select">
+                  
+                    
+                    
+                    <option selected value="next">
+                    
+                      next
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="latest">
+                    
+                      latest
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="v0.10.3">
+                    
+                      v0.10.3
+                    
+                    </option>
+                  
+                  </select>
+                  </div>
+                  
+                  <ul class="sidebar-menu">
+    
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/readme">Welcome</a>
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">User Guide<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">Installation<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/binaries">Get Binaries</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/standalone">Standalone Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/cluster">Cluster Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/docker">Installation On Docker</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/kubernetes">Installation On Kubernetes</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Basic Concepts and Terminology<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/data-model">Data Model</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/guides/quick-start/quick-start">Quick Start Tutorial</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/versions">Versions and Compatibility</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Interacting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">CLI<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/bydbctl">bydbctl</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/agent">BYDBQL Agent TUI</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">CRUD Schema<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/group">Group</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/index-rule">IndexRule</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/index-rule-binding">IndexRuleBinding</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Querying Data<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/filter-operation">Filter Operation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/property">CRUD Property</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/analyze">Analyzing Data</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Web UI<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/dashboard">Dashboard</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">CRUD Schema<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/schema/group">Group</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/schema/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/schema/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/schema/index-rule">IndexRule</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/schema/index-rule-binding">IndexRuleBinding</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/schema/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Querying Data<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/query/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/query/stream">Stream</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/web-ui/property">CRUD Property</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/client">Client APIs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/data-lifecycle">Data Lifecycle</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Schema Consistency<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/barriers">Barrier RPCs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/revision-gates">Revision Gates</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/scenarios">Scenarios</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbql">BydbQL</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Operation and Maintenance<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/configuration">Configure BanyanDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/disk-management">Disk Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/system">System Configuration</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/upgrade">Upgrade</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Trace Pipeline Plugins<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins-development">Development Guide</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins">Packaging and Deployment</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins-debugging">Debugging (Offline)</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Observability<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/logging">Logging</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/metrics">Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/providers">Metrics Providers</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/profiling">Profiling</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/tracing">Query Tracing</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/cluster">Cluster Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Troubleshooting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/error-checklist">Error Checklist</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/install">Troubleshooting Installation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/crash">Troubleshooting Crash</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/no-data">Troubleshooting No Data</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/overhead">Troubleshooting Overhead</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/query">Troubleshooting Query</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/common-issues">Common Issues</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/security">Security</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/backup">Backup</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/restore">Restore</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/lifecycle">Lifecycle Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">MCP Server<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/setup">Setup MCP</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/inspector">Test via Inspector</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/build">Build and Package</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/plugin">Plugin Packaging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">First Occurrence Data Collection (FODC)<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/ktm_metrics">KTM Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/apis">Proxy APIs and CLI Flags</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/topology">Cluster Topology Rendering</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Benchmark<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/benchmark/benchmark-single-model">Single‑Model Benchmark (Trace / Log / Measure / Property)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/benchmark/benchmark-hybrid">Hybrid Scenario Benchmark</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">File Format<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/storage-and-format">Storage &amp; File Format (by API resource)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/tsdb">v1.3.0</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Concepts<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/clustering">Clustering</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/distributed-measure-aggregation">Distributed Measure Aggregation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/tsdb">TSDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/rotation">Data Rotation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Contribute<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/contribute/debugging">Debugging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+</ul>
+<script src="/js/sidebar-menu.js"></script>
+<script>
+  (function (){
+    $.sidebarMenu($('.sidebar-menu'))
+    var path = window.location.pathname;
+    var hash = window.location.hash;
+    var $a = $('.sidebar-menu a')
+    $a.each(function (e){
+      if($(this).attr('href')+'/' === path || $(this).attr('href').replace('#','/#') === path+hash){
+        $(this).parents('li').addClass('active').show()
+      }
+    })
+    $a.on('click',function (){
+      var url = $(this).attr('href')
+      if(url!=='#'){
+        window.location.href = url
+      }
+    })
+  })()
+</script>
+
+                  <div class="commit-id">Commit Id: e7bb0d3</div>
+                
+
+
+
+
+
+
+</div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+              <i class="iconfont icon-menu-doc doc-menu-button"></i>
+              
+<div class="td-content">
+	<h1 id="trace-fragment-guard-for-sampling-design">Trace Fragment Guard for Sampling Design</h1>
+<h2 id="status">Status</h2>
+<p>Core enforcement implemented using the resolved merge-grace safety contract.</p>
+<h2 id="context-and-problem-statement">Context and Problem Statement</h2>
+<p>BanyanDB&rsquo;s trace merge policy selects file parts primarily by compressed size to control write amplification. The
+selected parts are merged in trace-ID order, and an enabled post-trace sampler may discard traces from the merge output.</p>
+<p>A trace can have fragments in both selected and unselected parts. Sampling only the selected fragments can therefore
+produce an incorrect partial decision: the selected fragment may be dropped while another fragment remains visible in an
+unselected part. Expanding every merge selection to all timestamp-connected parts avoids some partial decisions, but
+production data shows that broad and transitively overlapping part ranges can expand a small merge into a full-shard
+rewrite.</p>
+<p>This design retains the existing size-based part selection and adds a per-trace boundary guard. Part timestamps cheaply
+identify the unselected parts that could contain another fragment. Existing trace-ID Bloom filters then confirm whether
+those candidate parts might contain the trace. Bloom filters are consulted only for traces that the sampler
+provisionally wants to drop.</p>
+<p>This document refines the in-merge filtering semantics described in the post-trace pipeline design. In particular, grace
+time is not treated as proof of trace completeness unless the deployment enforces a corresponding fragment-gap or
+sealing contract.</p>
+<h2 id="design-boundary">Design Boundary</h2>
+<h3 id="execution-boundary">Execution Boundary</h3>
+<p>The guard applies to destructive trace filtering during both the Hot-stage merge event and finalization. It does not
+change the current size-tiered merge picker, merge fan-out, output part structure, or the lossless behavior of merges
+that have no active sampler. Finalization-wide selection and scheduling remain separate concerns, but a finalization
+DROP is subject to the same outside-catalog and publication checks as an ordinary merge DROP.</p>
+<h3 id="data-visibility-boundary">Data-Visibility Boundary</h3>
+<p>The guard reasons about a pinned shard snapshot. Its universe includes:</p>
+<ul>
+<li>selected file parts;</li>
+<li>unselected file parts;</li>
+<li>hot parts;</li>
+<li>memparts;</li>
+<li>parts already participating in another in-flight merge;</li>
+<li>newly visible parts discovered during pre-publication revalidation.</li>
+</ul>
+<p>Parts that cannot be inspected remain uncertainty sources and cause affected traces to be retained for the current
+merge.</p>
+<h3 id="time-boundary">Time Boundary</h3>
+<p>Part minimum and maximum timestamps are span event-time bounds, not ingestion-time bounds. The temporal pruning step is
+strictly safe only when grace is at least an enforced maximum separation between fragments of the same trace. Sealing
+an event-time range prevents future arrivals, but does not prove that an already-visible same-trace fragment is absent
+from a part farther than grace.</p>
+<p>This document calls the value used for interval expansion guard grace. The implementation uses the resolved per-group
+<code>merge_grace</code> for both interval expansion and the per-trace maturity delay. A deployment must ensure fragments of one
+trace do not arrive farther apart than this grace; the engine cannot infer or enforce that ingestion property.</p>
+<p>The engine default for merge grace is 2h when a group does not configure a positive override. A merge must resolve the
+group override or engine default once and carry that immutable value through filtering and publication revalidation.
+The runtime uses selected-part minimum timestamps only to avoid building a filter when no selected part can contain a
+mature trace. Once staging groups by <code>trace_id</code>, it sends only groups whose maximum timestamp is at or before
+<code>now − grace</code> to the sampler; newer groups are retained unchanged. Because compaction is part-count-driven rather than
+timer-driven, an ineligible trace is not guaranteed to be reconsidered at the two-hour frontier. Finalization remains
+an independent backstop.</p>
+<p>Using one value makes the configured maturity contract match the boundary checked before a destructive DROP. It also
+permits an early whole-merge bypass when no selected part can contain a mature trace,
+avoiding projection, staging, sampler, and Bloom work when no DROP could be authorized. Without a trustworthy
+fragment-arrival contract, operators should not enable destructive sampling for that group.</p>
+<p>The design uses symmetric time expansion because the size-based picker can select an arbitrary temporal subset. An
+outside fragment may be earlier or later than the selected fragment.</p>
+<h3 id="concurrency-boundary">Concurrency Boundary</h3>
+<p>A stable snapshot and pre-publication epoch validation cover parts that become visible while a merge is running. They do
+not prove that no future late or backdated fragment will arrive after publication.</p>
+<p>Strict protection against future arrivals requires an ingestion watermark, a sealed segment, or a policy that rejects or
+quarantines late fragments. Defining that cluster-wide late-write protocol is outside this design.</p>
+<h3 id="segment-boundary">Segment Boundary</h3>
+<p>The current trace table is scoped to an event-time segment, while one trace can cross adjacent segments. A trace whose
+grace-expanded range reaches a segment boundary is retained unless the relevant neighboring segment is included under
+the same visibility and ownership fence.</p>
+<h3 id="failure-boundary">Failure Boundary</h3>
+<p>All uncertainty fails open. A missing timestamp, invalid range, missing or corrupt Bloom filter, sampler failure,
+snapshot conflict, ownership change, or incomplete fragment assembly causes retention rather than destructive deletion.</p>
+<p>Retention by this guard is merge-local deferral. It is not a permanent KEEP decision and does not prevent the trace from
+being evaluated in a later merge or finalization pass.</p>
+<h2 id="goals">Goals</h2>
+<ol>
+<li>Prevent a sampler DROP from removing selected fragments when a currently visible unselected part may contain the same
+trace ID.</li>
+<li>Preserve the existing size-based input selection, input fan-out, and direct rewrite scope.</li>
+<li>Avoid probing every unselected Bloom filter for every merged trace.</li>
+<li>Apply Bloom confirmation only to provisional sampler DROP traces and only against time-relevant outside parts.</li>
+<li>Assemble all selected physical fragments of a trace before calculating its time range or invoking the sampler.</li>
+<li>Keep core-part and secondary-index publication consistent when a trace is deferred or dropped.</li>
+<li>Bound additional CPU and memory through per-merge indexes, batching, and early termination.</li>
+<li>Make uncertainty observable and fail open.</li>
+</ol>
+<h2 id="non-goals">Non-Goals</h2>
+<ol>
+<li>Replacing the current size-tiered merge policy with leveled compaction.</li>
+<li>Physically colocating every fragment of a trace in one part.</li>
+<li>Guaranteeing that no fragment can arrive after a merge commits.</li>
+<li>Defining a cluster-wide event watermark or late-write rejection protocol.</li>
+<li>Eliminating Bloom-filter false positives.</li>
+<li>Removing the need for finalization as a backstop.</li>
+<li>Changing sampler policy, plugin ordering, or plugin projection semantics.</li>
+<li>Providing permanent trace-level KEEP or DROP tombstones.</li>
+<li>Solving arbitrary trace-ID reuse within the retention period.</li>
+<li>Specifying backward compatibility for file parts that do not contain persisted per-trace timestamp bounds.</li>
+<li>Guaranteeing unchanged output bytes or lifetime write amplification when conservative deferrals retain more traces.</li>
+</ol>
+<h2 id="terminology">Terminology</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Term</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Selected parts</td>
+          <td>File parts chosen by the existing merge policy.</td>
+      </tr>
+      <tr>
+          <td>Outside parts</td>
+          <td>All visible parts in the relevant shard and segment scope that are not selected by this merge.</td>
+      </tr>
+      <tr>
+          <td>Selected trace range</td>
+          <td>The minimum and maximum event timestamps across every selected physical fragment with the same trace ID.</td>
+      </tr>
+      <tr>
+          <td>Guard grace</td>
+          <td>The interval expansion used to find time-relevant outside parts.</td>
+      </tr>
+      <tr>
+          <td>Guard range</td>
+          <td>The selected trace range expanded earlier and later by guard grace.</td>
+      </tr>
+      <tr>
+          <td>Candidate outside part</td>
+          <td>An outside part whose part-level event-time range intersects the guard range.</td>
+      </tr>
+      <tr>
+          <td>Provisional DROP</td>
+          <td>A DROP returned by the sampler before boundary confirmation.</td>
+      </tr>
+      <tr>
+          <td>Deferred trace</td>
+          <td>A trace retained in this merge because an outside fragment is possible or the guard is uncertain.</td>
+      </tr>
+      <tr>
+          <td>Base epoch</td>
+          <td>The snapshot epoch used to select inputs and construct the boundary guard.</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="design-invariants">Design Invariants</h2>
+<ol>
+<li>The merge picker receives the same eligible file parts and produces the same selected input set as it did before this
+guard.</li>
+<li>All physical blocks with the same trace ID in the selected inputs form one logical evaluation unit.</li>
+<li>A sampler KEEP is final for the current merge and requires no Bloom check.</li>
+<li>A sampler DROP becomes effective only after boundary confirmation.</li>
+<li>Bloom filters are never used as evidence of absence when they are missing, unreadable, or incompatible.</li>
+<li>A Bloom positive causes deferral unless an optional exact metadata lookup proves the trace ID absent.</li>
+<li>A valid Bloom filter contains every trace ID in its immutable part and cannot produce a false negative.</li>
+<li>Part-level time ranges may create false candidates but must not exclude timestamps actually stored in that part.</li>
+<li>A trace with missing or invalid per-trace timestamps is deferred.</li>
+<li>A selected trace is never partially written to the output.</li>
+<li>Secondary-index entries are removed only for trace IDs whose DROP survives boundary confirmation.</li>
+<li>A merge output is not published against an invalidated snapshot without successful revalidation.</li>
+<li>Exhausting a boundary-check CPU, memory, I/O, or probe budget causes deferral.</li>
+</ol>
+<h2 id="design-overview">Design Overview</h2>
+<p>The merge request captures and pins the selected inputs, the base snapshot epoch, the event-time coverage of the pinned
+catalog, and lightweight metadata for every outside part. Outside metadata consists of the part identity, minimum and
+maximum event timestamps, segment identity, availability state, and a reference to its trace-ID Bloom filter. The
+catalog also records the enforced fragment gap, which is the same resolved merge grace used by the maturity gate.</p>
+<p>Before incurring sampler work, the runtime also checks that native sampling is enabled, a sampler exists, the relevant
+event is enabled, the segment has a non-empty merge-grace-expanded interior, and at least one selected part may contain
+a mature trace. Trace-ID staging then applies the maturity boundary to each assembled trace. Finalization uses the
+greater of merge grace and finalize grace for maturity. Failure of any check leaves the lossless path unchanged.</p>
+<p>The merge assembles selected blocks by trace ID and computes one selected trace range. The sampler evaluates the
+assembled trace. Sampler KEEP traces are written immediately according to normal ordered-output rules. For each
+provisional DROP, the guard identifies only outside parts whose event-time envelopes intersect the grace-expanded
+selected trace range. It probes the Bloom filters of those candidates and stops at the first positive or uncertainty.</p>
+<p>If no candidate part exists, or all candidate Bloom filters are negative, the trace may be dropped within the documented
+time and snapshot boundary. If any candidate filter is positive or unavailable, the trace is written to the output and
+deferred for later evaluation.</p>
+<p>The outside interval index is created once per merge. With the normal small part count, a compact sorted array and
+integer comparisons are preferred. An interval tree is warranted only if profiling shows that part counts make linear
+candidate discovery material.</p>
+<h2 id="key-process">Key Process</h2>
+<h3 id="1-select-and-pin-inputs">1. Select and Pin Inputs</h3>
+<p>The existing merge policy selects file parts without modification. Selection and in-flight pinning retain their current
+atomic exclusion behavior.</p>
+<p>The dispatcher also captures the base snapshot epoch and the identity of every visible part. Parts excluded from merge
+eligibility still remain in the outside-part universe.</p>
+<h3 id="2-build-the-outside-part-guard">2. Build the Outside-Part Guard</h3>
+<p>The merge request records the part-level time range and Bloom-filter reference for every outside part. Outside intervals
+are ordered and indexed once.</p>
+<p>The index preserves the identity of each overlapping part rather than only the union of time intervals because Bloom
+confirmation must be directed to individual parts.</p>
+<p>Invalid part bounds, unavailable filters, and segment or ownership ambiguity are recorded as uncertainty rather than
+silently omitted.</p>
+<h3 id="3-assemble-a-complete-selected-trace">3. Assemble a Complete Selected Trace</h3>
+<p>The merge stream groups all selected physical blocks with the same trace ID. The selected trace range is the minimum and
+maximum across all grouped blocks.</p>
+<p>The sampler receives the complete selected trace projection, not only the first staged block. Batch boundaries may occur
+only between trace IDs.</p>
+<p>Persisted per-block minimum and maximum timestamps are required for an efficient implementation. The current in-memory
+timestamp fields are not serialized in block metadata. New file parts must persist these bounds, or the merge must
+reconstruct them from the configured timestamp column. Failure to reconstruct them causes deferral.</p>
+<p>Projection handling must enter the decoded assembly path whenever tags, span IDs, or spans are requested. Timestamp
+aggregation and sampler input assembly must cover the same complete set of physical blocks.</p>
+<h3 id="4-obtain-the-sampler-verdict">4. Obtain the Sampler Verdict</h3>
+<p>The sampler chain runs with its existing fail-open behavior. A sampler error, panic, timeout, malformed mask, or
+incomplete projection retains the affected batch.</p>
+<p>A KEEP requires no boundary work. Only provisional DROP traces enter temporal pruning and Bloom confirmation.</p>
+<h3 id="5-discover-time-candidates">5. Discover Time Candidates</h3>
+<p>The guard symmetrically expands the selected trace range by grace. It finds every outside part whose part range
+intersects that guard range.</p>
+<p>The check is inclusive at the configured boundary and uses overflow-safe timestamp arithmetic. It does not consider only
+an immediate predecessor or successor because outside intervals can be nested and the selected parts are not temporally
+contiguous.</p>
+<p>If the guard range reaches a segment boundary and the neighboring segment is not covered by the same snapshot fence, the
+trace is deferred.</p>
+<h3 id="6-confirm-with-bloom-filters">6. Confirm with Bloom Filters</h3>
+<p>The trace ID is tested only against candidate outside parts. Candidate checks terminate at the first positive, missing
+filter, or corrupt filter.</p>
+<p>For cache locality, a merge implementation may group provisional DROP trace IDs by candidate part and probe one part&rsquo;s
+filter in a batch. This optimization must preserve early deferral semantics.</p>
+<p>An optional exact lookup in sorted primary metadata may verify Bloom positives. Exact verification is an optimization
+for reducing false deferrals, not a correctness requirement.</p>
+<p>Cancellation or exhaustion of the merge&rsquo;s boundary-check resource budget defers every unresolved trace.</p>
+<h3 id="7-apply-the-final-merge-action">7. Apply the Final Merge Action</h3>
+<p>The action matrix is:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Sampler result</th>
+          <th style="text-align: right">Time candidates</th>
+          <th>Bloom confirmation</th>
+          <th>Merge action</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>KEEP</td>
+          <td style="text-align: right">Not evaluated</td>
+          <td>Not evaluated</td>
+          <td>Write the trace.</td>
+      </tr>
+      <tr>
+          <td>DROP</td>
+          <td style="text-align: right">None</td>
+          <td>Not evaluated</td>
+          <td>Drop within the documented grace assumption.</td>
+      </tr>
+      <tr>
+          <td>DROP</td>
+          <td style="text-align: right">One or more</td>
+          <td>All negative</td>
+          <td>Drop.</td>
+      </tr>
+      <tr>
+          <td>DROP</td>
+          <td style="text-align: right">One or more</td>
+          <td>Any positive</td>
+          <td>Write and defer the trace.</td>
+      </tr>
+      <tr>
+          <td>DROP</td>
+          <td style="text-align: right">One or more</td>
+          <td>Missing or corrupt filter</td>
+          <td>Write and defer the trace.</td>
+      </tr>
+      <tr>
+          <td>DROP or unknown</td>
+          <td style="text-align: right">Invalid trace range or incomplete assembly</td>
+          <td>Not trusted</td>
+          <td>Write and defer the trace.</td>
+      </tr>
+      <tr>
+          <td>DROP or unknown</td>
+          <td style="text-align: right">Boundary-check budget exhausted or canceled</td>
+          <td>Incomplete</td>
+          <td>Write and defer every unresolved trace.</td>
+      </tr>
+  </tbody>
+</table>
+<p>The guard records each confirmed DROP together with the authoritative aggregate trace range it calculated. Only those
+guard-owned confirmed DROP tokens are passed to secondary-index pruning and publication revalidation.</p>
+<h3 id="8-revalidate-before-publication">8. Revalidate Before Publication</h3>
+<p>Before the core and secondary-index outputs are introduced, the merge worker compares a pinned current snapshot,
+selected-input presence, and table-lifecycle ownership with the captured base state. If new parts appeared, provisional
+DROP trace IDs are revalidated against those parts using the same time-candidate and Bloom rules. This potentially
+expensive work runs outside the serialized introducer.</p>
+<p>The introducer then holds the publication fence and performs a constant-time epoch and ownership check. Publication is
+allowed only when the epoch is exactly the one successfully prevalidated. Unavailable metadata, ownership changes, or
+an epoch change after prevalidation rejects the filtered output.</p>
+<p>Because dropped payload is already absent from a provisional output, an unsafe output cannot be repaired in place. It is
+discarded, while the pinned inputs remain authoritative, and the merge is retried or performed losslessly.</p>
+<h3 id="9-release-and-retry">9. Release and Retry</h3>
+<p>Successful publication releases input pins through the existing lifecycle. Rejected output files and secondary-index
+artifacts are removed. The same pinned inputs are then merged once without a sampler or guard, guaranteeing compaction
+progress without another destructive decision. A failed lossless retry is reported as the merge error and the original
+inputs remain authoritative.</p>
+<h2 id="correctness-properties-and-limitations">Correctness Properties and Limitations</h2>
+<h3 id="visible-snapshot-protection">Visible-Snapshot Protection</h3>
+<p>Under accurate part bounds, complete selected-trace assembly, and a stable snapshot, a Bloom-negative result for every
+candidate part proves that none of those candidate parts contains the trace ID.</p>
+<p>Temporal pruning proves that non-candidate parts can be ignored only when guard grace is at least an enforced maximum
+same-trace fragment separation. A seal alone is insufficient because it says nothing about fragments already present
+outside grace. Without the maximum-gap proof, enforcement defers or uses a future all-outside-filter fallback.</p>
+<h3 id="false-positives">False Positives</h3>
+<p>Part time ranges are envelopes over unrelated traces and can span minutes or hours. They may nominate parts that cannot
+contain the selected trace. Bloom confirmation removes most resulting false deferrals. Remaining Bloom false positives
+safely defer sampling.</p>
+<h3 id="late-arrivals">Late Arrivals</h3>
+<p>Epoch validation covers concurrent part introductions visible before publication. It does not cover a future fragment
+arriving afterward. Operators requiring strict whole-trace semantics must pair this design with sealing or late-write
+quarantine.</p>
+<h3 id="convergence">Convergence</h3>
+<p>Broad part envelopes can repeatedly nominate the same outside parts. Bloom negatives allow unrelated traces to progress,
+while Bloom positives defer possible fragments until a later merge includes them together. Finalization remains the
+backstop for traces that do not converge through ordinary merge selection, but it uses the same guard rather than
+treating a cooled partial selection as complete.</p>
+<h2 id="cost-model">Cost Model</h2>
+<p>The baseline all-part Bloom strategy performs approximately the number of selected traces multiplied by the number of
+outside parts in Bloom probes.</p>
+<p>The hybrid strategy performs cheap integer interval comparisons first, then probes approximately the number of
+provisional DROP traces multiplied by their average number of time-candidate parts. Sampler KEEP traces incur no Bloom
+work.</p>
+<p>The captured 26-part production shard provides an initial validation fixture. Its per-trace time map contains 37,288
+unique trace IDs and has SHA-256 <code>02eda3eed08d17590527d02fd5f56610fba5fe0bd7252f9575df9bbdd6c9df7f</code>.
+The replay uses the latest fixture event time, <code>2026-07-29T23:59:56.171Z</code>, as its deterministic active-ingestion clock.
+Using the later download time would incorrectly classify every tail part as cooled and would not reproduce the state in
+which the small files were new.</p>
+<p>With the 2h merge-grace default, the maturity frontier is <code>2026-07-29T21:59:56.171Z</code>. The twelve-part small-file window previously
+used by the prototype is newer than that frontier. Production would merge it losslessly without calling the sampler or
+guard: all 254 traces are retained, and drops and Bloom probes are both zero. It is also only the best scoring window,
+not a dispatched default-policy merge; the frozen fixture&rsquo;s default picker selects no merge.</p>
+<p>The corrected guard replay derives its inputs from metadata by selecting the six parts at or before the frontier:
+<code>05ee</code>, <code>0b5b</code>, <code>1002</code>, <code>1191</code>, <code>165a</code>, and <code>1c36</code>. They are 34,856,465 compressed bytes and contain 31,832 selected
+trace IDs. All 20 newer parts remain in the outside catalog. For this conservative replay, the declared maximum
+fragment gap is also 2h. Only <code>21d4</code> intersects any selected trace&rsquo;s 2h guard range;
+it contains all 31 exact selected/outside crossings.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Strategy over all provisional DROP traces</th>
+          <th style="text-align: right">Candidate pairs</th>
+          <th style="text-align: right">Bloom probes</th>
+          <th style="text-align: right">Retained</th>
+          <th style="text-align: right">Dropped</th>
+          <th style="text-align: right">False deferrals</th>
+          <th style="text-align: right">False negatives</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Hybrid, 2h</td>
+          <td style="text-align: right">6,652</td>
+          <td style="text-align: right">6,652</td>
+          <td style="text-align: right">34</td>
+          <td style="text-align: right">31,798</td>
+          <td style="text-align: right">3</td>
+          <td style="text-align: right">0</td>
+      </tr>
+      <tr>
+          <td>Time only, 2h</td>
+          <td style="text-align: right">6,652</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">6,652</td>
+          <td style="text-align: right">25,180</td>
+          <td style="text-align: right">6,621</td>
+          <td style="text-align: right">0</td>
+      </tr>
+      <tr>
+          <td>All outside Bloom filters</td>
+          <td style="text-align: right">Not pruned</td>
+          <td style="text-align: right">629,241</td>
+          <td style="text-align: right">900</td>
+          <td style="text-align: right">30,932</td>
+          <td style="text-align: right">869</td>
+          <td style="text-align: right">0</td>
+      </tr>
+  </tbody>
+</table>
+<p>The corrected hybrid uses approximately 1.1 percent of the all-Bloom probes while preserving every observed crossing.
+A recent small part added to the six cooled inputs makes the whole selection hot, so sampling and guard work return to
+zero. A large part can also be recent; event-time maturity, not file size alone, controls the gate.</p>
+<p>In a 100-iteration, three-run prototype benchmark, median guard time was 1.09ms for the hybrid, 0.45ms for time-only,
+and 33.17ms for all-Bloom. The hot small-part maturity check took approximately 31ns and performed no sampling or
+guard work. All four prototype paths reported zero allocations. These numbers exclude merge I/O and sampler execution.</p>
+<p>The cooled six-part selection is a maturity-and-guard fixture, not evidence that the default ordinary picker dispatched
+those exact inputs. A production-realistic picker replay requires a historical pre-merge snapshot or a synthetic tier
+with enough similarly sized, cooled parts to pass the dispatch threshold.</p>
+<p>The maximum observed adjacent same-trace fragment gap in this fixture was 71.225s. The 2h range therefore covered the
+observation, while this remains workload evidence rather than the enforced maximum-gap proof required for destructive
+temporal pruning.</p>
+<p>The merge still reads only the inputs selected by the existing policy, so the guard does not directly increase input
+fan-out or rewrite scope. More conservative deferrals can enlarge output parts and cause more bytes to survive into
+later merges. Total lifetime write amplification can therefore increase indirectly and must be measured.</p>
+<h2 id="observability">Observability</h2>
+<p>The implementation must expose bounded-cardinality metrics for:</p>
+<ul>
+<li>traces evaluated by the sampler;</li>
+<li>provisional KEEP and DROP verdicts;</li>
+<li>traces with no time candidate;</li>
+<li>time-candidate trace-part pairs;</li>
+<li>Bloom probes;</li>
+<li>Bloom negatives and early positive exits;</li>
+<li>Bloom-positive deferrals;</li>
+<li>missing or corrupt filter deferrals;</li>
+<li>invalid timestamp deferrals;</li>
+<li>segment-boundary deferrals;</li>
+<li>boundary-check budget deferrals;</li>
+<li>immature traces retained past the eligibility frontier;</li>
+<li>confirmed drops;</li>
+<li>snapshot revalidation attempts and failures;</li>
+<li>discarded provisional outputs;</li>
+<li>retries performed losslessly;</li>
+<li>candidate parts per provisional DROP;</li>
+<li>filter bytes loaded;</li>
+<li>boundary-guard latency.</li>
+</ul>
+<p>Logs should identify the group, shard, segment, merge type, input count, base epoch, and failure reason. Trace IDs must
+not be used as unbounded metric labels.</p>
+<p>The current enforcement path exposes bounded counters for guard bypasses, Bloom probes, deferred traces, budget
+exhaustion, publication rejection, and lossless retries, in addition to the existing sampler evaluated/retained/dropped
+counters. Publication rejection logs include the group, shard, merge type, reason, rechecked trace count, and Bloom
+probe count. Per-reason trace-level labels are intentionally avoided.</p>
+<h2 id="test-plan">Test Plan</h2>
+<h3 id="unit-tests">Unit Tests</h3>
+<ol>
+<li>Verify symmetric interval intersection for earlier and later outside parts.</li>
+<li>Verify inclusive grace-boundary behavior.</li>
+<li>Verify overflow-safe handling near minimum and maximum timestamp values.</li>
+<li>Verify nested outside intervals and non-contiguous selected parts.</li>
+<li>Verify temporal pruning is rejected when guard grace is smaller than the catalog&rsquo;s enforced gap.</li>
+<li>Verify that sampler KEEP performs no Bloom probes.</li>
+<li>Verify that provisional DROP with no time candidate is dropped.</li>
+<li>Verify that all-negative candidate filters permit DROP.</li>
+<li>Verify that a positive, missing, or corrupt candidate filter defers the trace.</li>
+<li>Verify that optional exact lookup can clear a Bloom false positive without changing negative-filter semantics.</li>
+<li>Verify that invalid or missing per-trace timestamps fail open.</li>
+<li>Verify aggregation of minimum and maximum timestamps across multiple selected blocks with the same trace ID.</li>
+<li>Verify that a trace larger than the staging budget remains one decision unit.</li>
+<li>Verify that only guard-owned confirmed DROP tokens reach secondary-index pruning and revalidation.</li>
+<li>Verify persisted per-trace timestamp bounds and their presence marker after close and reopen.</li>
+<li>Verify sequential block reads and slow multi-block merges preserve and aggregate those timestamp bounds.</li>
+<li>Verify that each persisted part Bloom filter contains every trace ID written to that part.</li>
+<li>Verify that cancellation and every boundary-check budget limit fail open.</li>
+<li>Verify that closing a guard releases its pinned catalog exactly once.</li>
+<li>Verify that an unset group value resolves to the 2h engine default and an explicit group value takes precedence.</li>
+<li>Verify per-trace maturity at one nanosecond before, exactly at, and one nanosecond after the 2h frontier.</li>
+<li>Verify exact earlier and later 2h guard boundaries.</li>
+<li>Verify that finalization applies the same outside-part guard and defers a trace found in a skipped part.</li>
+<li>Verify that a segment with no guardable interior bypasses projection, sampler, and Bloom work.</li>
+</ol>
+<h3 id="property-and-randomized-tests">Property and Randomized Tests</h3>
+<ol>
+<li>Generate random part intervals, trace fragment placements, selections, and grace values. Under an enforced
+fragment-gap bound, assert that every trace crossing selected and outside parts is either deferred or retained by the
+sampler.</li>
+<li>Randomize nested intervals to ensure candidate discovery does not depend on monotonic maximum timestamps.</li>
+<li>Randomize Bloom false positives and assert that they can only increase retention.</li>
+<li>Inject missing metadata and assert that no uncertain trace is dropped.</li>
+<li>Compare the hybrid result with an exhaustive exact trace-ID oracle for a stable snapshot.</li>
+</ol>
+<h3 id="integration-tests">Integration Tests</h3>
+<ol>
+<li>Place one trace in selected and unselected file parts and verify deferral after a provisional DROP.</li>
+<li>Place unrelated traces in time-overlapping parts and verify that Bloom negatives allow sampling.</li>
+<li>Place an outside fragment earlier than every selected fragment and verify symmetric protection.</li>
+<li>Include memparts, hot parts, and in-flight parts in the outside universe.</li>
+<li>Verify ordered core output when provisional drops are overridden to deferral.</li>
+<li>Verify core and secondary-index consistency for mixed confirmed drops and deferred traces.</li>
+<li>Verify fail-open behavior for sampler timeout, panic, invalid mask, and projection failure.</li>
+<li>Verify segment-boundary deferral when an adjacent segment is unavailable.</li>
+<li>Verify adjacent-segment confirmation when both segments are covered by a common fence.</li>
+<li>Verify tags-only, span-ID-only, and full-span projections use complete multi-block trace input.</li>
+<li>Verify an outside mempart without a usable filter causes deferral.</li>
+<li>Verify an outside in-flight part remains represented by a conservative catalog entry.</li>
+<li>Verify both segment edges at exactly the 2h guard boundary and one nanosecond on either side.</li>
+</ol>
+<h3 id="concurrency-and-recovery-tests">Concurrency and Recovery Tests</h3>
+<ol>
+<li>Introduce an overlapping part after selection and before publication; verify epoch revalidation prevents unsafe
+publication.</li>
+<li>Introduce an unrelated part during the same window; verify successful revalidation is possible.</li>
+<li>Change shard ownership during the merge; verify the provisional output is rejected.</li>
+<li>Crash before output completion, after core output, after secondary-index output, and before introduction; verify the
+old snapshot remains authoritative.</li>
+<li>Fail provisional-output cleanup and verify recovery removes orphan artifacts without losing input parts.</li>
+<li>Race ordinary merge selection, finalization, mempart flushing, and handoff.</li>
+<li>Block pre-publication Bloom revalidation and verify the serialized introducer continues accepting new parts.</li>
+<li>Change the snapshot after successful prevalidation and verify the filtered output is discarded and the same pinned
+inputs are retried losslessly.</li>
+</ol>
+<h3 id="captured-shard-regression">Captured-Shard Regression</h3>
+<ol>
+<li>Replay all 26 captured parts and their 37,288 unique trace IDs at the deterministic active-ingestion clock.</li>
+<li>Verify that the default picker dispatches no merge from the frozen snapshot; do not label a scoring candidate as an
+ordinary merge selection.</li>
+<li>Verify that the recent twelve-part small-file window contains no mature trace, so it bypasses the sampler and guard
+with zero drops and Bloom probes.</li>
+<li>Derive the six cooled inputs from the 2h frontier, assert their exact identities and 34,856,465-byte total, and retain
+all 20 other parts in the outside catalog.</li>
+<li>Compare every selected/outside decision with the exact trace-placement oracle and require zero false negatives.</li>
+<li>Assert 6,652 candidate pairs and Bloom probes, 34 retained traces, 31,798 drops, and three false deferrals for the
+hybrid guard.</li>
+<li>Add one recent small part to the cooled selection and verify that mature traces are sampled while traces newer than
+the frontier pass through unchanged.</li>
+<li>Verify the observed 71.225s fragment gap and document that fixture observation is not a maximum-gap proof.</li>
+<li>Add a synthetic narrow outside part whose same-trace fragment is beyond grace and document that it falls outside the
+time-safety contract.</li>
+</ol>
+<h3 id="performance-tests">Performance Tests</h3>
+<ol>
+<li>Benchmark merge CPU with no guard, all-part Bloom probing, temporal-only guarding, and the hybrid guard.</li>
+<li>Measure Bloom probes, hash cost, cache misses, and candidate discovery time as trace and part counts grow.</li>
+<li>Measure sampler DROP ratios from zero to one hundred percent.</li>
+<li>Benchmark linear interval scanning against an interval tree and retain the simpler structure until profiling
+justifies replacement.</li>
+<li>Measure memory added by staged trace ranges, candidate mappings, and batched Bloom probes.</li>
+<li>Confirm that selected input parts, merged input bytes, and output fan-out are unchanged from the current policy.</li>
+<li>Run sustained ingestion with concurrent merges and verify that epoch conflicts do not cause retry storms.</li>
+<li>Profile the 2h hybrid, time-only, and all-Bloom strategies over cooled inputs, plus the constant-time maturity bypass
+over recent small inputs. Measure retained output bytes, later rewrite bytes, probe-budget deferrals, finalization
+backlog, and time from maturity frontier to the next eligible compaction.</li>
+</ol>
+<h2 id="acceptance-criteria">Acceptance Criteria</h2>
+<ol>
+<li>The selected input set is identical with the guard enabled and disabled.</li>
+<li>No provisional DROP is published when a candidate outside Bloom filter is positive or uncertain.</li>
+<li>All selected fragments with the same trace ID receive one final action.</li>
+<li>Core and secondary-index snapshots agree on every confirmed DROP.</li>
+<li>Snapshot conflicts fail open without losing input data.</li>
+<li>The captured-shard regression has zero false negatives against the exact placement oracle.</li>
+<li>With 2h merge grace used for both maturity and boundary expansion, the cooled captured-shard case produces
+exactly 6,652 time-candidate pairs and Bloom probes, versus 629,241 probes for all-Bloom confirmation.</li>
+<li>Missing timestamp metadata and segment-boundary ambiguity never produce destructive deletion.</li>
+<li>Benchmarks show no increase in selected merge bytes or merge fan-out.</li>
+<li>Probe-budget exhaustion retains affected traces.</li>
+<li>A selected part newer than the maturity frontier does not suppress eligible traces; only trace groups whose maximum
+timestamp is newer than the frontier bypass sampler and guard calls.</li>
+<li>Finalization cannot publish a DROP that the ordinary merge guard would defer for the same visible catalog.</li>
+<li>Publication rejection leaves the selected inputs authoritative and completes one lossless retry.</li>
+</ol>
+<h2 id="tdd-implementation-sequence">TDD Implementation Sequence</h2>
+<ol>
+<li>Persist the timestamp presence marker and bounds, restore them during sequential reads, and aggregate them during slow
+block merges.</li>
+<li>Assemble every selected physical block for one trace into a complete sampler and guard input.</li>
+<li>Build and pin the outside catalog with conservative coverage, fallible membership adapters, the base epoch, and an
+enforced gap equal to resolved merge grace.</li>
+<li>Implement provisional DROP resolution, including validation, saturating expansion, interval candidate discovery,
+tri-state membership checks, cumulative probe budgets, and guard-owned confirmed DROP tokens.</li>
+<li>Drive core and secondary-index pruning only from those tokens.</li>
+<li>Revalidate every token against a pinned current snapshot outside the introducer, rejecting changed ownership, missing
+selected inputs, incomplete deltas, positive or uncertain filters, and exhausted budgets. Carry the validated epoch to
+the introducer for a constant-time publication-fence check.</li>
+<li>Add captured-shard replay and shadow-mode integration before enabling destructive enforcement.</li>
+</ol>
+<h2 id="rollout">Rollout</h2>
+<p>The feature should first run in shadow mode. Shadow mode records provisional sampler results, temporal candidates, Bloom
+outcomes, and the final action that enforcement would take, but it does not drop traces.</p>
+<p>After captured-shard replay and production shadow metrics confirm acceptable candidate and deferral rates, enforcement
+can be enabled for a limited set of trace groups whose verified fragment-arrival bound fits within their resolved merge
+grace. Rollout should monitor Bloom probes, deferred traces, epoch conflicts, merge latency, sampler
+effectiveness, and finalization backlog.</p>
+<p>Rollback disables boundary-aware destructive filtering and returns merges to fail-open retention without changing the
+part-selection policy or invalidating existing parts.</p>
+<h2 id="open-questions">Open Questions</h2>
+<ol>
+<li>How the system will establish and expose the enforced maximum fragment-gap contract required before destructive
+enforcement is enabled.</li>
+<li>Whether exact primary-metadata verification is worthwhile for Bloom positives.</li>
+<li>Whether adjacent-segment metadata can be fenced cheaply enough to reduce boundary deferrals.</li>
+<li>Whether persisted per-trace timestamp bounds require a format version change or can be reconstructed during
+transitional merges.</li>
+<li>Whether repeated Bloom-positive deferrals require a dedicated finalization priority signal.</li>
+</ol>
+
+</div>
+
+            </main>
+          <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
+            
+
+
+
+
+<div class="td-page-meta ml-2 pb-1 pt-2 mb-0">
+
+
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+
+
+
+<div class="td-toc-label">On this page</div>
+<nav id="TableOfContents">
+  <ul>
+    <li><a href="#trace-fragment-guard-for-sampling-design">Trace Fragment Guard for Sampling Design</a>
+      <ul>
+        <li><a href="#status">Status</a></li>
+        <li><a href="#context-and-problem-statement">Context and Problem Statement</a></li>
+        <li><a href="#design-boundary">Design Boundary</a>
+          <ul>
+            <li><a href="#execution-boundary">Execution Boundary</a></li>
+            <li><a href="#data-visibility-boundary">Data-Visibility Boundary</a></li>
+            <li><a href="#time-boundary">Time Boundary</a></li>
+            <li><a href="#concurrency-boundary">Concurrency Boundary</a></li>
+            <li><a href="#segment-boundary">Segment Boundary</a></li>
+            <li><a href="#failure-boundary">Failure Boundary</a></li>
+          </ul>
+        </li>
+        <li><a href="#goals">Goals</a></li>
+        <li><a href="#non-goals">Non-Goals</a></li>
+        <li><a href="#terminology">Terminology</a></li>
+        <li><a href="#design-invariants">Design Invariants</a></li>
+        <li><a href="#design-overview">Design Overview</a></li>
+        <li><a href="#key-process">Key Process</a>
+          <ul>
+            <li><a href="#1-select-and-pin-inputs">1. Select and Pin Inputs</a></li>
+            <li><a href="#2-build-the-outside-part-guard">2. Build the Outside-Part Guard</a></li>
+            <li><a href="#3-assemble-a-complete-selected-trace">3. Assemble a Complete Selected Trace</a></li>
+            <li><a href="#4-obtain-the-sampler-verdict">4. Obtain the Sampler Verdict</a></li>
+            <li><a href="#5-discover-time-candidates">5. Discover Time Candidates</a></li>
+            <li><a href="#6-confirm-with-bloom-filters">6. Confirm with Bloom Filters</a></li>
+            <li><a href="#7-apply-the-final-merge-action">7. Apply the Final Merge Action</a></li>
+            <li><a href="#8-revalidate-before-publication">8. Revalidate Before Publication</a></li>
+            <li><a href="#9-release-and-retry">9. Release and Retry</a></li>
+          </ul>
+        </li>
+        <li><a href="#correctness-properties-and-limitations">Correctness Properties and Limitations</a>
+          <ul>
+            <li><a href="#visible-snapshot-protection">Visible-Snapshot Protection</a></li>
+            <li><a href="#false-positives">False Positives</a></li>
+            <li><a href="#late-arrivals">Late Arrivals</a></li>
+            <li><a href="#convergence">Convergence</a></li>
+          </ul>
+        </li>
+        <li><a href="#cost-model">Cost Model</a></li>
+        <li><a href="#observability">Observability</a></li>
+        <li><a href="#test-plan">Test Plan</a>
+          <ul>
+            <li><a href="#unit-tests">Unit Tests</a></li>
+            <li><a href="#property-and-randomized-tests">Property and Randomized Tests</a></li>
+            <li><a href="#integration-tests">Integration Tests</a></li>
+            <li><a href="#concurrency-and-recovery-tests">Concurrency and Recovery Tests</a></li>
+            <li><a href="#captured-shard-regression">Captured-Shard Regression</a></li>
+            <li><a href="#performance-tests">Performance Tests</a></li>
+          </ul>
+        </li>
+        <li><a href="#acceptance-criteria">Acceptance Criteria</a></li>
+        <li><a href="#tdd-implementation-sequence">TDD Implementation Sequence</a></li>
+        <li><a href="#rollout">Rollout</a></li>
+        <li><a href="#open-questions">Open Questions</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+
+
+
+
+<script>
+  $(function () {
+    var $toc = $("#TableOfContents");
+    if (!$toc || !$toc.length) {
+      return;
+    }
+    var top = $toc.offset().top;
+    $(window).on("scroll", debounce(setTop, 100))
+    $(window).on("scroll", debounce(addActive, 30))
+
+    function addActive() {
+      var scrollValue = $(window).scrollTop();
+      var topEle = null;
+      $.each($('main h1, main h2, main h3'), function (index, item) {
+        if ($(item).offset().top - 70 > scrollValue) {
+          return
+        }
+        if (!topEle) {
+          topEle = item
+        } else if ($(item).offset().top >= $(topEle).offset().top) {
+          topEle = item
+        }
+        if (topEle) {
+          var id = $(item).attr('id');
+          $toc.find('a').removeClass("active").end().find('a[href="' + '#' + id + '"]').addClass("active")
+        }
+      })
+    }
+
+    function setTop() {
+      var scrollValue = $(window).scrollTop();
+      if (scrollValue >= top - 70) {
+        $toc.addClass('fixed')
+      } else {
+        $toc.removeClass('fixed')
+      }
+    }
+
+    function debounce(fn, wait) {
+      var timeout = null;
+      return function () {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fn.apply(this, arguments);
+        }, wait);
+      };
+    }
+  })
+</script>
+
+          </div>
+
+        </div>
+      </div>
+
+      
+<footer class="py-5 sky-row">
+  <div class="container-fluid text-center">
+    <div class="">
+        
+        
+        
+<ul class="list-inline mb-0">
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Twitter" aria-label="Twitter">
+    <a class="text-color" target="_blank" rel="noopener" href="https://twitter.com/asfskywalking"><i class="iconfont icon-twitter"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Slack" aria-label="Slack">
+    <a class="text-color" target="_blank" rel="noopener" href="mailto:dev@skywalking.apache.org?subject=Request%20to%20join%20SkyWalking%20Slack"><i class="iconfont icon-slack"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Mailing list" aria-label="Mailing list">
+    <a class="text-color" target="_blank" rel="noopener" href="https://lists.apache.org/list.html?dev@skywalking.apache.org"><i class="iconfont icon-email"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="GitHub" aria-label="GitHub">
+    <a class="text-color" target="_blank" rel="noopener" href="https://github.com/apache/skywalking"><i class="iconfont icon-github"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="B站" aria-label="B站">
+    <a class="text-color" target="_blank" rel="noopener" href="https://space.bilibili.com/390683219">B站</a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="掘金" aria-label="掘金">
+    <a class="text-color" target="_blank" rel="noopener" href="https://juejin.cn/user/13673577331607">掘金</a>
+  </li>
+  
+</ul>
+
+        
+        
+    </div>
+    <div class="">
+
+        <small class="text-color">&copy; 2017 - 2026 The Apache Software Foundation All Rights Reserved</small>
+        
+	
+    </div>
+    <div class="">
+      <small class="text-color mt-4">Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</small>
+    </div>
+  </div>
+</footer>
+
+
+    </div>
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<div id="popup">
+    <div class="mask">
+        <img src=""/>
+    </div>
+</div>
+
+    <div class="sidebar-mask"></div>
+<div class="sidebar">
+    <nav class="nav-links">
+        
+        <div class="nav-item"><a href="/docs/" class="nav-link router-link-active">Documentation</a></div>
+        <div class="nav-item"><a href="/events/" class="nav-link">Events</a></div>
+        <div class="nav-item"><a href="/blog/" class="nav-link">Blog</a></div>
+        <div class="nav-item"><a href="/downloads/" class="nav-link">Downloads</a></div>
+        <div class="nav-item"><a href="/team/" class="nav-link">Team</a></div>
+        <div class="nav-item"><a href="/users/" class="nav-link">Users</a></div>
+        <div class="nav-item"><a href="/zh/" class="nav-link">中文博客</a></div>
+        <div class="nav-item">
+            <div class="dropdown-wrapper open">
+                <a class="dropdown-title">
+                    <span>Links</span>
+                    <span class="arrow down"></span>
+                </a>
+                <ul class="nav-dropdown">
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Apache Software Foundation
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="https://github.com/apache/skywalking/issues"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            GitHub Issue Tracker
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Dev Mailing List
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/licenses/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            License
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/events/current-event"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Apache Events
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/security/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Security
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/foundation/sponsorship.html"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Sponsorship and Donate
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/foundation/thanks.html"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Thanks
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+</div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+
+<script src="/js/docsearch-3.9.0.js"></script>
+
+
+
+
+
+
+
+
+
+<script src="/js/main.min.9be14eed0a0e24711261c334305209aa2e5ae3fb624f6a1731e064d5ffb11f3d.js" integrity="sha256-m&#43;FO7QoOJHESYcM0MFIJqi5a4/tiT2oXMeBk1f&#43;xHz0=" crossorigin="anonymous"></script>
+
+
+<script src="/js/highlight.min.js"></script>
+<script src="/js/mermaid.min.js"></script>
+<script>
+    window.onload = () => mermaid.init(undefined, ".language-mermaid");
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('pre code.language-json5').forEach((block) => {
+      if (block.classList.contains('language-json5')) {
+        try {
+          hljs.registerLanguage('json5', function(hljs) {
+            return hljs.getLanguage('json');
+          });
+          hljs.highlightElement(block);
+        } catch (error) {
+          console.error("Error parsing JSON5:", error);
+        }
+      }
+    });
+  });
+</script>
+
+
+<script defer
+src="/js/kapa-widget.bundle.js"
+data-website-id="8a08392b-9c4d-4816-8bc4-f93e0ecdd2a7"
+data-project-name="SkyWalking"
+data-project-color="#2B74B8"
+data-button-text="Ask AI"
+data-search-mode-enabled="true"
+data-modal-open-on-command-k="true"
+data-modal-disclaimer="The AI supports multiple languages, but it may not be accessible in China, a proxy is required."
+data-project-logo="/images/widget-logo.jpg"
+data-modal-example-questions="What is Apache SkyWalking?,How to deploy SkyWalking?,How to inject agents non-intrusively?,How to setup trace sampling?"
+data-button-position-top=""
+data-button-position-right="20px"
+data-button-position-bottom="200px"
+data-button-position-left=""
+data-consent-required="true"  
+data-user-analytics-cookie-enabled="true"  
+data-consent-screen-title="Help us improve our AI assistant"  
+data-consent-screen-disclaimer="By clicking 'Allow tracking', you consent to anonymous user tracking which helps us improve our service. We don't collect any personally identifiable information."  
+data-consent-screen-accept-button-text="Allow tracking"  
+data-consent-screen-reject-button-text="No, thanks"
+></script>
+
+
+
+
+    <script>
+      
+      document.querySelectorAll('.project-doc .td-content .highlight').forEach(function (block) {
+        if (block.querySelector('.sw-code-bar')) return;
+        var codeEl = block.querySelector('code');
+        var lang = '';
+        if (codeEl) {
+          var m = (codeEl.className || '').match(/language-([\w+-]+)/);
+          if (m) lang = m[1];
+          if (!lang && codeEl.getAttribute('data-lang')) lang = codeEl.getAttribute('data-lang');
+        }
+        var bar = document.createElement('div');
+        bar.className = 'sw-code-bar';
+        bar.innerHTML = '<span class="lang">' + (lang || 'code') + '</span><button class="copy" type="button">Copy</button>';
+        block.insertBefore(bar, block.firstChild);
+        bar.querySelector('.copy').addEventListener('click', function () {
+          var btn = this;
+          var text = (block.querySelector('pre') || {}).innerText || '';
+          navigator.clipboard && navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      });
+    </script>
+  </body>
+  <script>
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val().toLowerCase();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
+    })
+  </script>
+</html>

@@ -35,7 +35,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
   <meta itemprop="description" content="Login audit Horizon can keep a durable record of who signed in, when, and from where. It is optional, off by default, and backed by a shared database rather than a file — one page under one permission, readable by an administrator.
 It records sign-ins, not changes. “Who changed what” is not this feature: template and rule edits land in OAP’s own records.
 What is recorded, and what deliberately is not Only what a valid credential produced. That is the rule the whole feature is shaped around, and it has a security reason: Horizon can face the internet, and this feature adds no rate limit. If an unauthenticated caller could cause a row, they could fill your database from a laptop.">
-  <meta itemprop="wordCount" content="3081">
+  <meta itemprop="wordCount" content="3167">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Login audit">
   <meta name="twitter:description" content="Login audit Horizon can keep a durable record of who signed in, when, and from where. It is optional, off by default, and backed by a shared database rather than a file — one page under one permission, readable by an administrator.
@@ -1465,6 +1465,14 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 
     <li>
         
+            <a href="/docs/skywalking-horizon-ui/next/changelog/1.1.0">1.1.0</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-horizon-ui/next/changelog/1.0.0">1.0.0</a>
         
     </li>
@@ -1554,7 +1562,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: acf584b</div>
+                  <div class="commit-id">Commit Id: eeaa4df</div>
                 
 
 
@@ -1768,7 +1776,8 @@ What is recorded, and what deliberately is not Only what a valid credential prod
       </tr>
   </tbody>
 </table>
-<p><strong>A database can never delay a sign-in.</strong> Sign-ins are buffered in memory and written in the background, so the login path never waits on the database at all — an unreachable database is invisible to someone signing in. The cost is that an abrupt crash loses whatever is still buffered. While the database is reachable that is small — at most <code>eventBatchRows</code> rows or <code>eventBatchSeconds</code> seconds, whichever comes first. While it is unreachable, records accumulate in memory instead, up to a 10,000-row ceiling, and a crash then loses however much of that has built up.</p>
+<p><strong>A database can never delay a sign-in.</strong> Sign-ins are collected in memory and written in the background in batches, so the login path never waits on the database at all — an unreachable database is invisible to someone signing in. What is held is only what has arrived since the last write: at most <code>eventBatchRows</code> rows or <code>eventBatchSeconds</code> seconds, whichever comes first, and an abrupt crash loses that much.</p>
+<p><strong>A write that fails is not retried.</strong> Batching exists to write efficiently, not to survive an outage, so a batch the database refuses is dropped rather than queued for later. Nothing grows in memory while the database is down, and the sign-ins from that window are simply not recorded — counted, so you are told how many, but not reconstructed afterwards.</p>
 <p><strong><code>maxRowsPerHour</code> bounds what one Horizon process can add to the table in an hour.</strong> A fifty-person team produces on the order of a hundred rows a <em>day</em>, so the default is orders of magnitude of headroom — if it is ever reached, something is wrong and the page tells you. Past the limit, records are dropped rather than queued, and the page shows the count.</p>
 <h2 id="reading-the-page">Reading the page</h2>
 <p><strong>Admin → Login audit.</strong> Two tabs, because the two records answer different questions at different grains: <strong>Login</strong> is people arriving, <strong>Token usage</strong> is hours of machine traffic.</p>
@@ -1813,7 +1822,8 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 <ul>
 <li>one <code>error</code> line when the connection is first lost, naming a sanitised cause, and one <code>info</code> line when it comes back, with how long it was down and how many records could not be confirmed as written. Not one line per sign-in — a long outage would bury the cause it is trying to surface;</li>
 <li>the page renders an explicit &ldquo;cannot be reached&rdquo; state rather than an empty table, because an empty table would claim there is nothing to show when there is;</li>
-<li>records are held in memory and written when the database returns. A long enough outage exhausts that buffer; the count of what could not be confirmed is reported in the recovery log line, not on the page.</li>
+<li>sign-ins during the outage are <strong>not recorded</strong>. Batches that cannot be written are dropped rather than held, so memory does not grow for the length of the outage and nothing is replayed when the database returns. How many went unrecorded is reported in the recovery log line, not on the page;</li>
+<li>hourly statistics behave the same way: each row totals a closed interval that the next one supersedes, so a failed interval is dropped and the next is written normally. An hour of outage costs that hour&rsquo;s counts.</li>
 </ul>
 <h2 id="multiple-horizon-replicas">Multiple Horizon replicas</h2>
 <p>Each process writes its own rows and reports its own health, so the status line at the foot of the page describes <strong>whichever replica answered your request</strong>, not the cluster. The list and the summary read across all of them.</p>
@@ -1979,6 +1989,26 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
