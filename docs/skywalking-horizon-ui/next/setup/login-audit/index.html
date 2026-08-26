@@ -35,7 +35,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
   <meta itemprop="description" content="Login audit Horizon can keep a durable record of who signed in, when, and from where. It is optional, off by default, and backed by a shared database rather than a file — one page under one permission, readable by an administrator.
 It records sign-ins, not changes. “Who changed what” is not this feature: template and rule edits land in OAP’s own records.
 What is recorded, and what deliberately is not Only what a valid credential produced. That is the rule the whole feature is shaped around, and it has a security reason: Horizon can face the internet, and this feature adds no rate limit. If an unauthenticated caller could cause a row, they could fill your database from a laptop.">
-  <meta itemprop="wordCount" content="3167">
+  <meta itemprop="wordCount" content="3948">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Login audit">
   <meta name="twitter:description" content="Login audit Horizon can keep a durable record of who signed in, when, and from where. It is optional, off by default, and backed by a shared database rather than a file — one page under one permission, readable by an administrator.
@@ -1562,7 +1562,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: eb227c8</div>
+                  <div class="commit-id">Commit Id: ef3a161</div>
                 
 
 
@@ -1682,6 +1682,27 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 <p><strong>The protocol is recorded per sign-in, not looked up from the provider afterwards.</strong> A provider can be reconfigured or removed, and the row has to keep saying what was true at the time — the same reason the granted roles are stored rather than re-derived. One provider can also serve both: Okta and Keycloak do OIDC and plain OAuth2 alike, so the vendor&rsquo;s name does not settle how strongly an identity was proven.</p>
 <p><strong>&ldquo;Recorded by&rdquo; names the Horizon process and where it can be reached.</strong> The process half changes on every restart, which is what lets replicas count independently without ever colliding. The address half is the pod address when Kubernetes supplies one through <code>POD_IP</code>, and otherwise the first external address of the host — set <code>POD_IP</code> yourself on a machine with several interfaces, where picking one is a guess. Loopback and link-local addresses are never recorded: neither says where the process can be reached from anywhere else, and a row claiming <code>127.0.0.1</code> wrote it is worse than one that leaves the column empty.</p>
 <h2 id="turning-it-on">Turning it on</h2>
+<p>Recording is off until you name a place to keep the records. There are two, and they store the same thing — the page, the filters and the summary are identical on either:</p>
+<table>
+  <thead>
+      <tr>
+          <th></th>
+          <th>when it fits</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>PostgreSQL</strong></td>
+          <td>You already run one, or you want the audit log somewhere entirely separate from the observability data</td>
+      </tr>
+      <tr>
+          <td><strong>BanyanDB</strong></td>
+          <td>You would rather not run a second database — SkyWalking already ships one, and Horizon can keep the records in it, in groups of its own</td>
+      </tr>
+  </tbody>
+</table>
+<p>Whichever you pick, <strong>the whole <code>audit</code> block takes effect at startup</strong>: editing it in a live configuration file does not turn the feature on, off, or repoint it. Restart Horizon.</p>
+<h3 id="storing-the-records-in-postgresql">Storing the records in PostgreSQL</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">audit</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">enabled</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">provider</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>postgres<span style="color:#fff">
@@ -1692,13 +1713,32 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;caFile&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;/etc/horizon/pg-ca.crt&#34;</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;retentionDays&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">90</span>
 </span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span>
-</span></span></code></pre></div><p><strong>The whole <code>audit</code> block takes effect at startup.</strong> Editing it in a live configuration file does not turn the feature on, off, or repoint it — restart Horizon.</p>
-<p>Horizon creates its own tables on first connection. If the account may not create tables, set <code>postgres.autoMigrate: false</code> and have a DBA create them first: start Horizon once with a privileged account against a scratch database and copy the <code>CREATE TABLE</code> / <code>CREATE INDEX</code> statements it applies, or grant <code>CREATE</code> on the schema for the first boot only.</p>
+</span></span></code></pre></div><p>Horizon creates its own tables on first connection. If the account may not create tables, set <code>postgres.autoMigrate: false</code> and have a DBA create them first: start Horizon once with a privileged account against a scratch database and copy the <code>CREATE TABLE</code> / <code>CREATE INDEX</code> statements it applies, or grant <code>CREATE</code> on the schema for the first boot only.</p>
 <h3 id="tls-is-required-away-from-loopback">TLS is required away from loopback</h3>
 <p>The records carry usernames, verified email addresses and client addresses. A connection string whose host is not this machine — anything other than <code>localhost</code>, <code>127.0.0.x</code> or <code>::1</code> — must ask for <code>sslmode=verify-full</code> (or <code>verify-ca</code>), and Horizon refuses to start the feature otherwise. <code>sslmode=require</code> is <strong>not</strong> enough: it encrypts without checking who answered, which stops someone listening and not someone impersonating. Use <code>caFile</code> when your database presents a certificate from a private authority.</p>
 <p>If the database is reached over a network you control — a Postgres in the same Kubernetes namespace, say — you can accept an unencrypted connection deliberately:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;url&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;postgres://horizon@audit-db:5432/horizon&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;allowCleartext&#34;</span><span style="color:#1f2328">:</span> <span style="color:#cf222e">true</span> <span style="color:#1f2328">}</span>
 </span></span></code></pre></div><p>It is off by default and has to be named, because <code>pg</code> will connect in cleartext without complaint and the records are worth protecting. Turning it on logs a warning naming the host at every start, so nobody inherits the setting without being told.</p>
+<h3 id="storing-the-records-in-banyandb">Storing the records in BanyanDB</h3>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">audit</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">enabled</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">provider</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>banyandb<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">banyandb</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${HORIZON_AUDIT_BANYANDB:null}<span style="color:#fff">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#1f2328">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;address&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;banyandb.internal:17912&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;tls&#34;</span><span style="color:#1f2328">:</span> <span style="color:#cf222e">true</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;caFile&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;/etc/horizon/banyandb-ca.crt&#34;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;retentionDays&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">90</span>
+</span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span>
+</span></span></code></pre></div><p><code>address</code> is the <strong>gRPC</strong> address of a liaison node — port 17912 by default, not the 17913 the HTTP interface uses.</p>
+<p><strong>Point it at whichever BanyanDB suits you, including the one SkyWalking already stores its telemetry in.</strong> Horizon keeps the records in groups it owns, named <code>horizon_audit</code> and <code>horizon_audit_metrics</code>, so nothing it writes can collide with OAP&rsquo;s own data. If two Horizon deployments share one BanyanDB, give each a <code>namespace</code>: it prefixes both group names, and without it the two write into one audit log without either being told.</p>
+<p>Retention is the group&rsquo;s lifetime rather than a job Horizon runs, so nothing sweeps and there is no interval to tune. BanyanDB drops whole segments, which means a record lives at least <code>retentionDays</code> and can outlive it by up to a segment.</p>
+<p><strong>The groups are laid out for you, and the layout is not configurable.</strong> They are created with a single shard, which is not a limitation worth tuning: a sign-in is a rare event — a fifty-person team writes on the order of a hundred rows a <em>day</em> — and one shard serves that without noticing. It is also the safe choice, because BanyanDB fixes a group&rsquo;s shard count when the group is created and does not move data if it later changes: raising it would route new records away from the ones already stored, and lowering it would strand whole shards of them. <strong>Replication is yours to decide, and Horizon leaves it alone.</strong> It does not set a replica count, so groups it creates take BanyanDB&rsquo;s own default of none — but if you want the audit log replicated, create the two groups yourself with the replica count you want before pointing Horizon at them, and it will keep them that way rather than flattening them on the next start. Shard count is the one thing it will not adopt: a group whose shard count differs is reported and left as it is, never rewritten.</p>
+<p>Horizon owns this schema and maintains it for you: at every start it checks all seven pieces — both groups with their retention, shards and replicas, the log stream, the two statistics, and the index that makes the Auth Channel filter work — and creates or updates whatever does not match. There is nothing to apply by hand and no switch to turn it off, because a half-applied schema is the one state that fails invisibly: records write successfully and then cannot be read back. The same check runs when Horizon recovers from losing the connection, so a group dropped underneath it is rebuilt rather than reported.</p>
+<h3 id="tls-away-from-loopback-here-too">TLS away from loopback, here too</h3>
+<p>The same rule as PostgreSQL, for the same reason: an address that is not this machine needs <code>tls: true</code>, and Horizon refuses to start the feature otherwise. Use <code>caFile</code> for a private certificate authority. To accept an unencrypted connection deliberately — a BanyanDB on a network you control, in the same Kubernetes namespace — say so:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#1f2328">{</span> <span style="color:#0550ae">&#34;address&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0a3069">&#34;banyandb:17912&#34;</span><span style="color:#1f2328">,</span> <span style="color:#0550ae">&#34;allowCleartext&#34;</span><span style="color:#1f2328">:</span> <span style="color:#cf222e">true</span> <span style="color:#1f2328">}</span>
+</span></span></code></pre></div><p>That logs a warning naming the host at every start, so nobody inherits the setting without being told.</p>
 <h3 id="settings">Settings</h3>
 <table>
   <thead>
@@ -1717,7 +1757,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
       <tr>
           <td><code>provider</code></td>
           <td><code>none</code></td>
-          <td><code>none</code> or <code>postgres</code></td>
+          <td><code>none</code>, <code>postgres</code> or <code>banyandb</code></td>
       </tr>
       <tr>
           <td><code>maxRowsPerHour</code></td>
@@ -1774,6 +1814,51 @@ What is recorded, and what deliberately is not Only what a valid credential prod
           <td><code>1000</code></td>
           <td>Never on a sign-in, but it does bound the audit page&rsquo;s own queries — raise it if a wide range times out</td>
       </tr>
+      <tr>
+          <td><code>banyandb.address</code></td>
+          <td></td>
+          <td><code>host:port</code> of a liaison&rsquo;s gRPC port</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.namespace</code></td>
+          <td></td>
+          <td>Prefixes the group names. Required when two Horizon deployments share one BanyanDB</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.retentionDays</code></td>
+          <td><code>90</code></td>
+          <td>How long records are kept, as the groups&rsquo; lifetime</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.username</code></td>
+          <td></td>
+          <td>Sent as gRPC metadata, when the server requires a credential</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.password</code></td>
+          <td></td>
+          <td>With <code>username</code>. Redacted from the logs</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.tls</code></td>
+          <td><code>false</code></td>
+          <td>Required for any address that is not loopback</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.caFile</code></td>
+          <td></td>
+          <td>For a certificate from a private authority</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.allowCleartext</code></td>
+          <td><code>false</code></td>
+          <td>Accept an unencrypted connection to a non-loopback host</td>
+      </tr>
+      <tr>
+          <td><code>banyandb.deadlineMs</code></td>
+          <td><code>10000</code></td>
+          <td>Bounds Horizon&rsquo;s own calls to BanyanDB. Never on a sign-in</td>
+      </tr>
   </tbody>
 </table>
 <p><strong>A database can never delay a sign-in.</strong> Sign-ins are collected in memory and written in the background in batches, so the login path never waits on the database at all — an unreachable database is invisible to someone signing in. What is held is only what has arrived since the last write: at most <code>eventBatchRows</code> rows or <code>eventBatchSeconds</code> seconds, whichever comes first, and an abrupt crash loses that much.</p>
@@ -1787,7 +1872,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 <p>Records refused by the hourly limit are deliberately <em>not</em> drawn as a bar. They appear as a note instead when the count is non-zero, because they describe records that were never written, and charting them beside records that were would read as extra volume.</p>
 <p>One other count is kept but <strong>not shown on the page</strong>: writes whose outcome could not be confirmed. They are <em>unconfirmed</em> rather than known-lost — a write that commits and then times out leaves the row in the database and the count here, and nothing on Horizon&rsquo;s side can tell that from a write that never landed. It reaches the application log rather than the page: the recovery line names how many accumulated during an outage.</p>
 <p><strong>Filters</strong> are <strong>Time range</strong>, <strong>Auth Channel</strong> and <strong>Login ID</strong> — the same three the list is headed with. <code>Login ID</code> matches <strong>exactly</strong> — it names one principal, so a partial name finds nothing. There is deliberately nothing else: this page is read, not queried, and every extra predicate is an index to carry and another way to ask the database something slow. The other fields on a row are for reading once you have found it.</p>
-<p>The list pages 50 at a time and reports only whether there is more, never a total. Selecting a row expands the investigation fields.</p>
+<p>The list pages 50 at a time and reports only whether there is more, never a total — the same arrangement OAP uses for every list it serves, which returns no count either. Paging is bounded at 500 pages deep; if you are that far in, narrow the time range instead. Selecting a row expands the investigation fields.</p>
 <h3 id="token-usage">Token usage</h3>
 <p>Presenting an API token is not a sign-in, so it produces no audit row — what a token did is a matter of traffic. This tab counts that traffic: <strong>one row per token per hour</strong>, newest hour first.</p>
 <p><strong>Only API tokens from the tokens file are counted.</strong> The other bearer Horizon accepts is the access token its own authorization server issues to an agent or MCP client at sign-in. That one is deliberately left out: the sign-in behind it is already a row on the Login tab, so counting its requests here as well would report one person&rsquo;s session as machine traffic. Browser sessions never reach this tab at all — they carry a cookie, not a token.</p>
@@ -1823,7 +1908,7 @@ What is recorded, and what deliberately is not Only what a valid credential prod
 <li>one <code>error</code> line when the connection is first lost, naming a sanitised cause, and one <code>info</code> line when it comes back, with how long it was down and how many records could not be confirmed as written. Not one line per sign-in — a long outage would bury the cause it is trying to surface;</li>
 <li>the page renders an explicit &ldquo;cannot be reached&rdquo; state rather than an empty table, because an empty table would claim there is nothing to show when there is;</li>
 <li>sign-ins during the outage are <strong>not recorded</strong>. Batches that cannot be written are dropped rather than held, so memory does not grow for the length of the outage and nothing is replayed when the database returns. How many went unrecorded is reported in the recovery log line, not on the page;</li>
-<li>hourly statistics behave the same way: each row totals a closed interval that the next one supersedes, so a failed interval is dropped and the next is written normally. An hour of outage costs that hour&rsquo;s counts.</li>
+<li>hourly statistics come back on their own. Unlike the sign-in list, each write carries a running total for the whole hour rather than what happened since the last one, so the first write after the database returns restores the counts the outage would otherwise have cost — as long as the hour is still open. An outage spanning a whole hour still loses that hour.</li>
 </ul>
 <h2 id="multiple-horizon-replicas">Multiple Horizon replicas</h2>
 <p>Each process writes its own rows and reports its own health, so the status line at the foot of the page describes <strong>whichever replica answered your request</strong>, not the cluster. The list and the summary read across all of them.</p>
@@ -1865,7 +1950,10 @@ What is recorded, and what deliberately is not Only what a valid credential prod
         <li><a href="#what-a-row-holds">What a row holds</a></li>
         <li><a href="#turning-it-on">Turning it on</a>
           <ul>
+            <li><a href="#storing-the-records-in-postgresql">Storing the records in PostgreSQL</a></li>
             <li><a href="#tls-is-required-away-from-loopback">TLS is required away from loopback</a></li>
+            <li><a href="#storing-the-records-in-banyandb">Storing the records in BanyanDB</a></li>
+            <li><a href="#tls-away-from-loopback-here-too">TLS away from loopback, here too</a></li>
             <li><a href="#settings">Settings</a></li>
           </ul>
         </li>
