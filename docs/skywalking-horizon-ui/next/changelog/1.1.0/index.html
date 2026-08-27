@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="1.1.0">
   <meta itemprop="description" content="1.1.0 Sign-in and access control Features The login audit can now be stored in BanyanDB instead of PostgreSQL. Set audit.provider: banyandb and point audit.banyandb.address at a liaison’s gRPC port — including the BanyanDB SkyWalking already stores its telemetry in, since Horizon keeps the records in groups of its own (horizon_audit and horizon_audit_metrics, prefixed by namespace where two deployments share one server). The page is the same on either backend: the same rows, the same three filters, the same hourly summary and token-usage tab. Retention is the groups’ own lifetime rather than a job Horizon runs, so there is no sweep interval to tune; on a cluster, set shards and replicas, because the single-node defaults would keep the whole audit log on one data node. As with PostgreSQL, an address that is not loopback must use TLS unless allowCleartext says otherwise. See Login audit.">
-  <meta itemprop="wordCount" content="499">
+  <meta itemprop="wordCount" content="2579">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="1.1.0">
   <meta name="twitter:description" content="1.1.0 Sign-in and access control Features The login audit can now be stored in BanyanDB instead of PostgreSQL. Set audit.provider: banyandb and point audit.banyandb.address at a liaison’s gRPC port — including the BanyanDB SkyWalking already stores its telemetry in, since Horizon keeps the records in groups of its own (horizon_audit and horizon_audit_metrics, prefixed by namespace where two deployments share one server). The page is the same on either backend: the same rows, the same three filters, the same hourly summary and token-usage tab. Retention is the groups’ own lifetime rather than a job Horizon runs, so there is no sweep interval to tune; on a cluster, set shards and replicas, because the single-node defaults would keep the whole audit log on one data node. As with PostgreSQL, an address that is not loopback must use TLS unless allowCleartext says otherwise. See Login audit.">
@@ -514,6 +514,14 @@
 
             
 <ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-horizon-ui/next/operate/refreshing">Refreshing &amp; Time Range</a>
+        
+    </li>
+
     
 
     <li>
@@ -1556,7 +1564,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: ef3a161</div>
+                  <div class="commit-id">Commit Id: f97b19b</div>
                 
 
 
@@ -1617,6 +1625,42 @@
 <p><strong>The login audit list pages the way every other SkyWalking list does.</strong> It asks for a page number rather than carrying a position between requests, which is the arrangement OAP uses for traces, logs, alarms and events alike. The page still shows 50 rows at a time and still reports only whether more exist; paging is bounded at 500 pages deep, and a request past that is refused rather than quietly answered with something else.</p>
 <p><strong>The hourly summary and token-usage totals now refuse a window they cannot read completely.</strong> Both are sums, so a row that did not fit did not look missing — it looked like a smaller number. A window holding more rows than one read may return now reports that it cannot be shown, instead of drawing a total that is quietly low.</p>
 <p><strong>A database outage no longer costs the hourly sign-in counts it spanned.</strong> Each Horizon process now records a running total for the hour rather than a count of what happened since its last write, so the first write after the database comes back restores the figures for the hour in progress — and a write that is retried after an uncertain outcome leaves the same number instead of counting twice. The sign-in list is unchanged: rows from an outage are still not recorded.</p>
+<h2 id="refreshing">Refreshing</h2>
+<h3 id="features-1">Features</h3>
+<p><strong>Refreshing is one coordinated round.</strong> A page used to refresh in pieces, on clocks that drifted apart: the header and the service roster followed the topbar timer, while a dashboard&rsquo;s widgets and the alarms card each polled on intervals of their own. A refresh is now a single round — header, roster, every widget, the alarms card and the maps — all asking about one time window, and the round is not finished until the last of them lands. They still appear as they arrive, so a large comparison fills in over a second or two; what changed is that they are all answering the same question. The countdown measures the gap between rounds rather than between starts: while the readings are out it reads <em>Refreshing</em>, and it begins again when the last of them lands, so time spent loading is never charged against the interval. On a slow backend the interval genuinely stretches and two rounds can no longer overlap. A round that has started always finishes, even if you switch refreshing off or move to a page that pauses it — the next one simply does not begin. One that runs longer than a minute is given up on, so a single wedged screen cannot stop everything else refreshing.</p>
+<p><strong>Auto-refresh has its own on/off, separate from the interval.</strong> Turning it off and back on returns to the interval you last chose rather than forgetting it, and off means off everywhere: passing through a page that pauses refreshing and coming back no longer triggers a refresh you had switched off. Switching it on while a page is paused or the tab is in the background saves the setting without refreshing then and there, and the interval menu stays usable on pages that pause refreshing — how often to refresh outlives the page you happen to be on. Pages and overlays pause refreshing independently of each other, so opening the Smartscape hierarchy overlay freezes the background while you pan through it and changing the time range no longer unfreezes it underneath you.</p>
+<p><strong>The refresh control says whether anything is actually loading.</strong> A download arrow beside the countdown appears while requests are in flight and goes when they land — the icon used to spin whenever auto-refresh was merely enabled, which told you nothing about whether data was arriving. While a round is out the refresh buttons are disabled rather than accepting a click that could only ask for what is already being fetched.</p>
+<p><strong>A refresh that fails is recorded where you can go and read it.</strong> Failures from the timer collect beside the refresh control, newest five first, with a count of the ones you have not seen — nobody asked for that round, so it waits rather than interrupting. Each entry names the screen, what it was trying to do, the request and the server&rsquo;s answer; secrets in the URL or the response are removed before it is shown. Failures from something you just did — expanding a node, for instance — appear immediately instead, as a message that pauses while you read it and can be opened for the same detail.</p>
+<h3 id="fixes-1">Fixes</h3>
+<p><strong>Overview widget grids and layer dashboards emptied on every refresh.</strong> Both treated a moving time window as a new question, so each tick blanked the grid and replaced it with a loading line — over widgets that were usually about to be filled with the same numbers. They keep the previous values while the next reading is out and replace them in one go when it lands.</p>
+<p><strong>The Alarms card on a dashboard refreshed on a clock of its own.</strong> It polled every minute regardless of the page&rsquo;s own cadence, so a dashboard set to refresh every fifteen seconds showed an alarm list up to a minute older than the metrics beside it. It moves with the rest of the page now.</p>
+<p><strong>A read you walked away from went on costing OAP work.</strong> Navigating away mid-load, or a refresh that gave up, stopped the browser waiting but not the query behind it — so an abandoned page went on costing OAP the whole fan-out, multiplied by the node count on a cluster. Those reads are now cancelled all the way through. Anything that CHANGES something — creating a profiling task, pushing a template — still runs to completion, so a closed tab cannot leave it half applied.</p>
+<p><strong>Clicking Refresh against a dead backend appeared to do nothing.</strong> The failure was filed away and the screen said nothing, though you had just pressed the button and were watching. A refresh you asked for now answers on screen when part of it fails — once, however many widgets failed — and points at the list beside the control, where the detail is.</p>
+<p><strong>One outage was listed several times.</strong> Two screens sharing the same reading each recorded it, so the failure list showed one problem as several. Each is recorded once now, and a comparison entity that fails on its own is recorded at all, which it was not before.</p>
+<p><strong>A failed read was drawn as a page of zeroes.</strong> When a layer read could not reach OAP the answer came back empty, and an overview&rsquo;s KPIs rendered that as 0 and its service counts as none — indistinguishable on screen from a system that genuinely had nothing running. Overviews and the layer service list now keep the last values they read and report the failure instead. Layer dashboards keep their widgets through the same failure rather than emptying them.</p>
+<p><strong>Query cold stage could leave hot and cold answers on screen together.</strong> Flipping it re-read each screen on its own, so the page showed both stages while it settled, and a screen that had not caught up yet could file its answer under the wrong one. The whole page is re-read as one round now.</p>
+<h2 id="topology-deployment-and-dependency-maps">Topology, deployment and dependency maps</h2>
+<h3 id="features-2">Features</h3>
+<p><strong>Changing what you are looking at says what it is loading.</strong> Picking a different service, endpoint, depth or time range names its target — <em>Loading topology for &ldquo;checkout&rdquo;…</em> — instead of leaving the previous answer under the new heading while the next one is fetched.</p>
+<h3 id="fixes-2">Fixes</h3>
+<p><strong>An expansion on the API dependency graph could land in a graph you had left.</strong> Nothing stopped you switching endpoints while one was loading, and the branch then arrived in whatever graph had replaced it. Expanding now shows its pending state and holds the endpoint picker and the other expand handles until it lands. An expansion started while an admin preview is open also resolves against the draft being previewed, rather than against the published template the rest of the graph is not showing.</p>
+<p><strong>A map that failed its FIRST read showed a loading line for ever.</strong> With nothing cached to fall back on there was no way to tell a read still in progress from one that had already failed, so the graph sat on &ldquo;Reading data…&rdquo; indefinitely. It now says the read failed and offers Retry.</p>
+<p><strong>The maps blanked on every refresh.</strong> The Topology, Deployment, API dependency and instance-relationship graphs dropped to a loading line and came back on each tick, taking your zoom, pan and any nodes you had dragged with them. They redraw in place now, and are re-framed only when the question changes — a different layer, service, endpoint, focus, depth or time range. A service appearing or disappearing no longer re-frames the canvas or discards placements.</p>
+<p><strong>A failed reading erased the map you were looking at.</strong> When a round could not reach OAP the graph was replaced by an empty one, so an empty map could mean either that there was nothing to show or that the read had failed. The previous picture stays and the failure is reported beside it. A layer whose template an administrator has <strong>disabled</strong> is the deliberate exception — that is an answer rather than a failure, so the map is cleared and says so, instead of telling you to check a backend that is fine.</p>
+<p><strong>A failed expansion on the API dependency graph was reported as &ldquo;no further dependencies&rdquo;.</strong> A read that could not be completed marked the branch exhausted and faded its handle — a claim about your system made from a failure to read it. It now says the expansion failed and leaves the handle live, so the click can simply be repeated.</p>
+<p><strong>The API dependency columns re-sorted themselves on every refresh.</strong> Rows were ranked by the centre metric, which moves every cycle, so an endpoint you were watching had to be found again after each tick. Which endpoints get a row is still decided live — one that becomes busy enough still appears — but an endpoint already on screen keeps its place and an arrival takes the next free one.</p>
+<p><strong>Pods drifted on the Deployment map, and dragging could stop working.</strong> A placement was held as an offset from the packed position, so a refresh that added a pod carried yours along with the re-pack; and the map only re-armed its drag handles when a count changed, so a refresh that swapped one instance for another silently left them unbound. Placements are absolute now, and a node on the API dependency graph keeps its place the same way.</p>
+<h2 id="dashboard-templates">Dashboard templates</h2>
+<h3 id="features-3">Features</h3>
+<p><strong>Cluster Status shows what the template store has actually loaded.</strong> A new Dashboard templates pane reports how many layer templates, overviews, alert pages and translation overlays are being served from OAP, and when they were last read — and, when a read fails, the message it failed with, so &ldquo;unreachable&rdquo; is no longer the only thing you are told about a 404, a 401 and a timeout alike. Its badge separates a store that cannot be read while your dashboards keep rendering from one that has never been read at all.</p>
+<p><strong>A template published elsewhere reaches an open browser on its own.</strong> Horizon re-reads the template store on a slow cycle of its own, so a dashboard pushed from another Horizon, from <code>swctl</code>, or from anything else writing the same OAP store appears within about a minute — without anyone reloading the page.</p>
+<h3 id="fixes-3">Fixes</h3>
+<p><strong>A template store that could not be read emptied every dashboard, overview and map.</strong> They are rendered from the last successful read now, so a brief outage of OAP&rsquo;s admin port leaves the console up, with the banner saying how stale it is. Horizon still never substitutes the templates bundled in the release — showing shipped defaults in place of your own configuration would misrepresent what is on screen — so a Horizon that has never read the store still blocks those pages rather than inventing content for them.</p>
+<p><strong>The unreachable banner never cleared once the store came back.</strong> Nothing re-read the store&rsquo;s status after the page had loaded, so the warning stayed up — and the pages behind it stayed blocked — however healthy OAP had become. Both recover on their own now.</p>
+<h2 id="operating-horizon">Operating Horizon</h2>
+<h3 id="fixes-4">Fixes</h3>
+<p><strong>Data retention now reads the same on every storage backend, and says which setting governs each figure.</strong> The page used to mirror OAP&rsquo;s wire shape — a Records / Metrics split, a Minute / Hour / Day trio, and a class called <em>Normal</em> — which on ElasticSearch, MySQL, PostgreSQL, H2 and TiDB meant nine numbers that were really two, presented as nine knobs you could turn apart. Those backends now show the five things retention is actually decided for — <strong>Metadata</strong>, <strong>Metrics</strong>, <strong>Logs</strong>, <strong>Traces</strong> and <strong>Others</strong> — each naming <code>core.recordDataTTL</code> or <code>core.metricsDataTTL</code> beneath it, with a note saying the two settings are all there is. BanyanDB shows the same five in the same order, expanding Metrics into its minute / hour / day groups and adding Zipkin traces and Browser error logs, because there each one is a separate <code>bydb.yml</code> group that genuinely can be tuned apart.</p>
+<p><strong>The retention chart hid data classes whose retention happened to match.</strong> Classes sharing a figure were merged into a single <em>All records (5)</em> bar — which reads as a fact about the backend when it is only a fact about today&rsquo;s configuration, and left an operator unable to see what they could change. Every class now has its own row. <em>Others</em> is the one row named for a group rather than a data type: BanyanDB keeps alarms, events, sampled traces, top-N and every profiling record together in <code>records</code>, so they share one retention and no name for a single one of them would be true.</p>
 
 </div>
 
@@ -1655,6 +1699,29 @@
           <ul>
             <li><a href="#features">Features</a></li>
             <li><a href="#fixes">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#refreshing">Refreshing</a>
+          <ul>
+            <li><a href="#features-1">Features</a></li>
+            <li><a href="#fixes-1">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#topology-deployment-and-dependency-maps">Topology, deployment and dependency maps</a>
+          <ul>
+            <li><a href="#features-2">Features</a></li>
+            <li><a href="#fixes-2">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#dashboard-templates">Dashboard templates</a>
+          <ul>
+            <li><a href="#features-3">Features</a></li>
+            <li><a href="#fixes-3">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#operating-horizon">Operating Horizon</a>
+          <ul>
+            <li><a href="#fixes-4">Fixes</a></li>
           </ul>
         </li>
       </ul>
@@ -1767,6 +1834,8 @@
 
     </div>
     
+
+
 
 
 
