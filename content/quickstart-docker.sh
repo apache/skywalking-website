@@ -103,3 +103,9 @@ fi
 echo "To find SkyWalking Docs, follow the link to our documentation site https://skywalking.apache.org/docs/."
 
 echo "To stop SkyWalking, run 'docker compose --project-name=skywalking-quickstart down'."
+
+echo ""
+echo "Sign in to the UI at http://localhost:8080 with:"
+echo "  username: skywalking"
+echo "  password: skywalking"
+echo "These are quickstart credentials — change them before exposing the UI beyond localhost."

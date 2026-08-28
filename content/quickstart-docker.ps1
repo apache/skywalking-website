@@ -162,4 +162,9 @@ else {
     Write-Host "To find SkyWalking Docs, follow the link to our documentation site https://skywalking.apache.org/docs/.`n"
 
     Write-Host "To stop SkyWalking, run 'docker compose --project-name=skywalking-quickstart down'.`n"
+
+    Write-Host "Sign in to the UI at http://localhost:8080 with:"
+    Write-Host "  username: skywalking"
+    Write-Host "  password: skywalking"
+    Write-Host "These are quickstart credentials - change them before exposing the UI beyond localhost.`n"
 }
