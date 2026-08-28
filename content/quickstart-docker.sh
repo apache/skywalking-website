@@ -20,7 +20,8 @@ set -e
 
 SW_STORAGE=
 
-SW_VERSION=${SW_VERSION:-10.4.0}
+SW_VERSION=${SW_VERSION:-11.0.0}
+SW_HORIZON_UI_VERSION=${SW_HORIZON_UI_VERSION:-1.0.0}
 SW_BANYANDB_VERSION=${SW_BANYANDB_VERSION:-0.11.0}
 
 usage() {
@@ -55,9 +56,10 @@ temp_dir=$(mktemp -d)
 
 curl -fsSL https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml -o "$temp_dir/docker-compose.yml"
 
-# Patch OAP health check for SkyWalking 10.4.0+ (curl not available in image)
-perl -pi -e "s|curl http://localhost:12800/internal/l7check|bash -c 'echo >/dev/tcp/localhost/12800'|" "$temp_dir/docker-compose.yml"
-sed -i 's|start_period: 10s|start_period: 120s|g' "$temp_dir/docker-compose.yml"
+# The ui service bind-mounts ./horizon.yaml relative to the compose file, and the
+# image reads its OAP URLs and login users only from there, so it has to land in
+# the same directory or compose fails on the missing mount.
+curl -fsSL https://github.com/apache/skywalking/raw/master/docker/horizon.yaml -o "$temp_dir/horizon.yaml"
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
 if [ -z "$SW_STORAGE" ]; then
@@ -82,9 +84,9 @@ esac
 
 export BANYANDB_IMAGE=apache/skywalking-banyandb:${SW_BANYANDB_VERSION}
 export OAP_IMAGE=apache/skywalking-oap-server:${SW_VERSION}
-export UI_IMAGE=apache/skywalking-ui:${SW_VERSION}
+export UI_IMAGE=apache/skywalking-ui:horizon-${SW_HORIZON_UI_VERSION}
 
-echo "Installing SkyWalking ${SW_VERSION} with ${SW_STORAGE} storage..."
+echo "Installing SkyWalking ${SW_VERSION} with Horizon UI ${SW_HORIZON_UI_VERSION} and ${SW_STORAGE} storage..."
 
 docker compose -f "$temp_dir/docker-compose.yml" \
   --project-name=skywalking-quickstart \

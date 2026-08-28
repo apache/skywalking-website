@@ -15,13 +15,16 @@
 # limitations under the License.
 
 # Default values for SkyWalking versions
-$SW_VERSION = "10.2.0"
-$SW_BANYANDB_VERSION = "0.8.0"
+$SW_VERSION = "11.0.0"
+$SW_HORIZON_UI_VERSION = "1.0.0"
+$SW_BANYANDB_VERSION = "0.11.0"
 
 $COMPOSE_FILE_PATH = ".\docker-compose.yml"
+$HORIZON_CONFIG_PATH = ".\horizon.yaml"
 $env:BANYANDB_IMAGE = "apache/skywalking-banyandb:$SW_BANYANDB_VERSION"
 $env:OAP_IMAGE = "apache/skywalking-oap-server:$SW_VERSION"
-$env:UI_IMAGE = "apache/skywalking-ui:$SW_VERSION"
+# Horizon UI ships on Docker Hub under skywalking-ui with a horizon- tag prefix.
+$env:UI_IMAGE = "apache/skywalking-ui:horizon-$SW_HORIZON_UI_VERSION"
 
 # Unset the SW_STORAGE environment variable at the start of the script
 Remove-Item Env:\SW_STORAGE -ErrorAction Ignore
@@ -86,10 +89,20 @@ if (Test-Path -Path $COMPOSE_FILE_PATH) {
 
 if ($DOWNLOAD) {
     Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml" -OutFile $COMPOSE_FILE_PATH
-    Write-Host "Downloaded SkyWalking Docker Compose manifest to the current directory...`n"
+    # The ui service bind-mounts ./horizon.yaml relative to the compose file, and
+    # the image reads its OAP URLs and login users only from there, so it has to
+    # sit beside the manifest or compose fails on the missing mount.
+    Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/horizon.yaml" -OutFile $HORIZON_CONFIG_PATH
+    Write-Host "Downloaded SkyWalking Docker Compose manifest and Horizon UI config to the current directory...`n"
 }
 else {
     Write-Host "Attempting to reuse the existing SkyWalking Docker Compose manifest from the current directory.`n"
+    # A manifest kept from an older run predates the Horizon UI config; fetch it
+    # rather than letting compose fail on the missing mount.
+    if (-not (Test-Path -Path $HORIZON_CONFIG_PATH)) {
+        Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/horizon.yaml" -OutFile $HORIZON_CONFIG_PATH
+        Write-Host "Downloaded the missing Horizon UI config beside it.`n"
+    }
 }
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
@@ -131,7 +144,7 @@ if ($DETACHED) {
 }
 
 # Attempt to start Docker compose
-Write-Host "Starting to set up SkyWalking ($SW_VERSION) with $env:SW_STORAGE storage, this might take a while...`n"
+Write-Host "Starting to set up SkyWalking ($SW_VERSION) with Horizon UI ($SW_HORIZON_UI_VERSION) and $env:SW_STORAGE storage, this might take a while...`n"
 
 Invoke-Expression $composeCommand
 
