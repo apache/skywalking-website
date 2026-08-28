@@ -91,8 +91,10 @@ if ($DOWNLOAD) {
     Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/docker-compose.yml" -OutFile $COMPOSE_FILE_PATH
     # The ui service bind-mounts ./horizon.yaml relative to the compose file, and
     # the image reads its OAP URLs and login users only from there, so it has to
-    # sit beside the manifest or compose fails on the missing mount.
-    Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/horizon.yaml" -OutFile $HORIZON_CONFIG_PATH
+    # sit beside the manifest or compose fails on the missing mount. Served from
+    # this site rather than a branch tip, so it stays in step with the versions
+    # pinned above.
+    Invoke-WebRequest -Uri "https://skywalking.apache.org/horizon.yaml" -OutFile $HORIZON_CONFIG_PATH
     Write-Host "Downloaded SkyWalking Docker Compose manifest and Horizon UI config to the current directory...`n"
 }
 else {
@@ -100,7 +102,7 @@ else {
     # A manifest kept from an older run predates the Horizon UI config; fetch it
     # rather than letting compose fail on the missing mount.
     if (-not (Test-Path -Path $HORIZON_CONFIG_PATH)) {
-        Invoke-WebRequest -Uri "https://github.com/apache/skywalking/raw/master/docker/horizon.yaml" -OutFile $HORIZON_CONFIG_PATH
+        Invoke-WebRequest -Uri "https://skywalking.apache.org/horizon.yaml" -OutFile $HORIZON_CONFIG_PATH
         Write-Host "Downloaded the missing Horizon UI config beside it.`n"
     }
 }

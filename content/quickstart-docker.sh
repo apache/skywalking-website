@@ -58,8 +58,9 @@ curl -fsSL https://github.com/apache/skywalking/raw/master/docker/docker-compose
 
 # The ui service bind-mounts ./horizon.yaml relative to the compose file, and the
 # image reads its OAP URLs and login users only from there, so it has to land in
-# the same directory or compose fails on the missing mount.
-curl -fsSL https://github.com/apache/skywalking/raw/master/docker/horizon.yaml -o "$temp_dir/horizon.yaml"
+# the same directory or compose fails on the missing mount. Served from this site
+# rather than a branch tip, so it stays in step with the versions pinned above.
+curl -fsSL https://skywalking.apache.org/horizon.yaml -o "$temp_dir/horizon.yaml"
 
 # If SW_STORAGE is not set, prompt the user to select a storage option
 if [ -z "$SW_STORAGE" ]; then
