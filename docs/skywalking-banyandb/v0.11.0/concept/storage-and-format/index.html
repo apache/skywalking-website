@@ -1,0 +1,13013 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="twitter:site" content="skywalking.apache.org">
+<meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+<meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+
+<meta name="generator" content="Hugo 0.159.0">
+
+<META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
+<link rel="stylesheet" href="/css/iconfont/iconfont.css">
+
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png">
+<link rel="manifest" href="/favicons/site.webmanifest">
+<link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+<title>Storage &amp; File Format | Apache SkyWalking</title><meta property="og:url" content="https://skywalking.apache.org/docs/skywalking-banyandb/v0.11.0/concept/storage-and-format/">
+  <meta property="og:site_name" content="Apache SkyWalking">
+  <meta property="og:title" content="Storage & File Format">
+  <meta property="og:description" content="Storage &amp; File Format This document describes how BanyanDB physically stores data on disk, organized from the API perspective: for each resource a user creates (Measure, Stream, Trace, Property, TopNAggregation), it explains the API surface first, then the storage engine(s) that actually back it.
+The central idea to keep in mind:
+The API unifies what the storage separates. A single API resource can be backed by completely different storage engines. The clearest example is Measure: one schema, one write RPC, one query RPC — but a single boolean flag (index_mode) silently swaps the entire on-disk engine. This document makes those hidden forks explicit.">
+  <meta property="og:locale" content="en">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="docs">
+
+  <meta itemprop="name" content="Storage & File Format">
+  <meta itemprop="description" content="Storage &amp; File Format This document describes how BanyanDB physically stores data on disk, organized from the API perspective: for each resource a user creates (Measure, Stream, Trace, Property, TopNAggregation), it explains the API surface first, then the storage engine(s) that actually back it.
+The central idea to keep in mind:
+The API unifies what the storage separates. A single API resource can be backed by completely different storage engines. The clearest example is Measure: one schema, one write RPC, one query RPC — but a single boolean flag (index_mode) silently swaps the entire on-disk engine. This document makes those hidden forks explicit.">
+  <meta itemprop="wordCount" content="4365">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Storage & File Format">
+  <meta name="twitter:description" content="Storage &amp; File Format This document describes how BanyanDB physically stores data on disk, organized from the API perspective: for each resource a user creates (Measure, Stream, Trace, Property, TopNAggregation), it explains the API surface first, then the storage engine(s) that actually back it.
+The central idea to keep in mind:
+The API unifies what the storage separates. A single API resource can be backed by completely different storage engines. The clearest example is Measure: one schema, one write RPC, one query RPC — but a single boolean flag (index_mode) silently swaps the entire on-disk engine. This document makes those hidden forks explicit.">
+
+
+
+<link rel="preload" href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" as="style">
+<link href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" rel="stylesheet" integrity="">
+
+
+
+<link rel="stylesheet" href="/css/docSearch.css" />
+<link rel="stylesheet" href="/css/highlight-github.css" />
+
+
+<script src="/js/jquery-3.6.0.min.js"></script>
+
+<link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/latest/concept/storage-and-format/">
+<meta name="description" content="Storage &amp; File Format This document describes how BanyanDB physically stores data on disk, organized from the API perspective: for each resource a user creates…">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Storage \u0026 File Format","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/v0.11.0/concept/storage-and-format/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/v0.11.0/concept/storage-and-format/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/v0.11.0/concept/storage-and-format/","name":"Storage \u0026 File Format","position":3}]}]}</script>
+
+
+<link rel="alternate" type="application/rss+xml" href="https://skywalking.apache.org/feed.xml" title="Apache SkyWalking">
+
+
+
+  </head>
+  <body class="td-page  project-doc">
+    <header>
+      
+<nav class="js-navbar-scroll navbar navbar-expand  flex-column flex-md-row td-navbar">
+    <div class="sidebar-button">
+      <i class="iconfont icon-menu"></i>
+    </div>
+    <a class="navbar-brand" href="/">
+        <span class="navbar-logo"><img width="130" src="/images/logo.svg" alt="SkyWalking"></span> 
+    </a>
+    <div class="td-navbar-nav-scroll navbar-nav-wrapper" id="navigation">
+        <ul class="navbar-nav mt-lg-0">
+             
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link active" href="/docs" ><span class="active">Documentation</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/events" ><span>Events</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/blog" ><span>Blogs</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/downloads" ><span>Downloads</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/team" ><span>Team</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				<a class="nav-link" href="/users" ><span>Users</span></a>
+			</li>
+            
+            
+            
+            
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+                <a class="nav-link" href="/zh/"><span>中文博客</span></a>
+            </li>
+
+            
+			
+        </ul>
+    </div>
+
+    <div class="navbar-nav d-none d-lg-block search-input-box">
+        
+<div id="docsearch"></div>
+
+
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <span class="link dropdown sw-navdd">
+                <a class="link-name nav-link dropdown-toggle sw-navdd-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <img class="sw-navdd-asf" src="/images/asf-oakleaf.svg" alt="" aria-hidden="true"> Apache
+                </a>
+                <div class="dropdown-menu sw-navmenu sw-navmenu--wide">
+                    <div class="sw-navmenu-head">
+                        <img src="/images/asf-oakleaf.svg" alt="Apache Software Foundation feather">
+                        <div><strong>The Apache Software Foundation</strong><span>governance · trademarks · sponsorship</span></div>
+                    </div>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Software Foundation</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/issues" target="_blank" rel="noopener noreferrer">
+                        <span>GitHub Issue Tracker</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/discussions" target="_blank" rel="noopener noreferrer">
+                        <span>Discussion</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank" rel="noopener noreferrer">
+                        <span>Dev Mailing List</span>
+                        <em>lists.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home" target="_blank" rel="noopener noreferrer">
+                        <span>WIKI</span>
+                        <em>cwiki.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/licenses/" target="_blank" rel="noopener noreferrer">
+                        <span>License</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/events/current-event" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Events</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/security/" target="_blank" rel="noopener noreferrer">
+                        <span>Security</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noopener noreferrer">
+                        <span>Sponsor and Donate</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/thanks.html" target="_blank" rel="noopener noreferrer">
+                        <span>Thanks</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://apache.org/foundation/policies/privacy.html" target="_blank" rel="noopener noreferrer">
+                        <span>Privacy</span>
+                        <em>apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                </div>
+            </span>
+            
+        
+    </div>
+</nav>
+
+    </header>
+    <div class="container-fluid td-outer">
+
+      <div class="td-main">
+        <div class="row flex-xl-nowrap">
+          <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  <div class="description-wrapper">
+                    <h5>
+                    <img width="26" height="26" src="/images/project/banyan-db.svg">
+                    BanyanDB
+                    </h5>
+                    <p>An observability database aims to ingest, analyze and store Metrics, Tracing and Logging data.</p>
+                  </div>
+                  
+                  <div class="version-wrapper">Version: 
+                  <select class="version-select">
+                  
+                    
+                    
+                    <option ZgotmplZ value="next">
+                    
+                      next
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="latest">
+                    
+                      latest
+                    
+                    </option>
+                  
+                    
+                    
+                    <option selected value="v0.11.0">
+                    
+                      v0.11.0
+                    
+                    </option>
+                  
+                  </select>
+                  </div>
+                  
+                  <ul class="sidebar-menu">
+    
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/readme">Welcome</a>
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">User Guide<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">Installation<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/installation/binaries">Get Binaries</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/installation/standalone">Standalone Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/installation/cluster">Cluster Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/installation/docker">Installation On Docker</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/installation/kubernetes">Installation On Kubernetes</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Basic Concepts and Terminology<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/data-model">Data Model</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/guides/quick-start/quick-start">Quick Start Tutorial</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/installation/versions">Versions and Compatibility</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Interacting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">CLI<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/bydbctl">bydbctl</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/agent">BYDBQL Agent TUI</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">CRUD Schema<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/group">Group</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/index-rule">IndexRule</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/index-rule-binding">IndexRuleBinding</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/schema/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Querying Data<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/query/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/query/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/query/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/query/filter-operation">Filter Operation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/query/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/property">CRUD Property</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbctl/analyze">Analyzing Data</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Web UI<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/dashboard">Dashboard</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">CRUD Schema<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/schema/group">Group</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/schema/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/schema/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/schema/index-rule">IndexRule</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/schema/index-rule-binding">IndexRuleBinding</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/schema/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Querying Data<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/query/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/query/stream">Stream</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/web-ui/property">CRUD Property</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/client">Client APIs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/data-lifecycle">Data Lifecycle</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Schema Consistency<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/schema-consistency/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/schema-consistency/barriers">Barrier RPCs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/schema-consistency/revision-gates">Revision Gates</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/schema-consistency/scenarios">Scenarios</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/interacting/bydbql">BydbQL</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Operation and Maintenance<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/configuration">Configure BanyanDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/disk-management">Disk Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/system">System Configuration</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/upgrade">Upgrade</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Trace Pipeline Plugins<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/plugins-development">Development Guide</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/plugins">Packaging and Deployment</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/plugins-debugging">Debugging (Offline)</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Observability<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/observability/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/observability/logging">Logging</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/observability/metrics">Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/observability/providers">Metrics Providers</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/observability/profiling">Profiling</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/observability/tracing">Query Tracing</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/cluster">Cluster Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Troubleshooting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/error-checklist">Error Checklist</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/install">Troubleshooting Installation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/crash">Troubleshooting Crash</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/no-data">Troubleshooting No Data</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/overhead">Troubleshooting Overhead</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/query">Troubleshooting Query</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/troubleshooting/common-issues">Common Issues</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/security">Security</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/backup">Backup</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/restore">Restore</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/lifecycle">Lifecycle Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">MCP Server<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/mcp/setup">Setup MCP</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/mcp/inspector">Test via Inspector</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/mcp/build">Build and Package</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/mcp/plugin">Plugin Packaging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">First Occurrence Data Collection (FODC)<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/fodc/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/fodc/ktm_metrics">KTM Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/fodc/apis">Proxy APIs and CLI Flags</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/fodc/topology">Cluster Topology Rendering</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Benchmark<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/benchmark/benchmark-single-model">Single‑Model Benchmark (Trace / Log / Measure / Property)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/operation/benchmark/benchmark-hybrid">Hybrid Scenario Benchmark</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">File Format<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/storage-and-format">Storage &amp; File Format (by API resource)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/tsdb">v1.3.0</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Concepts<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/clustering">Clustering</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/distributed-measure-aggregation">Distributed Measure Aggregation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/tsdb">TSDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/rotation">Data Rotation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Contribute<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/v0.11.0/contribute/debugging">Debugging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+</ul>
+<script src="/js/sidebar-menu.js"></script>
+<script>
+  (function (){
+    $.sidebarMenu($('.sidebar-menu'))
+    var path = window.location.pathname;
+    var hash = window.location.hash;
+    var $a = $('.sidebar-menu a')
+    $a.each(function (e){
+      if($(this).attr('href')+'/' === path || $(this).attr('href').replace('#','/#') === path+hash){
+        $(this).parents('li').addClass('active').show()
+      }
+    })
+    $a.on('click',function (){
+      var url = $(this).attr('href')
+      if(url!=='#'){
+        window.location.href = url
+      }
+    })
+  })()
+</script>
+
+                  <div class="commit-id">Commit Id: 3b83e18</div>
+                
+
+
+
+
+</div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+              <i class="iconfont icon-menu-doc doc-menu-button"></i>
+              
+<div class="td-content">
+	<h1 id="storage--file-format">Storage &amp; File Format</h1>
+<p>This document describes how BanyanDB physically stores data on disk, organized <strong>from the API perspective</strong>: for each resource a user creates (<code>Measure</code>, <code>Stream</code>, <code>Trace</code>, <code>Property</code>, <code>TopNAggregation</code>), it explains the API surface first, then the storage engine(s) that actually back it.</p>
+<p>The central idea to keep in mind:</p>
+<blockquote>
+<p><strong>The API unifies what the storage separates.</strong> A single API resource can be backed by completely different storage engines. The clearest example is <code>Measure</code>: one schema, one write RPC, one query RPC — but a single boolean flag (<code>index_mode</code>) silently swaps the entire on-disk engine. This document makes those hidden forks explicit.</p>
+</blockquote>
+<p>Everything here is derived from the source code. Where a diagram or older document disagrees with the code, the code wins.</p>
+<blockquote>
+<p><strong>Convention used below:</strong> <code>&lt;016x&gt;</code> means a 16-digit zero-padded lowercase hex string (e.g. <code>000000000000001f</code>); <code>&lt;012x&gt;</code> means 12-digit. These are how part/segment epoch IDs appear as directory and file names.</p>
+</blockquote>
+<hr>
+<h2 id="1-two-storage-families">1. Two storage families</h2>
+<p>Despite five API resources, there are only <strong>two</strong> physical storage engines underneath.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Family</th>
+          <th>Backs</th>
+          <th>On disk</th>
+          <th>Mutability</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Columnar TSDB</strong> (BanyanDB-native)</td>
+          <td><code>Measure</code> (normal mode), <code>Stream</code>, <code>Trace</code> (span store)</td>
+          <td>per-part column files (<code>*.bin</code>, <code>*.tf</code>, <code>*.t</code>, …) inside epoch-named part directories</td>
+          <td>append-only — immutable parts, mem → flush → merge</td>
+      </tr>
+      <tr>
+          <td><strong>Inverted index</strong> (third-party <a href="https://github.com/blugelabs/bluge">Bluge</a> + ICE segments)</td>
+          <td><code>Property</code>, <code>Measure</code> (index-mode), and the <strong>series index</strong> used by every TSDB engine</td>
+          <td>Lucene-style <code>*.seg</code> / <code>*.snp</code> segment files</td>
+          <td>mutable — new document + tombstone bitmap, GC at merge</td>
+      </tr>
+  </tbody>
+</table>
+<p>So the five resources really decompose into <strong>3 columnar + 2 inverted-index</strong> uses, plus the <strong>sidx</strong> ordered secondary-index store that <code>Trace</code> embeds.</p>
+<p>The columnar engines store values <strong>by column</strong> for compression and projection efficiency. The inverted-index engines store whole <strong>documents</strong> and are searched by term — they are used either as a pure index (series resolution, stream indexed tags) or, surprisingly, as a primary store (<code>Property</code>, index-mode <code>Measure</code>).</p>
+<hr>
+<h2 id="2-the-shared-directory-skeleton-tsdb">2. The shared directory skeleton (TSDB)</h2>
+<p><code>Measure</code>, <code>Stream</code>, and <code>Trace</code> all share the same directory skeleton, managed by <code>banyand/internal/storage</code>. The substrate owns the directory tree and lifecycle; each engine injects its own per-part column format.</p>
+<pre tabindex="0"><code>&lt;data-path&gt;/&lt;group&gt;/
+├── lock                              # advisory flock for the whole group&#39;s TSDB
+└── seg-&lt;YYYYMMDD|YYYYMMDDHH&gt;/        # SEGMENT = a time bucket (the rotation/retention unit)
+    ├── metadata                      #   {&#34;version&#34;:&#34;1.5.0&#34;,&#34;endTime&#34;:&#34;&lt;RFC3339Nano&gt;&#34;} (JSON)
+    ├── sidx/                         #   per-SEGMENT series inverted index (Bluge) — shared by all shards
+    └── shard-&lt;N&gt;/                    #   SHARD lives *inside* the segment
+        ├── &lt;016x&gt;/                   #     PART (one immutable flush/merge output)
+        │   └── … columnar files …
+        ├── &lt;016x&gt;.snp               #     snapshot manifest = JSON array of live part dir names
+        ├── idx/                      #     STREAM only: per-shard element inverted index (Bluge)
+        └── sidx/&lt;ruleName&gt;/&lt;016x&gt;/   #     TRACE only: ordered secondary-index parts (one tree per index rule)
+</code></pre><pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
+    G[&#34;group/ (lock)&#34;] --&gt; S1[&#34;seg-20240901/&#34;]
+    G --&gt; S2[&#34;seg-20240902/&#34;]
+    S1 --&gt; M[&#34;metadata (JSON: version, endTime)&#34;]
+    S1 --&gt; SIDX[&#34;sidx/ — segment series index (Bluge)&#34;]
+    S1 --&gt; SH0[&#34;shard-0/&#34;]
+    S1 --&gt; SH1[&#34;shard-1/&#34;]
+    SH0 --&gt; P1[&#34;000…001/ (part)&#34;]
+    SH0 --&gt; P2[&#34;000…002/ (part)&#34;]
+    SH0 --&gt; SNP[&#34;000…002.snp (snapshot manifest)&#34;]
+    SH0 --&gt; IDX[&#34;idx/ — stream element index (stream only)&#34;]
+    SH0 --&gt; TSX[&#34;sidx/&amp;lt;rule&amp;gt;/ — ordered index (trace only)&#34;]
+</code></pre><p>Key facts (verified against <code>banyand/internal/storage/segment.go</code>, <code>shard.go</code>, <code>storage.go</code>):</p>
+<ul>
+<li><strong>Hierarchy order is <code>group → segment → shard → part</code>.</strong> A <code>shard-&lt;N&gt;</code> directory is created <strong>inside</strong> a <code>seg-&lt;…&gt;</code> directory (<code>segment.openShard</code> joins <code>segment.location</code> with <code>shard-&lt;N&gt;</code>). Older diagrams/prose that draw <code>group → shard → segment</code> are <strong>wrong</strong>.</li>
+<li><strong>Segment</strong> directories are named <code>seg-</code> + the segment-start time formatted as <code>2006010215</code> (hour granularity) or <code>20060102</code> (day granularity), chosen by the group&rsquo;s <code>segment_interval</code> unit.</li>
+<li><strong>Part</strong> directories are named <code>&lt;016x&gt;</code> of a monotonically increasing epoch. A part is immutable once written.</li>
+<li><strong>Snapshot (MVCC):</strong> <code>&lt;016x&gt;.snp</code> is a JSON array listing which part directories are <em>live</em> at that epoch. Readers only see parts in the current snapshot; a part dropped from the snapshot is GC&rsquo;d at the next flush/merge. The newest <code>.snp</code> (highest epoch) is the current one.</li>
+<li>The <strong>segment-level <code>sidx/</code></strong> is the <em>series index</em> (a Bluge inverted index). Note the <strong>name collision</strong>: <code>Trace</code> also has a <code>sidx/</code> directory, but at the <strong>shard</strong> level and with a completely different meaning (ordered secondary index, see §6). Same name, different depth, different engine.</li>
+</ul>
+<p><code>Property</code> does <strong>not</strong> use this skeleton — see §7.</p>
+<h3 id="21-part-lifecycle">2.1 Part lifecycle</h3>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    W[&#34;write batch&#34;] --&gt; MP[&#34;memory part (in RAM)&#34;]
+    MP --&gt;|flush| DP[&#34;disk part &amp;lt;016x&amp;gt;/&#34;]
+    DP --&gt;|merge| MG[&#34;merged part (drops invalid rows)&#34;]
+    MP -.-&gt;|snapshot update| SNP[&#34;.snp manifest&#34;]
+    DP -.-&gt; SNP
+    MG -.-&gt; SNP
+</code></pre><p>Every batch write becomes a memory part. A background worker flushes it to a disk part; flushing triggers a merge that combines parts and removes data no longer referenced by the snapshot. Each of these events writes a new <code>.snp</code> and deletes stale ones.</p>
+<hr>
+<h2 id="3-measure">3. Measure</h2>
+<p><code>Measure</code> is the headline example of &ldquo;one API, two engines.&rdquo;</p>
+<h3 id="31-the-measure-resource-api">3.1 The Measure resource (API)</h3>
+<p>A user registers a <code>Measure</code> schema (<code>api/proto/banyandb/database/v1/schema.proto</code>, message <code>Measure</code>):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>tag_families</code></td>
+          <td>named groups of tags (the dimensions); each tag has a type (STRING/INT/STRING_ARRAY/INT_ARRAY/DATA_BINARY)</td>
+      </tr>
+      <tr>
+          <td><code>fields</code></td>
+          <td>the numeric measure values; each has <code>field_type</code>, <code>encoding_method</code>, <code>compression_method</code></td>
+      </tr>
+      <tr>
+          <td><code>entity</code></td>
+          <td>the subset of tags forming the <strong>series key</strong> (and default shard key)</td>
+      </tr>
+      <tr>
+          <td><code>sharding_key</code></td>
+          <td>optional explicit shard key (defaults to <code>entity</code>)</td>
+      </tr>
+      <tr>
+          <td><code>interval</code></td>
+          <td>nominal data-point cadence (e.g. <code>1m</code>)</td>
+      </tr>
+      <tr>
+          <td><strong><code>index_mode</code></strong></td>
+          <td><strong>the boolean that selects the storage engine</strong> (field 7)</td>
+      </tr>
+  </tbody>
+</table>
+<p>Data is written and read with the same two RPCs regardless of mode:</p>
+<ul>
+<li><strong>Write</strong> — <code>MeasureService.Write</code> (bidi stream of <code>DataPointValue{timestamp, tag_families, fields, version}</code>).</li>
+<li><strong>Query</strong> — <code>MeasureService.Query</code> (<code>time_range</code>, <code>criteria</code>, <code>tag_projection</code>, <code>field_projection</code>, <code>group_by</code>, <code>agg</code>, <code>top</code>, <code>order_by</code>, …).</li>
+</ul>
+<p>Crucially, <strong>the liaison (coordinator) write path never inspects <code>index_mode</code></strong> — it just hashes the entity to a shard and forwards. The engine fork happens only on the data node.</p>
+<h3 id="32-one-api-two-storage-engines">3.2 One API, two storage engines</h3>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
+    API[&#34;Measure schema + Write/Query RPC (identical)&#34;] --&gt; FLAG{&#34;index_mode?&#34;}
+    FLAG --&gt;|false| COL[&#34;Mode A: columnar tsTable parts&lt;br/&gt;(+ metadata docs in series index)&#34;]
+    FLAG --&gt;|true| INV[&#34;Mode B: inverted index only&lt;br/&gt;(whole data point as a document)&#34;]
+</code></pre><p><code>index_mode</code> is set once at schema creation and is effectively <strong>immutable for the data&rsquo;s lifetime</strong>: flipping it would orphan everything previously written in the other engine (this is an operational caveat, not a code-enforced check). Field-encoding options, part compaction, and TopN derivation apply only to <strong>Mode A</strong>.</p>
+<h3 id="33-mode-a--normal-columnar-index_mode--false">3.3 Mode A — normal columnar (<code>index_mode = false</code>)</h3>
+<p>Field/tag values are stored <strong>by column</strong> in immutable parts. The series index holds only a lightweight metadata document per series (for series-ID resolution); the <em>values</em> live in the part.</p>
+<p><strong>Part files</strong> (<code>banyand/measure/part.go</code>):</p>
+<table>
+  <thead>
+      <tr>
+          <th>File</th>
+          <th>Holds</th>
+          <th>Format</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>metadata.json</code></td>
+          <td>per-part stats</td>
+          <td>JSON: <code>{compressedSizeBytes, uncompressedSizeBytes, totalCount, blocksCount, minTimestamp, maxTimestamp}</code>. The part ID is the directory name, not stored in the JSON.</td>
+      </tr>
+      <tr>
+          <td><code>meta.bin</code></td>
+          <td>index of primary blocks</td>
+          <td>zstd stream of fixed <strong>40-byte</strong> <code>primaryBlockMetadata</code> records: <code>seriesID(8 BE) + minTimestamp(8) + maxTimestamp(8) + offset(8) + size(8)</code>, sorted ascending by seriesID</td>
+      </tr>
+      <tr>
+          <td><code>primary.bin</code></td>
+          <td>per-block index (<code>blockMetadata</code>)</td>
+          <td>sequence of independently zstd-compressed &ldquo;primary blocks&rdquo; (~128 KiB uncompressed each), each a run of <code>blockMetadata</code> records pointing into the data files</td>
+      </tr>
+      <tr>
+          <td><code>timestamps.bin</code></td>
+          <td>timestamps <strong>+ versions</strong></td>
+          <td>per block: <code>[encoded timestamps][encoded versions]</code>; delta/zigzag, no zstd at this layer</td>
+      </tr>
+      <tr>
+          <td><code>fv.bin</code></td>
+          <td><strong>all field-value columns</strong></td>
+          <td>per (block, field) a self-describing encoded run (see §8). <em>Note: the file is <code>fv.bin</code>, not <code>fields.bin</code>.</em></td>
+      </tr>
+      <tr>
+          <td><code>&lt;tagFamily&gt;.tf</code></td>
+          <td>tag value columns for one family</td>
+          <td>one file per tag family; per (block, tag) encoded run</td>
+      </tr>
+      <tr>
+          <td><code>&lt;tagFamily&gt;.tfm</code></td>
+          <td>tag column directory for one family</td>
+          <td>per block: names, value types, offsets/sizes into the <code>.tf</code></td>
+      </tr>
+      <tr>
+          <td><code>smeta.bin</code></td>
+          <td>optional series metadata</td>
+          <td>opaque blob (series docs) for sync/recovery; absent on older parts</td>
+      </tr>
+  </tbody>
+</table>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    META[&#34;meta.bin&lt;br/&gt;(40-byte records:&lt;br/&gt;seriesID,minTs,maxTs,offset,size)&#34;] --&gt; PRIM[&#34;primary.bin&lt;br/&gt;(zstd primary blocks of&lt;br/&gt;blockMetadata)&#34;]
+    PRIM --&gt; TS[&#34;timestamps.bin&lt;br/&gt;(ts + version per block)&#34;]
+    PRIM --&gt; FV[&#34;fv.bin&lt;br/&gt;(field columns)&#34;]
+    PRIM --&gt; TFM[&#34;&amp;lt;family&amp;gt;.tfm&lt;br/&gt;(tag column directory)&#34;]
+    TFM --&gt; TF[&#34;&amp;lt;family&amp;gt;.tf&lt;br/&gt;(tag value columns)&#34;]
+</code></pre><p><strong>Block structure.</strong> A block holds the rows (data points) of <strong>one series ID</strong>, sorted by timestamp. Within a block, every column is stored contiguously and addressed by one <code>blockMetadata</code> record. Blocks are globally ordered by <code>(seriesID asc, minTimestamp asc)</code>. A <code>version</code> is stored alongside each timestamp; when two rows share a timestamp, only the highest version is returned (dedup).</p>
+<p><strong>Size caps</strong> (<code>banyand/measure/measure.go</code>) — note two distinct enforcement strategies:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Cap</th>
+          <th>Value</th>
+          <th>Enforced by</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>maxUncompressedBlockSize</code></td>
+          <td>2 MiB</td>
+          <td><strong>split</strong> — start a new block</td>
+      </tr>
+      <tr>
+          <td><code>maxBlockLength</code></td>
+          <td>8192 rows</td>
+          <td><strong>split</strong></td>
+      </tr>
+      <tr>
+          <td><code>maxUncompressedPrimaryBlockSize</code></td>
+          <td>128 KiB</td>
+          <td><strong>split</strong> — flush the primary block</td>
+      </tr>
+      <tr>
+          <td><code>maxValuesBlockSize</code></td>
+          <td>8 MiB</td>
+          <td><strong>panic</strong> — hard invariant</td>
+      </tr>
+      <tr>
+          <td><code>maxTagFamiliesMetadataSize</code></td>
+          <td>8 MiB</td>
+          <td><strong>panic</strong> — hard invariant</td>
+      </tr>
+  </tbody>
+</table>
+<p>A block boundary is also forced whenever the series ID changes.</p>
+<p><strong>Encoding/compression</strong> is shared with the other columnar engines — see §8. Numeric field/tag columns use delta / delta-of-delta / const + zigzag varint; non-numeric columns use dictionary encoding (≤256 distinct values) or a plain bytes block; long byte payloads and the primary/meta indexes are zstd level-1.</p>
+<p><strong>Series index.</strong> On write, a <em>metadata</em> document (<code>seriesID ↔ entity values</code>) is inserted into the segment series index (<code>segment.IndexDB().Insert</code>). This is only for series resolution — it does <strong>not</strong> hold field values.</p>
+<p><strong>Write path:</strong> <code>processDataPoint</code> → buffer as memory part → on flush, <code>tsTable.mustAddDataPoints</code> (columns) <strong>and</strong> <code>IndexDB().Insert</code> (metadata docs).
+<strong>Query path:</strong> resolve candidate series from the series index → load matching parts from snapshots → scan blocks for the requested columns/time range → order/aggregate/top-N.</p>
+<h3 id="34-mode-b--index-mode-index_mode--true">3.4 Mode B — index-mode (<code>index_mode = true</code>)</h3>
+<p>No part is ever written. The <strong>entire</strong> data point — entity tags, tags, and field values, all as <em>stored</em> fields — becomes one document in the segment series index (Bluge), keyed by series ID with <strong>upsert</strong> (Update) semantics.</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    DP[&#34;data point&#34;] --&gt; DOC[&#34;index.Document (DocID = seriesID)&#34;]
+    DOC --&gt; IDB[&#34;segment series index &#39;sidx/&#39; (Bluge ICE segments)&#34;]
+    NOPART[&#34;tsTable parts&#34;]:::x
+    classDef x fill:#fdd,stroke:#900,stroke-dasharray:4
+</code></pre><ul>
+<li><strong>Storage:</strong> Bluge <code>*.seg</code> / <code>*.snp</code> ICE segments under the segment-level <code>sidx/</code>. No columnar part files.</li>
+<li><strong>Synthetic fields</strong> added only in this mode: <code>_im_name</code> (the measure subject) and <code>_im_entity_tag_&lt;tag&gt;</code> (so entity components are independently queryable), plus internal <code>_series_id</code>, <code>_timestamp</code>, <code>_version</code>, <code>_id</code>.</li>
+<li><strong>Write path:</strong> <code>handleIndexMode</code> builds the document → <code>segment.IndexDB().Update(docs)</code>. <code>mustAddDataPoints</code> is never called.</li>
+<li><strong>Query path:</strong> short-circuits to <code>buildIndexQueryResult</code> → <code>IndexDB().SearchWithoutSeries</code> — it reads projected stored fields straight out of the index over a time range and de-dupes by series ID with a roaring bitmap. There is no series-list pre-resolution and no block scan.</li>
+<li><strong>What does NOT apply:</strong> field <code>encoding_method</code>/<code>compression_method</code>, columnar block layout, part compaction, and TopN — all of those are Mode-A concepts. Index-mode segments use Bluge&rsquo;s own S2 compression for stored fields.</li>
+</ul>
+<p>Index-mode is intended for low-cardinality, non-time-series-shaped data (e.g. service traffic / metadata) where every tag should be searchable.</p>
+<h3 id="35-topnaggregation-derived-from-a-normal-mode-measure">3.5 TopNAggregation (derived from a normal-mode measure)</h3>
+<p><code>TopNAggregation</code> has <strong>no write RPC</strong>. It is materialized from the source measure&rsquo;s writes:</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    SRC[&#34;source measure writes&#34;] --&gt; PROC[&#34;streaming TopN processor&lt;br/&gt;(tumbling window + TopN)&#34;]
+    PROC --&gt;|on window flush| RES[&#34;_top_n_result measure&lt;br/&gt;(one shared measure per group)&#34;]
+    RES --&gt;|query| PP[&#34;TopN post-processor (re-rank)&#34;]
+    RES --&gt;|merge| PP2[&#34;TopN post-processor (bound storage)&#34;]
+</code></pre><ul>
+<li>Pre-aggregated <strong>at ingest</strong>: each source write is fed through a streaming flow (tumbling time window + TopN operator). On window flush, the rankings are published as a normal data point into a single shared result measure named <strong><code>_top_n_result</code></strong> (auto-created once per group). Multiple <code>TopNAggregation</code> definitions in a group share this measure, distinguished by a <code>name</code> entity tag.</li>
+<li>Re-ranked <strong>at query</strong> (TopN post-processor merges per-timestamp heaps across blocks/segments) <strong>and at merge</strong> (to keep stored top-N blocks bounded). So the stored data is a <em>candidate set</em>; the final top-N is computed at read time.</li>
+<li>If <code>field_value_sort</code> is unspecified, two processors run (ASC and DESC), distinguished by a <code>direction</code> entity tag.</li>
+<li>The persisted value is a single opaque binary blob (<code>TopNValue</code>) holding the top entities and their int64 values — one blob per (group, window), not one row per ranked entity.</li>
+</ul>
+<hr>
+<h2 id="4-stream">4. Stream</h2>
+<h3 id="41-the-stream-resource-api">4.1 The Stream resource (API)</h3>
+<p>A <code>Stream</code> schema (<code>schema.proto</code> message <code>Stream</code>) has <code>tag_families</code> + <code>entity</code> only — <strong>no fields, no interval, no index_mode, no sharding_key</strong>. A stream stores immutable <strong>elements</strong> (e.g. log entries). Indexing is declared <strong>out of band</strong> via <code>IndexRule</code> + <code>IndexRuleBinding</code>, not in the Stream message.</p>
+<ul>
+<li><strong>Write</strong> — <code>StreamService.Write</code> (stream of <code>ElementValue{element_id, timestamp, tag_families}</code>). If <code>element_id</code> is set, the storage DocID is <code>HashStr(&quot;group|name|element_id&quot;)</code>; elements are immutable (never updated).</li>
+<li><strong>Query</strong> — <code>StreamService.Query</code> (<code>time_range</code>, <code>criteria</code>, <code>projection</code> (required), <code>order_by</code>).</li>
+</ul>
+<h3 id="42-three-physical-stores-under-one-resource">4.2 Three physical stores under one resource</h3>
+<p>A single <code>Stream</code> is backed by <strong>three</strong> separate structures, selected implicitly:</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
+    STR[&#34;Stream&#34;] --&gt; COL[&#34;columnar parts (element values, by tag family)&#34;]
+    STR --&gt; EIDX[&#34;shard-level idx/ — element inverted index (Bluge)&#34;]
+    STR --&gt; SER[&#34;segment-level series index (entity → seriesID)&#34;]
+    R[&#34;IndexRule type&#34;] --&gt;|INVERTED| EIDX
+    R --&gt;|SKIPPING| BLOOM[&#34;in-column bloom filter (.tff)&#34;]
+    R --&gt;|none| COL
+</code></pre><ol>
+<li><strong>Columnar parts</strong> — the element data, structured like Measure&rsquo;s but with no <code>fv.bin</code>:</li>
+</ol>
+<table>
+  <thead>
+      <tr>
+          <th>File</th>
+          <th>Difference vs Measure</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>metadata.json</code>, <code>meta.bin</code>, <code>primary.bin</code></td>
+          <td>same roles</td>
+      </tr>
+      <tr>
+          <td><code>timestamps.bin</code></td>
+          <td>holds timestamps <strong>+ elementIDs</strong> (not versions); elementIDs are a plain varuint list</td>
+      </tr>
+      <tr>
+          <td><code>&lt;tagFamily&gt;.tf</code> / <code>.tfm</code></td>
+          <td>same roles</td>
+      </tr>
+      <tr>
+          <td><code>&lt;tagFamily&gt;.tff</code></td>
+          <td><strong>tag filter file</strong> — per-tag bloom filters for SKIPPING-indexed tags (new vs Measure)</td>
+      </tr>
+      <tr>
+          <td><code>smeta.bin</code></td>
+          <td>optional series metadata</td>
+      </tr>
+  </tbody>
+</table>
+<p>(No <code>fv.bin</code> — streams have no fields.) Unlike Measure, rows with the same timestamp but different <code>element_id</code> are <strong>both</strong> stored (no dedup). Stream defines <code>maxUncompressedBlockSize</code>/<code>maxValuesBlockSize</code>/<code>maxTagFamiliesMetadataSize</code>/<code>maxUncompressedPrimaryBlockSize</code> but <strong>no <code>maxBlockLength</code></strong> — blocks are cut by size or series change only.</p>
+<ol start="2">
+<li>
+<p><strong>Shard-level element index <code>idx/</code></strong> — a Bluge inverted index mapping indexed-tag terms → element IDs (with a parallel timestamp posting list). This resolves <code>TYPE_INVERTED</code> predicates and sort-by-tag. (This is the element-level analogue of the series index, and is <strong>undocumented</strong> in the older <code>tsdb.md</code>.)</p>
+</li>
+<li>
+<p><strong>Segment-level series index</strong> — holds the entity (<code>seriesID ↔ entity values</code>), shared with the other engines.</p>
+</li>
+</ol>
+<h3 id="43-index-rules-map-to-two-different-mechanisms">4.3 Index rules map to two different mechanisms</h3>
+<p>This is the key thing a reader must understand: an <code>IndexRule</code>&rsquo;s <code>type</code> decides <em>which physical mechanism</em> a tag gets, and the Stream schema never mentions it:</p>
+<ul>
+<li><strong><code>TYPE_INVERTED</code></strong> → postings in the shard-level <code>idx/</code> inverted index (full inverted index).</li>
+<li><strong><code>TYPE_SKIPPING</code></strong> → <strong>no</strong> inverted index; instead an in-column <strong>bloom filter</strong> written to <code>&lt;tagFamily&gt;.tff</code> (block-level skip).</li>
+<li>unindexed → plain columnar values only.</li>
+</ul>
+<h3 id="44-query-fork">4.4 Query fork</h3>
+<p>The same Query RPC dispatches to two executors based on whether <code>order_by.index</code> is set:</p>
+<ul>
+<li><strong>no <code>order_by.index</code></strong> → time-series scan: read columnar parts filtered by series ID + time range, using in-column bloom filters for SKIPPING tags.</li>
+<li><strong><code>order_by.index</code> set</strong> → indexed query: drive the <code>idx/</code> inverted index to seek/sort element IDs, then fetch projected tag columns from the parts.</li>
+</ul>
+<hr>
+<h2 id="5-trace">5. Trace</h2>
+<h3 id="51-the-trace-resource-api">5.1 The Trace resource (API)</h3>
+<p>A <code>Trace</code> schema (<code>schema.proto</code> message <code>Trace</code>) is a <strong>flat list of tags</strong> (no tag families) plus three special tag-name pointers:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Role</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>trace_id_tag_name</code></td>
+          <td>the tag holding the trace ID — <strong>both the shard key</strong> (<code>Hash(traceID) % shards</code>) <strong>and the span store&rsquo;s primary key</strong></td>
+      </tr>
+      <tr>
+          <td><code>timestamp_tag_name</code></td>
+          <td>the tag holding span start time — drives segment/time selection</td>
+      </tr>
+      <tr>
+          <td><code>span_id_tag_name</code></td>
+          <td>the tag holding the span ID</td>
+      </tr>
+  </tbody>
+</table>
+<ul>
+<li><strong>Write</strong> — <code>TraceService.Write</code> (stream of <code>{tags[], span (raw bytes), version}</code>). Every span always goes to the span store; bound index rules additionally feed the sidx.</li>
+<li><strong>Query</strong> — <code>TraceService.Query</code> (<code>time_range</code>, <code>criteria</code>, <code>order_by</code>, <code>tag_projection</code>). Responses are always grouped <strong>by trace ID</strong>.</li>
+</ul>
+<p>Unlike Measure, <strong>Trace has no mode flag</strong>. The storage fork is driven entirely by index rules and the query&rsquo;s <code>order_by</code>.</p>
+<h3 id="52-two-engines-side-by-side">5.2 Two engines side by side</h3>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
+    TR[&#34;Trace write (span)&#34;] --&gt; SPAN[&#34;span store (trace-ID-keyed columnar part)&#34;]
+    TR --&gt;|per bound IndexRule| SIDX[&#34;sidx/&amp;lt;ruleName&amp;gt;/ — ordered secondary index&#34;]
+    Q{&#34;query order_by?&#34;} --&gt;|absent / explicit IDs| SPAN
+    Q --&gt;|set| SIDX
+    SIDX --&gt;|ordered trace IDs| SPAN
+</code></pre><p><strong>Span store part files</strong> (<code>banyand/trace/part.go</code>) — notably different from Measure/Stream:</p>
+<table>
+  <thead>
+      <tr>
+          <th>File</th>
+          <th>Holds</th>
+          <th>Notes</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>metadata.json</code></td>
+          <td>part stats <strong>including</strong> <code>minTimestamp</code>/<code>maxTimestamp</code></td>
+          <td>timestamps live <strong>only</strong> here (there is <strong>no <code>timestamps.bin</code></strong>)</td>
+      </tr>
+      <tr>
+          <td><code>meta.bin</code></td>
+          <td>index of primary blocks, keyed by <strong>traceID</strong></td>
+          <td>record = <code>EncodeBytes(traceID) + offset(8 BE) + size(8 BE)</code></td>
+      </tr>
+      <tr>
+          <td><code>primary.bin</code></td>
+          <td><code>blockMetadata</code> per block</td>
+          <td>keyed by traceID; points at the span chunk + per-tag columns</td>
+      </tr>
+      <tr>
+          <td><code>spans.bin</code></td>
+          <td>the raw span payloads + span IDs</td>
+          <td><strong>opaque</strong> application bytes (one <code>[][]byte</code> block per traceID range), compressed via the shared bytes-block (zstd)</td>
+      </tr>
+      <tr>
+          <td><code>&lt;tag&gt;.t</code> / <code>&lt;tag&gt;.tm</code></td>
+          <td>per-tag value column + metadata</td>
+          <td><strong>flat</strong> per-tag files (not tag families); extensions <code>.t</code>/<code>.tm</code>, <strong>not</strong> <code>.tf</code>/<code>.tfm</code></td>
+      </tr>
+      <tr>
+          <td><code>tag.type</code></td>
+          <td>tag name → value type</td>
+          <td>one map per part (because <code>blockMetadata</code> omits the value type, it is merged back at read time)</td>
+      </tr>
+      <tr>
+          <td><code>traceID.filter</code></td>
+          <td>part-level <strong>bloom filter over all traceIDs</strong></td>
+          <td>used to prune parts on traceID lookup</td>
+      </tr>
+      <tr>
+          <td><code>smeta.bin</code></td>
+          <td>optional series metadata</td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    META[&#34;meta.bin (keyed by traceID)&#34;] --&gt; PRIM[&#34;primary.bin (blockMetadata)&#34;]
+    PRIM --&gt; SPANS[&#34;spans.bin (opaque span blobs + span IDs)&#34;]
+    PRIM --&gt; T[&#34;&amp;lt;tag&amp;gt;.t (tag value column)&#34;]
+    PRIM --&gt; TM[&#34;&amp;lt;tag&amp;gt;.tm (tag metadata)&#34;]
+    PART[&#34;part&#34;] --&gt; TT[&#34;tag.type (name → value type)&#34;]
+    PART --&gt; TF[&#34;traceID.filter (bloom over traceIDs)&#34;]
+</code></pre><p><strong>Block structure.</strong> A block holds all spans of <strong>one trace ID</strong> (bounded by <code>maxUncompressedSpanSize</code> = 2 MiB of opaque span bytes). All three index levels (<code>meta.bin</code> → <code>primary.bin</code> → in-block) are sorted by traceID for binary search.</p>
+<p><strong>Block pruning is limited.</strong> Trace&rsquo;s only block/part-pruning structures are the part-level <code>traceID.filter</code> bloom and the embedded sidx. The per-tag <code>.tm</code> records <em>do</em> have <code>min</code>/<code>max</code>/<code>filterBlock</code> fields, but the trace engine writes them <strong>empty</strong> — there is <strong>no tag-level block-skip filter</strong> (unlike Stream&rsquo;s <code>.tff</code> and sidx&rsquo;s <code>.tf</code>).</p>
+<p><strong>Conflict-tag rename on merge.</strong> If the same tag name appears with different value types across merged parts, the columns are kept separate by suffixing the name with its type (<code>name#int</code>, <code>name#str</code>, …); read-time projection resolves the suffixed columns.</p>
+<h3 id="53-sidx--the-ordered-secondary-index">5.3 sidx — the ordered secondary index</h3>
+<p>The &ldquo;TREE&rdquo; index rule (proto enum <code>TYPE_TREE</code>) is implemented by the <strong>sidx</strong> store (<code>banyand/internal/sidx</code>), one instance per index rule, materialized lazily under <code>shard-&lt;N&gt;/sidx/&lt;ruleName&gt;/</code>. sidx stores <code>(seriesID, int64 ordering-key, tags, data)</code> records ordered by the key — it holds the int64 sort key (e.g. <code>duration</code>, start time) and the trace ID, but <strong>not</strong> the spans.</p>
+<p><strong>sidx part files:</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>File</th>
+          <th>Holds</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>manifest.json</code></td>
+          <td>part metadata (authoritative): ID, key range, counts, sizes</td>
+      </tr>
+      <tr>
+          <td><code>meta.bin</code></td>
+          <td>index of primary blocks (40-byte records, zstd)</td>
+      </tr>
+      <tr>
+          <td><code>primary.bin</code></td>
+          <td><code>blockMetadata</code> per block (zstd primary blocks, capped at <strong>64 KiB</strong> uncompressed — vs 128 KiB elsewhere)</td>
+      </tr>
+      <tr>
+          <td><code>keys.bin</code></td>
+          <td>the int64 ordering keys, encoded but <strong>not</strong> block-compressed</td>
+      </tr>
+      <tr>
+          <td><code>data.bin</code></td>
+          <td>user payload blobs (for trace: a control byte + trace ID), zstd bytes-block</td>
+      </tr>
+      <tr>
+          <td><code>&lt;tag&gt;.td</code> / <code>.tm</code> / <code>.tf</code></td>
+          <td>per-tag value column / metadata / <strong>bloom filter</strong> (the <code>.tf</code> is written only for non-dictionary tags)</td>
+      </tr>
+  </tbody>
+</table>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    SM[&#34;meta.bin&#34;] --&gt; SP[&#34;primary.bin (blockMetadata)&#34;]
+    SP --&gt; SK[&#34;keys.bin (int64 ordering keys)&#34;]
+    SP --&gt; SD[&#34;data.bin (payload: control byte + traceID)&#34;]
+    SP --&gt; STM[&#34;&amp;lt;tag&amp;gt;.tm&#34;]
+    STM --&gt; STD[&#34;&amp;lt;tag&amp;gt;.td (values)&#34;]
+    STM --&gt; STF[&#34;&amp;lt;tag&amp;gt;.tf (bloom, if not dict-encoded)&#34;]
+</code></pre><p>A block holds one series ID&rsquo;s records over a contiguous key range, sorted by key (caps: 8192 elements / 2 MiB).</p>
+<h3 id="54-query-fork">5.4 Query fork</h3>
+<ul>
+<li><strong><code>order_by</code> absent (or explicit trace IDs given)</strong> → hit the span store directly (binary-search by traceID, gated by <code>traceID.filter</code>).</li>
+<li><strong><code>order_by</code> set</strong> → stream <strong>ordered</strong> trace IDs from the named sidx, then fetch the spans from the span store for those IDs.</li>
+</ul>
+<p>So an index rule on a <code>Trace</code> does not merely &ldquo;add an index&rdquo; — it instantiates an entirely separate ordered storage engine, and <code>order_by</code> is the user-facing switch between the two read paths.</p>
+<hr>
+<h2 id="6-property">6. Property</h2>
+<h3 id="61-the-property-resource-api">6.1 The Property resource (API)</h3>
+<p><code>Property</code> presents a <strong>mutable key/value</strong> API, keyed by <code>group/name/id</code>, with etcd-style <code>ModRevision</code>/<code>CreateRevision</code>. There are two proto messages named <code>Property</code>: the <strong>schema</strong> (<code>database.v1.Property</code>, the tag-type contract registered once) and the <strong>data</strong> (<code>property.v1.Property</code>, the actual values).</p>
+<ul>
+<li><strong>Apply</strong> (<code>PropertyService.Apply</code>) — upsert with <code>strategy</code> <code>MERGE</code> (default, union of previous + current tags) or <code>REPLACE</code> (full overwrite).</li>
+<li><strong>Delete</strong> — soft delete (tombstone). <code>id</code> is optional (omit to delete all ids under a name).</li>
+<li><strong>Query</strong> — <code>groups</code>, <code>name</code>, <code>ids</code>, <code>criteria</code>, <code>tag_projection</code>, <code>limit</code>, <code>order_by</code>. <strong>There is no time-range parameter</strong> — Property is not a time series.</li>
+</ul>
+<p>Storage options are on the <strong>group</strong>: only <code>shard_num</code> matters; <code>segment_interval</code> and <code>ttl</code> on the group are <strong>silently ignored</strong> for properties.</p>
+<h3 id="62-storage-a-bluge-document-store-not-kv-not-tsdb">6.2 Storage: a Bluge document store (not KV, not TSDB)</h3>
+<p>Despite the KV-style API, there is no KV engine and no time-series engine. Each <code>(group, shard)</code> is <strong>one Bluge inverted index</strong>; every property revision is <strong>one document</strong>.</p>
+<pre tabindex="0"><code>&lt;property-root&gt;/property/data/&lt;group&gt;/shard-&lt;N&gt;/
+├── &lt;012x&gt;.seg     # ICE-v3 segment: documents (stored _source JSON + indexed terms)
+├── &lt;012x&gt;.snp     # snapshot manifest: live segments + per-segment DELETED roaring drop-set
+└── bluge.pid      # writer lock
+</code></pre><p>There is <strong>no segment (time) directory</strong> — a single Bluge directory per shard holds all revisions of all properties in that shard.</p>
+<p><strong>Document fields</strong> (<code>banyand/property/db/shard.go</code>, the doc keyed by <code>entity/ModRevision</code>):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Stored?</th>
+          <th>Indexed?</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>_source</code></td>
+          <td>✅</td>
+          <td>—</td>
+          <td>the whole property serialized as JSON (the value)</td>
+      </tr>
+      <tr>
+          <td><code>_sha_value</code></td>
+          <td>✅</td>
+          <td>—</td>
+          <td>SHA-512 of source + delete-time (for repair)</td>
+      </tr>
+      <tr>
+          <td><code>_deleted</code></td>
+          <td>✅ (only when deleted)</td>
+          <td>—</td>
+          <td>delete-time nanos (tombstone)</td>
+      </tr>
+      <tr>
+          <td><code>_id</code></td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>the entity (<code>group/name/id</code>)</td>
+      </tr>
+      <tr>
+          <td><code>_timestamp</code></td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>= <code>ModRevision</code></td>
+      </tr>
+      <tr>
+          <td><code>_entity_id</code>, <code>_group</code>, <code>_name</code></td>
+          <td>—</td>
+          <td>✅</td>
+          <td>indexed identity terms</td>
+      </tr>
+      <tr>
+          <td>per tag (<code>hash(tagKey)</code>)</td>
+          <td>—</td>
+          <td>✅</td>
+          <td>one indexed term per tag (all tags are always indexed)</td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p>The read-back projection is <code>{_id, _timestamp, _source, _deleted}</code>. Note <code>_version</code> and <code>_series_id</code> are <strong>not</strong> written on the property path (unlike the generic series-index path).</p>
+</blockquote>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    A[&#34;Apply (id, tags)&#34;] --&gt; D[&#34;new Bluge doc keyed entity/ModRevision&#34;]
+    D --&gt; SEG[&#34;new .seg segment&#34;]
+    A -.-&gt;|old revision| DROP[&#34;marked in .snp deleted bitmap&#34;]
+    DEL[&#34;Delete&#34;] --&gt; TOMB[&#34;new doc with _deleted = now&#34;]
+    MERGE[&#34;segment merge&#34;] --&gt;|after expire-delete-timeout| GC[&#34;physically removes dropped docs&#34;]
+</code></pre><p><strong>Mutation = append + tombstone, not in-place edit:</strong></p>
+<ul>
+<li>An update writes a brand-new document (new revision); the prior same-<code>_id</code> document is added to a <strong>per-segment DELETED roaring bitmap</strong> recorded in <code>.snp</code>. Reads <code>AndNot</code> the deleted set, so the old revision is masked, not rewritten.</li>
+<li>A delete writes a new document carrying <code>_deleted = deleteTime</code> (soft delete).</li>
+<li><strong>Physical removal happens only at Bluge segment merge</strong>, and only <code>property-expire-delete-timeout</code> (default 7 days) after the tombstone — so &ldquo;deleted&rdquo; data lingers on disk until then. There is no per-property TTL.</li>
+<li>Conflict resolution is last-writer-wins by <code>ModRevision</code> (the physical doc ID is <code>entity/ModRevision</code>).</li>
+</ul>
+<p><strong>Compression:</strong> stored fields (<code>_source</code>) are chunked (128 docs/chunk) and compressed with <strong>S2</strong> by default (not zstd); postings are roaring bitmaps; term dictionaries are FSTs.</p>
+<h3 id="63-anti-entropy-repair">6.3 Anti-entropy repair</h3>
+<p>Property has a gossip-based repair mechanism backed by a <strong>custom Merkle tree</strong> (SHA-512; leaf per entity, xxhash slot buckets, root) persisted as <code>state-tree.data</code> under a <strong>separate</strong> repair directory (<code>state.json</code>, transient <code>state-append-&lt;slot&gt;.tmp</code>, <code>state-tree.data</code>). Peers reconcile root → slot → leaf SHAs over a bidi gRPC stream and exchange full property protos for mismatches. See <a href="../property-repair">Property Background Repair</a>.</p>
+<hr>
+<h2 id="7-encoding--compression-primitives-shared">7. Encoding &amp; compression primitives (shared)</h2>
+<p>All columnar engines (Measure Mode A, Stream, Trace span store, sidx) share the same low-level primitives in <code>pkg/encoding</code>. Understanding these once explains every <code>*.bin</code>/<code>*.tf</code>/<code>*.t</code>/<code>*.td</code> column.</p>
+<h3 id="71-the-byte-block--length-list-framing">7.1 The byte-block / length-list framing</h3>
+<ul>
+<li><strong><code>compressBlock</code></strong> is the single compression chokepoint. A payload <strong>&lt; 128 bytes</strong> is stored plain (<code>[type=0][1-byte len][raw]</code>); a payload <strong>≥ 128 bytes</strong> is zstd level-1 (<code>[type=1][varuint complen][zstd bytes]</code>).</li>
+<li><strong><code>EncodeUint64Block</code></strong> packs a uint64 list at an <strong>adaptive bit width</strong> — it scans for the max and emits a 1-byte selector (8/16/32/64-bit) then fixed-width <strong>big-endian</strong> values, then runs the result through <code>compressBlock</code>.</li>
+<li><strong><code>EncodeBytesBlock</code></strong> serializes a <code>[][]byte</code> as <code>[uint64-block of lengths][compressBlock of concatenated bytes]</code>. Lengths use <strong>nil-encoding offset-by-one</strong>: a <code>nil</code> entry encodes as <code>0</code>, a present entry as <code>len+1</code> (so an empty-but-present <code>[]byte</code> encodes as <code>1</code>).</li>
+</ul>
+<h3 id="72-numeric-column-encoding">7.2 Numeric column encoding</h3>
+<ul>
+<li><strong>int64 columns</strong> (and timestamps, sidx keys): <code>Int64ListToBytes</code> chooses per run from <code>Const</code> / <code>DeltaConst</code> / <code>Delta</code> / <code>DeltaOfDelta</code>, with deltas as <strong>zigzag varint</strong>; a <code>firstValue</code> is stored alongside. There is <strong>no zstd</strong> at this layer.</li>
+<li><strong>float64 columns</strong>: converted to an int64 mantissa + an int16 exponent (<code>Float64ListToDecimalIntList</code>), then int64-delta encoded.</li>
+<li><strong>versions</strong> (Measure) use a parallel <code>WithVersion</code> encode-type variant.</li>
+</ul>
+<h3 id="73-non-numeric-stringbinaryarray-column-encoding">7.3 Non-numeric (string/binary/array) column encoding</h3>
+<ul>
+<li><strong>Dictionary</strong> when ≤ 256 distinct values: values stored as a bytes-block, indices RLE-then-bit-packed. The dictionary itself doubles as an exact membership filter.</li>
+<li>otherwise <strong>plain</strong> <code>EncodeBytesBlock</code>.</li>
+<li>Array tags are <code>|</code>-delimited (with <code>\</code> escaping); int64 arrays are raw 8-byte concatenations.</li>
+</ul>
+<h3 id="74-where-zstd-is-applied">7.4 Where zstd is applied</h3>
+<p>zstd level-1 is applied to: the whole <code>meta.bin</code>, each ~128 KiB primary block in <code>primary.bin</code>, and any byte payload ≥ 128 bytes inside a column. Timestamps, element IDs, and sidx keys are <strong>not</strong> zstd&rsquo;d (delta/zigzag only).</p>
+<h3 id="75-two-encoding-footguns-do-not-be-misled">7.5 Two encoding footguns (do not be misled)</h3>
+<ul>
+<li><strong><code>ENCODING_METHOD_GORILLA</code> is a schema hint, not Gorilla XOR.</strong> The <code>FieldSpec.encoding_method = GORILLA</code> enum is set in schemas, but the columnar engine encodes fields with the delta/dictionary scheme above. The actual Gorilla XOR encoder (<code>pkg/encoding/xor.go</code>) and the <code>SeriesEncoder</code>/<code>SeriesDecoder</code> interfaces are <strong>dead code</strong> — no engine wires them in. Do not document them as live primitives.</li>
+<li><strong>Per-field <code>compression_method = ZSTD</code> is not a per-field setting.</strong> zstd is applied generically (§7.4), driven by size thresholds, not by the schema enum.</li>
+</ul>
+<hr>
+<h2 id="8-distributed-how-parts-move-between-nodes">8. Distributed: how parts move between nodes</h2>
+<p>In cluster mode, parts are shipped to replica/data nodes by a <strong>chunked-sync</strong> protocol (<code>banyand/queue/pub|sub/chunked_sync.go</code>). The on-the-wire form is <strong>not</strong> a byte-for-byte copy of the directory:</p>
+<ul>
+<li><strong>Logical file model.</strong> Each part is sent as a list of <code>FileInfo{name, offset, size}</code> where <code>name</code> is a <em>logical</em> identifier decoupled from the on-disk filename: <code>meta</code>, <code>primary</code>, <code>timestamps</code>, <code>fv</code>, <code>t:&lt;tag&gt;</code>, <code>tm:&lt;tag&gt;</code>, <code>tf:&lt;tag&gt;</code>, <code>tff:&lt;tag&gt;</code>. The receiver maps each logical name back to the concrete file (<code>meta</code> → <code>meta.bin</code>, <code>t:foo</code> → <code>foo.t</code>, …). So the streamed file list differs from the literal directory listing.</li>
+<li><strong>Chunk framing.</strong> Data is split into ~1 MiB chunks with a monotonic <code>chunk_index</code>, a per-chunk <strong>CRC32 (IEEE)</strong> checksum, and a <code>VersionInfo</code> (API + file-format version) validated on every chunk. A single logical file can span multiple chunks; the receiver appends per-chunk slices in order. (Note: <code>FileInfo.offset</code> is <strong>chunk-relative</strong> in practice; the proto comment saying &ldquo;within the part&rdquo; is stale.)</li>
+<li><strong><code>meta</code> is regenerated, not copied.</strong> The live syncer rebuilds the <code>meta</code> bytes from the in-memory <code>primaryBlockMetadata</code> (marshal + zstd), producing bytes equivalent to <code>meta.bin</code> rather than reading the file. (A separate verbatim path, <code>CreatePartFileReaderFromPath</code>, exists for migration/copy flows.)</li>
+<li><strong><code>metadata.json</code> is not shipped.</strong> It is reconstructed on the receiver from the per-part <code>PartInfo</code> numeric fields. By contrast <code>traceID.filter</code> and <code>tag.type</code> <em>are</em> streamed (as logical files) but flushed at <code>FinishSync</code>.</li>
+</ul>
+<h3 id="81-failed-parts-handling">8.1 Failed-parts handling</h3>
+<p>If a part still fails to sync after retries (3 attempts, exponential backoff), it is preserved under <code>failed-parts/</code> as <strong>hard links</strong> (no byte copy) at <code>&lt;root&gt;/failed-parts/&lt;016x&gt;_&lt;partType&gt;/</code> (partType <code>core</code> or a sidx name). The directory is size-capped (<code>--failed-parts-max-size-percent</code>, default 10%) with oldest-first eviction, and is explicitly <strong>skipped</strong> when loading parts (so it is never mistaken for a live part or deleted as an unparseable epoch).</p>
+<hr>
+<h2 id="9-quick-reference--files-by-engine">9. Quick reference — files by engine</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Engine</th>
+          <th>Per-unit directory</th>
+          <th>Key files</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Measure (columnar)</td>
+          <td><code>seg-…/shard-N/&lt;016x&gt;/</code></td>
+          <td><code>metadata.json</code> · <code>meta.bin</code> · <code>primary.bin</code> · <code>timestamps.bin</code> (ts+version) · <code>fv.bin</code> · <code>&lt;fam&gt;.tf</code> · <code>&lt;fam&gt;.tfm</code> · <code>smeta.bin?</code></td>
+      </tr>
+      <tr>
+          <td>Stream</td>
+          <td><code>seg-…/shard-N/&lt;016x&gt;/</code> + <code>shard-N/idx/</code></td>
+          <td><code>metadata.json</code> · <code>meta.bin</code> · <code>primary.bin</code> · <code>timestamps.bin</code> (ts+elementID) · <code>&lt;fam&gt;.tf</code> · <code>&lt;fam&gt;.tfm</code> · <code>&lt;fam&gt;.tff</code> · <code>smeta.bin?</code></td>
+      </tr>
+      <tr>
+          <td>Trace (span store)</td>
+          <td><code>seg-…/shard-N/&lt;016x&gt;/</code></td>
+          <td><code>metadata.json</code> · <code>meta.bin</code> · <code>primary.bin</code> · <code>spans.bin</code> · <code>&lt;tag&gt;.t</code> · <code>&lt;tag&gt;.tm</code> · <code>tag.type</code> · <code>traceID.filter</code> · <code>smeta.bin?</code></td>
+      </tr>
+      <tr>
+          <td>sidx (trace 2°)</td>
+          <td><code>seg-…/shard-N/sidx/&lt;rule&gt;/&lt;016x&gt;/</code></td>
+          <td><code>manifest.json</code> · <code>meta.bin</code> · <code>primary.bin</code> · <code>keys.bin</code> · <code>data.bin</code> · <code>&lt;tag&gt;.td</code> · <code>&lt;tag&gt;.tm</code> · <code>&lt;tag&gt;.tf</code></td>
+      </tr>
+      <tr>
+          <td>Measure (index-mode)</td>
+          <td><code>seg-…/sidx/</code> (segment series index)</td>
+          <td>Bluge <code>&lt;012x&gt;.seg</code> · <code>&lt;012x&gt;.snp</code></td>
+      </tr>
+      <tr>
+          <td>Series index (all TSDB)</td>
+          <td><code>seg-…/sidx/</code></td>
+          <td>Bluge <code>&lt;012x&gt;.seg</code> · <code>&lt;012x&gt;.snp</code></td>
+      </tr>
+      <tr>
+          <td>Property</td>
+          <td><code>…/property/data/&lt;group&gt;/shard-N/</code></td>
+          <td>Bluge <code>&lt;012x&gt;.seg</code> · <code>&lt;012x&gt;.snp</code> · <code>bluge.pid</code></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../tsdb">TSDB</a> — the columnar TSDB engine concepts (segment/shard/part/block, snapshot MVCC, write/read paths).</li>
+<li><a href="../data-model">Data Model</a> — the logical/API model (groups, resources, index rules).</li>
+<li><a href="../rotation">Data Rotation</a> — segment rotation and retention.</li>
+<li><a href="../property-repair">Property Background Repair</a> — the gossip + Merkle anti-entropy detail.</li>
+</ul>
+
+</div>
+
+            </main>
+          <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
+            
+
+
+
+
+<div class="td-page-meta ml-2 pb-1 pt-2 mb-0">
+
+
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+
+
+
+<div class="td-toc-label">On this page</div>
+<nav id="TableOfContents">
+  <ul>
+    <li><a href="#storage--file-format">Storage &amp; File Format</a>
+      <ul>
+        <li><a href="#1-two-storage-families">1. Two storage families</a></li>
+        <li><a href="#2-the-shared-directory-skeleton-tsdb">2. The shared directory skeleton (TSDB)</a>
+          <ul>
+            <li><a href="#21-part-lifecycle">2.1 Part lifecycle</a></li>
+          </ul>
+        </li>
+        <li><a href="#3-measure">3. Measure</a>
+          <ul>
+            <li><a href="#31-the-measure-resource-api">3.1 The Measure resource (API)</a></li>
+            <li><a href="#32-one-api-two-storage-engines">3.2 One API, two storage engines</a></li>
+            <li><a href="#33-mode-a--normal-columnar-index_mode--false">3.3 Mode A — normal columnar (<code>index_mode = false</code>)</a></li>
+            <li><a href="#34-mode-b--index-mode-index_mode--true">3.4 Mode B — index-mode (<code>index_mode = true</code>)</a></li>
+            <li><a href="#35-topnaggregation-derived-from-a-normal-mode-measure">3.5 TopNAggregation (derived from a normal-mode measure)</a></li>
+          </ul>
+        </li>
+        <li><a href="#4-stream">4. Stream</a>
+          <ul>
+            <li><a href="#41-the-stream-resource-api">4.1 The Stream resource (API)</a></li>
+            <li><a href="#42-three-physical-stores-under-one-resource">4.2 Three physical stores under one resource</a></li>
+            <li><a href="#43-index-rules-map-to-two-different-mechanisms">4.3 Index rules map to two different mechanisms</a></li>
+            <li><a href="#44-query-fork">4.4 Query fork</a></li>
+          </ul>
+        </li>
+        <li><a href="#5-trace">5. Trace</a>
+          <ul>
+            <li><a href="#51-the-trace-resource-api">5.1 The Trace resource (API)</a></li>
+            <li><a href="#52-two-engines-side-by-side">5.2 Two engines side by side</a></li>
+            <li><a href="#53-sidx--the-ordered-secondary-index">5.3 sidx — the ordered secondary index</a></li>
+            <li><a href="#54-query-fork">5.4 Query fork</a></li>
+          </ul>
+        </li>
+        <li><a href="#6-property">6. Property</a>
+          <ul>
+            <li><a href="#61-the-property-resource-api">6.1 The Property resource (API)</a></li>
+            <li><a href="#62-storage-a-bluge-document-store-not-kv-not-tsdb">6.2 Storage: a Bluge document store (not KV, not TSDB)</a></li>
+            <li><a href="#63-anti-entropy-repair">6.3 Anti-entropy repair</a></li>
+          </ul>
+        </li>
+        <li><a href="#7-encoding--compression-primitives-shared">7. Encoding &amp; compression primitives (shared)</a>
+          <ul>
+            <li><a href="#71-the-byte-block--length-list-framing">7.1 The byte-block / length-list framing</a></li>
+            <li><a href="#72-numeric-column-encoding">7.2 Numeric column encoding</a></li>
+            <li><a href="#73-non-numeric-stringbinaryarray-column-encoding">7.3 Non-numeric (string/binary/array) column encoding</a></li>
+            <li><a href="#74-where-zstd-is-applied">7.4 Where zstd is applied</a></li>
+            <li><a href="#75-two-encoding-footguns-do-not-be-misled">7.5 Two encoding footguns (do not be misled)</a></li>
+          </ul>
+        </li>
+        <li><a href="#8-distributed-how-parts-move-between-nodes">8. Distributed: how parts move between nodes</a>
+          <ul>
+            <li><a href="#81-failed-parts-handling">8.1 Failed-parts handling</a></li>
+          </ul>
+        </li>
+        <li><a href="#9-quick-reference--files-by-engine">9. Quick reference — files by engine</a></li>
+        <li><a href="#see-also">See also</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+
+
+
+
+<script>
+  $(function () {
+    var $toc = $("#TableOfContents");
+    if (!$toc || !$toc.length) {
+      return;
+    }
+    var top = $toc.offset().top;
+    $(window).on("scroll", debounce(setTop, 100))
+    $(window).on("scroll", debounce(addActive, 30))
+
+    function addActive() {
+      var scrollValue = $(window).scrollTop();
+      var topEle = null;
+      $.each($('main h1, main h2, main h3'), function (index, item) {
+        if ($(item).offset().top - 70 > scrollValue) {
+          return
+        }
+        if (!topEle) {
+          topEle = item
+        } else if ($(item).offset().top >= $(topEle).offset().top) {
+          topEle = item
+        }
+        if (topEle) {
+          var id = $(item).attr('id');
+          $toc.find('a').removeClass("active").end().find('a[href="' + '#' + id + '"]').addClass("active")
+        }
+      })
+    }
+
+    function setTop() {
+      var scrollValue = $(window).scrollTop();
+      if (scrollValue >= top - 70) {
+        $toc.addClass('fixed')
+      } else {
+        $toc.removeClass('fixed')
+      }
+    }
+
+    function debounce(fn, wait) {
+      var timeout = null;
+      return function () {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fn.apply(this, arguments);
+        }, wait);
+      };
+    }
+  })
+</script>
+
+          </div>
+
+        </div>
+      </div>
+
+      
+<footer class="py-5 sky-row">
+  <div class="container-fluid text-center">
+    <div class="">
+        
+        
+        
+<ul class="list-inline mb-0">
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Twitter" aria-label="Twitter">
+    <a class="text-color" target="_blank" rel="noopener" href="https://twitter.com/asfskywalking"><i class="iconfont icon-twitter"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Slack" aria-label="Slack">
+    <a class="text-color" target="_blank" rel="noopener" href="mailto:dev@skywalking.apache.org?subject=Request%20to%20join%20SkyWalking%20Slack"><i class="iconfont icon-slack"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Mailing list" aria-label="Mailing list">
+    <a class="text-color" target="_blank" rel="noopener" href="https://lists.apache.org/list.html?dev@skywalking.apache.org"><i class="iconfont icon-email"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="GitHub" aria-label="GitHub">
+    <a class="text-color" target="_blank" rel="noopener" href="https://github.com/apache/skywalking"><i class="iconfont icon-github"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="B站" aria-label="B站">
+    <a class="text-color" target="_blank" rel="noopener" href="https://space.bilibili.com/390683219">B站</a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="掘金" aria-label="掘金">
+    <a class="text-color" target="_blank" rel="noopener" href="https://juejin.cn/user/13673577331607">掘金</a>
+  </li>
+  
+</ul>
+
+        
+        
+    </div>
+    <div class="">
+
+        <small class="text-color">&copy; 2017 - 2026 The Apache Software Foundation All Rights Reserved</small>
+        
+	
+    </div>
+    <div class="">
+      <small class="text-color mt-4">Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</small>
+    </div>
+  </div>
+</footer>
+
+
+    </div>
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<div id="popup">
+    <div class="mask">
+        <img src=""/>
+    </div>
+</div>
+
+    <div class="sidebar-mask"></div>
+<div class="sidebar">
+    <nav class="nav-links">
+        
+        <div class="nav-item"><a href="/docs/" class="nav-link router-link-active">Documentation</a></div>
+        <div class="nav-item"><a href="/events/" class="nav-link">Events</a></div>
+        <div class="nav-item"><a href="/blog/" class="nav-link">Blog</a></div>
+        <div class="nav-item"><a href="/downloads/" class="nav-link">Downloads</a></div>
+        <div class="nav-item"><a href="/team/" class="nav-link">Team</a></div>
+        <div class="nav-item"><a href="/users/" class="nav-link">Users</a></div>
+        <div class="nav-item"><a href="/zh/" class="nav-link">中文博客</a></div>
+        <div class="nav-item">
+            <div class="dropdown-wrapper open">
+                <a class="dropdown-title">
+                    <span>Links</span>
+                    <span class="arrow down"></span>
+                </a>
+                <ul class="nav-dropdown">
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Apache Software Foundation
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="https://github.com/apache/skywalking/issues"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            GitHub Issue Tracker
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Dev Mailing List
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/licenses/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            License
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/events/current-event"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Apache Events
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/security/" target="_blank"
+                           rel="noopener noreferrer" class="nav-link external">
+                            Security
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/foundation/sponsorship.html"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Sponsorship and Donate
+                        </a>
+                    </li>
+                    <li class="dropdown-item">
+                        <a href="http://www.apache.org/foundation/thanks.html"
+                           target="_blank" rel="noopener noreferrer"
+                           class="nav-link external">
+                            Thanks
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+</div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+
+<script src="/js/docsearch-3.9.0.js"></script>
+
+
+
+
+
+
+
+
+
+<script src="/js/main.min.9be14eed0a0e24711261c334305209aa2e5ae3fb624f6a1731e064d5ffb11f3d.js" integrity="sha256-m&#43;FO7QoOJHESYcM0MFIJqi5a4/tiT2oXMeBk1f&#43;xHz0=" crossorigin="anonymous"></script>
+
+
+<script src="/js/highlight.min.js"></script>
+<script src="/js/mermaid.min.js"></script>
+<script>
+    window.onload = () => mermaid.init(undefined, ".language-mermaid");
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('pre code.language-json5').forEach((block) => {
+      if (block.classList.contains('language-json5')) {
+        try {
+          hljs.registerLanguage('json5', function(hljs) {
+            return hljs.getLanguage('json');
+          });
+          hljs.highlightElement(block);
+        } catch (error) {
+          console.error("Error parsing JSON5:", error);
+        }
+      }
+    });
+  });
+</script>
+
+
+<script defer
+src="/js/kapa-widget.bundle.js"
+data-website-id="8a08392b-9c4d-4816-8bc4-f93e0ecdd2a7"
+data-project-name="SkyWalking"
+data-project-color="#2B74B8"
+data-button-text="Ask AI"
+data-search-mode-enabled="true"
+data-modal-open-on-command-k="true"
+data-modal-disclaimer="The AI supports multiple languages, but it may not be accessible in China, a proxy is required."
+data-project-logo="/images/widget-logo.jpg"
+data-modal-example-questions="What is Apache SkyWalking?,How to deploy SkyWalking?,How to inject agents non-intrusively?,How to setup trace sampling?"
+data-button-position-top=""
+data-button-position-right="20px"
+data-button-position-bottom="200px"
+data-button-position-left=""
+data-consent-required="true"  
+data-user-analytics-cookie-enabled="true"  
+data-consent-screen-title="Help us improve our AI assistant"  
+data-consent-screen-disclaimer="By clicking 'Allow tracking', you consent to anonymous user tracking which helps us improve our service. We don't collect any personally identifiable information."  
+data-consent-screen-accept-button-text="Allow tracking"  
+data-consent-screen-reject-button-text="No, thanks"
+></script>
+
+
+
+
+    <script>
+      
+      document.querySelectorAll('.project-doc .td-content .highlight').forEach(function (block) {
+        if (block.querySelector('.sw-code-bar')) return;
+        var codeEl = block.querySelector('code');
+        var lang = '';
+        if (codeEl) {
+          var m = (codeEl.className || '').match(/language-([\w+-]+)/);
+          if (m) lang = m[1];
+          if (!lang && codeEl.getAttribute('data-lang')) lang = codeEl.getAttribute('data-lang');
+        }
+        var bar = document.createElement('div');
+        bar.className = 'sw-code-bar';
+        bar.innerHTML = '<span class="lang">' + (lang || 'code') + '</span><button class="copy" type="button">Copy</button>';
+        block.insertBefore(bar, block.firstChild);
+        bar.querySelector('.copy').addEventListener('click', function () {
+          var btn = this;
+          var text = (block.querySelector('pre') || {}).innerText || '';
+          navigator.clipboard && navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      });
+    </script>
+  </body>
+  <script>
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val().toLowerCase();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
+    })
+  </script>
+</html>
