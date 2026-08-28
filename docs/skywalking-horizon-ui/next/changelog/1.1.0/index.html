@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="1.1.0">
   <meta itemprop="description" content="1.1.0 Sign-in and access control Features The login audit can now be stored in BanyanDB instead of PostgreSQL. Set audit.provider: banyandb and point audit.banyandb.address at a liaison’s gRPC port — including the BanyanDB SkyWalking already stores its telemetry in, since Horizon keeps the records in groups of its own (horizon_audit and horizon_audit_metrics, prefixed by namespace where two deployments share one server). The page is the same on either backend: the same rows, the same three filters, the same hourly summary and token-usage tab. Retention is the groups’ own lifetime rather than a job Horizon runs, so there is no sweep interval to tune; on a cluster, set shards and replicas, because the single-node defaults would keep the whole audit log on one data node. As with PostgreSQL, an address that is not loopback must use TLS unless allowCleartext says otherwise. See Login audit.">
-  <meta itemprop="wordCount" content="2579">
+  <meta itemprop="wordCount" content="3503">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="1.1.0">
   <meta name="twitter:description" content="1.1.0 Sign-in and access control Features The login audit can now be stored in BanyanDB instead of PostgreSQL. Set audit.provider: banyandb and point audit.banyandb.address at a liaison’s gRPC port — including the BanyanDB SkyWalking already stores its telemetry in, since Horizon keeps the records in groups of its own (horizon_audit and horizon_audit_metrics, prefixed by namespace where two deployments share one server). The page is the same on either backend: the same rows, the same three filters, the same hourly summary and token-usage tab. Retention is the groups’ own lifetime rather than a job Horizon runs, so there is no sweep interval to tune; on a cluster, set shards and replicas, because the single-node defaults would keep the whole audit log on one data node. As with PostgreSQL, an address that is not loopback must use TLS unless allowCleartext says otherwise. See Login audit.">
@@ -323,17 +323,9 @@
                   
                     
                     
-                    <option ZgotmplZ value="v0.7.0">
+                    <option ZgotmplZ value="v1.0.0">
                     
-                      v0.7.0
-                    
-                    </option>
-                  
-                    
-                    
-                    <option ZgotmplZ value="v0.6.0">
-                    
-                      v0.6.0
+                      v1.0.0
                     
                     </option>
                   
@@ -1564,9 +1556,8 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f97b19b</div>
+                  <div class="commit-id">Commit Id: 2cdb8e9</div>
                 
-
 
 
 
@@ -1661,6 +1652,24 @@
 <h3 id="fixes-4">Fixes</h3>
 <p><strong>Data retention now reads the same on every storage backend, and says which setting governs each figure.</strong> The page used to mirror OAP&rsquo;s wire shape — a Records / Metrics split, a Minute / Hour / Day trio, and a class called <em>Normal</em> — which on ElasticSearch, MySQL, PostgreSQL, H2 and TiDB meant nine numbers that were really two, presented as nine knobs you could turn apart. Those backends now show the five things retention is actually decided for — <strong>Metadata</strong>, <strong>Metrics</strong>, <strong>Logs</strong>, <strong>Traces</strong> and <strong>Others</strong> — each naming <code>core.recordDataTTL</code> or <code>core.metricsDataTTL</code> beneath it, with a note saying the two settings are all there is. BanyanDB shows the same five in the same order, expanding Metrics into its minute / hour / day groups and adding Zipkin traces and Browser error logs, because there each one is a separate <code>bydb.yml</code> group that genuinely can be tuned apart.</p>
 <p><strong>The retention chart hid data classes whose retention happened to match.</strong> Classes sharing a figure were merged into a single <em>All records (5)</em> bar — which reads as a fact about the backend when it is only a fact about today&rsquo;s configuration, and left an operator unable to see what they could change. Every class now has its own row. <em>Others</em> is the one row named for a group rather than a data type: BanyanDB keeps alarms, events, sampled traces, top-N and every profiling record together in <code>records</code>, so they share one retention and no name for a single one of them would be true.</p>
+<h2 id="query-cold-stage">Query cold stage</h2>
+<h3 id="breaking-changes-and-migration">Breaking changes and migration</h3>
+<p><strong>Breaking:</strong> Turning the <strong>Cold</strong> pill on no longer re-reads the page. It changes what the NEXT read asks for — the following auto-refresh round, or whatever you do first, typically choosing the time range the cold data lives in. Flipping it used to start a round of its own, which on a cold tier routinely ran past the sixty-second cap; the sweep that followed then re-queued exactly the queries the cap had just cancelled, so the cap was at its most useless during the outage it exists for. And because a cold read REPLACES the hot one rather than widening it, an operator who had not yet moved the time range watched the whole page empty on the click. Anything already in flight is cancelled, so no batch is left half hot and half cold — the stage is read when a request goes out, and a call still queued behind the concurrency limiter would otherwise leave under the new stage while belonging to the old one. Nothing to migrate: if you want the page re-read immediately after flipping, press Refresh.</p>
+<h3 id="features-4">Features</h3>
+<p><strong>Cold is asked for only where cold data is kept.</strong> Traces, logs and metrics are the classes a deployment is advised to age into cold storage, and they are now the only ones Horizon sends the flag for. Alarms, the instance and endpoint pickers, events and everything from profiling stay hot — they are small, and they are the first things you reach for during an incident, so a Cold toggle emptying them bought nothing. Those pages keep answering while Cold is on.</p>
+<h3 id="fixes-5">Fixes</h3>
+<p><strong>The cold-stage warning told you to pick a window that does not exist.</strong> On a deployment with no cold stage configured — the BanyanDB default — it still said &ldquo;pick a window older than N days&rdquo;, which cannot work, and following it moved the range out of hot+warm so the warning hid itself: a blank page with the one sentence explaining it gone. It now says plainly that no cold stage is configured and stays up until you turn Cold off. Where cold IS configured, the suggested window is the one that clears the deepest class rather than the shallowest — it used to name the records boundary (3 days by default) while every metric widget needed 7, so following it brought traces back and left the metrics exactly as empty.</p>
+<h2 id="dashboards">Dashboards</h2>
+<h3 id="fixes-6">Fixes</h3>
+<p><strong>A compared service that failed to refresh was drawn as though it had.</strong> In Compare, each entity keeps its last good reading when its own read fails — deliberately, so one failure does not blank its siblings — but the retained series was then plotted across the CURRENT axis and ran to the right-hand edge beside the fresh ones. Ten-minute-old latency sat next to live latency with nothing to tell them apart. Each series is now placed at the buckets it was actually read for, so a stale one stops where its data does and the gap is visible.</p>
+<p><strong>A layer whose dashboard an administrator removed no longer reports an outage.</strong> The page said the template was disabled and pointed at an admin screen to re-enable it — a control most operators cannot reach, on a page that does not exist under that name — while the refresh history recorded &ldquo;OAP could not be reached&rdquo; for what was an administrative decision on a healthy server. The page now simply says it is not available, and the layer leaves the sidebar on the next menu read.</p>
+<p><strong>Reactivating a layer brings back its own dashboard, not the shipped default.</strong> OAP keeps a disabled template&rsquo;s configuration; Reactivate was re-pushing the bundled default over it, discarding every edit the layer carried. It now restores what was there, falling back to the bundled default only when there is nothing to restore.</p>
+<h2 id="refreshing-1">Refreshing</h2>
+<h3 id="fixes-7">Fixes</h3>
+<p><strong>A refresh that gave up left its heaviest requests running.</strong> The sixty-second cap cancelled the query but not the request behind it for the layer landing, the dashboard batches and the overview — the browser stopped waiting while OAP finished a fan-out nobody would read, multiplied by the node count on a cluster. Those now stop with the round.</p>
+<p><strong>Two reads racing could leave every request an hour wrong.</strong> The server timezone and the capability probe were each fetched per request, so a round&rsquo;s dozen reads probed in parallel; behind a load balancer a fast success could be overwritten by a slower timeout falling back to UTC, and that answer then served every request for the next minute. Each is now read once per expiry and shared.</p>
+<p><strong>A brief storage hiccup emptied the sidebar for a minute.</strong> A failed service-catalog read replaced the known-good roster with an empty one and cached it for the full minute, so service counts fell to zero and group navigation collapsed long after OAP was healthy. The last good roster is kept and marked stale instead, and a failed read is retried within seconds — for as long as the outage lasts, rather than surviving only the first failure.</p>
+<p><strong>A landing metric batch that timed out silently reordered the layer.</strong> Its services were left without a value, sorted to the bottom as though idle, and could fall out of the top-N — choosing a different busiest service and a different default — while the response still reported success. Services whose metric could not be READ are now ranked above those that genuinely reported nothing, and the response says the ranking was decided on partial data.</p>
 
 </div>
 
@@ -1722,6 +1731,23 @@
         <li><a href="#operating-horizon">Operating Horizon</a>
           <ul>
             <li><a href="#fixes-4">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#query-cold-stage">Query cold stage</a>
+          <ul>
+            <li><a href="#breaking-changes-and-migration">Breaking changes and migration</a></li>
+            <li><a href="#features-4">Features</a></li>
+            <li><a href="#fixes-5">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#dashboards">Dashboards</a>
+          <ul>
+            <li><a href="#fixes-6">Fixes</a></li>
+          </ul>
+        </li>
+        <li><a href="#refreshing-1">Refreshing</a>
+          <ul>
+            <li><a href="#fixes-7">Fixes</a></li>
           </ul>
         </li>
       </ul>
@@ -1834,26 +1860,6 @@
 
     </div>
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
