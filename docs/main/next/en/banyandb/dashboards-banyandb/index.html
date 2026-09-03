@@ -33,7 +33,7 @@ SkyWalking entity BanyanDB concept Identity Service one BanyanDB cluster the clu
   <meta itemprop="name" content="BanyanDB self-observability dashboard">
   <meta itemprop="description" content="BanyanDB self-observability dashboard Apache SkyWalking BanyanDB is the native storage for SkyWalking. A production deployment is one cluster made of many nodes, each running one or more containers with a role (liaison front door, data backend, and the lifecycle tier-migration sidecar), and data is organized into groups. SkyWalking models that reality directly and renders it on the Layer: BANYANDB dashboards in the Horizon UI:
 SkyWalking entity BanyanDB concept Identity Service one BanyanDB cluster the cluster label ServiceInstance one container on a node container_name &#43; pod_name (joined by @, e.g. data@…-data-hot-0) ↳ attributes role / tier container_name (liaison/data/lifecycle), node_type (hot/warm/cold), node_role, pod_name Endpoint one group (storage partition) the group label (e.g. sw_metricsMinute) Requires BanyanDB 0.11&#43;. This feature reads the FODC-proxy cluster-observability metric families and the queue / lifecycle metric families that BanyanDB introduced after 0.10. Run a 0.11&#43; cluster with the FODC proxy and the Prometheus metrics provider enabled.">
-  <meta itemprop="wordCount" content="2143">
+  <meta itemprop="wordCount" content="3287">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="BanyanDB self-observability dashboard">
   <meta name="twitter:description" content="BanyanDB self-observability dashboard Apache SkyWalking BanyanDB is the native storage for SkyWalking. A production deployment is one cluster made of many nodes, each running one or more containers with a role (liaison front door, data backend, and the lifecycle tier-migration sidecar), and data is organized into groups. SkyWalking models that reality directly and renders it on the Layer: BANYANDB dashboards in the Horizon UI:
@@ -3074,8 +3074,9 @@ SkyWalking entity BanyanDB concept Identity Service one BanyanDB cluster the clu
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 7903c44</div>
+                  <div class="commit-id">Commit Id: e27cc27</div>
                 
+
 
 
 
@@ -3243,7 +3244,7 @@ the cluster and stamps <code>pod_name</code> / <code>container_name</code> / <co
 (<code>node_type</code>) onto every sample — context the raw per-node <code>:2121</code> endpoints do not carry. Direct
 per-node scraping is not recommended: it would have to hand-inject all of those identity labels for
 every node. (The e2e does exactly that only because it runs no FODC proxy — see the
-<a href="https://github.com/apache/skywalking/tree/7903c44dacdab1dcbf7acf9c11bea75547bca594/test/e2e-v2/cases/banyandb/otel-collector-config.yaml">test collector config</a> — and is not
+<a href="https://github.com/apache/skywalking/tree/e27cc276a42dfb34403d2d9dcc9eedfd5e64ef55/test/e2e-v2/cases/banyandb/otel-collector-config.yaml">test collector config</a> — and is not
 a production pattern.)</p>
 </li>
 <li>
@@ -3258,8 +3259,8 @@ The <code>banyandb/*</code> rules are enabled by default in <code>enabledOtelMet
 <h2 id="metrics">Metrics</h2>
 <p>The metric source expressions mirror the upstream BanyanDB Grafana boards, so the SkyWalking dashboards
 stay in lockstep with the BanyanDB catalog. The rule files are
-<code>otel-rules/banyandb/banyandb-service.yaml</code>, <code>banyandb-instance.yaml</code>, <code>banyandb-endpoint.yaml</code> and
-<code>banyandb-instance-relation.yaml</code>.</p>
+<code>otel-rules/banyandb/banyandb-service.yaml</code>, <code>banyandb-instance.yaml</code>, <code>banyandb-endpoint.yaml</code>,
+<code>banyandb-instance-relation.yaml</code> and <code>banyandb-trace-sampling.yaml</code>.</p>
 <p>The instance and endpoint catalogs are <strong>category-separated</strong>: the rule name carries a role prefix
 (instance scope) or a data-type prefix (endpoint scope) so that a human can read a metric name and know
 which role / data type it belongs to, and so the UI layer template can select the right panel set. The
@@ -3944,6 +3945,387 @@ label-less per-instance gauges with no destination labels); they stay instance-s
 <code>lifecycle_last_run</code> / <code>lifecycle_last_run_success</code> / <code>lifecycle_migration_cycles</code>. The migration
 <em>traffic</em> (throughput / latency / error / bytes) above is already per-edge.</p>
 </blockquote>
+<h3 id="trace-tail-sampling-scope--sampler-plugins-meter_banyandb_trace_sampling_">Trace tail sampling scope — sampler plugins (<code>meter_banyandb_trace_sampling_*</code>)</h3>
+<p>BanyanDB 0.11+ can run an ordered chain of <strong>sampler plugins</strong> during trace merge and finalization,
+dropping whole traces after their fragments have already landed — tail sampling inside the storage
+tier. See <a href="../tail-sampling">Trace Tail Sampling</a> for how a trace is judged and how the chain is
+configured from <code>bydb.yml</code>.</p>
+<p>These rules live in their own file, <code>otel-rules/banyandb/banyandb-trace-sampling.yaml</code>, mirroring the
+upstream <strong><a href="https://github.com/apache/skywalking-banyandb/blob/main/docs/operation/grafana-fodc-trace-plugin.json">BanyanDB — Trace Sampling Plugins</a></strong>
+board, which upstream also ships separately from its two core boards. The reason is the same in both
+places: the plugin chain is <strong>optional</strong>. On a cluster with no sampler configured none of the wire
+families are registered and <strong>every metric in this section stays absent</strong> — that is the healthy
+default, not a broken scrape.</p>
+<blockquote>
+<p><strong>Service scope with <code>group</code> as a label.</strong> Every family here is keyed on <code>group</code>, so the natural
+scope would be Endpoint (see <a href="#endpoint-scope--per-group-meter_banyandb_endpoint_">Endpoint scope</a>).
+They are modeled at <strong>Service</strong> scope instead, with <code>group</code> kept as a metric <em>label</em>, because
+sampling is presented as one cluster-wide page: a labeled metric renders every group as a series
+and still gives cluster totals when the label is aggregated away, whereas an Endpoint-scope metric
+cannot be rolled back up to the cluster — OAP does no cross-scope rollup. Each metric keeps exactly
+the labels its upstream panel splits on, listed in the <strong>Labels</strong> column below.</p>
+</blockquote>
+<p>Two wire prefixes feed these rules, and the split is not cosmetic: plugin lifecycle, telemetry-host
+safety, finalization and the plugin-published business metrics are <code>banyandb_trace_pipeline_*</code>, while
+per-merge execution, batching and trace retention outcomes are <code>banyandb_trace_tst_pipeline_*</code> (the
+trace time-series table is where merge runs).</p>
+<p><strong>Pipeline status and reconciliation:</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Count</td>
+          <td><code>trace_sampling_active_samplers</code></td>
+          <td><code>group</code></td>
+          <td>Sampler plugins registered for the group. <code>0</code> means nothing is filtering</td>
+      </tr>
+      <tr>
+          <td>percent</td>
+          <td><code>trace_sampling_drop_ratio</code></td>
+          <td><code>group</code></td>
+          <td>Committed drop ratio — dropped / evaluated traces</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_plugin_load_failures</code></td>
+          <td><code>group</code>, <code>name</code>, <code>reason</code></td>
+          <td>Plugin load failures. Reconciliation fails open, so the chain keeps running without the plugin</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_register_rate</code> / <code>trace_sampling_update_rate</code></td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Pipeline registrations / updates (<code>result</code> = <code>success</code> or <code>rejected</code>)</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_remove_rate</code></td>
+          <td><code>group</code></td>
+          <td>Explicit pipeline removals</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Plugin execution and batching</strong> (<code>data</code> containers):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>o/s</td>
+          <td><code>trace_sampling_plugin_execution_rate</code></td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>result</code></td>
+          <td><code>Decide</code> calls/s. <code>result</code> = <code>success</code>, <code>decide_error</code>, <code>length_mismatch</code>, <code>panic</code> or <code>late</code></td>
+      </tr>
+      <tr>
+          <td>ms</td>
+          <td><code>trace_sampling_plugin_decide_latency_p99</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>p99 <code>Decide</code> wall time, successful calls only</td>
+      </tr>
+      <tr>
+          <td>ms</td>
+          <td><code>trace_sampling_plugin_decide_latency</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Mean <code>Decide</code> wall time, successful calls only</td>
+      </tr>
+      <tr>
+          <td>o/s</td>
+          <td><code>trace_sampling_chain_batch_rate</code></td>
+          <td><code>group</code>, <code>result</code></td>
+          <td>Chain batches/s. <code>result</code> = <code>success</code>, <code>timeout</code> or <code>circuit_open</code></td>
+      </tr>
+      <tr>
+          <td>ms</td>
+          <td><code>trace_sampling_plugin_time_per_trace</code></td>
+          <td><code>group</code></td>
+          <td>Whole-chain plugin time per evaluated trace — the sampling overhead</td>
+      </tr>
+      <tr>
+          <td>Count</td>
+          <td><code>trace_sampling_batch_size_p99</code></td>
+          <td><code>group</code></td>
+          <td>p99 traces presented per successful chain batch</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_link_bypasses</code></td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>reason</code></td>
+          <td>Individual links bypassed after <code>decide_error</code>, <code>length_mismatch</code> or <code>panic</code></td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p><code>trace_sampling_plugin_time_per_trace</code> is deliberately <strong>not</strong> split by <code>plugin_name</code>. The upstream
+panel divides a per-plugin numerator by a per-group denominator with PromQL&rsquo;s <code>on (group) group_left</code>; MAL arithmetic inner-joins on exact label equality and has no <code>group_left</code> equivalent,
+so the numerator collapses <code>plugin_name</code> and the metric reports the chain total. The per-plugin
+split is <code>trace_sampling_plugin_decide_latency</code>.</p>
+</blockquote>
+<p><strong>Sampling outcomes</strong> — the trace-level denominators:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>traces/s</td>
+          <td><code>trace_sampling_traces_evaluated</code></td>
+          <td><code>group</code></td>
+          <td>Traces evaluated by a completed, batch-aligned chain. The denominator for every ratio here</td>
+      </tr>
+      <tr>
+          <td>traces/s</td>
+          <td><code>trace_sampling_traces_retained</code></td>
+          <td><code>group</code></td>
+          <td>Traces retained by plugin verdict or by a safety fallback</td>
+      </tr>
+      <tr>
+          <td>traces/s</td>
+          <td><code>trace_sampling_traces_dropped</code></td>
+          <td><code>group</code></td>
+          <td>Traces removed from core and secondary-index output</td>
+      </tr>
+      <tr>
+          <td>traces/s</td>
+          <td><code>trace_sampling_traces_immature</code></td>
+          <td><code>group</code></td>
+          <td>Traces not yet eligible — their fragments are still inside the maturity boundary</td>
+      </tr>
+      <tr>
+          <td>o/s</td>
+          <td><code>trace_sampling_sidx_pruned</code></td>
+          <td><code>group</code></td>
+          <td>Secondary-index entries pruned after a confirmed drop</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Fail-open and bounded-retention safety.</strong> Every metric below <em>retains</em> data that a sampler proposed
+dropping, so a drop ratio under target is explained here before it is explained by plugin logic:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_oversized_traces_bypassed</code></td>
+          <td><code>group</code></td>
+          <td>Traces retained because their staged representation exceeded the per-trace budget</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_ambiguous</code></td>
+          <td><code>group</code></td>
+          <td>Traces whose fragment state could not produce an unambiguous drop decision</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_plugin_errors</code></td>
+          <td><code>group</code>, <code>reason</code></td>
+          <td>Chain-level errors that forced fail-open retention</td>
+      </tr>
+      <tr>
+          <td>o/s</td>
+          <td><code>trace_sampling_guard_bloom_probes</code></td>
+          <td><code>group</code></td>
+          <td>Bloom-filter probes checking for trace fragments outside the selected parts</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_guard_deferred</code></td>
+          <td><code>group</code></td>
+          <td>Drops deferred because the fragment guard found a possible external fragment</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_guard_budget_exhausted</code></td>
+          <td><code>group</code></td>
+          <td>Fragment-guard checks that exhausted their work budget</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_guard_publication_rejected</code></td>
+          <td><code>group</code></td>
+          <td>Publications rejected after guard validation went stale</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_guard_lossless_retry</code></td>
+          <td><code>group</code></td>
+          <td>Rejected publications retried without dropping traces</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_guard_bypassed</code></td>
+          <td><code>group</code></td>
+          <td>Merges retained unsampled because the guard was unavailable or inapplicable</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Drop-set capacity and finalization.</strong> The per-merge dropped-trace-ID set is memory-bounded; when it
+hits the ceiling the merge retains the rest, which is what makes a drop ratio plateau under load:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_capped_merges</code></td>
+          <td><code>group</code>, <code>lane</code></td>
+          <td>Merges whose drop-ID set reached its ceiling</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_traces_retained_by_ceiling</code></td>
+          <td><code>group</code></td>
+          <td>Proposed drops retained after the ceiling was reached</td>
+      </tr>
+      <tr>
+          <td>Count</td>
+          <td><code>trace_sampling_drop_set_entries_p99</code></td>
+          <td><code>group</code>, <code>lane</code></td>
+          <td>p99 dropped trace IDs held per merge — read against the budget for headroom</td>
+      </tr>
+      <tr>
+          <td>Bytes</td>
+          <td><code>trace_sampling_drop_set_budget_bytes</code></td>
+          <td><code>group</code></td>
+          <td>Resolved per-merge memory budget for confirmed dropped trace IDs</td>
+      </tr>
+      <tr>
+          <td>Count</td>
+          <td><code>trace_sampling_finalize_rounds</code></td>
+          <td><code>group</code></td>
+          <td>Highest finalization round count across the group&rsquo;s cooled shards</td>
+      </tr>
+      <tr>
+          <td>Status</td>
+          <td><code>trace_sampling_finalize_terminal</code></td>
+          <td><code>group</code></td>
+          <td><code>1</code> when a cooled shard can run no further finalization round — no more tail sampling for that data</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>First-party sampler decisions</strong> (<code>sw-trace-sampler</code> / <code>zipkin-trace-sampler</code>):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>o/s</td>
+          <td><code>trace_sampling_sampler_decisions</code></td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>verdict</code>, <code>rule</code></td>
+          <td>Trace evaluations attributed to the first matching rule. <code>verdict</code> = <code>keep</code> or <code>drop</code></td>
+      </tr>
+      <tr>
+          <td>rows/s</td>
+          <td><code>trace_sampling_sampler_rows</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Span / segment rows carried by evaluated traces</td>
+      </tr>
+      <tr>
+          <td>rows/s</td>
+          <td><code>trace_sampling_sampler_rows_dropped</code></td>
+          <td><code>group</code>, <code>plugin_name</code>, <code>rule</code></td>
+          <td>Rows belonging to traces the sampler proposed dropping</td>
+      </tr>
+      <tr>
+          <td>percent</td>
+          <td><code>trace_sampling_sampler_dropped_row_ratio</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Proposed dropped-row ratio</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_sampler_row_count_unavailable</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Evaluations whose metadata-only projection exposed no row count — these are missing from the row denominators</td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p>These are <strong>proposed</strong>, not committed. A trace can be evaluated across several merge or finalization
+rounds, and the safety guards above can retain a trace the plugin voted to drop — so always read
+<code>trace_sampling_sampler_decisions{verdict=drop}</code> against <code>trace_sampling_traces_dropped</code>, and treat
+<code>trace_sampling_sampler_dropped_row_ratio</code> as incomplete while
+<code>trace_sampling_sampler_row_count_unavailable</code> is nonzero. <code>rule</code> is one of the fixed built-in values
+(<code>duration</code>, <code>error</code>, <code>healthy_sample</code>, <code>healthy_rejected</code>, <code>no_keep_rule</code>, <code>decode_failure_*</code>) or a
+positional <code>tag_00</code>–<code>tag_31</code> slot following <code>keepTagRules</code> order; tag keys and values are never
+copied into the label, which is what keeps the label set bounded.</p>
+</blockquote>
+<blockquote>
+<p><strong>Adding a rule that divides two counters?</strong> <code>rate()</code> / <code>increase()</code> keep their lower bound per
+(rule, wire family, label set). Two rules reducing one family to the same label set therefore no
+longer share a window — but check anyway that the operands of a ratio are the reductions you think
+they are, and verify the result against known inputs rather than trusting it by inspection.</p>
+</blockquote>
+<p><strong>Plugin telemetry host safety.</strong> The host caps what a plugin may publish (100 label-value series per
+instrument) and rate-limits its logs. Nonzero here means a plugin&rsquo;s <em>own</em> telemetry is being
+truncated — its business metrics above are then incomplete, though the sampling itself is unaffected:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Unit</th>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_plugin_telemetry_series_rejected</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Series rejected by host safety bounds</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_plugin_log_dropped</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Plugin log lines dropped by the host rate limiter</td>
+      </tr>
+      <tr>
+          <td>c/m</td>
+          <td><code>trace_sampling_plugin_telemetry_panic</code></td>
+          <td><code>group</code>, <code>plugin_name</code></td>
+          <td>Panics recovered inside the plugin telemetry adapter</td>
+      </tr>
+  </tbody>
+</table>
 <h2 id="customizations">Customizations</h2>
 <p>You can customize your own metrics / expressions. The metric definitions and expression rules are in
 <code>/config/otel-rules/banyandb</code>. The dashboard panel configurations ship from the SkyWalking Horizon UI
@@ -3990,6 +4372,7 @@ bundle (apache/skywalking-horizon-ui); the OAP backend does not host UI dashboar
             <li><a href="#instance-scope--per-container-meter_banyandb_instance_">Instance scope — per container (<code>meter_banyandb_instance_*</code>)</a></li>
             <li><a href="#endpoint-scope--per-group-meter_banyandb_endpoint_">Endpoint scope — per group (<code>meter_banyandb_endpoint_*</code>)</a></li>
             <li><a href="#instance-relation-scope--deployment-topology-meter_banyandb_instance_relation_">Instance-relation scope — deployment topology (<code>meter_banyandb_instance_relation_*</code>)</a></li>
+            <li><a href="#trace-tail-sampling-scope--sampler-plugins-meter_banyandb_trace_sampling_">Trace tail sampling scope — sampler plugins (<code>meter_banyandb_trace_sampling_*</code>)</a></li>
           </ul>
         </li>
         <li><a href="#customizations">Customizations</a></li>
@@ -4103,6 +4486,20 @@ bundle (apache/skywalking-horizon-ui); the OAP backend does not host UI dashboar
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
