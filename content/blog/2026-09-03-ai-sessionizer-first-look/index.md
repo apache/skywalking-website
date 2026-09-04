@@ -9,6 +9,8 @@ tags:
   - Community
 ---
 
+![Replay Claude Code sessions without plugins or configuration changes with Apache SkyWalking AI Sessionizer.](sessionizer-replay-featured.png)
+
 After Claude Code has worked through a long task, how do you revisit what happened? You may want to follow the conversation, inspect a tool call and its result, or see what a child agent contributed. The records already exist on your machine, but a task that spans hours, tools, context compactions, and child agents can be spread across many files.
 
 Today we are sharing [Apache SkyWalking AI Sessionizer](https://github.com/apache/skywalking-ai-sessionizer), a new pre-alpha project offering an early local replay view for Claude Code sessions. It reads the native evidence Claude Code has already written, connects the conversation with tool and child-agent activity, and lets you explore that execution in your browser. **No plugin installation or configuration changes are needed in Claude Code**, and you can start with history recorded before you began using Sessionizer.
