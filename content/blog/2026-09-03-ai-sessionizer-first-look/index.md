@@ -1,63 +1,37 @@
 ---
-title: "Sessionizing Claude Code: A First Look"
+title: "Replay Claude Code Sessions Without Plugins or Configuration Changes"
 date: 2026-09-03
 author: Sheng Wu
-description: "An early look at Apache SkyWalking AI Sessionizer: reconstructing Claude Code from native evidence today and building toward unified agent replay, monitoring, and analysis."
+description: "Replay existing Claude Code sessions with Apache SkyWalking AI Sessionizer: explore conversations, tool calls, and child-agent activity without installing a Claude Code plugin or changing its configuration."
 tags:
   - AI
   - Engineering
   - Community
 ---
 
-AI agents no longer fit neatly into one prompt and one response. A coding agent can work for hours, call dozens of tools, delegate to child agents, compact its context, stop, and resume later. What a user experiences as one conversation is often recorded as many separate files and events.
+After Claude Code has worked through a long task, how do you revisit what happened? You may want to follow the conversation, inspect a tool call and its result, or see what a child agent contributed. The records already exist on your machine, but a task that spans hours, tools, context compactions, and child agents can be spread across many files.
 
-Today we are sharing [Apache SkyWalking AI Sessionizer](https://github.com/apache/skywalking-ai-sessionizer), a new pre-alpha project exploring conversation-level observability for these long-lived agents. We are also showing its first working path: Sessionizer can read the native evidence already written by Claude Code, assemble parent and child-agent activity into a durable conversation structure, and present that structure in a local browser view.
+Today we are sharing [Apache SkyWalking AI Sessionizer](https://github.com/apache/skywalking-ai-sessionizer), a new pre-alpha project offering an early local replay view for Claude Code sessions. It reads the native evidence Claude Code has already written, connects the conversation with tool and child-agent activity, and lets you explore that execution in your browser. **No plugin installation or configuration changes are needed in Claude Code**, and you can start with history recorded before you began using Sessionizer.
 
-It does this without installing a Claude Code plugin, registering hook scripts, wrapping the Claude Code process, or changing its environment and runtime configuration. It can also work with history that existed before Sessionizer was installed. Sessionizer is still a separate program with its own configuration, but Claude Code does not need to cooperate with it or be changed for collection to work.
+## What does replay mean?
 
-This is an early look, not a production-readiness announcement. Collection and assembly are implemented. The local view is still developing, and static export and remote telemetry integration are future work. We are opening the project now because the conversation model, evidence rules, and data boundaries will benefit from real-world review while they are still young.
+**Replay means reconstructing and navigating a recorded session from the evidence it left behind.** Open a conversation, follow its inputs and responses, inspect recorded tool requests and results, and explore parent and child-agent activity on a time axis. The aim is to make a long agent session understandable after it happened.
 
-## From a transcript to a session
+For example, when Claude Code delegates part of a task, you can inspect the parent's request, explore the child's recorded work in its own execution stream, and follow the relationship back to the parent where the evidence supports that connection. This brings the conversation and the activity behind it into one view.
 
-A transcript is useful, but it is not the whole execution.
+Replay here does not rerun the model or execute tools again. Claude Code's local files do not expose every exact provider request, system instruction, cache annotation, timing boundary, or retry identity. The view reconstructs the recorded activity and makes gaps and uncertain connections visible; it cannot reproduce hidden reasoning.
 
-Claude Code may place the main transcript, child-agent transcripts, child metadata, workflow journals, manifests, and scripts in different locations. Some records are a readable conversation. Others describe tool execution, model calls, delegation, or workflow state. A single source does not necessarily establish how every piece relates to the others.
+Collection and assembly are implemented, and the local replay view is still developing. Static export and remote telemetry integration are future work. We are opening the project at pre-alpha so developers can try the experience and help shape the conversation model and evidence rules.
 
-Before assembly, the Claude Code adapter maps those runtime-specific artifacts into **Session Data**, a common evidence format. Each record keeps its session and stream, native identifiers and parent references, call, run, tool, and child-agent keys, and a stable source location. This separates the meaning of the evidence from the file format in which one runtime happened to write it.
+## Nothing to install or configure in Claude Code
 
-## How Sessionizer links the evidence
+Sessionizer reads existing local files. There is no Claude Code plugin to install, hook script to register, process wrapper to use, or environment and runtime configuration to change. You do not need to start a new Claude Code session to capture data: retained history can already be explored.
 
-Assembly follows eight ordered stages because each establishes facts required by the next. Repeated records are removed first, keeping the first landed copy. Records are then partitioned into independent parent and child execution streams. Assistant fragments are grouped into model calls by message ID; tool requests and results are joined by tool-use ID; and agent calls are connected to child streams through the available agent and run identities.
+**Sessionizer itself runs as a separate program.** The walkthrough below builds it from source and starts the local view.
 
-Only an explicit reset record can open a new context epoch. Talks and Runs are then built by following triggers and parent ancestry, rather than assuming that nearby lines belong together. The fetching period provides the window in which Segments are determined. A Segment groups several Talks from that period, but it does not necessarily contain every Talk fetched in the period. Landed order remains authoritative throughout this process because timestamps from different records can move backward.
+## Start the local replay view
 
-![Figure 1: Native Claude Code artifacts are converted into runtime-neutral Session Data, pass through eight evidence-based assembly stages, and become a committed conversation with separate parent and child streams.](session-assembly-pipeline.svg)
-Figure 1: Fragmented native artifacts become a durable conversation through ordered, evidence-based assembly. A Segment groups several—but not necessarily all—Talks from one fetching period, while unresolved records and the quality of every join remain visible.</br>
-
-The assembled result separates **ownership** from **relationship**. A node has at most one containment parent: Session → Execution Stream → Context Epoch → Talk → Run → Step. Cross-stream flow and other causal claims are represented as sparse, typed relations such as `starts`, `reports`, `ends_with`, `follows`, `summarizes`, and `in_segment`. Every such relation carries both its source evidence and correlation quality.
-
-A Conversation supplies the durable chain identity, while a Session preserves source-runtime provenance. Parent and child agents remain in distinct Execution Streams so the child's messages and tools are not copied into the parent. A Segment is not another containment parent. It relates several Talks found within a fetching period without implying that all Talks in that period belong to the Segment.
-
-## A Segment groups several Talks from a fetching period
-
-The fetching period determines the window used to form Segments. Figure 2 shows four Talks collected in one period. Segment 3 groups Talk 12 and Talk 13; Talk 11 and Talk 14 remain outside it. Talk 12 is expanded to expose the agent activity behind that readable interaction.
-
-### One Talk can contain an entire agent loop
-
-A Talk is the readable interaction that begins with input from outside the agent. It is not necessarily one prompt followed by one reply. More human input can arrive while work is running, the agent can speak between tool calls, and a child-completion notification can start another Run while the original Talk continues.
-
-A Run is therefore an agent loop, not a single model call. Inside a Run, one model response can request a tool, the tool result can lead to another model call, and delegation can open an independent child stream. Sessionizer joins a tool request and its result into one Tool step. Child output stays owned by the child stream; the parent receives a qualified relation to that activity instead of absorbing it.
-
-![Figure 2: One fetching period contains four Talks, while a Segment groups only Talk 12 and Talk 13; Talk 12 is expanded to show multiple parent Runs and an independent child-agent stream.](session-linking-example.svg)
-Figure 2: A fetching period contains four Talks, but Segment 3 groups only two of them. The expanded Talk shows how one readable interaction can span multiple parent Runs and an independent child-agent stream; solid, dashed, and unresolved links preserve what the evidence can establish.</br>
-
-This process is what we mean by **sessionizing**: turning fragmented runtime evidence into a coherent, durable session without discarding its source or pretending that every relationship is certain.
-
-The complete rules and object definitions are documented in [Conversation Assembly](https://github.com/apache/skywalking-ai-sessionizer/blob/main/docs/en/concepts-and-designs/conversation-assembly.md) and the [Unified Conversation Model](https://github.com/apache/skywalking-ai-sessionizer/blob/main/docs/en/concepts-and-designs/unified-conversation-model.md).
-
-## Run it locally
-
-The fastest path requires Go 1.25 or later. Clone the project, build it, and start the all-in-one local view:
+To build Sessionizer from source, use Go 1.27 or later. Clone the project, build it, and start the local replay view:
 
 ```sh
 git clone https://github.com/apache/skywalking-ai-sessionizer.git
@@ -75,17 +49,53 @@ Two additional commands are useful for inspecting the pipeline, but they are not
 ./bin/asz collect -once    # collect the current local evidence once, without the UI
 ```
 
-By default, the commands read `asz.yaml` from the repository root. The checked-in file already contains the default local configuration, so no Claude Code configuration is needed for this quick start.
+Run these commands from the repository root so Sessionizer reads the included `asz.yaml`. The defaults discover existing Claude Code data and serve the local view without any configuration edits.
 
-![Figure 3: The local Apache SkyWalking AI Sessionizer view built from assembled Claude Code session data.](asz-1.png)
-Figure 3: The conversation index summarizes talks, steps, streams, segments, active span, and last activity across the assembled Claude Code sessions.</br>
+![Figure 1: The local Apache SkyWalking AI Sessionizer view built from assembled Claude Code session data.](asz-1.png)
+Figure 1: The conversation index summarizes talks, steps, streams, segments, active span, and last activity across the assembled Claude Code sessions.</br>
 
 The browser view begins with conversations and talks, then exposes the parent and child execution streams behind them. Transcript content and a time-axis flow can be inspected alongside model calls, tools, agent activity, relations, and the source evidence used to build those relations.
 
-![Figure 4: A reconstructed Claude Code session with its conversation content, execution flow, and supporting evidence.](asz-2.png)
-Figure 4: The talk view connects readable input and output with parent and child streams, an evidence inspector, and a time-axis flow of context, model, and tool activity.</br>
+![Figure 2: A reconstructed Claude Code session with its conversation content, execution flow, and supporting evidence.](asz-2.png)
+Figure 2: The talk view connects readable input and output with parent and child streams, an evidence inspector, and a time-axis flow of context, model, and tool activity.</br>
 
-This is the first step toward session replay, but it is important to define that term precisely. Here, **replay means forensic reconstruction and navigation from retained evidence**. It does not mean rerunning the model, repeating tool side effects, or claiming to reproduce hidden reasoning. Claude Code's local files do not expose every exact provider request, system instruction, cache annotation, timing boundary, or retry identity. Sessionizer reconstructs what the available evidence supports and identifies what it cannot establish.
+## From a transcript to a session
+
+A transcript is useful, but it is not the whole execution.
+
+Claude Code may place the main transcript, child-agent transcripts, child metadata, workflow journals, manifests, and scripts in different locations. Some records are a readable conversation. Others describe tool execution, model calls, delegation, or workflow state. A single source does not necessarily establish how every piece relates to the others.
+
+Before assembly, the Claude Code adapter maps those runtime-specific artifacts into **Session Data**, a common evidence format. Each record keeps its session and stream, native identifiers and parent references, call, run, tool, and child-agent keys, and a stable source location. This separates the meaning of the evidence from the file format in which one runtime happened to write it.
+
+## How Sessionizer links the evidence
+
+Assembly follows eight ordered stages because each establishes facts required by the next. Repeated records are removed first, keeping the first landed copy. Records are then partitioned into independent parent and child execution streams. Assistant fragments are grouped into model calls by message ID; tool requests and results are joined by tool-use ID; and agent calls are connected to child streams through the available agent and run identities.
+
+Only an explicit reset record can open a new context epoch. Talks and Runs are then built by following triggers and parent ancestry, rather than assuming that nearby lines belong together. The fetching period provides the window in which Segments are determined. A Segment groups several Talks from that period, but it does not necessarily contain every Talk fetched in the period. Landed order remains authoritative throughout this process because timestamps from different records can move backward.
+
+![Figure 3: Native Claude Code artifacts are converted into runtime-neutral Session Data, pass through eight evidence-based assembly stages, and become a committed conversation with separate parent and child streams.](session-assembly-pipeline.svg)
+Figure 3: Fragmented native artifacts become a durable conversation through ordered, evidence-based assembly. A Segment groups several—but not necessarily all—Talks from one fetching period, while unresolved records and the quality of every join remain visible.</br>
+
+The assembled result separates **ownership** from **relationship**. A node has at most one containment parent: Session → Execution Stream → Context Epoch → Talk → Run → Step. Cross-stream flow and other causal claims are represented as sparse, typed relations such as `starts`, `reports`, `ends_with`, `follows`, `summarizes`, and `in_segment`. Every such relation carries both its source evidence and correlation quality.
+
+A Conversation supplies the durable chain identity, while a Session preserves source-runtime provenance. Parent and child agents remain in distinct Execution Streams so the child's messages and tools are not copied into the parent. A Segment is not another containment parent. It relates several Talks found within a fetching period without implying that all Talks in that period belong to the Segment.
+
+## A Segment groups several Talks from a fetching period
+
+The fetching period determines the window used to form Segments. Figure 4 shows four Talks collected in one period. Segment 3 groups Talk 12 and Talk 13; Talk 11 and Talk 14 remain outside it. Talk 12 is expanded to expose the agent activity behind that readable interaction.
+
+### One Talk can contain an entire agent loop
+
+A Talk is the readable interaction that begins with input from outside the agent. It is not necessarily one prompt followed by one reply. More human input can arrive while work is running, the agent can speak between tool calls, and a child-completion notification can start another Run while the original Talk continues.
+
+A Run is therefore an agent loop, not a single model call. Inside a Run, one model response can request a tool, the tool result can lead to another model call, and delegation can open an independent child stream. Sessionizer joins a tool request and its result into one Tool step. Child output stays owned by the child stream; the parent receives a qualified relation to that activity instead of absorbing it.
+
+![Figure 4: One fetching period contains four Talks, while a Segment groups only Talk 12 and Talk 13; Talk 12 is expanded to show multiple parent Runs and an independent child-agent stream.](session-linking-example.svg)
+Figure 4: A fetching period contains four Talks, but Segment 3 groups only two of them. The expanded Talk shows how one readable interaction can span multiple parent Runs and an independent child-agent stream; solid, dashed, and unresolved links preserve what the evidence can establish.</br>
+
+This process is what we mean by **sessionizing**: turning fragmented runtime evidence into a coherent, durable session without discarding its source or pretending that every relationship is certain.
+
+The complete rules and object definitions are documented in [Conversation Assembly](https://github.com/apache/skywalking-ai-sessionizer/blob/main/docs/en/concepts-and-designs/conversation-assembly.md) and the [Unified Conversation Model](https://github.com/apache/skywalking-ai-sessionizer/blob/main/docs/en/concepts-and-designs/unified-conversation-model.md).
 
 ## Evidence has to remain evidence
 
@@ -133,4 +143,4 @@ That is why we are sharing the project at pre-alpha. We want developers of agent
 
 If you would like to share your thoughts or discuss the project's direction with us, join the conversation in [Apache SkyWalking Discussions](https://github.com/apache/skywalking/discussions).
 
-Explore the source and documentation in the [Apache SkyWalking AI Sessionizer repository](https://github.com/apache/skywalking-ai-sessionizer). What works today is the beginning: reconstruct the observable session first, preserve its evidence, and use that foundation to build replay, monitoring, and analysis together.
+Explore the source and documentation in the [Apache SkyWalking AI Sessionizer repository](https://github.com/apache/skywalking-ai-sessionizer). Start with a Claude Code session already on your machine, explore its recorded execution in the local replay view, and help us build toward broader agent replay, monitoring, and analysis.
