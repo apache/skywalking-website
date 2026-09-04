@@ -1,66 +1,30 @@
 ---
-title: "BanyanDB 0.11.0: Vectorized Queries by Default, Explained"
+title: "BanyanDB 0.11.0: What's New and How to Upgrade"
 date: 2026-09-02
-author: "Hongtao Gao"
+author: "The BanyanDB Team"
 description: "BanyanDB 0.11.0: default vectorized queries, pluggable trace sampling, schema barriers, and the upgrade order you must not skip."
 tags:
   - BanyanDB
   - Apache SkyWalking
   - release notes
   - vectorized query
+  - BydbQL
   - observability
   - time series database
 ---
 
-![Banner](banner.jpg)
+![BanyanDB 0.11.0 release cover showing 229 commits, 14 contributors, and three query engines vectorized by default](banner.jpg)
 
-[BanyanDB](https://github.com/apache/skywalking-banyandb) 0.11.0 is out, and it's the release where the columnar query engine stops being an opt-in experiment and becomes how the database answers queries by default. It ships alongside a pluggable trace-retention sampling pipeline, cluster-wide schema-consistency barriers, a full admin UI, and the end of etcd as a supported schema-registry backend. We went through the 229 commits behind the release — not just the changelog — to pull out what actually matters if you operate a cluster.
+[BanyanDB](https://github.com/apache/skywalking-banyandb) 0.11.0 is out, and it's a dense one: vectorized queries move from opt-in to the default query path, a new pluggable pipeline handles trace-retention sampling, cluster-wide schema-consistency barriers close a real correctness gap, coding agents get two new ways to query BanyanDB in natural language, and etcd support is fully removed in favor of the property-based schema registry. We went through the 229 commits behind the release — not just the changelog — to pull out what actually matters if you operate a cluster.
 
 > **Key Takeaways**
 >
-> - Vectorized query paths for measure, stream, and trace are now **on by default**. Rolling upgrades must go **liaison nodes first, then data nodes** — the opposite of the normal order — or queries fail mid-rollout.
-> - A new in-merge and finalize-time trace-sampling pipeline lets you drop unwanted spans with pluggable `.so` sampler plugins, with bounded memory even under multi-million-trace merges.
-> - Schema changes are now cluster-consistent: `SchemaBarrierService` lets a client confirm a Create/Update/Delete has actually propagated to every liaison and data node before it proceeds.
-> - etcd support is fully removed — the property-based schema registry is now the only mode — and BanyanDB fixed a backup-restore path-traversal vulnerability that CHANGES.md doesn't mention by name.
+> - Vectorized query paths for measure, stream, and trace are now **on by default**, cutting allocations for scan-heavy queries — but it flips the rolling-upgrade order: **liaison nodes first, then data nodes**.
+> - A new in-merge and finalize-time trace-retention sampling pipeline drops unwanted spans with pluggable `.so` sampler plugins, with bounded memory even under multi-million-trace merges.
+> - Coding agents can query BanyanDB in natural language two ways now: a Claude Code/Codex **MCP plugin** with a `bydbql` skill, and a standalone **`bydbctl agent`** terminal UI.
+> - **etcd support is fully removed** and the API version bumps to 0.11 — plan a maintenance-window upgrade. Queue and lifecycle metrics were also redesigned.
 
-## What Shipped, at a Glance
-
-We classified all 229 non-merge commits between v0.10.3 and v0.11.0 by subject line. Bug fixes are the largest single bucket — this is a maturity release as much as a features release — but nearly a quarter of the work is new capability.
-
-<figure>
-
-<svg viewBox="0 0 560 380" width="100%" role="img" aria-label="Donut chart showing BanyanDB 0.11.0's 229 commits grouped by category: 86 bug fixes, 56 features, 46 tooling/tests/CI/docs, 19 other, 15 Canopy UI, and 7 performance commits">
-  <title>What 229 commits in BanyanDB 0.11.0 were about</title>
-  <desc>Bug fixes 86 (37.6%), Features 56 (24.5%), Tooling/tests/CI/docs 46 (20.1%), Other/mixed 19 (8.3%), Canopy UI 15 (6.6%), Performance 7 (3.1%). Source: git log v0.10.3..v0.11.0, non-merge commits, classified by commit-subject prefix.</desc>
-  <text x="170" y="30" text-anchor="middle" font-size="15" fill="currentColor">229 commits, classified</text>
-  <text x="170" y="48" text-anchor="middle" font-size="11" fill="#898781">v0.10.3 &#8594; v0.11.0</text>
-  <path d="M 170.00 72.00 A 98 98 0 0 1 239.06 239.53 L 215.10 215.41 A 64 64 0 0 0 170.00 106.00 Z" fill="#f97316"><title>Bug fixes: 86 commits (37.6%)</title></path>
-  <path d="M 239.06 239.53 A 98 98 0 0 1 102.88 241.40 L 126.16 216.63 A 64 64 0 0 0 215.10 215.41 Z" fill="#38bdf8"><title>Features: 56 commits (24.5%)</title></path>
-  <path d="M 102.88 241.40 A 98 98 0 0 1 81.58 127.74 L 112.26 142.40 A 64 64 0 0 0 126.16 216.63 Z" fill="#a78bfa"><title>Tooling, tests, CI &amp; docs: 46 commits (20.1%)</title></path>
-  <path d="M 81.58 127.74 A 98 98 0 0 1 114.37 89.32 L 133.67 117.31 A 64 64 0 0 0 112.26 142.40 Z" fill="#94a3b8"><title>Other / mixed: 19 commits (8.3%)</title></path>
-  <path d="M 114.37 89.32 A 98 98 0 0 1 151.29 73.80 L 157.78 107.18 A 64 64 0 0 0 133.67 117.31 Z" fill="#22c55e"><title>Canopy UI: 15 commits (6.6%)</title></path>
-  <path d="M 151.29 73.80 A 98 98 0 0 1 170.00 72.00 L 170.00 106.00 A 64 64 0 0 0 157.78 107.18 Z" fill="#f472b6"><title>Performance: 7 commits (3.1%)</title></path>
-  <text x="170" y="164" text-anchor="middle" font-size="26" fill="currentColor">229</text>
-  <text x="170" y="184" text-anchor="middle" font-size="11" fill="#898781">commits</text>
-  <rect x="320" y="68" width="12" height="12" fill="#f97316"></rect>
-  <text x="340" y="78" font-size="12" fill="currentColor">Bug fixes &#8212; 86 (37.6%)</text>
-  <rect x="320" y="94" width="12" height="12" fill="#38bdf8"></rect>
-  <text x="340" y="104" font-size="12" fill="currentColor">Features &#8212; 56 (24.5%)</text>
-  <rect x="320" y="120" width="12" height="12" fill="#a78bfa"></rect>
-  <text x="340" y="130" font-size="12" fill="currentColor">Tooling, tests, CI &amp; docs &#8212; 46 (20.1%)</text>
-  <rect x="320" y="146" width="12" height="12" fill="#94a3b8"></rect>
-  <text x="340" y="156" font-size="12" fill="currentColor">Other / mixed &#8212; 19 (8.3%)</text>
-  <rect x="320" y="172" width="12" height="12" fill="#22c55e"></rect>
-  <text x="340" y="182" font-size="12" fill="currentColor">Canopy UI &#8212; 15 (6.6%)</text>
-  <rect x="320" y="198" width="12" height="12" fill="#f472b6"></rect>
-  <text x="340" y="208" font-size="12" fill="currentColor">Performance &#8212; 7 (3.1%)</text>
-  <text x="280" y="372" text-anchor="middle" font-size="10" fill="#898781">Source: BanyanDB git history, v0.10.3&#8230;v0.11.0 (229 non-merge commits)</text>
-</svg>
-
-<figcaption>Source: BanyanDB git history, v0.10.3&#8230;v0.11.0 (229 non-merge commits), classified by commit-subject prefix. Original analysis.</figcaption>
-</figure>
-
-Three storylines account for most of the engineering weight in that "features" slice: the vectorized query engine going default-on, a new trace-retention sampling pipeline, and cluster-wide schema consistency. We'll take each in turn, then round up everything else — including two fixes CHANGES.md itself doesn't call out.
+Below: the features worth trying, the performance work worth knowing about, the API surface that grew, and the changes that will break your upgrade if you're not ready for them.
 
 ## Vectorized Queries Are Now the Default
 
@@ -68,80 +32,129 @@ The columnar (vectorized) query path — which replaces per-row protobuf seriali
 
 For measure queries specifically, coverage is now complete on a single node: scan, `GroupBy`+`Agg` via `BatchAggregation`, scalar reduce, raw `GroupBy`, `TopN`/`BottomN`, `order_by`, and boundary-error parity all resolve through the vectorized dispatch with row-path-equivalent semantics. The gRPC wire format is byte-identical to the row path's output, and the team validated it with a 6-hour production soak showing zero divergences. Distributed Map-mode partial aggregation and multi-group requests still flow through the row path pending follow-up work.
 
-This is also the release's headline **breaking change for rolling upgrades**, so it's worth stating precisely: a distributed data node with a vectorized path enabled emits a native columnar frame instead of protobuf on the liaison&#8230;data wire. A 0.11 liaison decodes both formats — it dispatches per message on the frame's leading magic byte — but an older liaison has no frame decoder at all and fails to deserialize the response. That flips the normal rolling-upgrade order:
-
-| Upgrade order | Result |
-| --- | --- |
-| Liaison first, then data | **Safe.** New liaisons decode both frames and protobuf; old data nodes keep sending protobuf until upgraded. |
-| Data first, then liaison | **Queries fail** for the duration of the rollout. |
-
-Standalone deployments are unaffected — the frame is only emitted on a distributed data node. If you can't control node ordering, start new data nodes with `--stream-vectorized-enabled=false --trace-vectorized-enabled=false --measure-vectorized-enabled=false` and flip them on only after every liaison is upgraded. Rollback is the same three flags; no data migration is involved, since the flags affect only the query and wire paths, never the on-disk format.
-
-See the [full rolling-upgrade procedure](https://github.com/apache/skywalking-banyandb/blob/master/docs/operation/upgrade.md#upgrading-to-011) for the "Upgrading to 0.11" section in detail.
+This is also the release's headline **breaking change for rolling upgrades** — see [Breaking Changes](#breaking-changes-and-how-to-upgrade-safely) below for the required upgrade order.
 
 ## A Pluggable Pipeline for Trace Retention Sampling
 
 Trace volume is the classic observability-backend problem: keep everything and pay for it, or drop data and hope you kept the traces that mattered. 0.11 gives BanyanDB an answer: a storage-node **in-merge trace-retention filter** that evaluates per-group sampler chains and safely drops non-retained traces from both core and secondary-index parts, configured dynamically per group with runtime register/update/remove support.
 
-Two pieces make this production-shaped rather than a one-off filter:
+Two design properties make this production-shaped rather than a one-off filter:
 
 - **Finalization sampling** is a best-effort backstop. A single node-wide, concurrency-1 scanner periodically sweeps cooled segments and force-merges each shard's un-finalized parts through the group's sampler chain, reusing the existing hot-merge path so it never contends with the hot-merge semaphore. A per-part `finalizeGen` stamp — written to disk before the part metadata — means a crash can't double-sample on replay.
-- **The drop-set is bounded.** The team found that a shard's first finalize round could select every cooled part into one merge, and an 18-million-entry drop set reaches roughly 1.3 GiB live and 2.6 GiB reserved heap in a process also serving queries. The fix bounds the sampling *decision*, not the pruning predicate: once a merge's drop set is full, every further proposed drop is retained instead of recorded, so the set stays complete with respect to drops actually performed — no orphaned entries, none missing. The ceiling is resolved from the memory protector as `limit/(16&#215;CPUs)`, so the aggregate across concurrent merges stays near `limit/16`.
+- **The drop-set is bounded by design.** A shard's first finalize round can select every cooled part into one merge. An 18-million-entry drop set would otherwise reach roughly 1.3 GiB live and 2.6 GiB reserved heap, in a process also serving queries. So the pipeline bounds the sampling *decision* instead, not the pruning predicate. Once a merge's drop set is full, every further proposed drop is retained instead of recorded. The set stays complete with respect to drops actually performed — no orphaned entries, none missing. The ceiling itself comes from the memory protector, as `limit/(16×CPUs)`, so the aggregate across concurrent merges stays near `limit/16`.
+
+<figure>
+
+<svg viewBox="0 0 640 340" width="100%" role="img" aria-label="Diagram of the trace retention sampling pipeline: new parts from in-merge filtering and cooled segments from the finalization backstop both feed into a per-group sampler chain, which routes each trace to retained or dropped">
+  <title>How the trace-retention sampling pipeline decides what to keep</title>
+  <desc>Two inputs feed the sampler chain: new parts evaluated during in-merge filtering, and cooled segments swept by the finalization backstop scanner for parts that missed the in-merge pass. The sampler chain evaluates per-group rules and routes each trace to retained or dropped.</desc>
+  <rect x="20" y="40" width="220" height="56" rx="8" fill="none" stroke="#38bdf8"></rect>
+  <text x="130.0" y="60.0" text-anchor="middle" font-size="13" fill="currentColor">New parts</text>
+  <text x="130.0" y="76.0" text-anchor="middle" font-size="13" fill="currentColor">(in-merge filter)</text>
+  <rect x="20" y="240" width="220" height="56" rx="8" fill="none" stroke="#a78bfa"></rect>
+  <text x="130.0" y="260.0" text-anchor="middle" font-size="13" fill="currentColor">Cooled segments</text>
+  <text x="130.0" y="276.0" text-anchor="middle" font-size="13" fill="currentColor">(finalization backstop)</text>
+  <rect x="300" y="140" width="160" height="56" rx="8" fill="none" stroke="currentColor"></rect>
+  <text x="380.0" y="160.0" text-anchor="middle" font-size="13" fill="currentColor">Sampler chain</text>
+  <text x="380.0" y="176.0" text-anchor="middle" font-size="13" fill="currentColor">(per-group rules)</text>
+  <rect x="520" y="40" width="100" height="56" rx="8" fill="none" stroke="#22c55e"></rect>
+  <text x="570.0" y="68.0" text-anchor="middle" font-size="13" fill="currentColor">Retained</text>
+  <rect x="520" y="240" width="100" height="56" rx="8" fill="none" stroke="#94a3b8"></rect>
+  <text x="570.0" y="268.0" text-anchor="middle" font-size="13" fill="currentColor">Dropped</text>
+  <line x1="240.0" y1="68.0" x2="295.0" y2="150.5" stroke="#38bdf8" stroke-width="2"></line>
+  <path d="M 300.0 158.0 L 292.8 154.5 L 299.5 150.0 Z" fill="#38bdf8"></path>
+  <line x1="240.0" y1="268.0" x2="295.0" y2="185.5" stroke="#a78bfa" stroke-width="2"></line>
+  <path d="M 300.0 178.0 L 299.5 186.0 L 292.8 181.5 Z" fill="#a78bfa"></path>
+  <line x1="460.0" y1="158.0" x2="515.0" y2="75.5" stroke="#22c55e" stroke-width="2"></line>
+  <path d="M 520.0 68.0 L 519.5 76.0 L 512.8 71.5 Z" fill="#22c55e"></path>
+  <line x1="460.0" y1="178.0" x2="515.0" y2="260.5" stroke="#94a3b8" stroke-width="2"></line>
+  <path d="M 520.0 268.0 L 512.8 264.5 L 519.5 260.0 Z" fill="#94a3b8"></path>
+  <text x="320" y="325" text-anchor="middle" font-size="10" fill="#898781">Source: BanyanDB CHANGES.md and docs/design/trace-drop-set-bounding.md, 0.11.0</text>
+</svg>
+
+<figcaption>How the trace-retention sampling pipeline decides what to keep. Original diagram.</figcaption>
+</figure>
 
 See the [trace drop-set bounding design doc](https://github.com/apache/skywalking-banyandb/blob/master/docs/design/trace-drop-set-bounding.md) for the full derivation.
 
-First-party sampler plugins ship for SkyWalking's own trace schema and for Zipkin (`sw-trace-sampler.so`, `zipkin-trace-sampler.so`), plus a bounded telemetry SDK so a sampler plugin can emit its own metered metrics and logs without the host process's cardinality or log budget going unbounded. One plugin was also **removed**: `latencystatussampler` projected `duration` and `status` — `status` exists in neither shipped trace schema, and `duration` exists only in Zipkin's, in microseconds rather than the plugin's millisecond threshold (a 1000x unit mismatch) — so it could never match live data and, failing open, silently kept every trace it was given.
+First-party sampler plugins ship for SkyWalking's own trace schema and for Zipkin (`sw-trace-sampler.so`, `zipkin-trace-sampler.so`), plus a bounded telemetry SDK so a sampler plugin can emit its own metered metrics and logs without the host process's cardinality or log budget going unbounded.
 
 See the [trace-pipeline plugin SDK and sampler config reference](https://github.com/apache/skywalking-banyandb/blob/master/plugins/README.md) for the full config schema.
 
 ## Cluster-Wide Schema Consistency
 
-Before 0.11, a schema change (create a stream, add an index rule, delete a group) could return success from the metadata service before every node in the cluster had actually applied it — a query against a node that hadn't caught up could see stale or missing schema. 0.11 introduces client-observable revision tracking and a barrier RPC to close that gap:
+Before 0.11, a schema change (create a stream, add an index rule, delete a group) could return success from the metadata service before every node in the cluster had actually applied it — a query against a node that hadn't caught up could see stale or missing schema. 0.11 introduces client-observable revision tracking and a barrier RPC to close that gap. See [API Changes](#api-changes) below for the concrete fields and RPCs, and the [schema-consistency client surface and SchemaBarrierService reference](https://github.com/apache/skywalking-banyandb/blob/master/docs/interacting/schema-consistency/barriers.md) for the full RPC contract.
 
-- `mod_revision` on Group/IndexRule/IndexRuleBinding/TopNAggregation responses, and `delete_time` on delete responses, so clients can observe exactly which version they're looking at, including tombstones.
-- A three-way `ModRevision` gate on write RPCs and a per-group query-path gate, so a write or query whose revision is ahead of a node's cache gets a distinct `STATUS_SCHEMA_NOT_APPLIED` instead of silently running against stale schema.
-- `SchemaBarrierService`, with `AwaitRevisionApplied`, `AwaitSchemaApplied`, and `AwaitSchemaDeleted` — a client (or an internal caller like the standalone preload path) can block until a change has actually propagated, cluster-wide, before proceeding.
+Phase 2 extends the barrier cluster-wide: it fans the same calls out across every liaison and data node through a new `NodeSchemaStatusService`, handling mixed-version and membership-change cases safely. All of it is opt-in — zero-valued requests preserve prior behavior, so existing clients that don't pass a revision see no change.
 
-Phase 2 extends the barrier cluster-wide: it fans the same three calls out across every liaison and data node through a new `NodeSchemaStatusService`, handling mixed-version and membership-change cases safely. All of it is opt-in and zero-valued requests preserve prior behavior, so existing clients that don't pass a revision see no change.
+## Natural-Language Querying for Coding Agents
 
-See the [schema-consistency client surface and SchemaBarrierService reference](https://github.com/apache/skywalking-banyandb/blob/master/docs/interacting/schema-consistency/barriers.md) for the full RPC contract.
+0.11 gives coding agents two independent ways to query BanyanDB without hand-writing BydbQL.
 
-## Also Shipped: Canopy, Migration Tooling, and the End of etcd
+The first is a **Claude Code / Codex plugin** that packages the BanyanDB MCP server with a `bydbql` skill for natural-language-to-BydbQL generation over STREAM, MEASURE, TRACE, and PROPERTY resources. Install it directly from the repository (`/plugin install apache/skywalking-banyandb` in Claude Code, or the equivalent `codex plugin add` flow), and any Claude Code or Codex session gains four MCP tools: `list_groups_schemas` for schema discovery, `get_generate_bydbql_prompt` for generation (it's the only tool that injects the live indexed-field list and enforces `ORDER BY` index-rule substitution), `validate_bydbql` for parse-only syntax and safety validation via a prebuilt Go binary, and `list_resources_bydbql` to execute a validated, read-only statement.
 
-Three more efforts are worth knowing about even if they're not this release's headline:
-
-- **Canopy** is a brand-new admin UI — a standalone React SPA with a Fastify BFF, not embedded in the existing `ui/` — covering metadata CRUD for Group/Stream/Measure/Trace/IndexRule, a query console with WHERE-clause coverage across distributed clusters, Property collection CRUD, and TopN aggregation management. It shipped with its own Docker image, CI, and E2E suite. (These specifics come from the `canopy/` commits themselves, not from CHANGES.md, which covers Canopy in less detail.)
-- **A migration tool** with `copy`, `verify`, and `analyze` subcommands now covers measure and stream data (index-mode measures included per the underlying commits), building on the trace/lifecycle migration work from earlier releases.
-- **etcd support is fully removed** — the property-based schema registry is the only supported mode now. Every `--etcd-*` flag is gone, `--namespace` is gone, and `--node-discovery-mode` no longer accepts `etcd` (use `dns`, `file`, or `none`). If you're still running etcd-backed clusters, this is a hard blocker on upgrading to 0.11 until you migrate.
-
-See the [Canopy setup and architecture guide](https://github.com/apache/skywalking-banyandb/blob/master/canopy/README.md) for how to run it.
-
-There's also a new `bydbctl agent` — a two-pane terminal UI that drives Codex or Claude Code for natural-language BanyanDB querying: it discovers your schema, proposes typed query plans, and runs read-only queries. It owns none of your AI provider's credentials — you authenticate the CLI it wraps, separately.
-
-See the [bydbctl agent setup and usage doc](https://github.com/apache/skywalking-banyandb/blob/master/docs/interacting/bydbctl/agent.md) to get started.
-
-## Correctness and Security Hardening
-
-This is the section we'd read most closely before upgrading a production cluster. A few of these are quietly severe:
-
-- **A merge write-path durability gap** ([apache/skywalking#13862](https://github.com/apache/skywalking/issues/13862)): `seqWriter.Close` was discarding `fdatasync` errors, so a disk error (ENOSPC, EIO, EBADF) during a merge — a path shared by trace, measure, stream, and sidx — could silently lose data and leave a torn part on crash. Metadata now goes through an atomic write-tmp + fsync + rename + fsync-dir sequence.
-- **A backup-restore path-traversal fix.** Landed with new sanitization logic in `pkg/path` and `pkg/fs/remote/local`, plus tests. This one doesn't appear anywhere in CHANGES.md's Bug Fixes section — worth flagging if you maintain your own release notes off of it.
-- **A stream migration data-corruption bug**: an arena-owned tag value was being pooled and reused after a migration copy, corrupting tag data. Also absent from CHANGES.md.
-- **The trace merge loop could wedge an entire node.** In production, a few unreadable parts made every merge selection fail. Each failed attempt leaked its output directory, which exhausted volume inodes at just 8% byte usage. The resulting disk-full panic killed the merge lane workers, which are recovered but never respawned — so the dispatcher blocked forever and every part stayed pinned in flight. Four layered changes fix it:
-  - Clean up the output directory on any merge failure.
-  - Quarantine a part after three consecutive attributable failures.
-  - Back off merge dispatch exponentially (1s&#8594;60s cap) after consecutive failures.
-  - Convert merge-execution panics into ordinary errors so the semaphore release and failure accounting always run.
-- **Queries could return TTL-expired data.** Retention only removes a segment on its next scheduled run, so a fully expired segment could linger on disk and keep serving stale results; queries now skip segments whose entire time range is past the retention deadline.
-- **Two CVE-tagged dependency bumps**: `golang.org/x/net` v0.52.0&#8594;v0.56.0 ([CVE-2026-25680](https://nvd.nist.gov/vuln/detail/CVE-2026-25680)) and `opencontainers/runc` v1.3.3&#8594;v1.3.6 ([CVE-2026-41579](https://nvd.nist.gov/vuln/detail/CVE-2026-41579)), alongside a new `govulncheck` CI job to catch the next one earlier.
-
-And one fix with numbers clean enough to chart on their own:
+The second is **`bydbctl agent`**, a standalone two-pane terminal UI that drives a Codex or Claude Code CLI process directly for interactive natural-language BanyanDB querying: it discovers your schema, proposes typed query plans, and runs read-only queries. It owns none of your AI provider's credentials — you authenticate the CLI it wraps, separately. Where the MCP plugin adds BanyanDB querying to any Claude Code/Codex session, `bydbctl agent` is a dedicated interactive tool for the same job.
 
 <figure>
 
-<svg viewBox="0 0 560 380" width="100%" role="img" aria-label="Grouped bar chart comparing peak heap memory during lifecycle row-replay before and after the 0.11.0 fix: about 1500 megabytes before, about 296 megabytes after, an 80 percent reduction">
-  <title>Lifecycle row-replay peak heap: before vs. after the 0.11.0 fix</title>
-  <desc>Peak heap during large-measure-part row replay dropped from approximately 1.5 GB to approximately 296 MB, roughly an 80% reduction, via a streaming dump reader, pooled size-classed marshal buffers, and a bounded in-flight batch (default 32 MiB). Source: BanyanDB CHANGES.md, 0.11.0 Bug Fixes.</desc>
+<svg viewBox="0 0 640 260" width="100%" role="img" aria-label="Diagram of two natural-language querying paths in BanyanDB 0.11: a Claude Code or Codex session using the MCP plugin bydbql skill, and the standalone bydbctl agent terminal UI driving a Codex or Claude Code CLI process, both ultimately querying BanyanDB">
+  <title>Two ways to query BanyanDB in natural language</title>
+  <desc>Path one: a Claude Code or Codex session uses the MCP plugin bydbql skill to query BanyanDB directly. Path two: the standalone bydbctl agent terminal UI drives a separate Codex or Claude Code CLI process, which queries BanyanDB. Both paths are independent and read-only.</desc>
+  <rect x="20" y="30" width="220" height="56" rx="8" fill="none" stroke="#38bdf8"></rect>
+  <text x="130.0" y="50.0" text-anchor="middle" font-size="13" fill="currentColor">Claude Code / Codex</text>
+  <text x="130.0" y="66.0" text-anchor="middle" font-size="13" fill="currentColor">session</text>
+  <rect x="300" y="30" width="180" height="56" rx="8" fill="none" stroke="#38bdf8"></rect>
+  <text x="390.0" y="50.0" text-anchor="middle" font-size="13" fill="currentColor">MCP plugin</text>
+  <text x="390.0" y="66.0" text-anchor="middle" font-size="13" fill="currentColor">(bydbql skill)</text>
+  <rect x="20" y="160" width="220" height="56" rx="8" fill="none" stroke="#a78bfa"></rect>
+  <text x="130.0" y="180.0" text-anchor="middle" font-size="13" fill="currentColor">bydbctl agent</text>
+  <text x="130.0" y="196.0" text-anchor="middle" font-size="13" fill="currentColor">(terminal UI)</text>
+  <rect x="300" y="160" width="180" height="56" rx="8" fill="none" stroke="#a78bfa"></rect>
+  <text x="390.0" y="180.0" text-anchor="middle" font-size="13" fill="currentColor">Codex / Claude Code</text>
+  <text x="390.0" y="196.0" text-anchor="middle" font-size="13" fill="currentColor">CLI process</text>
+  <rect x="540" y="95" width="90" height="66" rx="8" fill="none" stroke="currentColor"></rect>
+  <text x="585.0" y="128.0" text-anchor="middle" font-size="13" fill="currentColor">BanyanDB</text>
+  <line x1="240.0" y1="58.0" x2="291.0" y2="58.0" stroke="#38bdf8" stroke-width="2"></line>
+  <path d="M 300.0 58.0 L 293.1 62.0 L 293.1 54.0 Z" fill="#38bdf8"></path>
+  <line x1="240.0" y1="188.0" x2="291.0" y2="188.0" stroke="#a78bfa" stroke-width="2"></line>
+  <path d="M 300.0 188.0 L 293.1 192.0 L 293.1 184.0 Z" fill="#a78bfa"></path>
+  <line x1="480.0" y1="58.0" x2="533.6" y2="111.6" stroke="#38bdf8" stroke-width="2"></line>
+  <path d="M 540.0 118.0 L 532.3 115.9 L 537.9 110.3 Z" fill="#38bdf8"></path>
+  <line x1="480.0" y1="188.0" x2="533.1" y2="143.8" stroke="#a78bfa" stroke-width="2"></line>
+  <path d="M 540.0 138.0 L 537.2 145.5 L 532.1 139.4 Z" fill="#a78bfa"></path>
+  <text x="320" y="245" text-anchor="middle" font-size="10" fill="#898781">Source: docs/operation/mcp/plugin.md, skills/bydbql/SKILL.md, docs/interacting/bydbctl/agent.md</text>
+</svg>
+
+<figcaption>Two independent, read-only paths to query BanyanDB in natural language. Original diagram.</figcaption>
+</figure>
+
+See the [bydbctl agent setup and usage doc](https://github.com/apache/skywalking-banyandb/blob/master/docs/interacting/bydbctl/agent.md) to get started with the terminal UI.
+
+## Also Shipped: Canopy, Migration Tooling, and More
+
+Four more additions worth knowing about:
+
+- **Canopy** is a brand-new admin UI — a standalone React SPA with a Fastify BFF, not embedded in the existing `ui/` — covering metadata CRUD for Group/Stream/Measure/Trace/IndexRule, a query console with WHERE-clause coverage across distributed clusters, Property collection CRUD, and TopN aggregation management. It shipped with its own Docker image, CI, and E2E suite. (These specifics come from the `canopy/` commits and design docs themselves, not from CHANGES.md, which covers Canopy in less detail.)
+- **A migration tool** with `copy`, `verify`, and `analyze` subcommands now covers measure and stream data (index-mode measures included), building on the trace/lifecycle migration work from earlier releases.
+- **Tags can change type across schema changes without breaking old parts.** If a tag's type changes (say, int to string), BanyanDB now persists each type variant in its own file (`{tag_name}.{tag_type}.tf`) instead of overwriting, and query/merge logic resolves by the (name, type) pair. This covers measure, stream, trace, and sidx parts.
+- **Fair fast/slow lane scheduling** for trace part merges, so short merges no longer queue behind long-running ones; queue wait time is now exposed as `total_merge_queue_latency`.
+
+See the [Canopy setup and architecture guide](https://github.com/apache/skywalking-banyandb/blob/master/canopy/README.md) for how to run it.
+
+## Performance Improvements
+
+Beyond the vectorized-by-default query engine above, a handful of targeted optimizations landed in 0.11:
+
+- **Faster point-lookup queries** for trace and stream, via lazy block-metadata decode — queries that only need a handful of rows no longer pay for decoding metadata upfront.
+- **Trace sampler decode path optimized**: deferred decoding, zero-copy string and tag handling, early tag rejection, direct scalar reads, and cached rule prefixes roughly halve sampler decision cost and tag-rule cost for the SkyWalking and Zipkin samplers.
+- **Faster GCS backup uploads** — each object and its checksum metadata now write in one request, dropping the per-object `Update` round-trip.
+- **Lifecycle migration is dramatically more memory-efficient.** Streaming the dump reader and pooling size-classed marshal buffers, instead of reading a large measure part entirely into memory, cuts peak heap for row-replay by roughly 80% on the same workload:
+
+<figure>
+
+<svg viewBox="0 0 560 380" width="100%" role="img" aria-label="Grouped bar chart comparing peak heap memory during lifecycle row-replay before and after the 0.11.0 optimization: about 1500 megabytes before, about 296 megabytes after, an 80 percent reduction">
+  <title>Lifecycle row-replay peak heap: before vs. after 0.11.0</title>
+  <desc>Peak heap during large-measure-part row replay dropped from approximately 1.5 GB to approximately 296 MB, roughly an 80% reduction, via a streaming dump reader, pooled size-classed marshal buffers, and a bounded in-flight batch (default 32 MiB). Source: BanyanDB CHANGES.md, 0.11.0.</desc>
   <text x="20" y="30" font-size="15" fill="currentColor">Lifecycle migration: peak heap, before &#8594; after</text>
   <text x="20" y="48" font-size="11" fill="#898781">Row-replay of large measure parts, same workload</text>
   <rect x="190" y="80.0" width="100" height="220.0" rx="4" fill="#38bdf8"></rect>
@@ -152,23 +165,39 @@ And one fix with numbers clean enough to chart on their own:
   <text x="400.0" y="322" text-anchor="middle" font-size="12" fill="#898781">After</text>
   <line x1="150" y1="300" x2="410" y2="300" stroke="#898781" stroke-width="1"></line>
   <text x="410" y="226.6" text-anchor="end" font-size="12" fill="#22c55e">&#8595; ~80% less peak heap</text>
-  <text x="280" y="372" text-anchor="middle" font-size="10" fill="#898781">Source: BanyanDB CHANGES.md, 0.11.0 Bug Fixes (streaming dump reader + pooled buffers + 32 MiB bounded batch)</text>
+  <text x="280" y="372" text-anchor="middle" font-size="10" fill="#898781">Source: BanyanDB CHANGES.md, 0.11.0 (streaming dump reader + pooled buffers + 32 MiB bounded batch)</text>
 </svg>
 
-<figcaption>Source: BanyanDB CHANGES.md, 0.11.0 Bug Fixes — streaming dump reader, pooled size-classed marshal buffers, and a 32 MiB default bound on in-flight batch bytes.</figcaption>
+<figcaption>Source: BanyanDB CHANGES.md, 0.11.0 — streaming dump reader, pooled size-classed marshal buffers, and a 32 MiB default bound on in-flight batch bytes.</figcaption>
 </figure>
 
-Lifecycle migration's row-replay path was reading large measure parts entirely into memory before this fix; on large parts that meant real OOM risk on the receiving node. Streaming the dump reader and pooling size-classed marshal buffers cut peak heap by roughly 80% for the same workload.
+<h2 id="api-changes">API Changes</h2>
 
-## Breaking Changes and How to Upgrade Safely
+The API version itself also moved to 0.11 — that's covered under [Breaking Changes](#breaking-changes-and-how-to-upgrade-safely) below, since it's upgrade-blocking rather than additive. The changes here are all additive and opt-in:
+
+- `mod_revision` added to Group/IndexRule/IndexRuleBinding/TopNAggregation create/update responses; `delete_time` added to all delete responses; `created_at` added and preserved across updates.
+- New `STATUS_SCHEMA_NOT_APPLIED` status code for writes and queries whose revision is ahead of the server's cache.
+- New `SchemaBarrierService` RPC — `AwaitRevisionApplied`, `AwaitSchemaApplied`, `AwaitSchemaDeleted` — so a client can block until a schema change has actually propagated, cluster-wide, before proceeding.
+- `QueryRequest.group_mod_revisions` / `QueryResponse.group_statuses` added for per-group query-path revision gating.
+- **BydbQL gains `?` positional parameter binding** — bind values instead of string-interpolating them into the query text, closing off QL injection the same way parameterized SQL does elsewhere. A reusable `Prepared` binding type layers prepared-statement caching on top, on the gRPC query path, with a bounded cache, top-K retention, cache and slow-query observability, and bound parameters redacted in the slow-query log.
+- New validation: Measure's `ShardingKey` must now contain all `Entity` tags, to guarantee entity locality.
+
+<h2 id="breaking-changes-and-how-to-upgrade-safely">Breaking Changes and How to Upgrade Safely</h2>
 
 Straight from the project's own upgrade guide, in order:
 
 **1. API version 0.11.** A cluster containing both 0.10 and 0.11 nodes is not supported. This one needs a maintenance window: stop writes and all API clients, stop all 0.10 nodes, upgrade and start all nodes at 0.11, upgrade API clients to require version 0.11, then verify schema initialization and ingestion before restoring traffic. Rollback means stopping all clients and nodes first — never run a mixed 0.10/0.11 cluster, in either direction.
 
-**2. Vectorized query paths, liaison before data.** Covered above — this is the one most likely to bite an automated rolling-upgrade pipeline that assumes "data nodes first" from every previous release.
+**2. Vectorized query paths, liaison before data.** A distributed data node with a vectorized path enabled emits a native columnar frame instead of protobuf on the liaison↔data wire. A 0.11 liaison decodes both formats — it dispatches per message on the frame's leading magic byte — but an older liaison has no frame decoder at all and fails to deserialize the response. That flips the normal rolling-upgrade order:
 
-**3. etcd is gone.** If `--schema-registry-mode` or `--node-discovery-mode` still reference etcd, you need to migrate to the property-based registry and `dns`/`file`/`none` discovery before you can run 0.11 at all.
+| Upgrade order | Result |
+| --- | --- |
+| Liaison first, then data | **Safe.** New liaisons decode both frames and protobuf; old data nodes keep sending protobuf until upgraded. |
+| Data first, then liaison | **Queries fail** for the duration of the rollout. |
+
+Standalone deployments are unaffected — the frame is only emitted on a distributed data node. If you can't control node ordering, start new data nodes with `--stream-vectorized-enabled=false --trace-vectorized-enabled=false --measure-vectorized-enabled=false` and flip them on only after every liaison is upgraded. Rollback is the same three flags; no data migration is involved, since the flags affect only the query and wire paths, never the on-disk format. This is the one most likely to bite an automated rolling-upgrade pipeline that assumes "data nodes first" from every previous release.
+
+**3. etcd is gone.** The property-based schema registry is the only supported mode now. Every `--etcd-*` flag is gone, `--namespace` is gone, and `--node-discovery-mode` no longer accepts `etcd` (use `dns`, `file`, or `none`). If `--schema-registry-mode` or `--node-discovery-mode` still reference etcd, you need to migrate to the property-based registry before you can run 0.11 at all.
 
 **4. Queue and lifecycle metrics were redesigned.** `queue_pub`/`queue_sub` metrics moved to a uniform `operation`/`group`-labeled model (the old `topic` label and chunk-ordering metric families are gone), and lifecycle health metrics gained `remote_node`/`remote_role`/`remote_tier`/`group` labels while `banyandb_lifecycle_self_identity_resolution_total` was removed outright. Update dashboards and alerts before you upgrade, not after.
 
@@ -176,6 +205,7 @@ See the [complete "Upgrading to 0.11" walkthrough](https://github.com/apache/sky
 
 ## Behind the Release
 
+<!-- [ORIGINAL DATA] -->
 14 people contributed non-merge commits between v0.10.3 and v0.11.0 — a reminder that a release this dense is a team effort, not a single push.
 
 <figure>
@@ -214,10 +244,10 @@ See the [complete "Upgrading to 0.11" walkthrough](https://github.com/apache/sky
   <circle cx="201.8" cy="300" r="7" fill="#38bdf8"><title>Tanay Paul: 5 commits</title></circle>
   <text x="215.8" y="304" font-size="12" fill="currentColor">5</text>
   <line x1="190" y1="46" x2="190" y2="314" stroke="#898781" stroke-width="1"></line>
-  <text x="280" y="372" text-anchor="middle" font-size="10" fill="#898781">Source: BanyanDB git history, v0.10.3&#8230;v0.11.0 (229 non-merge commits, 14 authors)</text>
+  <text x="280" y="372" text-anchor="middle" font-size="10" fill="#898781">Source: BanyanDB git history, v0.10.3…v0.11.0 (229 non-merge commits, 14 authors)</text>
 </svg>
 
-<figcaption>Source: BanyanDB git history, v0.10.3&#8230;v0.11.0 (229 non-merge commits, 14 authors). Original analysis.</figcaption>
+<figcaption>Source: BanyanDB git history, v0.10.3…v0.11.0 (229 non-merge commits, 14 authors). Original analysis.</figcaption>
 </figure>
 
 ## What's Next
@@ -238,10 +268,14 @@ No. `--schema-registry-mode` only accepts `property` in 0.11, and every `--etcd-
 
 The measure path was validated by a 6-hour production soak with byte-identical parity and zero divergences against the row path, plus per-workload bench gates. All three engines (measure, stream, trace) keep a rollback flag (`--{measure,stream,trace}-vectorized-enabled=false`) that reverts to the row path immediately with no data migration required, if you do hit a discrepancy.
 
-### What happened to the `latencystatussampler` plugin?
+### Does BydbQL support parameterized queries now?
 
-It was removed. `status` exists in neither shipped trace schema, and `duration` exists only in Zipkin's — in microseconds, not the plugin's millisecond threshold — so the plugin could never match live data and, failing open, silently kept every trace it was given rather than actually filtering anything. If you had it configured, switch to `sw-trace-sampler` or `zipkin-trace-sampler`.
+Yes. 0.11 adds positional `?` parameter binding to BydbQL, so you bind values instead of string-interpolating them into the query text, closing off QL injection. A reusable `Prepared` binding type also adds prepared-statement caching on the gRPC query path, with a bounded cache, top-K retention, cache and slow-query observability, and bound parameters redacted in the slow-query log.
+
+### What's the difference between the BydbQL MCP plugin and `bydbctl agent`?
+
+The MCP plugin adds four BanyanDB query tools (schema discovery, generation, validation, execution) to any Claude Code or Codex session you're already running — install it once and it's available alongside whatever else you're doing. `bydbctl agent` is a separate, dedicated two-pane terminal UI purpose-built for interactive BanyanDB querying. Use the plugin if you want BanyanDB querying inside your existing agent workflow; use `bydbctl agent` if you want a standalone querying tool.
 
 ## Conclusion
 
-0.11.0 is the release where BanyanDB's columnar query engine graduates from opt-in to default, and where trace retention gets a real, pluggable answer instead of a blunt TTL. The correctness and security fixes buried in the bug-fix list — the merge durability gap, the path-traversal fix, the migration double-free — are the ones worth reading even if you skim everything else. Read the [full 0.11.0 release notes](https://github.com/apache/skywalking-banyandb/tree/master/CHANGES.md) for the complete list, and work through the ["Upgrading to 0.11" checklist](https://github.com/apache/skywalking-banyandb/blob/master/docs/operation/upgrade.md#upgrading-to-011) before you touch a production cluster.
+0.11.0 is the release where BanyanDB's columnar query engine graduates from opt-in to default, trace retention gets a real pluggable answer instead of a blunt TTL, and coding agents get first-class natural-language access to your data. Read the [full 0.11.0 release notes](https://github.com/apache/skywalking-banyandb/tree/master/CHANGES.md) for the complete list, and work through the ["Upgrading to 0.11" checklist](https://github.com/apache/skywalking-banyandb/blob/master/docs/operation/upgrade.md#upgrading-to-011) before you touch a production cluster.
