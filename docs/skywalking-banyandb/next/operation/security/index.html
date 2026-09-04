@@ -35,7 +35,7 @@ Basic Authentication To enable authentication on the BanyanDB server, you need t
   <meta itemprop="description" content="Security Security is a critical aspect of any application. In this section, we will discuss the security features of the BanyanDB.
 Authentication BanyanDB supports username and password-based authentication for both gRPC and HTTP endpoints. This guide explains how to configure and use this feature for both the BanyanDB server and the bydbctl command-line tool.
 Basic Authentication To enable authentication on the BanyanDB server, you need to create a YAML configuration file that defines your users and their passwords.">
-  <meta itemprop="wordCount" content="1391">
+  <meta itemprop="wordCount" content="1507">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Security">
   <meta name="twitter:description" content="Security Security is a critical aspect of any application. In this section, we will discuss the security features of the BanyanDB.
@@ -1451,7 +1451,7 @@ Basic Authentication To enable authentication on the BanyanDB server, you need t
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 9f1ea35</div>
+                  <div class="commit-id">Commit Id: 6a2eaf6</div>
                 
 
 
@@ -1611,30 +1611,43 @@ one user. The authentication file must still have mode <code>0600</code>. Valid 
 changes are applied atomically without restarting liaison; an invalid reload
 leaves the last valid policy and revision in force.</p>
 <h3 id="authorization-coverage-in-this-release">Authorization coverage in this release</h3>
-<p>This release activates the global cluster permissions:</p>
+<p>This release authorizes every public liaison RPC through the same compiled
+method policy used by direct gRPC and grpc-gateway calls:</p>
 <ul>
 <li><code>cluster:read</code> covers cluster state, current node, group inspection, and
 deletion-task queries.</li>
 <li><code>cluster:admin</code> covers snapshots, retention deletion, measure internal query,
 and the conditionally registered node-schema-status RPCs.</li>
+<li><code>schema:read</code> and <code>schema:write</code> cover group and resource-schema operations,
+including schema-barrier waits. Group lists are filtered to the caller&rsquo;s
+visible groups.</li>
+<li><code>data:read</code> covers Stream, Measure, Trace and Property queries, Measure TopN,
+and ByDBQL queries after they are transformed into their native request.
+Every group in a multi-group query must be permitted; BanyanDB never returns
+only the allowed subset.</li>
+<li><code>data:write</code> covers Property Apply and Delete before the handler runs, and
+every Stream, Measure and Trace write frame. A write stream requires a grant
+somewhere to open, then each frame is checked against its target group using
+the policy revision current when that frame arrives.</li>
 </ul>
 <p><code>GetAPIVersion</code> requires authentication but no role binding. Schema-barrier
-methods, including <code>AwaitRevisionApplied</code>, remain classified as <code>schema:read</code>
-and fail closed in this release.</p>
+methods, including <code>AwaitRevisionApplied</code>, are classified as <code>schema:read</code>.</p>
 <p>The existing <code>--enable-health-auth</code> setting continues to decide whether the
 gRPC <code>Check</code> and HTTP health checks require credentials; no RBAC role is added
 to that policy. Static web assets remain public. The gRPC <code>List</code> and <code>Watch</code>
 health methods retain their existing authentication requirement.</p>
-<p>Although schema and data permission names may be configured, their executors
-are not active in this release. With RBAC enabled, methods outside the activated
-global cluster set therefore fail closed with <code>PermissionDenied</code>, including for
-a role that lists the corresponding permission. Leave RBAC disabled until the
-available method coverage matches the deployment&rsquo;s needs.</p>
 <p>HTTP Basic authentication and direct gRPC authentication converge on the same
 gRPC authorization decision. The HTTP gateway discards caller-supplied identity
 metadata and forwards only the identity established from valid Basic
 credentials. Missing or invalid credentials return <code>Unauthenticated</code> before
 authorization, and denied requests do not invoke their handlers.</p>
+<h3 id="canopy-service-account-boundary">Canopy service-account boundary</h3>
+<p>When Canopy connects to BanyanDB with its single shared upstream Basic
+credential, BanyanDB authorizes that Canopy service account rather than the
+individual browser user. Canopy&rsquo;s own administrator and read-only checks remain
+the enforcement point for browser sessions. Passing per-browser-user identity
+to BanyanDB would require a separately designed signed-delegation mechanism;
+it is not part of this RBAC model.</p>
 <p>External policy proxies such as <a href="https://www.envoyproxy.io/">Envoy</a> or
 <a href="https://istio.io/">Istio</a> may still be used when deployments require an
 authorization model beyond BanyanDB&rsquo;s built-in RBAC.</p>
@@ -1686,6 +1699,7 @@ authorization model beyond BanyanDB&rsquo;s built-in RBAC.</p>
           <ul>
             <li><a href="#configure-rbac">Configure RBAC</a></li>
             <li><a href="#authorization-coverage-in-this-release">Authorization coverage in this release</a></li>
+            <li><a href="#canopy-service-account-boundary">Canopy service-account boundary</a></li>
           </ul>
         </li>
         <li><a href="#data-encryption">Data Encryption</a></li>
@@ -1799,6 +1813,8 @@ authorization model beyond BanyanDB&rsquo;s built-in RBAC.</p>
 
     </div>
     
+
+
 
 
 
