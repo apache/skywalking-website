@@ -1,16 +1,11 @@
 ---
 title: "BanyanDB 0.11.0: What's New and How to Upgrade"
-date: 2026-09-02
+date: 2026-09-07
 author: "The BanyanDB Team"
 description: "BanyanDB 0.11.0: default vectorized queries, pluggable trace sampling, schema barriers, and the upgrade order you must not skip."
 tags:
-  - BanyanDB
-  - Apache SkyWalking
-  - release notes
-  - vectorized query
-  - BydbQL
-  - observability
-  - time series database
+  - Release
+  - Storage
 ---
 
 ![BanyanDB 0.11.0 release cover showing 229 commits, 14 contributors, and three query engines vectorized by default](banner.jpg)
