@@ -2,7 +2,7 @@
 title: "Trace Tail Sampling Inside the Storage Engine with SkyWalking 11 and BanyanDB 0.11"
 author: "Kai Wan"
 date: 2026-09-07
-description: "SkyWalking 11.0.0 and BanyanDB 0.11.0 add trace tail sampling that runs inside the BanyanDB data node during compaction: every trace is judged as a whole after it is stored, and a dropped trace reclaims space that was already written."
+description: "SkyWalking 11.0.0 and BanyanDB 0.11.0 add trace tail sampling that runs inside the BanyanDB data node during compaction: each trace is judged as a whole after it is stored, and a dropped trace reclaims space that was already written."
 tags:
   - Tracing
   - Storage
@@ -71,7 +71,7 @@ fails is not rewritten, and its space is gone when the old files are removed.
                     │                                     ──► drop: not rewritten, freed  │
                     └─────────────────────────────────────────────────────────────────────┘
                                                               │
-                           optional FINALIZE sweep re-checks settled data so every trace is judged
+                     optional FINALIZE sweep: bounded re-check of settled data compaction never reached
                                            Warm and Cold stages are never touched
 ```
 
@@ -91,9 +91,12 @@ Two events can run the sampler, chosen per storage group:
 - **`PIPELINE_EVENT_MERGE`**, the default, runs during routine compaction. It is best-effort: a
   trace is judged only when the data around it happens to be compacted, so a quiet shard may hold
   traces that are never evaluated before they expire.
-- **`PIPELINE_EVENT_FINALIZE`** adds a periodic background sweep over data that has settled, so
-  every trace is eventually judged regardless of compaction activity. It costs some extra
-  background I/O and has to be named explicitly; an empty event list means MERGE only.
+- **`PIPELINE_EVENT_FINALIZE`** adds a periodic, bounded background sweep over data that has
+  settled, so traces are evaluated even where routine compaction never reaches them. It is a
+  backstop rather than a guarantee: after the first round a shard is revisited only when enough
+  new data has arrived, with a cooldown between rounds and a lifetime cap on rounds, and resource
+  guards can defer work or retain traces. It costs some extra background I/O and has to be named
+  explicitly; an empty event list means MERGE only.
 
 Only the **Hot** stage is ever sampled. Once a trace has migrated to Warm or Cold storage it is
 kept for the stage's full TTL.
@@ -213,9 +216,9 @@ towards keeping.
   decision back to it with `-1`.
 - **Never a half-deleted trace.** If any part of a trace might live in data the current
   compaction cannot see, the trace is kept and judged another time.
-- **Plugin problems never delete data.** A sampler that fails to load leaves the group unfiltered,
-  one that crashes, errors, or times out is bypassed, and a rule that cannot be evaluated keeps
-  the trace.
+- **Plugin failures fail open.** A plugin load failure preserves the previous working sampler
+  configuration; without one, all traces are retained. A sampler that crashes, errors, or times
+  out is bypassed for that batch, and a rule that cannot be evaluated keeps the trace.
 - **Configuration is strict.** Every option is a keep rule, so a misspelled key that was silently
   ignored could drop the whole group. Unknown keys and an empty config are rejected outright.
 - **Memory is bounded.** If a single compaction would drop more traces than its memory budget
@@ -226,7 +229,8 @@ towards keeping.
 Tail sampling is **off by default** everywhere, and enabling it in the OAP alone does nothing. It
 takes effect only where the data node can load the sampler plugin **and** the group's pipeline is
 enabled. Anything short of that is inert, not broken: a node without plugin support ignores the
-config, and one that cannot load the plugin keeps everything.
+config, and one that cannot load the plugin keeps its previous working sampler configuration, or
+retains everything if it never had one.
 
 ### 1. Run a plugin-capable BanyanDB data node
 
@@ -377,7 +381,8 @@ The panels answer the questions you actually have:
 - **Drop Ratio by Group** is the share of evaluated traces that were actually removed, which is
   the number to watch when tuning `healthySampleRate` or the duration threshold.
 - **Plugin Load Failures** should stay empty. Anything here means a plugin was rejected and the
-  group is running unfiltered.
+  group is still running its previous sampler configuration, or no sampling at all if it never
+  had one.
 - **Decide Rate**, **Decide Latency**, and **Plugin Time per Trace** show what the sampler costs
   the data node.
 
@@ -414,7 +419,8 @@ type Sampler interface {
 ```
 
 Each trace arrives with its ID, the tag columns you asked for, and optionally its span bodies;
-you return a keep mask. Several samplers can be chained, each seeing what the previous one kept.
+you return a keep mask. Several samplers can be chained: each receives the same batch, their
+successful keep masks are combined with AND, and a link that fails is bypassed.
 The SDK includes an offline test toolkit that runs your `Decide` against hand-built traces
 without a database, and third-party `.so` files are mounted at `/plugins/thirdparty` beside the
 first-party carrier. The
@@ -425,7 +431,8 @@ covers the full workflow, including the toolchain requirements.
 
 - **Very long traces** that cross a storage segment boundary are judged one segment at a time.
   With day-long segments and traces measured in seconds this never matters.
-- **MERGE alone is best-effort.** Add FINALIZE if you need every trace evaluated.
+- **Both events are best-effort.** MERGE only sees data that compacts; FINALIZE widens coverage
+  with a bounded sweep but does not guarantee every trace is evaluated before it expires.
 - **Zipkin error detection is a tag convention**, with the truncation caveat above.
 - **Per-stage retention is designed but not yet available.** The plan is to let a group keep
   more in Hot and progressively less as data ages to Warm and Cold. In 0.11.0 a pipeline applies

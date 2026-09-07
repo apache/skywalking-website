@@ -2,7 +2,7 @@
 title: "SkyWalking 11 与 BanyanDB 0.11：在存储引擎内部实现 Trace 尾部采样"
 author: "万凯"
 date: 2026-09-07
-description: "SkyWalking 11.0.0 与 BanyanDB 0.11.0 新增 Trace 尾部采样：采样在 BanyanDB 数据节点的 compaction 过程中进行，每条 Trace 在落盘之后被整体判定，被丢弃的 Trace 会回收已经写入的空间。"
+description: "SkyWalking 11.0.0 与 BanyanDB 0.11.0 新增 Trace 尾部采样：采样在 BanyanDB 数据节点的 compaction 过程中进行，每条 Trace 都在落盘之后被整体判定，被丢弃的 Trace 会回收已经写入的空间。"
 tags:
   - Tracing
   - Storage
@@ -61,7 +61,7 @@ BanyanDB 按 `trace_id` 分组并排序存储 Span。和大多数现代数据库
                     │                                     ──► drop: not rewritten, freed  │
                     └─────────────────────────────────────────────────────────────────────┘
                                                               │
-                           optional FINALIZE sweep re-checks settled data so every trace is judged
+                     optional FINALIZE sweep: bounded re-check of settled data compaction never reached
                                            Warm and Cold stages are never touched
 ```
 
@@ -78,9 +78,10 @@ BanyanDB 按 `trace_id` 分组并排序存储 Span。和大多数现代数据库
 
 - **`PIPELINE_EVENT_MERGE`**，默认值，在日常 compaction 中运行。它是尽力而为的：只有当一条 Trace 周围的数据
   恰好被 compaction 时它才会被判定，所以一个安静的分片里可能有一些 Trace 直到过期都没被评估过。
-- **`PIPELINE_EVENT_FINALIZE`** 增加了一个周期性的后台扫描，处理已经稳定下来的数据，让每条 Trace 最终都会被
-  判定，不再依赖 compaction 的活跃程度。它会带来一些额外的后台 I/O，并且必须显式指定；事件列表为空时只有
-  MERGE 生效。
+- **`PIPELINE_EVENT_FINALIZE`** 增加了一个周期性的、有界的后台扫描，处理已经稳定下来的数据，让日常
+  compaction 触及不到的 Trace 也能被评估。它是兜底而不是保证：首轮之后，只有新到达的数据足够多时才会再扫一个
+  分片，两轮之间有冷却期，总轮数也有上限，资源保护还可能推迟工作或直接保留 Trace。它会带来一些额外的后台
+  I/O，并且必须显式指定；事件列表为空时只有 MERGE 生效。
 
 只有 **Hot** 阶段会被采样。一条 Trace 一旦迁移到 Warm 或 Cold 存储，就会保留到该阶段的 TTL 结束。
 
@@ -185,8 +186,8 @@ T1 到 T4 照常重写进 compaction 后的文件。T5 没有，旧文件删除�
   把决定权交回数据节点，节点自身的默认值是两小时。
 - **绝不出现半删除的 Trace。** 如果一条 Trace 的任何部分可能存在于当前 compaction 看不到的数据里，这条 Trace
   会被保留，下次再判。
-- **插件问题不会删数据。** 加载失败的采样器让 group 保持不过滤；崩溃、报错或超时的采样器被绕过；无法评估的
-  规则保留 Trace。
+- **插件故障时偏向保留。** 插件加载失败会保留之前正常工作的采样器配置；如果之前没有，则保留全部 Trace。
+  崩溃、报错或超时的采样器在该批次被绕过；无法评估的规则保留 Trace。
 - **配置是严格的。** 每个选项都是一条保留规则，一个被默默忽略的拼写错误可能丢掉整个 group。未知的键和空配置
   会被直接拒绝。
 - **内存有上限。** 如果单次 compaction 要丢弃的 Trace 超过了它的内存预算，它会停止丢弃，保留其余的。
@@ -195,7 +196,7 @@ T1 到 T4 照常重写进 compaction 后的文件。T5 没有，旧文件删除�
 
 尾部采样在所有地方**默认关闭**，只在 OAP 里开启不会有任何效果。它只在数据节点能加载采样器插件**并且** group
 的 pipeline 已启用时生效。不满足条件时它是惰性的，而不是坏的：不支持插件的节点忽略这段配置，加载不了插件的
-节点保留一切。
+节点沿用之前正常工作的采样器配置，如果从未有过，则保留一切。
 
 ### 1. 运行支持插件的 BanyanDB 数据节点
 
@@ -334,8 +335,8 @@ OpenTelemetry Collector 抓取集群指标并转发给 OAP——之后，UI 中�
   宽限期内，因此被原样放过。
 - **Drop Ratio by Group** 是被评估的 Trace 中真正被移除的比例，是调整 `healthySampleRate` 或时长阈值时要盯
   的数字。
-- **Plugin Load Failures** 应该一直为空。这里有任何数据都意味着某个插件被拒绝了，对应的 group 正在不过滤地
-  运行。
+- **Plugin Load Failures** 应该一直为空。这里有任何数据都意味着某个插件被拒绝了，对应的 group 仍在沿用之前
+  的采样器配置，如果从未有过，则完全没有采样。
 - **Decide Rate**、**Decide Latency** 和 **Plugin Time per Trace** 显示采样器给数据节点带来的开销。
 
 因为这些指标由 OAP 自己采集，你还能在不离开 SkyWalking 的情况下，把采样器*提议*的结果和存储*实际提交*的结果
@@ -366,7 +367,7 @@ type Sampler interface {
 ```
 
 每条 Trace 到达时带着它的 ID、你声明需要的标签列，以及可选的 Span 内容；你返回一个保留掩码。多个采样器可以
-串成链，每一个都只看到上一个保留下来的 Trace。SDK 附带一个离线测试工具包，无需数据库就能用手工构造的 Trace
+串成链：每一个都收到同一个批次，它们成功返回的保留掩码按 AND 合并，失败的环节会被绕过。SDK 附带一个离线测试工具包，无需数据库就能用手工构造的 Trace
 运行你的 `Decide`；第三方 `.so` 文件挂载在 `/plugins/thirdparty`，与官方 carrier 并列。
 [开发指南](https://skywalking.apache.org/docs/skywalking-banyandb/latest/operation/plugins-development/)
 覆盖了完整流程，包括工具链要求。
@@ -375,7 +376,8 @@ type Sampler interface {
 
 - **跨越存储 segment 边界的超长 Trace** 会按 segment 分别判定。segment 以天为单位、Trace 以秒计时，这一点
   不会有影响。
-- **只开 MERGE 是尽力而为。** 如果需要每条 Trace 都被评估，请加上 FINALIZE。
+- **两个事件都是尽力而为。** MERGE 只看到被 compaction 的数据；FINALIZE 用有界的扫描扩大覆盖范围，但不保证
+  每条 Trace 都在过期前被评估。
 - **Zipkin 的错误检测依赖标签约定**，并有上文提到的截断问题。
 - **按阶段保留已经设计但尚未可用。** 计划是让一个 group 在 Hot 阶段多留一些，随着数据老化到 Warm 和 Cold
   逐步少留。在 0.11.0 中，一个 pipeline 作用于整个 group。
