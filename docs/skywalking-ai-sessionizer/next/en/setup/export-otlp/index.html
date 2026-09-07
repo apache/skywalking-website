@@ -33,7 +33,7 @@
   <meta itemprop="name" content="Export over OpenTelemetry">
   <meta itemprop="description" content="Export over OpenTelemetry asz push sends what the storage root holds to an OpenTelemetry logs receiver: every landed file and every round, as OTLP logs over gRPC, or over HTTP with a protobuf body. The SkyWalking OAP accepts both, on its gRPC port and on its REST port, and so does an OpenTelemetry Collector.
 # asz.yaml export: otlp: protocol: grpc # the default; http posts to the receiver&#39;s /v1/logs instead endpoint: 127.0.0.1:11800 # the OAP&#39;s gRPC port; with http, http://127.0.0.1:12800 ./bin/asz push -once # send everything not yet sent, then exit ./bin/asz push # keep sending new files every export.otlp.interval One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names.">
-  <meta itemprop="wordCount" content="2067">
+  <meta itemprop="wordCount" content="2497">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Export over OpenTelemetry">
   <meta name="twitter:description" content="Export over OpenTelemetry asz push sends what the storage root holds to an OpenTelemetry logs receiver: every landed file and every round, as OTLP logs over gRPC, or over HTTP with a protobuf body. The SkyWalking OAP accepts both, on its gRPC port and on its REST port, and so does an OpenTelemetry Collector.
@@ -611,7 +611,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c977556</div>
+                  <div class="commit-id">Commit Id: 9f1795e</div>
                 
 
 
@@ -715,9 +715,8 @@ logs receiver reads it.</p>
 </table>
 <p><code>headers</code> travel with every request on both transports, as gRPC metadata or as HTTP headers,
 which is where an authorization token goes. A receiver that answers with a partial success,
-saying it rejected some records, is treated as having refused the request: it does not say which
-records, so the request is sent again whole on the next pass, and a receiver keeps the first copy
-of a file it already holds.</p>
+saying it rejected some records, has taken the request, and the protocol says not to send it
+again: the count is reported on the pass line as <code>rejected</code>, and the files are marked sent.</p>
 <h2 id="what-every-record-carries">What every record carries</h2>
 <p>The resource, which names the service a record belongs to:</p>
 <table>
@@ -855,35 +854,95 @@ over each transport, then checks every record against the root and rebuilds the 
 the Collector wrote; CI runs it on every change. Writing each record&rsquo;s body to <code>asz.file</code> under a
 new root gives a root that <code>asz verify</code> and <code>asz view</code> read like the original.</p>
 <h2 id="metrics">Metrics</h2>
-<p><code>asz push</code> sends metrics as well, when an adapter produces them, and they are Claude Code&rsquo;s own
-metric family, name for name and attribute for attribute with the runtime&rsquo;s OpenTelemetry
-exporter, so a receiver holds one family whichever produced it. Phase one is the one measure both
-can supply exactly:</p>
+<p><code>asz push</code> sends metrics as well, when an adapter produces them, under the name Claude Code&rsquo;s
+own OpenTelemetry exporter uses, so a receiver holds one metric name whichever produced the
+points. What the local adapter derives is a reconstructed subset of the exporter&rsquo;s family, not a
+copy of it, and this table says exactly which part:</p>
 <table>
   <thead>
       <tr>
-          <th>Metric</th>
-          <th>Attributes</th>
-          <th>Unit</th>
+          <th></th>
+          <th>The runtime&rsquo;s exporter</th>
+          <th>Derived from the transcripts</th>
       </tr>
   </thead>
   <tbody>
       <tr>
-          <td><code>claude_code.token.usage</code></td>
-          <td><code>type</code> (<code>input</code>, <code>output</code>, <code>cacheRead</code>, <code>cacheCreation</code>), <code>model</code>, <code>query_source</code> (<code>main</code>, <code>subagent</code>), <code>session.id</code></td>
-          <td><code>tokens</code>, a monotonic delta sum, one point per minute and attribute set</td>
+          <td>metric</td>
+          <td><code>claude_code.token.usage</code>, <code>Number of tokens used</code>, unit <code>tokens</code>, a monotonic delta sum</td>
+          <td>the same name, description, unit and kind</td>
+      </tr>
+      <tr>
+          <td><code>type</code></td>
+          <td><code>input</code>, <code>output</code>, <code>cacheRead</code>, <code>cacheCreation</code>, a point for each even when zero</td>
+          <td>the same four, zero included</td>
+      </tr>
+      <tr>
+          <td><code>query_source</code></td>
+          <td><code>main</code>, <code>subagent</code>, <code>auxiliary</code></td>
+          <td><code>main</code> and <code>subagent</code>, from the stream the call was made on; the auxiliary calls, such as the Haiku call that names a session, never reach a transcript</td>
+      </tr>
+      <tr>
+          <td><code>model</code>, <code>session.id</code></td>
+          <td>yes</td>
+          <td>yes</td>
+      </tr>
+      <tr>
+          <td><code>user.id</code>, <code>user.email</code>, <code>user.account_uuid</code>, <code>user.account_id</code>, <code>organization.id</code>, <code>terminal.type</code>, <code>effort</code>, <code>speed</code>, and the agent, skill, plugin and MCP attribution</td>
+          <td>yes</td>
+          <td>no; a transcript does not carry them</td>
+      </tr>
+      <tr>
+          <td>the other seven metrics: cost, active time, lines of code, commits, pull requests, sessions started, edit decisions</td>
+          <td>yes</td>
+          <td>no, and never estimated</td>
+      </tr>
+      <tr>
+          <td>resource</td>
+          <td><code>service.name</code> <code>claude-code</code>, <code>service.version</code>, <code>host.arch</code>, <code>os.type</code>, <code>os.version</code></td>
+          <td><code>service.name</code> <code>claude-code</code>; asz normalises both on the way out</td>
+      </tr>
+      <tr>
+          <td>instrumentation scope</td>
+          <td><code>com.anthropic.claude_code</code>, versioned as the runtime</td>
+          <td>asz&rsquo;s own, so a receiver that keys on the scope sees two streams of one name; the OAP keys on the name and the labels</td>
+      </tr>
+      <tr>
+          <td>a point&rsquo;s window</td>
+          <td>the exporter&rsquo;s export interval, wall clock</td>
+          <td>the minute the call&rsquo;s last fragment ended, see below</td>
+      </tr>
+      <tr>
+          <td>value</td>
+          <td>a double</td>
+          <td>a double</td>
       </tr>
   </tbody>
 </table>
+<p>The right-hand column is held to a capture of what Claude Code 2.1.260 sent to asz&rsquo;s receiver
+from one short session, kept under <code>internal/metrics/testdata</code> with every identifying value
+replaced, by a test that fails when the exporter sends a label or a metric this table does not
+account for. <code>go run ./tools/otlpdump -redact FILE.pb</code> prints any spooled request the same way.</p>
 <p>With <code>metrics: true</code> on the <code>claude-code-local</code> adapter, the collector derives the points from
-the landed files: one count per call, never per fragment, since a main transcript repeats the
-usage on every fragment of a call, summed per minute the way the runtime&rsquo;s SDK sums over its
-export interval, with <code>query_source</code> from the stream the call was made on. It cannot derive what
-a transcript does not carry: cost, latency, active time, lines of code, commits, pull requests,
-the session start type, or the tokens of the runtime&rsquo;s auxiliary calls, which never reach a
-transcript. Those are the runtime&rsquo;s exporter&rsquo;s alone. The first derivation over a root with
-history is bounded by <code>metrics_lookback</code>, 24 hours unless set, so switching the flag on does not
-send a year of tokens; every later pass derives each new file whole.</p>
+the landed files by the assembler&rsquo;s own rule: the usage of a call is its last fragment&rsquo;s in line
+order, never a sum, and only a call that finished counts. A main transcript repeats the final usage
+on every fragment; a child&rsquo;s carries streaming partials on all but the last, and a call with no
+terminal fragment, 7% of a real corpus&rsquo;s child calls, has no usage at all. A call cut at a landed
+file boundary is read on into the next file of its stream, and a file ending mid-call waits for
+that file for a short grace before it is derived with what it has, under a watching collector; a
+single pass, the backfill over history that already exists, derives with what is there and never
+waits. A call is counted once however
+many files its records reach, and a record the runtime re-emitted before a context reset is the
+same call again.</p>
+<p>Points are summed per minute and attribute set, and the windows of one series never overlap: a
+point takes its minute unless the series already has a point at or past it, as when two children
+ran in the same minute or a child&rsquo;s file landed later, in which case it follows the series&rsquo; last
+point. No point of a series is ever thrown away for another. The first derivation over a root
+with history is bounded by <code>metrics_lookback</code>, 24 hours unless set, and by the newest request the
+receiver adapter landed, so switching the flag on sends neither a year of tokens nor what the
+runtime&rsquo;s exporter already sent. Every later pass derives each new file whole. A pass is
+deterministic and its requests are named after their landed files, so a pass cut short is run
+again to the same bytes and nothing is counted twice.</p>
 <p>The other source of the same family is the runtime&rsquo;s exporter itself: the <code>claude-code-otlp</code>
 adapter receives what Claude Code sends and lands each metrics request in the same spool, bytes as
 received. One root sends one source: <code>metrics</code> may be on for the local adapter or for the
@@ -894,8 +953,9 @@ once-only rule as the files. <code>export.otlp.logs</code> and <code>export.otlp
 push sends, the files and rounds as logs and the spool as metrics, so a receiver that takes one
 and not the other is sent what it takes.
 On the way out the resource is normalised to asz&rsquo;s identity, the service, the layer, the sender,
-so the OAP holds one service for the runtime. A receiver that answers with a partial success is
-treated as having refused the request, as for logs.</p>
+so the OAP holds one service for the runtime. A receiver that answers with a partial success has
+taken the request, and the protocol says not to send it again: the rejected records or points are
+counted on the pass line as <code>rejected</code> and the file is marked sent.</p>
 <h2 id="rate">Rate</h2>
 <p>A first push sends the whole history of the storage root, which can be hundreds of megabytes, as
 fast as the receiver takes it. <code>export.otlp.max_bytes_per_minute</code> caps what goes on the wire: a
@@ -1074,6 +1134,10 @@ HTTP unless its receiver is configured otherwise, so its gRPC receiver needs
 
     </div>
     
+
+
+
+
 
 
 
