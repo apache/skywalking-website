@@ -12,7 +12,9 @@ tags:
 
 ![BanyanDB 0.11.0 发布封面：包含 229 次提交、14 位贡献者，以及默认启用向量化的三类查询引擎](banner.jpg)
 
-[BanyanDB](https://github.com/apache/skywalking-banyandb) 0.11.0 已正式发布。这是一次内容丰富的更新：向量化查询从可选功能升级为默认查询路径；新增可插拔流水线来处理链路保留采样；集群级 Schema 一致性屏障弥补了一个真实存在的正确性缺口；编码智能体现在可以通过两种新方式使用自然语言查询 BanyanDB；同时，etcd 支持被完全移除，统一改用基于 Property 的 Schema Registry。我们不仅阅读了变更日志，还逐一梳理了此次发布背后的 229 次提交，总结出集群运维人员真正需要关注的内容。
+[BanyanDB](https://github.com/apache/skywalking-banyandb) 0.11.0 已正式发布。向量化查询从可选功能升级为默认路径；链路保留采样有了可插拔流水线；集群级 Schema 一致性屏障补上了正确性缺口；编码智能体可以通过两条新路径用自然语言查询 BanyanDB；etcd 支持也已移除，Schema Registry 统一使用 Property 模式。
+
+我们逐一梳理了此次发布的 229 次提交，整理出集群运维人员需要关注的功能、性能改进、API 变化和升级风险。
 
 > **核心要点**
 >
@@ -21,7 +23,6 @@ tags:
 > - 编码智能体现在可以通过两种方式使用自然语言查询 BanyanDB：一种是带有 `bydbql` Skill 的 Claude Code/Codex **MCP 插件**，另一种是独立的 **`bydbctl agent`** 终端界面。
 > - **etcd 支持已完全移除**，API 版本也升级至 0.11，因此请安排维护窗口执行升级。队列和生命周期指标同样经过了重新设计。
 
-下文将介绍值得尝试的新功能、值得关注的性能优化、新增的 API，以及如果准备不足便可能导致升级失败的破坏性变更。
 
 ## 向量化查询现已默认启用
 
@@ -33,9 +34,9 @@ tags:
 
 ## 可插拔的链路保留采样流水线
 
-链路数据量是可观测性后端面临的经典难题：要么保留全部数据并承担相应成本，要么丢弃一部分数据，同时寄希望于真正重要的链路被保留下来。0.11 为 BanyanDB 提供了解法：在存储节点引入**合并中链路保留过滤器**。它会按 Group 执行采样器链，并从核心 Part 和二级索引 Part 中安全移除未保留的链路。采样器可按 Group 动态配置，并支持运行时注册、更新和移除。
+链路数据保留得越多，存储成本越高；直接丢弃数据，又可能删掉排障需要的链路。0.11 在存储节点加入了**合并中链路保留过滤器**。过滤器按 Group 执行采样器链，从核心 Part 和二级索引 Part 中安全移除未保留的链路。采样器可按 Group 动态配置，也支持运行时注册、更新和移除。
 
-以下两项设计使它成为真正面向生产环境的能力，而非一次性的过滤器：
+为了让过滤器能在生产环境中稳定运行，0.11 加入了两项设计：
 
 - **最终化采样（Finalization sampling）**是一道尽力而为的兜底机制。节点范围内仅有一个并发度为 1 的扫描器，定期扫描已经冷却的 Segment，并让每个 Shard 尚未最终化的 Part 通过所属 Group 的采样器链进行强制合并。它复用现有的热合并路径，因此不会与热合并信号量竞争。每个 Part 都带有 `finalizeGen` 标记；该标记会先于 Part 元数据写入磁盘，因此即使进程崩溃，重放时也不会重复采样。
 - **Drop set 的大小在设计上有界。** Shard 的首轮最终化可能会将所有已冷却的 Part 一次性选入同一次合并。如果不加限制，包含 1,800 万个条目的 Drop set 会占用约 1.3 GiB 活跃堆内存和 2.6 GiB 预留堆内存，而该进程还需要同时处理查询。因此，流水线限制的是采样*决策*数量，而不是裁剪谓词。一旦某次合并的 Drop set 已满，后续原本建议丢弃的记录都会被保留，而不再加入集合。这样，集合对于实际执行的丢弃操作始终是完整的，既不会出现孤立条目，也不会遗漏任何条目。上限由内存保护器按 `limit/(16×CPUs)` 计算，使并发合并的总占用保持在约 `limit/16`。
@@ -80,7 +81,9 @@ tags:
 
 ## 集群级 Schema 一致性
 
-在 0.11 之前，Schema 变更（例如创建 Stream、添加 Index Rule 或删除 Group）可能在集群中的所有节点真正应用变更之前，就由元数据服务返回成功。此时，如果查询命中尚未追上进度的节点，便可能看到过期或缺失的 Schema。0.11 引入了客户端可观测的 Revision 跟踪和屏障 RPC，弥补了这一缺口。具体字段和 RPC 请参阅下文的 [API 变更](#api-changes)；完整 RPC 契约请参阅 [Schema 一致性客户端接口与 SchemaBarrierService 参考](https://github.com/apache/skywalking-banyandb/blob/master/docs/interacting/schema-consistency/barriers.md)。
+在 0.11 之前，Schema 变更（例如创建 Stream、添加 Index Rule 或删除 Group）可能尚未应用到集群中的所有节点，元数据服务就已经返回成功。此时，如果查询命中尚未追上进度的节点，便可能看到过期或缺失的 Schema。
+
+0.11 引入了客户端可观测的 Revision 跟踪和屏障 RPC，补上了这一缺口。具体字段和 RPC 请参阅下文的 [API 变更](#api-changes)；完整 RPC 契约请参阅 [Schema 一致性客户端接口与 SchemaBarrierService 参考](https://github.com/apache/skywalking-banyandb/blob/master/docs/interacting/schema-consistency/barriers.md)。
 
 第二阶段将屏障扩展至整个集群：通过新增的 `NodeSchemaStatusService`，将相同调用扇出至每个 Liaison 和 Data 节点，并安全处理混合版本及成员变更场景。所有能力均为显式启用；取零值的请求会保留原有行为，因此不传入 Revision 的现有客户端不会受到影响。
 
@@ -88,9 +91,13 @@ tags:
 
 0.11 为编码智能体提供了两种相互独立的 BanyanDB 查询方式，无需手写 BydbQL。
 
-第一种是 **Claude Code / Codex 插件**。它将 BanyanDB MCP Server 与 `bydbql` Skill 打包在一起，可针对 STREAM、MEASURE、TRACE 和 PROPERTY 资源将自然语言转换为 BydbQL。直接从仓库安装（在 Claude Code 中运行 `/plugin install apache/skywalking-banyandb`，或使用等效的 `codex plugin add` 流程）后，任意 Claude Code 或 Codex 会话都能获得四个 MCP 工具：`list_groups_schemas` 用于发现 Schema；`get_generate_bydbql_prompt` 用于生成查询（这是唯一会注入实时索引字段列表，并强制执行 `ORDER BY` Index Rule 替换的工具）；`validate_bydbql` 通过预构建的 Go 二进制文件执行仅解析式的语法和安全校验；`list_resources_bydbql` 则用于执行已校验的只读语句。
+第一种是 **Claude Code / Codex 插件**。它将 BanyanDB MCP Server 与 `bydbql` Skill 打包在一起，可针对 STREAM、MEASURE、TRACE 和 PROPERTY 资源将自然语言转换为 BydbQL。直接从仓库安装即可使用：Claude Code 运行 `/plugin install apache/skywalking-banyandb`，Codex 使用对应的 `codex plugin add` 流程。
 
-第二种是 **`bydbctl agent`**。这是一个独立的双窗格终端界面，可直接驱动 Codex 或 Claude Code CLI 进程，以自然语言交互查询 BanyanDB：它会发现 Schema、提出类型明确的查询计划，并执行只读查询。它不持有任何 AI 提供商凭据；你需要单独为其封装的 CLI 完成认证。MCP 插件能把 BanyanDB 查询能力加入任意 Claude Code/Codex 会话，而 `bydbctl agent` 则是专门完成同一任务的独立交互式工具。
+安装后，Claude Code 或 Codex 会话会获得四个 MCP 工具：`list_groups_schemas` 用于发现 Schema；`get_generate_bydbql_prompt` 用于生成查询（这是唯一会注入实时索引字段列表，并强制执行 `ORDER BY` Index Rule 替换的工具）；`validate_bydbql` 通过预构建的 Go 二进制文件执行仅解析式的语法和安全校验；`list_resources_bydbql` 则用于执行已校验的只读语句。
+
+第二种是 **`bydbctl agent`**。这是一个独立的双窗格终端界面，可直接驱动 Codex 或 Claude Code CLI 进程，以自然语言交互查询 BanyanDB。它会发现 Schema、生成类型明确的查询计划，并执行只读查询。
+
+`bydbctl agent` 不持有 AI 提供商凭据，需要先为它调用的 CLI 单独完成认证。MCP 插件把查询能力加入已有的 Claude Code/Codex 会话；`bydbctl agent` 则提供专用的交互界面。
 
 <figure>
 
@@ -129,9 +136,9 @@ tags:
 
 ## 同期发布：Canopy、迁移工具及更多功能
 
-另外还有四项值得关注的新增能力：
+0.11 同时加入四项能力：
 
-- **Canopy** 是全新的管理界面。它不是嵌入现有 `ui/` 的页面，而是采用 Fastify BFF 的独立 React SPA，支持 Group/Stream/Measure/Trace/IndexRule 元数据的 CRUD、在分布式集群上完整支持 WHERE 子句的查询控制台、Property Collection CRUD，以及 TopN 聚合管理。它还拥有独立的 Docker 镜像、CI 和端到端测试套件。（这些细节来自 `canopy/` 相关提交及设计文档本身；CHANGES.md 对 Canopy 的介绍较为简略。）
+- **Canopy** 是采用 Fastify BFF 的独立 React SPA，不依赖现有 `ui/`。它支持 Group/Stream/Measure/Trace/IndexRule 元数据的 CRUD、在分布式集群上完整支持 WHERE 子句的查询控制台、Property Collection CRUD，以及 TopN 聚合管理。它还拥有独立的 Docker 镜像、CI 和端到端测试套件。（这些细节来自 `canopy/` 相关提交及设计文档本身；CHANGES.md 对 Canopy 的介绍较为简略。）
 - **迁移工具**新增 `copy`、`verify` 和 `analyze` 子命令。在早期版本 Trace/生命周期迁移能力的基础上，现在也支持 Measure 和 Stream 数据，包括索引模式的 Measure。
 - **Schema 变更时可以修改 Tag 类型，而不会破坏旧 Part。** 如果 Tag 类型发生变化（例如从 int 变为 string），BanyanDB 现在会将每种类型变体分别持久化到各自的文件（`{tag_name}.{tag_type}.tf`）中，而不再覆盖原文件；查询和合并逻辑则通过（名称、类型）二元组完成解析。该机制适用于 Measure、Stream、Trace 和 SIDX Part。
 - Trace Part 合并采用**公平的快/慢通道调度**，短合并不再排在耗时较长的合并之后；队列等待时间现通过 `total_merge_queue_latency` 暴露。
@@ -170,11 +177,11 @@ tags:
 
 <h2 id="api-changes">API 变更</h2>
 
-API 版本本身也已升级至 0.11。由于这并非增量能力，而是会阻碍升级的变更，因此将在下文的[破坏性变更](#breaking-changes-and-how-to-upgrade-safely)中说明。本节所列变更均为增量且需显式启用：
+API 版本也已升级至 0.11，这项变更会直接影响升级流程，详见下文的[破坏性变更](#breaking-changes-and-how-to-upgrade-safely)。本节先列出需要显式启用的增量 API：
 
 - Group/IndexRule/IndexRuleBinding/TopNAggregation 的创建和更新响应新增 `mod_revision`；所有删除响应新增 `delete_time`；新增 `created_at`，且更新时会保留该字段。
 - 新增 `STATUS_SCHEMA_NOT_APPLIED` 状态码，用于 Revision 超前于服务端缓存的写入与查询。
-- 新增 `SchemaBarrierService` RPC：`AwaitRevisionApplied`、`AwaitSchemaApplied` 和 `AwaitSchemaDeleted`。客户端可以阻塞等待，直到 Schema 变更真正传播至整个集群后再继续。
+- 新增 `SchemaBarrierService` RPC：`AwaitRevisionApplied`、`AwaitSchemaApplied` 和 `AwaitSchemaDeleted`。客户端可以阻塞等待，直到 Schema 变更传播至整个集群后再继续。
 - 新增 `QueryRequest.group_mod_revisions` / `QueryResponse.group_statuses`，用于按 Group 对查询路径进行 Revision 门控。
 - **BydbQL 新增 `?` 位置参数绑定**：可以绑定值，而无需将其以字符串方式插入查询文本，从而像参数化 SQL 一样防止 QL 注入。可复用的 `Prepared` 绑定类型还在 gRPC 查询路径之上增加了预处理语句缓存，并提供有界缓存、Top-K 保留、缓存与慢查询可观测性；慢查询日志中还会对绑定参数脱敏。
 - 新增校验：Measure 的 `ShardingKey` 现在必须包含所有 `Entity` Tag，以确保实体局部性。
@@ -249,7 +256,7 @@ API 版本本身也已升级至 0.11。由于这并非增量能力，而是会�
 
 ## 后续计划
 
-向量化引擎的发布说明也列出了尚未完成的工作：分布式 Map 模式的部分聚合和多 Group（多 Measure）请求仍然使用逐行路径。这些缺口预计将在后续版本中补齐，而不是本次发布。随着 SDK 和开发工具包趋于稳定，链路采样流水线的插件生态也有望超越目前两个第一方采样器的规模。
+向量化引擎的发布说明也列出了尚未完成的工作：分布式 Map 模式的部分聚合和多 Group（多 Measure）请求仍然使用逐行路径。这些缺口预计要到后续版本才会补齐。随着 SDK 和开发工具包趋于稳定，链路采样流水线的插件生态也有望超越目前两个第一方采样器的规模。
 
 ## 常见问题
 
@@ -275,4 +282,4 @@ MCP 插件会为正在运行的任意 Claude Code 或 Codex 会话添加四个 B
 
 ## 总结
 
-在 0.11.0 中，BanyanDB 的列式查询引擎从可选能力升级为默认路径；链路保留不再仅依靠简单粗放的 TTL，而是获得了真正可插拔的解决方案；编码智能体也能以自然语言一等访问数据。完整变更列表请阅读[完整的 0.11.0 发布说明](https://github.com/apache/skywalking-banyandb/tree/master/CHANGES.md)。在操作生产集群前，请务必逐项完成[“升级至 0.11”检查清单](https://github.com/apache/skywalking-banyandb/blob/master/docs/operation/upgrade.md#upgrading-to-011)。
+BanyanDB 0.11.0 默认启用列式查询引擎，用可插拔流水线处理链路保留采样，并为编码智能体提供自然语言查询入口。升级分布式集群时，0.11 API 版本和 Liaison→Data 的节点顺序都会影响服务可用性。完整改动见[0.11.0 发布说明](https://github.com/apache/skywalking-banyandb/tree/master/CHANGES.md)，生产升级步骤见[“升级至 0.11”检查清单](https://github.com/apache/skywalking-banyandb/blob/master/docs/operation/upgrade.md#upgrading-to-011)。
