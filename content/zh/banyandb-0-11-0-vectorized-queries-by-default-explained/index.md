@@ -2,7 +2,7 @@
 title: "BanyanDB 0.11.0：新特性与升级指南"
 date: 2026-09-07
 author: "BanyanDB 团队"
-description: "BanyanDB 0.11.0：默认启用向量化查询、可插拔链路采样、Schema 屏障，以及不可忽略的升级顺序。"
+description: "BanyanDB 0.11.0：默认启用向量化查询、可插拔 Trace 后采样、Schema 屏障，以及不可忽略的升级顺序。"
 tags:
   - Release
   - Storage
@@ -12,14 +12,14 @@ tags:
 
 ![BanyanDB 0.11.0 发布封面：包含 229 次提交、14 位贡献者，以及默认启用向量化的三类查询引擎](banner.jpg)
 
-[BanyanDB](https://github.com/apache/skywalking-banyandb) 0.11.0 已正式发布。向量化查询从可选功能升级为默认路径；链路保留采样有了可插拔流水线；集群级 Schema 一致性屏障补上了正确性缺口；编码智能体可以通过两条新路径用自然语言查询 BanyanDB；etcd 支持也已移除，Schema Registry 统一使用 Property 模式。
+[BanyanDB](https://github.com/apache/skywalking-banyandb) 0.11.0 已正式发布。向量化查询从可选功能升级为默认路径；Trace 后采样有了可插拔流水线；集群级 Schema 一致性屏障补上了正确性缺口；编码智能体可以通过两条新路径用自然语言查询 BanyanDB；etcd 支持也已移除，Schema Registry 统一使用 Property 模式。
 
 我们逐一梳理了此次发布的 229 次提交，整理出集群运维人员需要关注的功能、性能改进、API 变化和升级风险。
 
 > **核心要点**
 >
 > - Measure、Stream 和 Trace 的向量化查询路径现已**默认启用**，可减少扫描密集型查询的内存分配；但这也改变了滚动升级顺序：必须**先升级 Liaison 节点，再升级 Data 节点**。
-> - 新增的合并中（in-merge）和最终化阶段（finalize-time）链路保留采样流水线，可通过可插拔的 `.so` 采样器插件丢弃不需要的 Span；即使一次合并涉及数百万条链路，其内存占用也有明确上限。
+> - 新增 **Trace 后采样**流水线，在数据落盘后的合并中（in-merge）和最终化阶段（finalize-time）执行采样。此时 Trace 相对更完整，采样依据也更充分。流水线通过可插拔的 `.so` 采样器插件决定保留或丢弃哪些 Trace；即使一次合并涉及数百万条链路，其内存占用也有明确上限。
 > - 编码智能体现在可以通过两种方式使用自然语言查询 BanyanDB：一种是带有 `bydbql` Skill 的 Claude Code/Codex **MCP 插件**，另一种是独立的 **`bydbctl agent`** 终端界面。
 > - **etcd 支持已完全移除**，API 版本也升级至 0.11，因此请安排维护窗口执行升级。队列和生命周期指标同样经过了重新设计。
 
@@ -31,11 +31,13 @@ tags:
 
 这也是本次发布中最重要的**滚动升级破坏性变更**。所需的升级顺序请参阅下文的[破坏性变更与安全升级方法](#breaking-changes-and-how-to-upgrade-safely)。
 
-## 可插拔的链路保留采样流水线
+## 可插拔的 Trace 后采样流水线
 
-链路数据保留得越多，存储成本越高；直接丢弃数据，又可能删掉排障需要的链路。0.11 在存储节点加入了**合并中链路保留过滤器**。过滤器按 Group 执行采样器链，从核心 Part 和二级索引 Part 中安全移除未保留的链路。采样器可按 Group 动态配置，也支持运行时注册、更新和移除。
+Trace 前采样在探针端就决定是否采集和上报链路数据。BanyanDB 0.11 提供的 **Trace 后采样**则在数据已经落盘后进行。此时 Trace 相对更完整，可用于采样判断的信息也更充分，但不意味着每条 Trace 都已完整到齐。
 
-采样流水线还要处理漏采样和内存占用问题。
+链路数据保留得越多，存储成本越高。后采样根据落盘后的 Trace 信息决定哪些链路需要继续保留。0.11 在存储节点加入了**合并中 Trace 后采样过滤器**，按 Group 执行采样器链，从核心 Part 和二级索引 Part 中安全移除未保留的链路。采样器可按 Group 动态配置，也支持运行时注册、更新和移除。
+
+后采样流水线还要处理漏采样和内存占用问题。
 
 - **最终化采样（Finalization sampling）**提供尽力而为的兜底处理。每个节点只有一个并发度为 1 的扫描器，定期扫描已经冷却的 Segment，并让每个 Shard 尚未最终化的 Part 通过所属 Group 的采样器链进行强制合并。它复用现有的热合并路径，因此不会与热合并信号量竞争。每个 Part 都带有 `finalizeGen` 标记；该标记会先于 Part 元数据写入磁盘，因此即使进程崩溃，重放时也不会重复采样。
 - **Drop set 有大小上限。** Shard 的首轮最终化可能会将所有已冷却的 Part 选入同一次合并。如果不加限制，包含 1,800 万个条目的 Drop set 会占用约 1.3 GiB 活跃堆内存和 2.6 GiB 预留堆内存，而该进程还需要同时处理查询。
@@ -44,9 +46,9 @@ tags:
 
 <figure>
 
-<svg viewBox="0 0 640 340" width="100%" role="img" aria-label="链路保留采样流水线示意图：来自合并中过滤器的新 Part，以及来自最终化兜底机制的已冷却 Segment，都会进入按 Group 配置的采样器链；每条链路随后被分流为保留或丢弃">
-  <title>链路保留采样流水线如何决定保留哪些数据</title>
-  <desc>采样器链接收两类输入：在合并中过滤阶段评估的新 Part，以及由最终化兜底扫描器扫描、未经过合并中过滤的已冷却 Segment。采样器链按 Group 规则评估，并将每条链路分流为保留或丢弃。</desc>
+<svg viewBox="0 0 640 340" width="100%" role="img" aria-label="Trace 后采样流水线示意图：来自合并中过滤器的新 Part，以及来自最终化兜底机制的已冷却 Segment，都会进入按 Group 配置的采样器链；每条链路随后被分流为保留或丢弃">
+  <title>Trace 后采样流水线如何决定保留哪些数据</title>
+  <desc>后采样在数据落盘后执行。采样器链接收两类输入：在合并中过滤阶段评估的新 Part，以及由最终化兜底扫描器扫描、未经过合并中过滤的已冷却 Segment。采样器链按 Group 规则评估，并将每条链路分流为保留或丢弃。</desc>
   <rect x="20" y="40" width="220" height="56" rx="8" fill="none" stroke="#38bdf8"></rect>
   <text x="130.0" y="60.0" text-anchor="middle" font-size="13" fill="currentColor">新 Part</text>
   <text x="130.0" y="76.0" text-anchor="middle" font-size="13" fill="currentColor">（合并中过滤器）</text>
@@ -71,7 +73,7 @@ tags:
   <text x="320" y="325" text-anchor="middle" font-size="10" fill="#898781">来源：BanyanDB CHANGES.md 与 docs/design/trace-drop-set-bounding.md，0.11.0</text>
 </svg>
 
-<figcaption>链路保留采样流水线如何决定保留哪些数据。原创示意图。</figcaption>
+<figcaption>Trace 后采样流水线如何决定保留哪些数据。原创示意图。</figcaption>
 </figure>
 
 完整的推导过程请参阅 [Trace Drop Set 边界设计文档](https://github.com/apache/skywalking-banyandb/blob/master/docs/design/trace-drop-set-bounding.md)。
@@ -156,7 +158,7 @@ tags:
 0.11 还减少了点查解码、采样、备份上传和生命周期迁移的开销。
 
 - Trace 和 Stream 的**点查更快**：通过延迟解码 Block 元数据，只读取少量行的查询可以省去预先解码元数据的开销。
-- **Trace 采样器的解码路径得到优化**：延迟解码、字符串和 Tag 的零拷贝处理、提前拒绝 Tag、直接读取标量，以及缓存规则前缀，使 SkyWalking 和 Zipkin 采样器的采样决策成本与 Tag 规则成本大约减半。
+- **Trace 后采样器的解码路径得到优化**：延迟解码、字符串和 Tag 的零拷贝处理、提前拒绝 Tag、直接读取标量，以及缓存规则前缀，使 SkyWalking 和 Zipkin 采样器的采样决策成本与 Tag 规则成本大约减半。
 - **GCS 备份上传更快**：每个对象及其校验和元数据现在通过一次请求写入，省去了每个对象一次的 `Update` 往返。
 - **生命周期迁移的堆内存峰值降低约 80%。** 通过流式 Dump Reader 和按大小分级的序列化缓冲池，不再将大型 Measure Part 整体读入内存；下图对比了相同工作负载下行重放的堆内存峰值。
 
@@ -262,7 +264,7 @@ API 版本也已升级至 0.11，这项变更会直接影响升级流程，详�
 
 ## 后续计划
 
-向量化引擎的发布说明也列出了尚未完成的工作：分布式 Map 模式的部分聚合和多 Group（多 Measure）请求仍然使用逐行路径。这两项查询能力预计要到后续版本才会补齐。随着 SDK 和开发工具包稳定下来，链路采样插件也有望在现有两个项目自带采样器的基础上继续增加。
+向量化引擎的发布说明也列出了尚未完成的工作：分布式 Map 模式的部分聚合和多 Group（多 Measure）请求仍然使用逐行路径。这两项查询能力预计要到后续版本才会补齐。随着 SDK 和开发工具包稳定下来，Trace 后采样插件也有望在现有两个项目自带采样器的基础上继续增加。
 
 ## 常见问题
 
