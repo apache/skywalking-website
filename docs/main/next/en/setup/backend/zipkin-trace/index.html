@@ -37,7 +37,7 @@ receiver-zipkin: selector: ${SW_RECEIVER_ZIPKIN:default} default: # Defines a se
 NOTICE, Zipkin trace would not be analyzed like SkyWalking native trace format.
 Use the following config to activate it. Set enableHttpCollector to enable HTTP collector and enableKafkaCollector to enable Kafka collector.
 receiver-zipkin: selector: ${SW_RECEIVER_ZIPKIN:default} default: # Defines a set of span tag keys which are searchable. # The max length of key=value should be less than 256 or will be dropped. searchableTracesTags: ${SW_ZIPKIN_SEARCHABLE_TAG_KEYS:http.method} # The sample rate precision is 1/10000, should be between 0 and 10000 sampleRate: ${SW_ZIPKIN_SAMPLE_RATE:10000} # The maximum spans to be collected per second. 0 means no limit. Spans exceeding this threshold will be dropped. maxSpansPerSecond: ${SW_ZIPKIN_MAX_SPANS_PER_SECOND:0} ## The below configs are for OAP collect zipkin trace from HTTP enableHttpCollector: ${SW_ZIPKIN_HTTP_COLLECTOR_ENABLED:true} restHost: ${SW_RECEIVER_ZIPKIN_REST_HOST:0.0.0.0} restPort: ${SW_RECEIVER_ZIPKIN_REST_PORT:9411} restContextPath: ${SW_RECEIVER_ZIPKIN_REST_CONTEXT_PATH:/} restMaxThreads: ${SW_RECEIVER_ZIPKIN_REST_MAX_THREADS:200} restIdleTimeOut: ${SW_RECEIVER_ZIPKIN_REST_IDLE_TIMEOUT:30000} restAcceptQueueSize: ${SW_RECEIVER_ZIPKIN_REST_QUEUE_SIZE:0} ## The below configs are for OAP collect zipkin trace from kafka enableKafkaCollector: ${SW_ZIPKIN_KAFKA_COLLECTOR_ENABLED:true} kafkaBootstrapServers: ${SW_ZIPKIN_KAFKA_SERVERS:localhost:9092} kafkaGroupId: ${SW_ZIPKIN_KAFKA_Group_Id:zipkin} kafkaTopic: ${SW_ZIPKIN_KAFKA_TOPIC:zipkin} # Kafka consumer config, JSON format as Properties. If it contains the same key with above, would override. kafkaConsumerConfig: ${SW_ZIPKIN_KAFKA_CONSUMER_CONFIG:&#34;{\&#34;auto.offset.reset\&#34;:\&#34;earliest\&#34;,\&#34;enable.auto.commit\&#34;:true}&#34;} # The Count of the topic consumers kafkaConsumers: ${SW_ZIPKIN_KAFKA_CONSUMERS:1} kafkaHandlerThreadPoolSize: ${SW_ZIPKIN_KAFKA_HANDLER_THREAD_POOL_SIZE:-1} kafkaHandlerThreadPoolQueueSize: ${SW_ZIPKIN_KAFKA_HANDLER_THREAD_POOL_QUEUE_SIZE:-1} Zipkin query The Zipkin receiver makes the OAP server work as an alternative Zipkin server implementation for query traces. It implemented ZipkinQueryApiV2 through the HTTP service, supporting Zipkin-lens UI.">
-  <meta itemprop="wordCount" content="381">
+  <meta itemprop="wordCount" content="612">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Zipkin receiver">
   <meta name="twitter:description" content="Zipkin receiver The Zipkin receiver makes the OAP server work as an alternative Zipkin server implementation for collecting traces. It supports Zipkin v1/v2 formats through the HTTP collector and Kafka collector.
@@ -3088,7 +3088,7 @@ receiver-zipkin: selector: ${SW_RECEIVER_ZIPKIN:default} default: # Defines a se
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 116a0bd</div>
+                  <div class="commit-id">Commit Id: 4fe83aa</div>
                 
 
 
@@ -3218,7 +3218,46 @@ It implemented <code>ZipkinQueryApiV2</code> through the HTTP service, supportin
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">uiQueryLimit</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_QUERY_ZIPKIN_UI_QUERY_LIMIT:10}<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#57606a"># Default look back for search traces, 15 minutes in millis</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">uiDefaultLookback</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_QUERY_ZIPKIN_UI_DEFAULT_LOOKBACK:900000}<span style="color:#fff">
-</span></span></span></code></pre></div><h2 id="lens-ui">Lens UI</h2>
+</span></span></span></code></pre></div><h3 id="query-traces-from-the-banyandb-cold-stage">Query traces from the BanyanDB cold stage</h3>
+<p>When the BanyanDB <code>zipkinTrace</code> group has the cold <a href="../../../banyandb/stages">lifecycle stage</a> enabled, the
+trace-fetching endpoints accept the following optional query parameters in addition to the standard Zipkin ones.
+They are SkyWalking extensions of the Zipkin API: a request without them behaves exactly as before, so existing
+Zipkin clients, including the Lens UI, keep working unchanged.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Endpoint</th>
+          <th>Extra parameters</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>/api/v2/traces</code></td>
+          <td><code>coldStage</code></td>
+          <td><code>true</code> queries the cold stage instead of the hot/warm stages, within the standard <code>endTs</code>/<code>lookback</code> time range. Default <code>false</code>.</td>
+      </tr>
+      <tr>
+          <td><code>/api/v2/trace/{traceId}</code></td>
+          <td><code>coldStage</code>, <code>endTs</code>, <code>lookback</code></td>
+          <td>The standard Zipkin API has no time range for these lookups, so without any of the three parameters BanyanDB searches everything its hot/warm stages retain. Passing any of them bounds the query to <code>[endTs - lookback, endTs]</code>, <code>endTs</code> defaulting to now and <code>lookback</code> to the <code>lookback</code> setting above (both in milliseconds), and <code>coldStage=true</code> targets the cold stage.</td>
+      </tr>
+      <tr>
+          <td><code>/api/v2/traceMany</code></td>
+          <td><code>coldStage</code>, <code>endTs</code>, <code>lookback</code></td>
+          <td>Same as <code>/api/v2/trace/{traceId}</code>.</td>
+      </tr>
+  </tbody>
+</table>
+<ul>
+<li><code>coldStage</code> is only meaningful for BanyanDB, the other storages ignore it, the same as the <code>coldStage</code> flag of
+the GraphQL <code>Duration</code> input.</li>
+<li>Cold data is older than the hot (and warm) TTL by definition, so always send an <code>endTs</code>/<code>lookback</code> pair that
+covers the time the trace happened. The defaults, now and one day back, normally point at hot data.</li>
+</ul>
+<p>For example, fetch a trace that happened 2 to 4 days ago from the cold stage:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>curl <span style="color:#0a3069">&#34;http://127.0.0.1:9412/zipkin/api/v2/trace/fcb10b060c6b2492?coldStage=true&amp;endTs=</span><span style="color:#cf222e">$(($(</span>date +%s<span style="color:#cf222e">)</span><span style="color:#0550ae">*</span><span style="color:#0550ae">1000</span><span style="color:#0550ae">-</span><span style="color:#0550ae">172800000</span><span style="color:#cf222e">))</span><span style="color:#0a3069">&amp;lookback=172800000&#34;</span>
+</span></span></code></pre></div><h2 id="lens-ui">Lens UI</h2>
 <p>Lens UI is Zipkin&rsquo;s native browser UI. The OAP distribution does not bundle
 it; deploy a standalone Zipkin Lens container against the OAP Zipkin
 endpoints if you want a Lens-style trace view. SkyWalking
@@ -3260,7 +3299,11 @@ own trace views over the same OAP trace data.</p>
     <li>
       <ul>
         <li><a href="#zipkin-receiver">Zipkin receiver</a></li>
-        <li><a href="#zipkin-query">Zipkin query</a></li>
+        <li><a href="#zipkin-query">Zipkin query</a>
+          <ul>
+            <li><a href="#query-traces-from-the-banyandb-cold-stage">Query traces from the BanyanDB cold stage</a></li>
+          </ul>
+        </li>
         <li><a href="#lens-ui">Lens UI</a></li>
       </ul>
     </li>
@@ -3372,6 +3415,8 @@ own trace views over the same OAP trace data.</p>
 
     </div>
     
+
+
 
 
 
