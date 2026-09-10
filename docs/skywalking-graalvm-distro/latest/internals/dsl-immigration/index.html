@@ -33,7 +33,7 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
   <meta itemprop="name" content="DSL Build-Time Pre-Compilation (OAL/MAL/LAL/Hierarchy)">
   <meta itemprop="description" content="DSL Build-Time Pre-Compilation (OAL/MAL/LAL/Hierarchy) Context SkyWalking OAP uses four DSL compilers that generate Java bytecode at startup via Javassist:
 DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules Metrics, Builder, Dispatcher classes ~620 metrics &#43; ~620 builders &#43; ~45 dispatchers MAL Meter expression rules MalExpression ~1250 expression classes LAL Log analysis rules LalExpression ~10 expression classes (6 unique) Hierarchy Service hierarchy matching BiFunction&lt;Service, Service, Boolean&gt; ~4 rule classes All four share the same pipeline (since upstream PR #13723):">
-  <meta itemprop="wordCount" content="1080">
+  <meta itemprop="wordCount" content="1400">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="DSL Build-Time Pre-Compilation (OAL/MAL/LAL/Hierarchy)">
   <meta name="twitter:description" content="DSL Build-Time Pre-Compilation (OAL/MAL/LAL/Hierarchy) Context SkyWalking OAP uses four DSL compilers that generate Java bytecode at startup via Javassist:
@@ -324,17 +324,17 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
                   
                     
                     
-                    <option ZgotmplZ value="0.3.0">
+                    <option ZgotmplZ value="v0.4.0">
                     
-                      0.3.0
+                      0.4.0 (SkyWalking 11.0.0)
                     
                     </option>
                   
                     
                     
-                    <option ZgotmplZ value="v0.2.1 (10.3.0-dev-64a1795)">
+                    <option ZgotmplZ value="v0.3.0">
                     
-                      v0.2.1 (10.3.0-dev-64a1795)
+                      0.3.0 (SkyWalking 10.4.0)
                     
                     </option>
                   
@@ -487,7 +487,7 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 1ab407e</div>
+                  <div class="commit-id">Commit Id: 1e5dfed</div>
                 
 
 
@@ -770,6 +770,23 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
 </code></pre><p>4 rule types: <code>name</code>, <code>short-name</code>, <code>lower-short-name-remove-namespace</code>, <code>lower-short-name-with-fqdn</code>.</p>
 <p>Generated class package: <code>org.apache.skywalking.oap.server.core.config.v2.compiler.hierarchy.rule.rt.*</code></p>
 <hr>
+<h2 id="dsl-live-debugger-swip-13">DSL Live Debugger (SWIP-13)</h2>
+<p>Upstream&rsquo;s debugger is a codegen-time decision: when <code>DSLDebugCodegenSwitch.isInjectionEnabled()</code>
+is true, the OAL, MAL and LAL generators emit a <code>GateHolder</code> field per rule (per metric for OAL
+dispatchers), a <code>debugHolder()</code> accessor and <code>if (holder.isGateOn())</code> probe call sites. The
+upstream OAP flips the switch in <code>DSLDebuggingModuleProvider.prepare()</code>; this distro flips it in
+the precompiler (<code>DSLDebugCodegenSwitch.enableInjection()</code> before every generator pass) and sets
+<code>setContent(...)</code> on the MAL/LAL generators, so the pre-compiled classes carry the same probes
+and rule text. Nothing is compiled at runtime: the wired-in upstream <code>dsl-debugging</code> module only
+adds and removes recorders on the holders. Registration works unchanged — MAL holders are
+published by upstream&rsquo;s receivers through <code>MalStaticBindingHook</code>, LAL holders by
+<code>LogFilterListener</code> through <code>LalStaticBindingHook</code> (the log <code>DSL</code> replacement stamps the same
+<code>ruleName</code>/<code>inputClass</code>/<code>outputClass</code> metadata upstream does), and OAL holders are found on the
+loaded dispatchers via <code>DebugHolderProvider</code>. Idle cost is one volatile read per probe site.</p>
+<p>Two details the distro supplies for the module: <code>OALEngineLoaderService.getLoadedDefines()</code> on
+the replacement loader, and the raw <code>oal/*.oal</code> scripts at their classpath paths in the
+precompiler jar, which <code>GET /runtime/oal/files/{name}</code> reads (the file name must be
+path-escaped, <code>oal%2Fcore.oal</code>, as swctl and Horizon send it).</p>
 <h2 id="runtime-loading-via-same-fqcn-replacements">Runtime Loading via Same-FQCN Replacements</h2>
 <p>At runtime (native image or JVM distro), same-FQCN replacement classes load pre-compiled classes instead of running Javassist.</p>
 <h3 id="oal-oalengineloaderservice">OAL: <code>OALEngineLoaderService</code></h3>
@@ -796,11 +813,11 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
 <h3 id="lal-dsl-v2">LAL: <code>DSL</code> (v2)</h3>
 <p><strong>Upstream</strong>: <code>analyzer/log-analyzer/.../v2/dsl/DSL.java</code>
 <strong>Replacement</strong>: <code>oap-libs-for-graalvm/log-analyzer-for-graalvm/</code></p>
-<p><code>of(moduleManager, config, dsl, extraLogType, ruleName, yamlSource)</code> computes the deterministic class name and loads via <code>Class.forName()</code>.</p>
-<h3 id="hierarchy-compiledhierarchyruleprovider">Hierarchy: <code>CompiledHierarchyRuleProvider</code></h3>
-<p><strong>Upstream</strong>: <code>analyzer/hierarchy/.../v2/compiler/CompiledHierarchyRuleProvider.java</code>
+<p><code>of(moduleManager, config, dsl, inputType, outputType, ruleName, sourceRef)</code> looks the rule up by its <code>DslSourceRef</code> coordinates (<code>lal/&lt;file&gt;.yaml:&lt;line&gt;</code>) in <code>META-INF/lal-v2-rules.txt</code> and loads via <code>Class.forName()</code>. The manifest also carries the effective input type the compiler resolved, which upstream <code>LogFilterListener</code> uses to route Envoy HTTP vs TCP access logs to the right rule.</p>
+<h3 id="hierarchy-hierarchydefinitionservice">Hierarchy: <code>HierarchyDefinitionService</code></h3>
+<p><strong>Upstream</strong>: <code>server-core/.../core/config/HierarchyDefinitionService.java</code>
 <strong>Replacement</strong>: <code>oap-libs-for-graalvm/server-core-for-graalvm/</code></p>
-<p><code>buildRules(ruleExpressions)</code> loads pre-compiled <code>BiFunction</code> classes by rule name.</p>
+<p>Skips the upstream <code>HierarchyRuleProvider</code> SPI and loads pre-compiled <code>BiFunction</code> classes by rule name from <code>META-INF/hierarchy-v2-rules.txt</code>.</p>
 <hr>
 <h2 id="classpath-scanning-replacements">Classpath Scanning Replacements</h2>
 <p>Guava <code>ClassPath.from()</code> is used in several places. All replaced with manifest-based loading:</p>
@@ -832,7 +849,7 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
 </table>
 <hr>
 <h2 id="metersystem-javassist-unchanged">MeterSystem Javassist (Unchanged)</h2>
-<p><code>MeterSystem.create()</code> generates one dynamic meter subclass per metric rule (~1188 classes) via Javassist. This is separate from MAL DSL compilation and is handled the same as before: run at build time, export <code>.class</code> files, load from manifests at runtime.</p>
+<p><code>MeterSystem.create()</code> generates one dynamic meter subclass per metric rule (~1430 classes) via Javassist. This is separate from MAL DSL compilation and is handled the same as before: run at build time, export <code>.class</code> files, load from manifests at runtime.</p>
 <hr>
 <h2 id="manifest-files">Manifest Files</h2>
 <p>All manifests are in <code>META-INF/</code> within the precompiler output JAR:</p>
@@ -881,9 +898,19 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
           <td>Reflection config for LAL expression classes</td>
       </tr>
       <tr>
+          <td><code>lal-v2-rules.txt</code></td>
+          <td>Properties (<code>rule.N.source/line/name/class/inputType</code>)</td>
+          <td>Runtime LAL lookup by source coordinates + effective input type</td>
+      </tr>
+      <tr>
           <td><code>hierarchy-v2-classes.txt</code></td>
           <td>FQCN per line</td>
           <td>Reflection config for hierarchy rule classes</td>
+      </tr>
+      <tr>
+          <td><code>hierarchy-v2-rules.txt</code></td>
+          <td><code>ruleName=FQCN</code></td>
+          <td>Runtime hierarchy rule lookup</td>
       </tr>
       <tr>
           <td><code>mal-meter-classes.txt</code></td>
@@ -900,6 +927,16 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
           <td>JSON</td>
           <td>Serialized rule configs for runtime loaders</td>
       </tr>
+      <tr>
+          <td><code>rule-source/**</code></td>
+          <td>raw MAL/LAL YAML + <code>index.txt</code></td>
+          <td>Read-only <code>/runtime/rule</code> catalog served by <code>BundledRuleCatalogHandler</code></td>
+      </tr>
+      <tr>
+          <td><code>oal/*.oal</code> (jar root)</td>
+          <td>raw OAL scripts</td>
+          <td><code>GET /runtime/oal/files/{name}</code> (upstream dsl-debugging handler)</td>
+      </tr>
   </tbody>
 </table>
 <hr>
@@ -910,8 +947,9 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
 <li>MAL/LAL/Hierarchy expression classes: constructor-only access</li>
 <li>Annotation-scanned classes: full method/field access</li>
 <li>Armeria HTTP handlers, GraphQL resolvers/types: full access</li>
+<li>LAL input types (Envoy <code>HTTPAccessLogEntry</code> / <code>TCPAccessLogEntry</code>) and every message, Builder and enum type reachable through their proto descriptors: full access. Upstream JSON-prints these entries with protobuf&rsquo;s <code>JsonFormat</code> (the <code>EnvoyAccessLog</code> content and the DSL debug captures), whose accessor table finds the generated getters by reflection. <code>LalInputTypeReflectionTest</code> walks the descriptors and fails on any gap.</li>
 </ul>
-<p>MAL v2 expressions use <code>LambdaMetafactory</code> for closure wiring. Since the pre-compiled classes are on the native-image build classpath, the static analysis resolves these lambdas automatically.</p>
+<p>MAL v2 closures (tag/forEach/decorate functions) are compiled into companion classes next to the expression class, so no runtime lambda wiring is needed; the static analysis sees them as ordinary classes.</p>
 <hr>
 <h2 id="same-fqcn-replacement-summary">Same-FQCN Replacement Summary</h2>
 <table>
@@ -946,12 +984,7 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
       <tr>
           <td><code>HierarchyDefinitionService</code></td>
           <td><code>server-core-for-graalvm</code></td>
-          <td>Java-backed hierarchy rules</td>
-      </tr>
-      <tr>
-          <td><code>CompiledHierarchyRuleProvider</code></td>
-          <td><code>server-core-for-graalvm</code></td>
-          <td>Load pre-compiled hierarchy rule classes</td>
+          <td>Load pre-compiled hierarchy rule classes by name</td>
       </tr>
       <tr>
           <td><code>DSL</code> (MAL v2)</td>
@@ -967,11 +1000,6 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
           <td><code>Rules</code></td>
           <td><code>meter-analyzer-for-graalvm</code></td>
           <td>Load rule configs from JSON manifests</td>
-      </tr>
-      <tr>
-          <td><code>MeterConfigs</code></td>
-          <td><code>agent-analyzer-for-graalvm</code></td>
-          <td>Load meter configs from JSON manifests</td>
       </tr>
       <tr>
           <td><code>LALConfigs</code></td>
@@ -1039,12 +1067,13 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
             <li><a href="#hierarchy">Hierarchy</a></li>
           </ul>
         </li>
+        <li><a href="#dsl-live-debugger-swip-13">DSL Live Debugger (SWIP-13)</a></li>
         <li><a href="#runtime-loading-via-same-fqcn-replacements">Runtime Loading via Same-FQCN Replacements</a>
           <ul>
             <li><a href="#oal-oalengineloaderservice">OAL: <code>OALEngineLoaderService</code></a></li>
             <li><a href="#mal-dsl-v2">MAL: <code>DSL</code> (v2)</a></li>
             <li><a href="#lal-dsl-v2">LAL: <code>DSL</code> (v2)</a></li>
-            <li><a href="#hierarchy-compiledhierarchyruleprovider">Hierarchy: <code>CompiledHierarchyRuleProvider</code></a></li>
+            <li><a href="#hierarchy-hierarchydefinitionservice">Hierarchy: <code>HierarchyDefinitionService</code></a></li>
           </ul>
         </li>
         <li><a href="#classpath-scanning-replacements">Classpath Scanning Replacements</a></li>
@@ -1163,6 +1192,12 @@ DSL Purpose Compiled Interface Generated Classes OAL Metrics aggregation rules M
 
     </div>
     
+
+
+
+
+
+
 
 
 

@@ -33,7 +33,7 @@ The .sf side is never mocked. A scenario produces evidence; the ordinary parser 
   <meta itemprop="name" content="Scenarios">
   <meta itemprop="description" content="Scenarios A scenario is a short YAML description of a conversation, in the model’s own words: a person’s input, a call with its fragments, a tool and its result, a child agent, a context reset. asz scenario build turns it into the input a real session leaves behind, so the ordinary commands collect and parse it. asz scenario check runs it as a test.
 The .sf side is never mocked. A scenario produces evidence; the ordinary parser produces the rounds. That is what makes a scenario both a fixture generator and a conformance test: built as the runtime’s own files and collected through its adapter, or landed directly as Session Data, it must fold to the same conversation.">
-  <meta itemprop="wordCount" content="2051">
+  <meta itemprop="wordCount" content="2531">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Scenarios">
   <meta name="twitter:description" content="Scenarios A scenario is a short YAML description of a conversation, in the model’s own words: a person’s input, a call with its fragments, a tool and its result, a child agent, a context reset. asz scenario build turns it into the input a real session leaves behind, so the ordinary commands collect and parse it. asz scenario check runs it as a test.
@@ -619,7 +619,7 @@ The .sf side is never mocked. A scenario produces evidence; the ordinary parser 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b66b057</div>
+                  <div class="commit-id">Commit Id: dd083cc</div>
                 
 
 
@@ -684,11 +684,10 @@ must fold to the same conversation.</p>
 whose adapter source is <code>DIR/_source</code>, then stops; the ordinary commands do the rest, each one
 inspectable on disk before the next.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>asz scenario build FILE --format claude-code --out DIR      <span style="color:#57606a"># generate the runtime&#39;s files, under DIR/_source</span>
-</span></span><span style="display:flex;"><span>asz collect -once -config DIR/asz.yaml                      <span style="color:#57606a"># load: the real adapter lands them as .sd</span>
-</span></span><span style="display:flex;"><span>asz parse -config DIR/asz.yaml                              <span style="color:#57606a"># parse: the real parser writes the .sf rounds</span>
+</span></span><span style="display:flex;"><span>asz collect -once -config DIR/asz.yaml                      <span style="color:#57606a"># load and parse: the real adapter and the real parser</span>
 </span></span><span style="display:flex;"><span>asz verify -config DIR/asz.yaml                             <span style="color:#57606a"># every digest and every chain</span>
-</span></span><span style="display:flex;"><span>asz view -config DIR/asz.yaml                               <span style="color:#57606a"># the page, on 127.0.0.1:8787</span>
-</span></span><span style="display:flex;"><span>asz push -once -config DIR/asz.yaml                         <span style="color:#57606a"># export: every file to an OTLP receiver</span>
+</span></span><span style="display:flex;"><span>asz server -config DIR/asz.yaml                             <span style="color:#57606a"># the page, on 127.0.0.1:8787</span>
+</span></span><span style="display:flex;"><span>asz push -config DIR/asz.yaml                               <span style="color:#57606a"># export: every file to an OTLP receiver</span>
 </span></span></code></pre></div><p>With <code>--format sd</code> the Session Data is landed by the build itself, so the collect step is skipped
 and the rest is the same. To push, name the receiver in <code>DIR/asz.yaml</code>; <code>build</code> leaves the block
 there, commented:</p>
@@ -736,12 +735,56 @@ it, such as the export block, is kept across builds.</p>
           <td>N sessions end to end on the clock, each with its own id</td>
       </tr>
       <tr>
+          <td><code>--every D</code></td>
+          <td>keep building: one session every D of wall clock, until the command is stopped</td>
+      </tr>
+      <tr>
+          <td><code>--pick MODE</code></td>
+          <td>with a set of scenarios, <code>cycle</code> through them in order or take a <code>random</code> one</td>
+      </tr>
+      <tr>
+          <td><code>--seed N</code></td>
+          <td>seeds <code>--pick random</code>; <code>0</code>, the default, varies with each run</td>
+      </tr>
+      <tr>
           <td><code>--through NAME</code></td>
           <td>only the steps up to the checkpoint NAME</td>
       </tr>
   </tbody>
 </table>
 <p>With a fixed <code>--at</code>, every file is identical on every run.</p>
+<h2 id="a-feed-keep-sending-conversations">A feed: keep sending conversations</h2>
+<p><code>--repeat</code> writes its sessions in one burst and stops. <code>--every</code> does not stop. It builds one whole
+session, waits that long on the wall clock, builds the next, and goes on until it is stopped. That
+is a mock client: run it beside a watching collector and conversations keep arriving.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>asz scenario build tests/scenarios/assembly.yaml --format claude-code --out DIR --every 30s <span style="color:#1f2328">&amp;</span>
+</span></span><span style="display:flex;"><span>asz server -config DIR/asz.yaml                             <span style="color:#57606a"># collect, parse and serve, on the interval</span>
+</span></span></code></pre></div><p><code>server</code> refreshes on the interval because the configuration the build writes says <code>mode: watch</code>.
+To feed a receiver instead of a page, name it under <code>export.otlp</code> and run <code>asz collect</code>, which
+sends at the end of every period.</p>
+<p>Two things differ from a one-shot build, and both are what a live feed needs.</p>
+<p>A session is stamped so its <strong>last record lands at the moment it was written</strong>. A real session that
+has just ended has its last record now, and a receiver reads nothing stamped ahead of the clock it
+reads it with. A one-shot build starts at <code>--at</code> instead and runs forward from there.</p>
+<p>Each session gets an id <strong>no earlier session has</strong>, taken from the moment it was written rather
+than from a counter. A counter starts again at one when the feed is restarted. The repeated id
+would rewrite the same source file in place, and the collector, which reads forward from where it
+stopped, would see no growth and land nothing at all.</p>
+<p>The configuration the build writes says <code>mode: watch</code> rather than <code>mode: once</code>, because the source
+keeps growing.</p>
+<h3 id="a-set-of-scenarios">A set of scenarios</h3>
+<p>More than one file may be given, and a directory contributes every <code>.yaml</code> file in it, except the
+expectation files. <code>--pick cycle</code>, the default, walks the list in the order it was written and
+starts again at the top. <code>--pick random</code> takes one each time; <code>--seed</code> makes that order repeatable.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>asz scenario build tests/scenarios --format claude-code --out DIR --every 1m --pick random
+</span></span><span style="display:flex;"><span>asz scenario build a.yaml b.yaml c.yaml --format sd --out DIR --every 10s
+</span></span></code></pre></div><p>With <code>--format sd</code> a feed lands its Session Data itself, so there is nothing for a collector to
+watch and <code>server</code> does not notice the later sessions. Run <code>asz parse -config DIR/asz.yaml</code> beside
+it, or feed in <code>claude-code</code> format, which goes through the real adapter and is the closer stand-in
+for a client anyway.</p>
+<p><code>--every</code> with <code>--repeat N</code> stops after N sessions rather than running on, and does not wait after
+the last one. The period must be at least <code>1ms</code>: a feed id carries the moment it was written, in
+milliseconds, so a shorter period could not give every session an id of its own.</p>
 <h2 id="the-scenario">The scenario</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">session</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>mock-build-and-check      <span style="color:#fff"> </span><span style="color:#57606a"># optional; default derived from the steps</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#0550ae">title</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>build and check             <span style="color:#fff"> </span><span style="color:#57606a"># optional</span><span style="color:#fff">
@@ -957,6 +1000,11 @@ run in both formats by <code>go test ./tests/</code>.</p>
     <li><a href="#scenarios">Scenarios</a>
       <ul>
         <li><a href="#generate-then-load-parse-and-export">Generate, then load, parse and export</a></li>
+        <li><a href="#a-feed-keep-sending-conversations">A feed: keep sending conversations</a>
+          <ul>
+            <li><a href="#a-set-of-scenarios">A set of scenarios</a></li>
+          </ul>
+        </li>
         <li><a href="#the-scenario">The scenario</a>
           <ul>
             <li><a href="#records-the-original-lost">Records the original lost</a></li>
@@ -1073,6 +1121,12 @@ run in both formats by <code>go test ./tests/</code>.</p>
 
     </div>
     
+
+
+
+
+
+
 
 
 

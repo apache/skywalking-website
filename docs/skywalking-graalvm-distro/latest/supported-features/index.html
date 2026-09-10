@@ -33,7 +33,7 @@ What’s Included Storage Provider Status BanyanDB Included (default) Elasticsea
   <meta itemprop="name" content="Supported Features">
   <meta itemprop="description" content="Supported Features This distro packages the Apache SkyWalking OAP server as a GraalVM native image with a fixed module set. All modules and providers are selected at build time — there is no runtime SPI discovery or dynamic module loading.
 What’s Included Storage Provider Status BanyanDB Included (default) Elasticsearch Not included H2 / MySQL / PostgreSQL / OpenSearch Not included Cluster Provider Status Standalone Included (default) Kubernetes Included ZooKeeper / Consul / Etcd / Nacos Not included Configuration Provider Status none Included k8s-configmap Included (default) Apollo / Consul / Etcd / Nacos / ZooKeeper / gRPC Not included Data Receivers All receivers are included:">
-  <meta itemprop="wordCount" content="651">
+  <meta itemprop="wordCount" content="938">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Supported Features">
   <meta name="twitter:description" content="Supported Features This distro packages the Apache SkyWalking OAP server as a GraalVM native image with a fixed module set. All modules and providers are selected at build time — there is no runtime SPI discovery or dynamic module loading.
@@ -324,17 +324,17 @@ What’s Included Storage Provider Status BanyanDB Included (default) Elasticsea
                   
                     
                     
-                    <option ZgotmplZ value="0.3.0">
+                    <option ZgotmplZ value="v0.4.0">
                     
-                      0.3.0
+                      0.4.0 (SkyWalking 11.0.0)
                     
                     </option>
                   
                     
                     
-                    <option ZgotmplZ value="v0.2.1 (10.3.0-dev-64a1795)">
+                    <option ZgotmplZ value="v0.3.0">
                     
-                      v0.2.1 (10.3.0-dev-64a1795)
+                      0.3.0 (SkyWalking 10.4.0)
                     
                     </option>
                   
@@ -487,7 +487,7 @@ What’s Included Storage Provider Status BanyanDB Included (default) Elasticsea
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 1ab407e</div>
+                  <div class="commit-id">Commit Id: 1e5dfed</div>
                 
 
 
@@ -688,7 +688,7 @@ runtime SPI discovery or dynamic module loading.</p>
       <tr>
           <td>Envoy / Istio ALS</td>
           <td>gRPC</td>
-          <td>Access log service, metrics</td>
+          <td>Access log service (HTTP and TCP entries), metrics</td>
       </tr>
       <tr>
           <td>Zipkin</td>
@@ -759,8 +759,18 @@ runtime SPI discovery or dynamic module loading.</p>
       </tr>
       <tr>
           <td><strong>Status</strong></td>
-          <td>12800</td>
-          <td>Debugging and status queries</td>
+          <td>17128</td>
+          <td>Cluster / alarm / TTL status + <code>/debugging/*</code> debug-query trace, on the admin-server host (relocated from the query plugin in 11.0.0)</td>
+      </tr>
+      <tr>
+          <td><strong>Inspect</strong></td>
+          <td>17128</td>
+          <td>SWIP-14 metric catalog + entity enumeration (<code>/inspect/*</code>), on the admin-server host</td>
+      </tr>
+      <tr>
+          <td><strong>UI Management</strong></td>
+          <td>17128</td>
+          <td>Dashboard-template REST (<code>/ui-management/*</code>) consumed by the Horizon UI, on the admin-server host</td>
       </tr>
   </tbody>
 </table>
@@ -816,6 +826,10 @@ runtime SPI discovery or dynamic module loading.</p>
           <td>AI Pipeline</td>
           <td>Included (baseline prediction)</td>
       </tr>
+      <tr>
+          <td>DSL live debugger (SWIP-13)</td>
+          <td>Included — sampling sessions over the bundled MAL/LAL/OAL rules, probes compiled in at build time</td>
+      </tr>
   </tbody>
 </table>
 <h2 id="optional-modules">Optional Modules</h2>
@@ -864,12 +878,50 @@ runtime SPI discovery or dynamic module loading.</p>
 </ul>
 <p><strong>Root cause</strong>: The Netty TLS implementation requires <code>netty_tcnative</code> platform-specific native
 libraries (<code>.so</code> files) that are not bundled in the GraalVM native image.</p>
+<p>The <code>restSSL*</code> options that 11.0.0 added to every HTTP/REST server (<code>SW_*_REST_SSL_ENABLED</code>) are
+present in <code>application.yml</code> for configuration parity, but they sit on the same Netty TLS stack and
+have not been verified in the native image; treat them as unsupported.</p>
 <p><strong>Workaround</strong>: Use a service mesh (e.g., <strong>Istio</strong>, <strong>Linkerd</strong>) to handle mTLS at the
 infrastructure layer. The mesh transparently encrypts all pod-to-pod traffic, including
 agent-to-OAP gRPC connections, without requiring application-level TLS configuration.</p>
 <pre tabindex="0"><code>Agent Pod ──(plaintext gRPC)──► Istio Sidecar ══(mTLS)══► Istio Sidecar ──► OAP Pod
 </code></pre><p>This is the recommended approach for Kubernetes deployments and provides stronger security
 guarantees than application-level TLS (automatic certificate rotation, policy enforcement).</p>
+<h3 id="dsl-rules-are-read-only-live-debugger-yes-hot-update-no">DSL Rules Are Read-Only (Live Debugger Yes, Hot-Update No)</h3>
+<p>All MAL / LAL / OAL rules are pre-compiled at build time. The precompiler compiles the SWIP-13
+debug probes into every rule class (the same codegen switch the upstream OAP flips at boot), so
+the live debugger works on the bundled rules; only runtime-rule hot-update, which generates
+bytecode at runtime, is unavailable:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Admin API</th>
+          <th>Status</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>/dsl-debugging/*</code> (SWIP-13 live debugger: sessions over MAL, LAL and OAL rules)</td>
+          <td>Supported on the bundled rules</td>
+      </tr>
+      <tr>
+          <td><code>GET /runtime/oal/files</code>, <code>/runtime/oal/files/{name}</code>, <code>/runtime/oal/rules[/{source}]</code></td>
+          <td>Supported (upstream handler)</td>
+      </tr>
+      <tr>
+          <td><code>GET /runtime/rule/list</code>, <code>/runtime/rule/bundled</code>, <code>GET /runtime/rule</code> (YAML + <code>X-Sw-*</code> headers)</td>
+          <td>Supported: every shipped rule, always <code>BUNDLED</code></td>
+      </tr>
+      <tr>
+          <td><code>POST /runtime/rule/addOrUpdate</code>, <code>/inactivate</code>, <code>/delete</code>, <code>GET /runtime/rule/dump</code>, <code>/runtime/mal/*</code>, <code>/runtime/lal/*</code></td>
+          <td><strong>HTTP 501</strong> (runtime-rule hot-update)</td>
+      </tr>
+  </tbody>
+</table>
+<p>The Horizon UI&rsquo;s DSL catalog, editor, OAL and live-debug pages therefore work against this distro;
+saving or deleting a rule is refused with a structured 501. <code>SW_DSL_DEBUGGING_INJECTION_ENABLED</code>
+only gates the debug API here — the probes are always compiled in. Use the upstream JVM OAP
+distribution if you need hot-update.</p>
 <h2 id="differences-from-upstream-skywalking">Differences from Upstream SkyWalking</h2>
 <table>
   <thead>
@@ -914,6 +966,11 @@ guarantees than application-level TLS (automatic certificate rotation, policy en
           <td>Module loading</td>
           <td>SPI discovery at runtime</td>
           <td>Fixed at build time</td>
+      </tr>
+      <tr>
+          <td>DSL rules</td>
+          <td>Hot-update + live debugger</td>
+          <td>Live debugger on bundled rules; read-only catalogs; no hot-update</td>
       </tr>
       <tr>
           <td>TLS/SSL</td>
@@ -989,6 +1046,7 @@ Zipkin ──HTTP──────►│                                  │
         <li><a href="#known-limitations">Known Limitations</a>
           <ul>
             <li><a href="#no-tlsssl-support-for-grpc">No TLS/SSL Support for gRPC</a></li>
+            <li><a href="#dsl-rules-are-read-only-live-debugger-yes-hot-update-no">DSL Rules Are Read-Only (Live Debugger Yes, Hot-Update No)</a></li>
           </ul>
         </li>
         <li><a href="#differences-from-upstream-skywalking">Differences from Upstream SkyWalking</a></li>
@@ -1104,6 +1162,12 @@ Zipkin ──HTTP──────►│                                  │
 
     </div>
     
+
+
+
+
+
+
 
 
 
