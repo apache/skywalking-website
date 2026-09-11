@@ -33,7 +33,7 @@ It reads the derived index, not the payloads. Structure resolution needs identif
   <meta itemprop="name" content="Conversation Assembly">
   <meta itemprop="description" content="Conversation Assembly Assembly turns landed records into the structure defined by the Unified Conversation Model, and appends the result to an append-only chain of immutable rounds.
 It reads the derived index, not the payloads. Structure resolution needs identifiers, not content: removing duplicate records needs record ids, grouping a provider call needs message ids, joining a tool needs tool-use ids, joining a spawn needs agent and run ids. Message text is read only when a conversation is rendered, and only for the records that appear in it.">
-  <meta itemprop="wordCount" content="1143">
+  <meta itemprop="wordCount" content="3285">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Conversation Assembly">
   <meta name="twitter:description" content="Conversation Assembly Assembly turns landed records into the structure defined by the Unified Conversation Model, and appends the result to an append-only chain of immutable rounds.
@@ -390,6 +390,14 @@ It reads the derived index, not the payloads. Structure resolution needs identif
 
     <li>
         
+            <a href="/docs/skywalking-ai-sessionizer/next/en/setup/install">Install</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-ai-sessionizer/next/en/setup/quick-start">Quick Start</a>
         
     </li>
@@ -570,7 +578,7 @@ It reads the derived index, not the payloads. Structure resolution needs identif
 
     <li>
         
-            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes-0.3.0">Current Version</a>
+            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes">Current Version</a>
         
     </li>
 
@@ -619,7 +627,7 @@ It reads the derived index, not the payloads. Structure resolution needs identif
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: dd083cc</div>
+                  <div class="commit-id">Commit Id: 55cf9cc</div>
                 
 
 
@@ -679,6 +687,17 @@ append-only chain of immutable rounds.</p>
 content: removing duplicate records needs record ids, grouping a provider call needs message ids,
 joining a tool needs tool-use ids, joining a spawn needs agent and run ids. Message text is read only
 when a conversation is rendered, and only for the records that appear in it.</p>
+<p><strong>Every parse assembles the whole session from its index</strong>, not only the records that arrived since
+the last round. So the same evidence always gives the same entities, and a round can be re-derived
+rather than only trusted. <a href="#the-round-chain">The round chain</a> says how the result becomes a round.</p>
+<p>Where this page says <em>in the corpus</em>, it means one corpus of Claude Code history: 2,970 source
+files holding 365,825 records, 1.09 GB in all, from 25 project directories. The date of that
+measurement is unavailable.</p>
+<p>Assembling everything each time is cheap because the index is small. In the corpus, 365,554 index
+entries describing 1.0 GB of landed payload took 47 MB of index, about 12 times smaller. The largest
+single session&rsquo;s index is 16 MB, and it loads in 4.5 ms with every lookup map rebuilt. That is why
+the lookup maps are rebuilt on load and never stored. <a href="../../formats/storage-root#size">Storage Root</a>
+gives the index size on a later sample.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>asz parse                     <span style="color:#57606a"># assemble every session, append a round to each chain</span>
 </span></span><span style="display:flex;"><span>asz parse SESSION             <span style="color:#57606a"># one session</span>
 </span></span><span style="display:flex;"><span>asz conversation ID           <span style="color:#57606a"># fold the chain and show the structure</span>
@@ -695,7 +714,7 @@ when a conversation is rendered, and only for the records that appear in it.</p>
   <tbody>
       <tr>
           <td>1. Remove duplicate records</td>
-          <td>nothing downstream is correct first; the first copy wins</td>
+          <td>the first copy of each record id wins, and nothing downstream is correct before it</td>
       </tr>
       <tr>
           <td>2. Partition streams</td>
@@ -723,11 +742,11 @@ when a conversation is rendered, and only for the records that appear in it.</p>
       </tr>
       <tr>
           <td>8. Propose segments</td>
-          <td>activity windows that can be committed</td>
+          <td>activity windows, and whether each could be committed</td>
       </tr>
   </tbody>
 </table>
-<p>Six rules in here are the opposite of the obvious choice, and each is the opposite because a
+<p>Seven rules in here are the opposite of the obvious choice, and each is the opposite because a
 measurement said so.</p>
 <p><strong>A record type is not what a record is.</strong> Every tool result in the corpus sits on a record whose
 type is <code>user</code>. Only a small fraction of <code>user</code> records are things a person said. Classification
@@ -736,6 +755,16 @@ reads the trigger and the content blocks, never the type alone.</p>
 just before it resets model context. The later copy is the worse one: it has a rewritten prompt
 cycle, and in many cases its captured tool output has been blanked. Keeping the last both moves
 records away from their true position and destroys data.</p>
+<p>The key is the record id across the whole session, not within one file. First means first in
+landed order: the lower sequence, then the lower row. So the same rule also removes the copies that
+a crash between landing a file and committing its cursor leaves in a later file, as
+<a href="../../formats/storage-root#landed-files">Storage Root</a> describes. A record with no id is never a
+duplicate, because a key built on an empty id would collapse every such record into one. In the
+corpus, 44,585 of 365,825 records carry no id.</p>
+<p>A repeated copy is left out of every lookup, not only the lookup by id. In call grouping it would
+inflate a call&rsquo;s fragment count. In the tool join it would make an exact join look ambiguous. In a
+stream it would appear twice. The copy stays in the index as evidence of what the runtime wrote
+again.</p>
 <p><strong>Group a provider call by message id, in line order.</strong> Never by walking the parent pointer forward,
 which drops a tool use on nearly one call in five; and never by request id, because a record the
 client fabricated can carry a real call&rsquo;s request id.</p>
@@ -747,9 +776,120 @@ background agent finishing and the parent resuming is mechanically a new prompt 
 said anything; it is the same interaction continuing. A locally typed command is the reverse case —
 a person acting with no trigger recorded — so both are Talk starts and everything between them is
 not.</p>
+<p><strong>A run id belongs to its stream.</strong> A run id is not unique across a session. A child stream is
+written under a run id that also appears in the parent, and one id has been seen in three different
+child streams. Keyed on the id alone, a child&rsquo;s records land inside the parent&rsquo;s Talk, and the child
+gets no run of its own. So every Talk and Run is keyed by the stream and the run id together.</p>
 <p><strong>Membership is resolved by walking backward.</strong> A model response carries no cycle id but reaches one
 through its containment parents, which is single-valued. Line proximity agrees in the simple case and
-disagrees exactly where it matters.</p>
+disagrees exactly where it matters. The walk passes through records of every kind. An attachment
+carries a parent and is named as one, so a walk that skipped every record that is not a message
+would break. The walk follows at most 64 parent links, and the limit exists only so that corrupt
+data cannot loop. A small limit would be wrong: in the corpus, 140 of 44,973 records need more
+than 7.</p>
+<p>One rule is asserted rather than measured.</p>
+<p><strong>A child stream is always exactly one Talk.</strong> Every run in it is a Run inside that Talk: the
+delegated prompt comes in, the final output goes out, and nobody outside the agent takes part. The
+Talk&rsquo;s trigger is <code>unknown</code>, because the parent wrote the prompt. The rule follows from what a child
+stream is. The main stream&rsquo;s rule cannot stand in for it, because that rule reads the trigger each
+run states, and in the corpus exactly one of 221,592 child records states a trigger. Applied to a
+child, it would start a new Talk on every run.</p>
+<h3 id="segments">Segments</h3>
+<p>Stage 8 proposes segments. It never commits one.</p>
+<p>Only the main stream is cut. Its Talks are taken in order of their first record time. A new window
+opens where the gap between one Talk&rsquo;s last record and the next Talk&rsquo;s first record is longer than
+the idle gap. Only records that resolve to a run count toward a Talk&rsquo;s time range. A window&rsquo;s id
+comes from where it opens, the landed position of its first Talk, and not from its place in the
+list. So late evidence that adds an earlier window cannot renumber a later one. The last window is
+<code>open</code>, and every earlier one is a <code>candidate</code>. A child stream&rsquo;s Talk joins the window whose time
+range holds its first record, as <code>strong_inference</code>, because delegated work belongs to the window
+of the Talk that asked for it.</p>
+<p><strong>A negative gap is no gap.</strong> Record times can step backward. In the corpus, 0.315% of consecutive
+records step back, by up to 4.06 hours. Provider-error records are the main cause: their time is
+when the failed request began, not when the record was written. So a negative difference between
+two Talks is treated as no gap, never as a large one.</p>
+<p><strong>The idle gap is 10 minutes, and a gap only proposes.</strong> A long gap often falls inside a turn rather
+than between two, so it cannot decide on its own. In the corpus:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Idle gap</th>
+          <th>Gaps that long</th>
+          <th>Share inside a run</th>
+          <th>Share inside a Talk</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>10 minutes</td>
+          <td>697</td>
+          <td>23.67%</td>
+          <td>38.74%</td>
+      </tr>
+      <tr>
+          <td>15 minutes</td>
+          <td>444</td>
+          <td>unavailable</td>
+          <td>30.41%</td>
+      </tr>
+      <tr>
+          <td>20 minutes</td>
+          <td>302</td>
+          <td>9.60%</td>
+          <td>21.52%</td>
+      </tr>
+  </tbody>
+</table>
+<p>The Talk column is the one that matters. A window cut inside a Talk splits one interaction between
+two windows. Whether provider-error records count on this timeline moves the run column by five
+percentage points. In asz such a record counts only when its containment parents reach a run,
+because only those records set a Talk&rsquo;s time range.</p>
+<p>Twenty minutes would propose 57% fewer candidates. The default stays at 10 minutes because the gates
+below decide what could be committed, and a shorter gap only gives them more candidates to judge.
+How often the gates stop a bad candidate has not been measured.</p>
+<p>The gap is fixed in the build. No configuration key and no command flag changes it. It is part of
+the policy every round header carries, <code>v1+idle=10m0s</code>, so windows proposed under one gap never
+fold together with windows proposed under another. <a href="../../formats/session-flow#header">Session Flow</a>
+says how a chain refuses a change of policy.</p>
+<p><strong>Four gates decide whether a window could be committed.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Gate</th>
+          <th>Passes when</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>activity_boundary</code></td>
+          <td>the window is not the last one</td>
+      </tr>
+      <tr>
+          <td><code>no_crossing_open_operation</code></td>
+          <td>every tool use whose request time falls inside the window has exactly one result, also timed inside the window, and the session holds no open <code>child_stream</code> or <code>notified_child</code> entry. The second test covers the whole session, not the window.</td>
+      </tr>
+      <tr>
+          <td><code>lateness_watermark</code></td>
+          <td>the window is not the last one, and the main stream&rsquo;s last record is more than one idle gap after the window ends</td>
+      </tr>
+      <tr>
+          <td><code>conversation_identity</code></td>
+          <td>the conversation id is not empty. Assembly refuses to run without one, so this gate always passes.</td>
+      </tr>
+  </tbody>
+</table>
+<p>A segment node carries <code>state</code>, <code>talks</code>, <code>gates_unmet</code> and <code>committable</code>. <code>gates_unmet</code> lists the
+gates that fail, and <code>committable</code> is true when none fail. <a href="../../formats/asz-view">asz.view</a> shows
+the same windows to a reader.</p>
+<p><code>no_crossing_open_operation</code> is the gate that does real work. It does not exist for a request left
+with no result at the end of a file. In the corpus that is 0 of 25,892 tool requests on the main
+stream, because the runtime writes a result even for a failure. It exists for a result that arrives
+after the quiet period, which in the corpus happens on 85 of the 697 gaps longer than 10 minutes,
+12.2%. Committing that window would freeze the request in one window while its result lands in the
+next.</p>
+<p><strong>Nothing commits a segment.</strong> Assembly proposes windows and reports <code>committable</code>, and no command
+acts on it. The <a href="../unified-conversation-model">model</a> calls a segment the commit unit, but the
+commit step is not implemented.</p>
 <h2 id="what-comes-out">What comes out</h2>
 <p>The containment tree carries direct ownership only. Every node has at most one parent.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>session
@@ -759,13 +899,21 @@ disagrees exactly where it matters.</p>
 </span></span><span style="display:flex;"><span>          └ run
 </span></span><span style="display:flex;"><span>             ├ llm.call
 </span></span><span style="display:flex;"><span>             │  ├ message.assistant · thinking
-</span></span><span style="display:flex;"><span>             │  └ tool
+</span></span><span style="display:flex;"><span>             │  └ tool · agent.call
 </span></span><span style="display:flex;"><span>             ├ message.external · context.injection
-</span></span><span style="display:flex;"><span>             ├ agent.call → agent.launch_ack
+</span></span><span style="display:flex;"><span>             ├ agent.launch_ack
 </span></span><span style="display:flex;"><span>             └ runtime.notification
-</span></span></code></pre></div><p>Everything else is a <strong>typed relation</strong> carrying its own correlation quality: <code>starts</code>, <code>reports</code>,
-<code>ends_with</code>, <code>result_of</code>, <code>follows</code>, <code>summarizes</code>, <code>in_segment</code>. Cross-stream flow is never containment,
-which is what stops a rendered conversation repeating every subagent&rsquo;s work inside its parent.</p>
+</span></span></code></pre></div><p>A <code>tool</code> becomes an <code>agent.call</code> when a child stream is joined to it. Only its kind changes, so it
+stays under the provider call whose response asked for it. The <code>agent.launch_ack</code> is a separate
+record, and it sits in the run.</p>
+<p>Everything else is a <strong>typed relation</strong> carrying its own correlation quality: <code>starts</code>, <code>reports</code>,
+<code>ends_with</code>, <code>follows</code>, <code>summarizes</code>, <code>in_segment</code>. Cross-stream flow is never containment, which is
+what stops a rendered conversation repeating every subagent&rsquo;s work inside its parent.</p>
+<p>A tool&rsquo;s request and result are not joined by a relation. The tool node references the request
+record and, once the join finds it, the result record. Those references are the join. Its quality
+is the node&rsquo;s <code>result_join</code> attribute. An edge would say the same thing again, and its far end would
+be a record with no node of its own. So assembly never writes the <code>result_of</code> relation that the
+<a href="../glossary#relations">Glossary</a> lists.</p>
 <p>A Segment is a relation rather than a parent. It is a time window and a session outlives many of
 them, so a session cannot sit under a segment in a tree where every node has one parent.</p>
 <h2 id="the-round-chain">The round chain</h2>
@@ -789,26 +937,115 @@ rather than deleted — absence cannot say that a gap existed and closed.</li>
 backwards; the chain cannot.</li>
 </ol>
 <p>Rounds are linked by digest, not by filename: round N names the digest of round N−1. A round carries
-no wall-clock time, so the same landed evidence and the same parser version reproduce the same bytes
-and the same digest. Anything mutable or temporal lives in <code>conversation.state</code>, outside every
-digest.</p>
-<p>A viewer folds the same chain, but not necessarily the same way: it may want the state as of an
-earlier round, or one entity&rsquo;s history across rounds, or to render rounds as they arrive. That is a
-later concern. What the chain guarantees is that the rounds hold enough to answer any of them.</p>
-<p><code>asz verify</code> checks four things. Three are digest properties — no gap in the round numbers, each
-round names its predecessor&rsquo;s digest, each round&rsquo;s digest matches its bytes. The fourth is that
-consumed landed sequences are contiguous across rounds, which catches skipped evidence that no digest
-would reveal.</p>
+no wall-clock time, so the same landed evidence and the same parser and policy versions reproduce
+the same bytes and the same digest. Anything mutable or temporal lives in <code>conversation.state</code>,
+outside every digest.</p>
+<p>A parse builds a round in three steps. It fixes its watermark at the sequence the index has
+reached. It assembles the whole session up to that watermark. It then compares the result with the
+fold of the chain and writes only the difference:</p>
+<ul>
+<li>An entity assembled unchanged is left out, because absence means unchanged.</li>
+<li>A node or relation the fold holds and the assembly no longer produces gets a tombstone.</li>
+<li>An open unresolved entry the assembly no longer produces is superseded as <code>resolved</code>.</li>
+</ul>
+<p>The comparison ignores an entity&rsquo;s revision and its frame type. The revision is the round number,
+and only the writer sets the frame type, so comparing either would make every entity look changed
+in every round. Because the whole session is assembled each time, duplicate removal always sees the
+first copy. A repeated record therefore cannot become a second node in a later round. A round over
+the byte budget is assembled again over a narrower window, as
+<a href="../../setup/configuration#parse"><code>max_round_bytes</code></a> describes.</p>
+<p><strong>The watermark is fixed before assembly, and assembly reads nothing past it.</strong> Deciding it
+afterwards would let a round hold nodes drawn from evidence that its own header and input digest do
+not cover. A collector writing at the same time makes that likely. A parse also refuses to run when
+the chain already covers more landed evidence than the index holds.</p>
+<p><strong>A round is written whenever landed evidence advanced</strong>, even when no entity changed. Such a round
+has no entity frames and only moves <code>through_seq</code>. Without it, the next parse would read the same
+evidence again and again, and &ldquo;no round&rdquo; would mean both &ldquo;nothing new arrived&rdquo; and &ldquo;nothing new
+mattered&rdquo;. Records landed twice after a crash are one such case. The chain test
+<code>TestInterruptedPassRepeatsRatherThanLoses</code> checks that they move the watermark with no node,
+relation or tombstone. The scenario <code>replay</code> checks the same for a repeated block.</p>
+<p><strong>The fold of rounds 1 to N equals one full assembly of the landed evidence through round N&rsquo;s
+<code>through_seq</code>.</strong> The full assembly is the reference, because it is simple and plainly correct.
+Where the two disagree, the fold is wrong. Every <a href="../../guides/scenario#check">scenario</a> checks
+this in both formats, on every node&rsquo;s kind, parent and attributes and on the number of relations.
+It holds under any round budget, because the budget changes where the chain is cut, never what it
+says. A chain test builds one session as a single round and again under a one-byte budget, one round
+per landed file, and the two folds hold the same entities. The rule does not say that the fold of
+round N+1 extends the fold of round N. Later evidence replaces entities that earlier rounds wrote.</p>
+<p><strong>Rounds and segments are separate.</strong> The round is the unit of appending. The segment is a proposed
+commit window. A segment is a node like any other, so when a later Talk turns the open window into a
+candidate, that change is an ordinary node revision in whatever round the parse writes. There is no
+separate mechanism for it, and nothing freezes a segment today, as <a href="#segments">Segments</a> says.</p>
+<p>The page that <code>asz view</code> serves folds the same chain in the same way, every round in order.
+<a href="../../formats/asz-view">asz.view</a> says what it does with a broken chain, and when it folds again.
+A fold as of an earlier round, one entity&rsquo;s history across rounds, and a fold that takes rounds as
+they arrive are not implemented. The rounds hold enough to support each of them.</p>
+<p><code>asz verify</code> checks every round against the round before it and against the landed files, as
+<a href="../../formats/session-flow#reading-it">Session Flow</a> lists. One of those checks is not about
+digests: the landed sequences the rounds consumed must be contiguous. It catches skipped evidence
+that no digest would reveal.</p>
 <h2 id="qualification">Qualification</h2>
 <p>Nothing is presented as observed execution unless it was observed.</p>
 <p>Every join carries a correlation quality: <code>exact_unique</code>, <code>exact_ambiguous</code>, <code>strong_inference</code>,
 <code>weak_inference</code>, <code>unresolved</code>, <code>conflict</code>. An exact identifier does not guarantee a unique match —
 where several candidates share a key the relation stays <code>exact_ambiguous</code> and the assembler does not
 choose one.</p>
-<p>What could not be resolved is carried as data, with a denominator. An assembler that drops what it
-could not resolve presents a partial conversation as a complete one. An entry is promoted to terminal
-only on terminal evidence — a pruned source, a finished run — never because it has stayed open for a
-number of rounds, which is a statement about how often we looked rather than about the data.</p>
+<p>What could not be resolved is carried as data. An assembler that drops what it could not resolve
+presents a partial conversation as a complete one.</p>
+<p>A count of what could not be resolved also needs the number it is out of. Without it, a reader
+cannot tell a small gap from a large one. The rounds do not carry that number. An unresolved entry
+records its kind, its reference, a reason and a state. Only <a href="../../setup/command-line#parse"><code>asz parse</code></a>
+prints the number, and only for tool calls and child launches.</p>
+<p>The assembler writes seven kinds of unresolved entry:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Kind</th>
+          <th>Written when</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>tool_result</code></td>
+          <td>no result landed for a tool use, or several results carry its id</td>
+      </tr>
+      <tr>
+          <td><code>tool_use</code></td>
+          <td>a result landed, and the request it answers never did</td>
+      </tr>
+      <tr>
+          <td><code>child_stream</code></td>
+          <td>a child was announced, and its stream has not landed</td>
+      </tr>
+      <tr>
+          <td><code>notified_child</code></td>
+          <td>a notification names a child whose stream has not landed</td>
+      </tr>
+      <tr>
+          <td><code>spawn_call</code></td>
+          <td>a child, or a batch of children, names a launch call that never landed</td>
+      </tr>
+      <tr>
+          <td><code>spawn_of_child</code></td>
+          <td>a child stream landed, and no landed record names the call that started it</td>
+      </tr>
+      <tr>
+          <td><code>epoch_continuation</code></td>
+          <td>a reset names a record that is not in the landed data</td>
+      </tr>
+  </tbody>
+</table>
+<p>Every entry is written <code>open</code>, and it resolves when the missing evidence lands. <code>child_stream</code> and
+<code>notified_child</code> are routine in a live session, because a child can be announced before its stream
+lands. While either is open, no segment is committable. A child in a batch that never reports a
+result is normal, and it is not recorded.</p>
+<p>The assembler makes one change of state. An open entry it no longer produces is superseded as
+<code>resolved</code>, and <a href="../../formats/session-flow#the-fold">the fold</a> keeps it. The scenario
+<code>unfinished-tool</code> checks a <code>tool_result</code> going from open to resolved. The format also defines
+<code>terminal</code>, for a producer with evidence that a reference will never resolve, such as a pruned
+source. The current assembler never writes it. Nothing counts rounds either. &ldquo;Still open after N
+rounds&rdquo; measures how often the chain was built, not the data, which is why the state has three
+values and not a counter.</p>
 
 </div>
 
@@ -843,7 +1080,11 @@ number of rounds, which is a statement about how often we looked rather than abo
   <ul>
     <li><a href="#conversation-assembly">Conversation Assembly</a>
       <ul>
-        <li><a href="#the-pipeline">The pipeline</a></li>
+        <li><a href="#the-pipeline">The pipeline</a>
+          <ul>
+            <li><a href="#segments">Segments</a></li>
+          </ul>
+        </li>
         <li><a href="#what-comes-out">What comes out</a></li>
         <li><a href="#the-round-chain">The round chain</a></li>
         <li><a href="#qualification">Qualification</a></li>

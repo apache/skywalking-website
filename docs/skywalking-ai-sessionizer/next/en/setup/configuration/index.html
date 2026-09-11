@@ -33,7 +33,7 @@ storage: root: ./data adapters: - name: claude-code-local enabled: true source_r
   <meta itemprop="name" content="Configuration">
   <meta itemprop="description" content="Configuration One YAML file. Every command reads asz.yaml from the working directory when no -config flag is given, and -config FILE names another one. The file at the repository root is the default configuration with every value written out, and a test holds it to the compiled defaults, so reading that file is reading the defaults.
 storage: root: ./data adapters: - name: claude-code-local enabled: true source_root: &#34;&#34; include: [] exclude: - /private/tmp/** collector: mode: watch interval: 5s max_delta_bytes: 2097152 storage Key Default Meaning root ./data The storage root: where collected data lands and where conversations are assembled. A relative path is resolved from the working directory. The default is ignored by git, so running the collector inside a checkout never stages private transcripts.">
-  <meta itemprop="wordCount" content="1294">
+  <meta itemprop="wordCount" content="1532">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Configuration">
   <meta name="twitter:description" content="Configuration One YAML file. Every command reads asz.yaml from the working directory when no -config flag is given, and -config FILE names another one. The file at the repository root is the default configuration with every value written out, and a test holds it to the compiled defaults, so reading that file is reading the defaults.
@@ -390,6 +390,14 @@ storage: root: ./data adapters: - name: claude-code-local enabled: true source_r
 
     <li>
         
+            <a href="/docs/skywalking-ai-sessionizer/next/en/setup/install">Install</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-ai-sessionizer/next/en/setup/quick-start">Quick Start</a>
         
     </li>
@@ -570,7 +578,7 @@ storage: root: ./data adapters: - name: claude-code-local enabled: true source_r
 
     <li>
         
-            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes-0.3.0">Current Version</a>
+            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes">Current Version</a>
         
     </li>
 
@@ -619,7 +627,7 @@ storage: root: ./data adapters: - name: claude-code-local enabled: true source_r
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: dd083cc</div>
+                  <div class="commit-id">Commit Id: 55cf9cc</div>
                 
 
 
@@ -711,9 +719,9 @@ reading that file is reading the defaults.</p>
 transcripts.</p>
 <h2 id="adapters">adapters</h2>
 <p>A list. <code>claude-code-local</code> reads Claude Code&rsquo;s files from this machine. <code>claude-code-changes</code>
-reads the change records the asz Claude Code plugin writes beside them; see
+reads the change records the asz Claude Code plugin writes beside them. See
 <a href="#the-changes-adapter">the changes adapter</a>. <code>claude-code-otlp</code> receives the runtime&rsquo;s own
-exporter; see <a href="#the-receiver-adapter">the receiver adapter</a>. Every command runs once per enabled
+exporter. See <a href="#the-receiver-adapter">the receiver adapter</a>. Every command runs once per enabled
 adapter.</p>
 <table>
   <thead>
@@ -762,7 +770,7 @@ adapter.</p>
       <tr>
           <td><code>metrics_lookback</code></td>
           <td><code>24h</code></td>
-          <td>How far back the first derivation over a root reaches. A duration such as <code>24h</code>, or a number of days such as <code>7d</code>; <code>0</code> or <code>none</code> derives everything. Later passes derive every new file whole.</td>
+          <td>How far back the first derivation over a root reaches. A duration such as <code>24h</code>, or a number of days such as <code>7d</code>. <code>0</code> or <code>none</code> derives everything. Later passes derive every new file whole.</td>
       </tr>
   </tbody>
 </table>
@@ -791,7 +799,7 @@ are the tool&rsquo;s, not yours, which is why they are excluded by default.</p>
       <tr>
           <td><code>mode</code></td>
           <td><code>watch</code></td>
-          <td><code>watch</code> polls the source continuously. <code>once</code> makes a single pass and exits, which is the backfill path over history that already exists. <code>-once</code> on the command line overrides the file.</td>
+          <td><code>watch</code> polls the source continuously. <code>once</code> makes a single pass, which is the backfill path over history that already exists. <code>asz collect</code> then exits, and <code>asz server</code> goes on serving what that pass produced. <code>-once</code> on the command line overrides the file.</td>
       </tr>
       <tr>
           <td><code>interval</code></td>
@@ -801,10 +809,28 @@ are the tool&rsquo;s, not yours, which is why they are excluded by default.</p>
       <tr>
           <td><code>max_delta_bytes</code></td>
           <td><code>2097152</code></td>
-          <td>The largest <code>.sd</code> file the collector writes, 2 MiB. A large catch-up is split into several files, and a single record larger than this is landed whole. A file travels whole as one log record, so this is also the largest record a receiver has to accept. A change applies to new files only; <code>asz repack</code> brings an existing root under a new budget.</td>
+          <td>How much of a growing source the collector lands in one <code>.sd</code> file, 2 MiB. A large catch-up is split into several files. When the next source line is longer than the budget, the collector reads to the end of the source instead. That file then holds the long line and every complete line after it. A file travels whole as one log record, so the largest record a receiver has to accept is the largest file, not the budget. A change applies to new files only. <code>asz repack</code> brings an existing root under a new budget.</td>
       </tr>
   </tbody>
 </table>
+<h3 id="several-local-adapters">Several local adapters</h3>
+<p><code>collector</code> is set on each adapter, but <code>asz collect</code> and <code>asz server</code> run one pipeline for all
+the enabled local adapters, <code>claude-code-local</code> and <code>claude-code-changes</code>. One pass reads them
+all. See <a href="../command-line#collect">collect</a>. One pipeline has one mode and one period, so the
+settings combine:</p>
+<ul>
+<li>It watches when any of them has <code>mode: watch</code>. It makes a single pass only when every one of
+them has <code>mode: once</code>, or with <code>-once</code>.</li>
+<li>It runs at the shortest <code>interval</code> among them. A source that asks for 2 seconds is still read
+every 2 seconds when another asks for a minute.</li>
+<li><code>max_delta_bytes</code> does not combine. Each adapter cuts its own files at its own budget.</li>
+</ul>
+<p>A disabled adapter does not count. The receiver, <code>claude-code-otlp</code>, takes no <code>collector</code> block,
+so it does not count either. When it is the only adapter enabled, <code>asz collect</code> sends what it
+lands to <code>export.otlp.endpoint</code> every 5 seconds, the compiled default.</p>
+<p>Both commands print the result when they start, on their <code>source</code> line: <code>(every 5s)</code> when the
+pipeline watches, <code>(once)</code> when it does not. <code>asz view</code> collects nothing, but it checks the root
+for new rounds at the same shortest interval.</p>
 <h2 id="parse">parse</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">parse</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">max_round_bytes</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">2097152</span><span style="color:#fff">
@@ -919,10 +945,10 @@ are the tool&rsquo;s, not yours, which is why they are excluded by default.</p>
 </span></span></span></code></pre></div><p><code>claude-code-changes</code> lands the records the <a href="../claude-code-plugin">asz Claude Code plugin</a>
 writes: which files each shell command changed, and each edit made inside a subagent, as
 git-style hunks. Empty <code>source_root</code> resolves <code>plugins/data</code> under the same directory
-<code>claude-code-local</code> resolves, and reads every plugin directory named <code>asz-changes-*</code> under it;
-set it to collect from a copy. The session filters are the ones above, judged by the workspace
-each session&rsquo;s records name. It is on by default because it costs nothing when the plugin is not
-installed: there is nothing to discover. It takes no <code>metrics</code>.</p>
+<code>claude-code-local</code> resolves, and reads every plugin directory named <code>asz-changes-*</code> under it.
+Set <code>source_root</code> to collect from a copy. The session filters are the ones above, judged by the
+workspace each session&rsquo;s records name. It is on by default because it costs nothing when the
+plugin is not installed: there is nothing to discover. It takes no <code>metrics</code>.</p>
 <h2 id="the-receiver-adapter">The receiver adapter</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">adapters</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>claude-code-otlp<span style="color:#fff">
@@ -932,7 +958,7 @@ installed: there is nothing to discover. It takes no <code>metrics</code>.</p>
 </span></span></span></code></pre></div><p><code>claude-code-otlp</code> receives what Claude Code&rsquo;s own OpenTelemetry exporter sends, with the
 runtime configured as its documentation says: <code>CLAUDE_CODE_ENABLE_TELEMETRY=1</code>,
 <code>OTEL_METRICS_EXPORTER=otlp</code>, <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> at <code>listen</code>, over gRPC or
-<code>http/protobuf</code>. Phase one lands its metrics in the storage root&rsquo;s spool for <code>asz push</code>; logs and
+<code>http/protobuf</code>. Phase one lands its metrics in the storage root&rsquo;s spool for <code>asz push</code>. Logs and
 traces are accepted and dropped. It runs while <code>asz collect</code> or <code>asz server</code> runs, beside the
 local adapter, and not with <code>-once</code>. <code>metrics</code> may be on here or on <code>claude-code-local</code>, never
 on both: the configuration refuses to load, since the two would count the same tokens twice.</p>
@@ -984,7 +1010,11 @@ on both: the configuration refuses to load, since the two would count the same t
             <li><a href="#session-filters">Session filters</a></li>
           </ul>
         </li>
-        <li><a href="#collector">collector</a></li>
+        <li><a href="#collector">collector</a>
+          <ul>
+            <li><a href="#several-local-adapters">Several local adapters</a></li>
+          </ul>
+        </li>
         <li><a href="#parse">parse</a></li>
         <li><a href="#export">export</a></li>
         <li><a href="#the-changes-adapter">The changes adapter</a></li>

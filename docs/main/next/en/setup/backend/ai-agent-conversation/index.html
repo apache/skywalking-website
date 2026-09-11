@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="AI Agent Conversations">
   <meta itemprop="description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
-  <meta itemprop="wordCount" content="2088">
+  <meta itemprop="wordCount" content="3039">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="AI Agent Conversations">
   <meta name="twitter:description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
@@ -3079,7 +3079,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: adf0ecd</div>
+                  <div class="commit-id">Commit Id: 476afad</div>
                 
 
 
@@ -3228,7 +3228,7 @@ other log sender.</p>
           <td><code>ai_agent_session_flow</code></td>
           <td>Session Flow round</td>
           <td><code>service_id</code>, <code>service_instance_id</code>, indexed <code>conversation</code>, <code>round</code></td>
-          <td><code>session_from_time</code>, <code>title</code>, <code>talks</code>, <code>steps</code>, <code>streams</code>, <code>segments</code>, <code>unresolved</code>, <code>digest</code>, <code>body</code></td>
+          <td><code>session_from_time</code>, <code>title</code>, <code>talks</code>, <code>steps</code>, <code>streams</code>, <code>segments</code>, <code>unresolved</code>, <code>changes</code>, <code>lines_added</code>, <code>lines_removed</code>, <code>llm_calls</code>, <code>subagents</code>, <code>bash_runs</code>, <code>digest</code>, <code>body</code></td>
       </tr>
   </tbody>
 </table>
@@ -3255,11 +3255,13 @@ and <code>TEXT</code> on PostgreSQL; retention is <code>recordDataTTL</code>.</l
 <p>The list and the export are GraphQL queries in <code>ai-agent-conversation.graphqls</code>; the conversation itself is an
 HTTP route on the same server, because its document is as large as the conversation.</p>
 <ul>
-<li><code>listConversations(condition, duration)</code> lists one row per conversation of a service, optionally of one sender,
-from the newest round&rsquo;s attributes. The rounds are read newest first, at most <code>limit</code> (default 1000), then
-folded to one row per conversation. An optional <code>conversation</code> narrows the read to one conversation by id, and an
-optional <code>title</code> keeps only the rows whose title contains the text, case-insensitively — matched after folding, on
-the newest round&rsquo;s title, so it never widens the rounds read.</li>
+<li><code>listConversations(condition, duration)</code> lists one row per conversation of a service, optionally of one sender, from
+the newest round&rsquo;s attributes: its title, talks, steps, streams, segments and unresolved references, and the counts
+the Sessionizer writes on a round&rsquo;s header, <code>changes</code> with <code>linesAdded</code> and <code>linesRemoved</code>, <code>llmCalls</code>, <code>subagents</code>
+and <code>bashRuns</code>, each absent rather than zero when the round did not carry it. The rounds are read newest first, at
+most <code>limit</code> (default 1000), then folded to one row per conversation. An optional <code>conversation</code> narrows the read to
+one conversation by id, and an optional <code>title</code> keeps only the rows whose title contains the text,
+case-insensitively — matched after folding, on the newest round&rsquo;s title, so it never widens the rounds read.</li>
 <li><code>getConversationRawFiles(condition, files)</code> lists every landed file and round of a conversation with its id,
 digest and size; selecting <code>body</code> returns the files verbatim, which is the export path. The optional <code>files</code>
 argument narrows the read to named files.</li>
@@ -3321,6 +3323,37 @@ rendered, never held whole in memory, and a slow client holds back the render. T
 timeout, <code>viewRequestTimeout</code>, in place of the server&rsquo;s default of ten seconds, because the floor for a large
 conversation is seconds of storage reads plus seconds of fold and render.</p>
 <p>The conversation page of the UI makes one call, this route, and nothing else.</p>
+<h2 id="workspace-changes">Workspace changes</h2>
+<p>The Sessionizer&rsquo;s Claude Code plugin records, beside each tool call, which files the call changed and how, as a
+git-style diff. Those records reach the OAP two ways, and the document shows both:</p>
+<ul>
+<li><strong>A <code>changes</code> file</strong>, a Session Data file of kind <code>changes</code> under the stream the tool ran on,
+<code>&lt;session&gt;/streams/&lt;stream&gt;/changes-&lt;stamp&gt;-&lt;seq&gt;.sd</code>, one line per observed call. It lands, is verified and is
+stored like any other Session Data file: it takes a seq of its own between the transcript files that landed around
+it, a round&rsquo;s window covers it and its input digest chains it, and it is listed under <code>files</code> with its kind. Nothing
+about it is decoded at ingest.</li>
+<li><strong>The runtime&rsquo;s own patch.</strong> Claude Code records a patch for its own <code>Edit</code>, <code>Write</code> and <code>NotebookEdit</code> calls, and
+the Sessionizer lands it as a second <code>data</code> part on the call&rsquo;s result record in the transcript, beside the raw
+result, which stays byte for byte.</li>
+</ul>
+<p>Each record is a <code>changes/1</code> document: the tool-use id it belongs to, who captured it, <code>claude-code</code> for a patch the
+runtime recorded or <code>asz-plugin</code> for one the plugin observed, the basis of the observation, the windows scanned, and
+one entry per file with its operation, the hashes on both sides and the hunks. The view joins each record to its step
+by the tool-use id, which the record names and the step&rsquo;s call part carries; nothing is matched by time. In the
+<code>asz.view</code> document:</p>
+<ul>
+<li><code>workspace_changes</code> lists every record of the session in time order, each with the <code>step</code> it belongs to and the
+<code>ref</code> it was read from, then the record&rsquo;s own fields as <code>changes/1</code> lists them;</li>
+<li><code>summary.changes</code> counts them;</li>
+<li>a tool step lists the ids of its records under <code>changes</code>.</li>
+</ul>
+<p>The runtime&rsquo;s record and the plugin&rsquo;s record of one call share its id and are both kept, the runtime&rsquo;s first. A record
+with <code>basis: skipped_read_only</code> carries no changes and means the call was not observed, never that nothing changed. A
+session folds to the same nodes with and without its <code>changes</code> files: they are evidence beside a stream, not steps of
+it. The record and the entry are defined by the Sessionizer under
+<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view document</a>, and
+the plugin under
+<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/">The Claude Code plugin</a>.</p>
 <h2 id="configuration">Configuration</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">ai-agent-conversation</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">selector</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION:default}<span style="color:#fff">
@@ -3393,6 +3426,117 @@ whole conversation.</li>
 document in about five seconds after about six seconds of storage reads, which is why the view is a streamed
 route with its own timeout and not a GraphQL query.</li>
 </ul>
+<h2 id="metrics-of-the-agent-runtime">Metrics of the agent runtime</h2>
+<p>Beside the files, the layer takes the agent runtime&rsquo;s own OpenTelemetry metrics, from either of two senders:</p>
+<ul>
+<li><strong>The Sessionizer</strong>, with <code>metrics: true</code> on its <code>claude-code-local</code> adapter: <code>asz collect</code> derives Claude Code&rsquo;s
+token metric from the landed transcripts and sends it beside the files over the same connection, as <code>asz push</code> does
+for a storage root that is already there. It is a reconstructed subset of what the runtime&rsquo;s exporter sends: the
+same name, unit and kind, the four token types, <code>main</code> and <code>subagent</code> as the query source, the model and the
+session. Cost, active time and the user, terminal and attribution labels are not in a transcript, and are never
+estimated.</li>
+<li><strong>Claude Code&rsquo;s own exporter</strong>, pointed at the OAP directly, <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> on 11800 over gRPC or on
+12800 over HTTP, or through the Sessionizer&rsquo;s <code>claude-code-otlp</code> adapter, which lands each request as received: the
+full family with every label, and the exporter&rsquo;s other metrics with it.</li>
+</ul>
+<p>Whichever sends, the resource must carry <code>service.layer=AI_AGENT</code>, which is what the rules filter on, and a
+<code>service.instance.id</code> naming the sender; the Sessionizer sets both, <code>AI_AGENT</code> and <code>user@host</code> by default, and the
+exporter takes them from <code>OTEL_RESOURCE_ATTRIBUTES</code>. The rule set is <code>otel-rules/ai-agent/*</code>, enabled by default in
+<code>enabledOtelMetricsRules</code>: <code>runtime-service.yaml</code> gives each metric per service, one service per kind of runtime,
+<code>Claude Code</code> by default, and <code>runtime-instance.yaml</code> the same per sender, under the prefixes <code>meter_ai_agent_</code> and
+<code>meter_ai_agent_instance_</code>.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Value</th>
+          <th>From</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>tokens</code></td>
+          <td></td>
+          <td>tokens per minute, every type</td>
+          <td>both</td>
+      </tr>
+      <tr>
+          <td><code>tokens_by_type</code></td>
+          <td><code>type</code>: <code>input</code>, <code>output</code>, <code>cacheRead</code>, <code>cacheCreation</code></td>
+          <td>tokens per minute</td>
+          <td>both</td>
+      </tr>
+      <tr>
+          <td><code>tokens_by_model</code></td>
+          <td><code>model</code>, <code>type</code></td>
+          <td>tokens per minute</td>
+          <td>both</td>
+      </tr>
+      <tr>
+          <td><code>tokens_by_source</code></td>
+          <td><code>query_source</code>: <code>main</code>, <code>subagent</code>, and from the exporter also <code>auxiliary</code>; <code>type</code></td>
+          <td>tokens per minute</td>
+          <td>both</td>
+      </tr>
+      <tr>
+          <td><code>cache_read_share</code></td>
+          <td></td>
+          <td>percent of what the model read that came from cache: <code>cacheRead</code> over every type but <code>output</code></td>
+          <td>both</td>
+      </tr>
+      <tr>
+          <td><code>cost_by_model</code></td>
+          <td><code>model</code></td>
+          <td>micro-dollars (USD × 1,000,000) per minute</td>
+          <td>the exporter</td>
+      </tr>
+      <tr>
+          <td><code>active_time</code></td>
+          <td><code>type</code>: <code>user</code>, <code>cli</code></td>
+          <td>milliseconds per minute</td>
+          <td>the exporter</td>
+      </tr>
+      <tr>
+          <td><code>sessions</code></td>
+          <td></td>
+          <td>sessions started per minute</td>
+          <td>the exporter</td>
+      </tr>
+      <tr>
+          <td><code>lines_of_code</code></td>
+          <td><code>type</code>: <code>added</code>, <code>removed</code></td>
+          <td>lines per minute</td>
+          <td>the exporter</td>
+      </tr>
+      <tr>
+          <td><code>commits</code>, <code>pull_requests</code></td>
+          <td></td>
+          <td>per minute</td>
+          <td>the exporter</td>
+      </tr>
+      <tr>
+          <td><code>edit_decisions</code></td>
+          <td><code>decision</code>: <code>accept</code>, <code>reject</code></td>
+          <td>permission decisions on the editing tools per minute</td>
+          <td>the exporter</td>
+      </tr>
+  </tbody>
+</table>
+<p>Three things to know when reading them:</p>
+<ul>
+<li>Every point is a delta, the tokens of the minute a call ended and not of the minute it ran, so a long call&rsquo;s tokens
+land in one minute. The receiver keeps a delta point as its value at its time, and a request that carries a series
+of minutes, as the Sessionizer&rsquo;s does, is analysed a minute at a time, see the
+<a href="../opentelemetry-receiver">OpenTelemetry receiver</a>. The rules sum a minute&rsquo;s points over every session and sender
+and downsample by <code>SUM</code>, so an hour is the total over its minutes. <code>session.id</code> is summed away on purpose: a series
+per session is the cardinality of a busy team, and the conversation page knows a session&rsquo;s tokens from its own
+records.</li>
+<li>A metric value is a whole number, so a fraction is scaled first: cost to micro-dollars, active time to milliseconds,
+the cache share to percent.</li>
+<li>Cache reads dominate. On one five-day conversation they were 98% of all tokens, so a chart that stacks the four
+types shows a flat line for the other three unless it is split.</li>
+</ul>
 
 </div>
 
@@ -3434,12 +3578,14 @@ route with its own timeout and not a GraphQL query.</li>
             <li><a href="#the-conversation-view-route">The conversation view route</a></li>
           </ul>
         </li>
+        <li><a href="#workspace-changes">Workspace changes</a></li>
         <li><a href="#configuration">Configuration</a>
           <ul>
             <li><a href="#turning-the-feature-off">Turning the feature off</a></li>
           </ul>
         </li>
         <li><a href="#limits-on-the-path">Limits on the path</a></li>
+        <li><a href="#metrics-of-the-agent-runtime">Metrics of the agent runtime</a></li>
       </ul>
     </li>
   </ul>

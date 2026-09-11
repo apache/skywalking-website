@@ -33,7 +33,7 @@
   <meta itemprop="name" content="Export over OpenTelemetry">
   <meta itemprop="description" content="Export over OpenTelemetry asz push sends what the storage root holds to an OpenTelemetry logs receiver: every landed file and every round, as OTLP logs over gRPC, or over HTTP with a protobuf body. The SkyWalking OAP accepts both, on its gRPC port and on its REST port, and so does an OpenTelemetry Collector.
 # asz.yaml export: otlp: protocol: grpc # the default; http posts to the receiver&#39;s /v1/logs instead endpoint: 127.0.0.1:11800 # the OAP&#39;s gRPC port; with http, http://127.0.0.1:12800 ./bin/asz push # send everything not yet sent, then exit ./bin/asz collect # land, parse and send, once every collector interval One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names.">
-  <meta itemprop="wordCount" content="2496">
+  <meta itemprop="wordCount" content="2720">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Export over OpenTelemetry">
   <meta name="twitter:description" content="Export over OpenTelemetry asz push sends what the storage root holds to an OpenTelemetry logs receiver: every landed file and every round, as OTLP logs over gRPC, or over HTTP with a protobuf body. The SkyWalking OAP accepts both, on its gRPC port and on its REST port, and so does an OpenTelemetry Collector.
@@ -390,6 +390,14 @@
 
     <li>
         
+            <a href="/docs/skywalking-ai-sessionizer/next/en/setup/install">Install</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-ai-sessionizer/next/en/setup/quick-start">Quick Start</a>
         
     </li>
@@ -570,7 +578,7 @@
 
     <li>
         
-            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes-0.3.0">Current Version</a>
+            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes">Current Version</a>
         
     </li>
 
@@ -619,7 +627,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: dd083cc</div>
+                  <div class="commit-id">Commit Id: 55cf9cc</div>
                 
 
 
@@ -934,14 +942,24 @@ account for. <code>go run ./tools/otlpdump -redact FILE.pb</code> prints any spo
 <p>With <code>metrics: true</code> on the <code>claude-code-local</code> adapter, the collector derives the points from
 the landed files by the assembler&rsquo;s own rule: the usage of a call is its last fragment&rsquo;s in line
 order, never a sum, and only a call that finished counts. A main transcript repeats the final usage
-on every fragment; a child&rsquo;s carries streaming partials on all but the last, and a call with no
-terminal fragment, 7% of a real corpus&rsquo;s child calls, has no usage at all. A call cut at a landed
-file boundary is read on into the next file of its stream, and a file ending mid-call waits for
-that file for a short grace before it is derived with what it has, under a watching collector; a
-single pass, the backfill over history that already exists, derives with what is there and never
-waits. A call is counted once however
-many files its records reach, and a record the runtime re-emitted before a context reset is the
-same call again.</p>
+on every fragment. A child&rsquo;s carries streaming partials on all but the last. A call has finished
+when one of its fragments reports a stop reason. A call that never does is left out, because its
+usage block is a streaming stub, not a count. That is about 10% of all calls in a corpus of 2,970
+files and 365,825 records written by Claude Code 2.1.220 to 2.1.251. It is 14.5% of the calls on
+child streams and 0.02% of those on main transcripts, as
+<a href="../../adapters/claude-code#provider-calls">Provider calls</a> reports.</p>
+<p>A call cut at a landed file boundary is read on into the next file of its stream only when the
+file&rsquo;s last record is a fragment of that call. The reading stops at the first record of the next
+file that is not a fragment of the call. A tool result carries no call id, and in the same corpus a
+call&rsquo;s own tool results sit between its fragments on 24% of multi-fragment calls. So a call cut
+next to one of its own tool results is read short. On a child stream only the last fragment says
+the call finished, so such a call is left out of the metric. On a main transcript every fragment
+repeats the final usage, so the call still counts in full, in the minute of the last fragment read.</p>
+<p>Under a watching collector, a file whose last record is a fragment of a call not yet counted waits
+a short grace for the next file of its stream, then is derived with what it has. A file that ends
+with a tool result does not wait. A single pass, the backfill over history that already exists,
+derives with what is there and never waits. A call is never counted twice, however many files its
+records reach, and a record the runtime re-emitted before a context reset is the same call again.</p>
 <p>Points are summed per minute and attribute set, and the windows of one series never overlap: a
 point takes its minute unless the series already has a point at or past it, as when two children
 ran in the same minute or a child&rsquo;s file landed later, in which case it follows the series&rsquo; last
@@ -953,8 +971,9 @@ deterministic and its requests are named after their landed files, so a pass cut
 again to the same bytes and nothing is counted twice.</p>
 <p>The other source of the same family is the runtime&rsquo;s exporter itself: the <code>claude-code-otlp</code>
 adapter receives what Claude Code sends and lands each metrics request in the same spool, bytes as
-received. One root sends one source: <code>metrics</code> may be on for the local adapter or for the
-receiver, and the configuration refuses both.</p>
+received. The receiver does not check whether it has landed a request before. A request the
+exporter sends twice lands twice, and <code>asz push</code> sends both copies. One root sends one source:
+<code>metrics</code> may be on for the local adapter or for the receiver, and the configuration refuses both.</p>
 <p>The points wait in the storage root&rsquo;s <code>_metrics/</code> spool, one write-once file per landed file
 with points or per request received, and go out in order under the same budget and the same
 once-only rule as the files. <code>export.otlp.logs</code> and <code>export.otlp.metrics</code> switch the two things a

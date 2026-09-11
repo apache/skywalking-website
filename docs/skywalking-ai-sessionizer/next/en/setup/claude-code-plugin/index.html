@@ -33,7 +33,7 @@ The plugin is named asz-changes. Its code is under plugins/claude-code/ in the r
   <meta itemprop="name" content="Claude Code Plugin">
   <meta itemprop="description" content="Claude Code Plugin The asz Claude Code plugin records which files each tool call changed. It runs inside Claude Code as a set of hooks, needs nothing from asz, and leaves one JSON line per observed call in its own data directory. asz collects those lines the way it collects Claude Code’s own transcripts, and the conversation page shows each change beside the step that made it.
 The plugin is named asz-changes. Its code is under plugins/claude-code/ in the repository, and its binary, asz-claude-plugin, ships beside asz in every binary package.">
-  <meta itemprop="wordCount" content="1856">
+  <meta itemprop="wordCount" content="2417">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Claude Code Plugin">
   <meta name="twitter:description" content="Claude Code Plugin The asz Claude Code plugin records which files each tool call changed. It runs inside Claude Code as a set of hooks, needs nothing from asz, and leaves one JSON line per observed call in its own data directory. asz collects those lines the way it collects Claude Code’s own transcripts, and the conversation page shows each change beside the step that made it.
@@ -390,6 +390,14 @@ The plugin is named asz-changes. Its code is under plugins/claude-code/ in the r
 
     <li>
         
+            <a href="/docs/skywalking-ai-sessionizer/next/en/setup/install">Install</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-ai-sessionizer/next/en/setup/quick-start">Quick Start</a>
         
     </li>
@@ -570,7 +578,7 @@ The plugin is named asz-changes. Its code is under plugins/claude-code/ in the r
 
     <li>
         
-            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes-0.3.0">Current Version</a>
+            <a href="/docs/skywalking-ai-sessionizer/next/en/changes/changes">Current Version</a>
         
     </li>
 
@@ -619,7 +627,7 @@ The plugin is named asz-changes. Its code is under plugins/claude-code/ in the r
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: dd083cc</div>
+                  <div class="commit-id">Commit Id: 55cf9cc</div>
                 
 
 
@@ -729,7 +737,8 @@ file the tool wrote, on both streams, so the next scan does not find that edit a
 window open at the same time sees it as shared with the edit and names it.</p>
 <h2 id="install">Install</h2>
 <p>The binary package for your platform holds <code>claude-code-plugin/</code>: the plugin&rsquo;s manifest, its
-hooks, and its binary under <code>bin/</code>. Point Claude Code at that directory:</p>
+hooks, and its binary under <code>bin/</code>. <a href="../install">Install</a> says where to get the package, and
+where each package manager puts this directory. Point Claude Code at it:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>claude --plugin-dir /path/to/claude-code-plugin
 </span></span></code></pre></div><p>or add it to your Claude Code settings the way the Claude Code documentation describes for a
 local plugin. Claude Code sets <code>CLAUDE_PLUGIN_DATA</code> for the plugin&rsquo;s hooks and creates the
@@ -744,12 +753,30 @@ exclusion rules they expand to.</p>
 <p>One file per stream of a session, one line per record, appended and never rewritten:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>${CLAUDE_PLUGIN_DATA}/output/&lt;session-id&gt;/main.jsonl
 </span></span><span style="display:flex;"><span>${CLAUDE_PLUGIN_DATA}/output/&lt;session-id&gt;/&lt;agent-id&gt;.jsonl
-</span></span></code></pre></div><p>Each line is a <code>changes/1</code> record: the tool-use id it belongs to as its id, <code>captured_by: asz-plugin</code>, the session, the stream, the time, how it was observed, the root, the policy it ran
+</span></span></code></pre></div><p>A record goes to the file of the stream its hook event came from. An event inside a subagent
+carries <code>agent_id</code>, and the file takes that name. No event on the main stream carries <code>agent_id</code>,
+so an event without one goes to <code>main.jsonl</code>. The same absence decides who records an edit: the
+plugin records one only when the event carries <code>agent_id</code>. See
+<a href="#what-was-verified">What was verified</a>.</p>
+<p>Each line is a <code>changes/1</code> record: the tool-use id it belongs to as its id, <code>captured_by: asz-plugin</code>, the session, the stream, the time, how it was observed, the root, the policy it ran
 under, and for each changed file its path, the operation, size and hash before and after, and the
-hunks as a unified diff with line numbers. <code>pkg/changes</code> in the repository defines the shape.</p>
+hunks as a unified diff with line numbers. <code>pkg/changes</code> in the repository defines the shape.
+Hook input carries neither a message id nor a request id. So a record names its tool call and
+never the provider call that made it, and the view joins it to its step by the tool-use id alone.
+See <a href="../../adapters/claude-code#workspace-changes">Workspace changes</a>.</p>
+<p>Two hooks can run at the same time. So each record is written whole, in one write to a file
+opened for appending, and synced to disk before the hook returns. asz lands a file only up to its
+last complete newline, and a line still being written waits for the next pass. Appending with
+<code>cat &gt;&gt;</code> to one shared file from concurrent subagents was seen to corrupt lines above about 64 KB.
+The sample it was seen on is unavailable.</p>
 <p>asz&rsquo;s <code>claude-code-changes</code> adapter, on by default, finds these files beside Claude Code&rsquo;s own,
 tails them, and lands each line as a record of kind <code>changes</code> under the stream the tool ran in.
 See <a href="../configuration#the-changes-adapter">Configuration</a>.</p>
+<p>Each file it lands names the dialect <code>asz-changes/1</code> in its
+<a href="../../formats/session-data#header">header</a>, not <code>claude-code/1</code>. The plugin writes its records in
+the model&rsquo;s own words, not in Claude Code&rsquo;s shape. Records of a different shape get a different
+dialect, even when the same runtime produced them, as the
+<a href="../../concepts-and-designs/unified-conversation-model#adapter-contract">adapter contract</a> says.</p>
 <h2 id="settings">Settings</h2>
 <p>Optional, in <code>${CLAUDE_PLUGIN_DATA}/settings.yaml</code>. Every value has a default, and the plugin runs
 with no file at all.</p>
@@ -931,7 +958,8 @@ word must be on this list, <code>readonly-v1</code>:</p>
 </span></span></code></pre></div><p><code>git add</code> is on the list because it changes only <code>.git/</code>, which is excluded scope. <code>git commit</code>
 is not, because a pre-commit hook can rewrite files. A miss is not a loss: the next scan compares
 against the last manifest, so a write that slipped through lands as an unattributed change. On
-the corpus above, 69.3% of shell commands are read-only under this list. The fixture
+the corpus above, 69.3% of shell commands are read-only under this list, so most shell commands
+wait for no scan. The fixture
 <code>plugins/claude-code/internal/readonly/testdata/commands.txt</code> holds 93 real commands with the
 outcome each must get, and the classifier&rsquo;s test reads it.</p>
 <h2 id="retention">Retention</h2>
@@ -957,22 +985,49 @@ what hash to what. A window is the span of steps between its two scans.</p>
 only one window spans is that window&rsquo;s alone; one changed in a step both span is <code>shared</code>, and
 each record names the other under <code>overlaps</code>. Nothing claims who wrote a byte: a person or an
 editor can write inside any window. The record says which tool windows could have.</p>
-<p>A scan stops at <code>scan_timeout</code> and the record says so, with <code>coverage: partial</code>. A hook that
-fails, for any reason, exits 0 and writes to <code>${CLAUDE_PLUGIN_DATA}/log/plugin.log</code>; it never
-stops the tool.</p>
+<p>Claude Code runs a hook synchronously, so the tool call waits until the hook returns. That is why
+a scan has a cap. A scan stops at <code>scan_timeout</code> and the record says so, with <code>coverage: partial</code>.
+The cap is for one scan, and a hook scans each root in turn. The default, 30 seconds, is half the
+60 seconds <code>hooks/hooks.json</code> gives each tool event. A hook still running at its timeout is killed
+and leaves no record for its call, so a <code>scan_timeout</code> near 60 seconds loses records instead of
+marking them partial. The scans of one root take turns under a lock, and a hook waiting for that
+lock is bounded only by its own timeout. The session&rsquo;s start and end run no scan, and get 30
+seconds.</p>
+<p>On 5 live headless sessions with a hook on every event, a hook invocation took about 5.6 ms.
+Those hooks ran no scan. How long a scan takes has not been measured.</p>
+<p>A hook that fails, for any reason, exits 0 and writes to <code>${CLAUDE_PLUGIN_DATA}/log/plugin.log</code>.
+It never stops the tool.</p>
 <h2 id="what-was-verified">What was verified</h2>
 <p>Each of these was read from a run of Claude Code 2.1.260 with a logging plugin, not from
-documentation: <code>hooks/hooks.json</code> with <code>${CLAUDE_PLUGIN_ROOT}</code> loads and fires; every tool event
-carries <code>session_id</code>, <code>tool_use_id</code>, <code>tool_input</code> and <code>cwd</code>; every event inside a subagent
-carries <code>agent_id</code>, and it is the id in the subagent transcript&rsquo;s file name; a failed shell
-command fires <code>PostToolUseFailure</code> with the exit code in <code>error</code>; the <code>Edit</code> response carries the
-patch and the original content, and so does a <code>Write</code> over an existing file, whose patch ends with
-the git marker line for a missing final newline; the <code>NotebookEdit</code> response names its file as
-<code>notebook_path</code> with the whole file before and after and no patch, so the plugin diffs the two;
-<code>CLAUDE_PLUGIN_DATA</code> exists before the first hook runs; a hook past its <code>timeout</code> is killed and the
-tool proceeds. The plugin itself was run inside Claude Code on macOS with a shell command, an
-edit and a subagent, and asz collected and showed the result. Windows is a build target; its hook
-command line has not been exercised.</p>
+documentation:</p>
+<ul>
+<li><code>hooks/hooks.json</code> with <code>${CLAUDE_PLUGIN_ROOT}</code> loads and fires.</li>
+<li>Every tool event carries <code>session_id</code>, <code>tool_use_id</code>, <code>tool_input</code> and <code>cwd</code>.</li>
+<li>Every event inside a subagent carries <code>agent_id</code>. It is the id in the subagent transcript&rsquo;s file
+name.</li>
+<li>No event on the main stream carries <code>agent_id</code>.</li>
+<li>A failed shell command fires <code>PostToolUseFailure</code>, with the exit code in <code>error</code>.</li>
+<li>The <code>Edit</code> response carries the patch and the original content.</li>
+<li>So does a <code>Write</code> over an existing file. Its patch ends with the git marker line for a missing
+final newline.</li>
+<li>The <code>NotebookEdit</code> response names its file as <code>notebook_path</code>. It carries the whole file before
+and after and no patch, so the plugin computes the hunks from the two.</li>
+<li><code>CLAUDE_PLUGIN_DATA</code> exists before the first hook runs.</li>
+<li>A hook past its <code>timeout</code> is killed, and the tool proceeds.</li>
+</ul>
+<p>A second sample, 5 live headless sessions with a hook on every event, agrees. <code>agent_id</code> is on
+every event inside a subagent and on no event of the main stream. No event in that sample carries
+a message id or a request id.</p>
+<p>The plugin itself was run inside Claude Code on macOS with a shell command, an edit and a
+subagent. asz collected and showed the result.</p>
+<p>On Windows the plugin has run only outside Claude Code. CI&rsquo;s <code>packages</code> job runs
+<code>tools/package-smoke.sh</code> on each binary package, on a runner of the package&rsquo;s own platform. On
+2026-09-11, the CI of pull request #6 ran it on <code>windows-latest</code>, x86-64, and on <code>windows-11-arm</code>,
+ARM 64. Both jobs passed, in 30 and 33 seconds. The script unpacks the zip with <code>Expand-Archive</code>.
+It runs the packaged plugin with a <code>SessionStart</code>, a <code>PreToolUse</code>, a <code>PostToolUse</code> and a
+<code>SessionEnd</code> event on standard input, writes a file between the two tool events, and requires the
+plugin to record that change. Claude Code itself has not run the hooks on Windows, so the command
+line in <code>hooks/hooks.json</code> has not run there.</p>
 
 </div>
 
