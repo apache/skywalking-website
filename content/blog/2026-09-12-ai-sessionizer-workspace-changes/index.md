@@ -2,7 +2,7 @@
 title: "Beyond Replay: Metrics and Change Detection for Your Claude Code Sessions"
 date: 2026-09-12
 author: Sheng Wu
-description: "Understand your Claude Code token usage with metrics dashboards, revisit conversations, and inspect the file changes recorded during your agent’s work."
+description: "Understand Claude Code usage across sessions and machines, replay recorded work, and inspect file changes with their tool calls and source evidence."
 tags:
   - AI
   - Engineering
@@ -11,15 +11,15 @@ tags:
 
 In our [first post on replaying Claude Code sessions](/blog/2026-09-03-ai-sessionizer-first-look/), we started with a conversation already on your machine. You could replay its messages, inspect tool calls, and follow child agents through a long task. Remote observation and metrics dashboards were still on the agenda.
 
-You can now go further with your Claude Code sessions: **use metrics dashboards to understand token usage, and change detection to inspect what happened to the files your agent worked on**. Your collected conversations can also be stored centrally and explored alongside usage metrics, so you and your teammates can review the work beyond the machine where a task ran.
+You can now **understand what Claude Code did, what changed in the files it worked on, and what resources it consumed**. Usage dashboards, conversation replay, and recorded file diffs let you examine agent work at two scales: activity across sessions and machines, and the details of an individual task.
 
-Where are your tokens going across models, subagents, and machines? What happened in a particular conversation? Which files changed during that work, and what discussion and tool activity surrounded those changes?
+That is where observability helps: you can compare usage over time, find a conversation worth investigating, and follow a recorded change to its tool call and source evidence. Central collection makes those records available to your team, so an investigation can continue beyond the machine where the task ran.
 
-The screenshots below follow those questions through our own development work, from usage patterns to individual conversations and file diffs.
+The screenshots below illustrate that workflow through our own development work, from usage patterns to individual conversations and file diffs.
 
 ## See where your tokens are going
 
-One conversation can explain a task in detail. Metrics make activity across many tasks visible over time.
+**Usage across sessions and machines** gives you context that an individual conversation cannot provide on its own. A team can review activity from its reporting runtimes in one place, compare it over time, and examine a particular machine more closely. The same views help an individual developer understand a week of work across many tasks.
 
 The **AI Agent Overview** brings daily and hourly token heatmaps together with totals and a ranking of reporting agents. It gives you a place to start when reviewing usage: find busy periods, see which agents report the most tokens, and decide where to look more closely.
 
@@ -28,7 +28,7 @@ The **AI Agent Overview** brings daily and hourly token heatmaps together with t
 
 Agent dashboards then break usage down by **token type, model, and main agent or subagent**, with cache read share alongside them. Input, output, cache reads, and cache creation appear separately, making it easier to understand what contributes to a large token total. You can also inspect the same metrics for an individual agent runtime, such as the collector running on one machine.
 
-For example, a rise in usage gives you a reason to compare models, look at main-agent and subagent activity, and examine the token types involved. The runtime view helps narrow that investigation to the machine reporting the activity. These are useful views for a team operating several agents, as well as for a developer reviewing their own usage over a week.
+For example, a rise in usage gives you a reason to compare models, look at main-agent and subagent activity, and examine the token types involved. The runtime view helps narrow that investigation to the machine reporting the activity. You can then search its conversations for the relevant period and inspect the work behind those trends.
 
 The available measurements depend on the data you collect. Existing Claude Code transcripts provide a subset of token metrics. With Claude Code's own telemetry exporter configured, the dashboards can also show reported cost by model, active time, sessions started, lines added and removed, commits, pull requests, and edit permission decisions. Those additional widgets appear when their metrics are reported; values are not estimated from conversation text.
 
@@ -67,7 +67,7 @@ Tool cards and timeline steps now show change indicators. Expand a card to see a
 
 Here, the diff captures a revision to the plan after checking the repositories. The surrounding transcript retains the user's request and the agent's response. You can read what changed together with the discussion that led up to it, then inspect the recorded tool call and result.
 
-Changes are linked through the **tool-use ID**. Each record also retains its capture source, so a patch reported by Claude Code and a workspace scan made around a shell command remain distinguishable. The [conversation replay documentation](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/ai-agent-conversations/#changes) describes the change indicators, file list, and inspector.
+Changes are linked through the **tool-use ID**. Each record also retains its capture source, so a patch reported by Claude Code and a workspace scan made around a shell command remain distinguishable. You can inspect the diff, the tool request and result, and the source record supporting their connection together. The [conversation replay documentation](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/ai-agent-conversations/#changes) describes the change indicators, file list, and inspector.
 
 ## Include shell commands and delegated edits
 
@@ -76,6 +76,12 @@ The starting point remains straightforward: collecting existing Claude Code hist
 For broader capture, the optional **asz-changes** plugin adds before-and-after workspace scans around shell tools such as `Bash`, `PowerShell`, and `Monitor`, plus reported editing patches from subagents. This brings changes made by scripts and delegated work into the same inspection experience. Shell snapshots are available for activity observed while the plugin is installed.
 
 The view also preserves capture limits. Overlapping tool windows can mark changes as **shared**, and changes detected between calls appear as **Changes outside observed tool windows**. Skipped or partial scans remain identifiable, and binary or oversized files may have paths and hashes without a text diff. A scan establishes what changed within its observation window; concurrent work can prevent attribution to one tool alone. See the [plugin guide](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/) for the capture rules.
+
+## Observe the workflow you already use
+
+You can keep using your usual terminal, editor, and Git workflow while collecting this evidence. Start with retained Claude Code history for replay and native editing patches; enable the optional plugin when you want broader change capture for future work.
+
+The plugin captures changes locally and writes its own output independently of the Sessionizer server or any remote service. You can inspect collected conversations locally, then configure export when your team needs central storage, dashboards, and shared investigation. This lets you begin with one machine and extend observation across the machines you operate.
 
 ## Try it with your Claude Code sessions
 
@@ -95,4 +101,4 @@ claude --plugin-dir plugins/claude-code
 
 For centralized inspection, configure `export.otlp.endpoint` in `asz.yaml` and use compatible development builds of OAP and Horizon. The [export guide](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/export-otlp/) and [backend conversation guide](https://skywalking.apache.org/docs/main/next/en/setup/backend/ai-agent-conversation/) cover that setup. Choose your metrics source using the dashboard guide above, then open **AI Agents** in SkyWalking.
 
-Start with a period of your Claude Code activity you know well. Review its token usage, find a conversation from that period, and inspect the files changed during the work. Beyond replaying the conversation, you can now examine the resources your agent used and the workspace changes recorded along the way.
+Start with a period of your Claude Code activity you know well. Review its token usage, find a conversation from that period, and inspect the files changed during the work. Enable collection on more machines as you need it: usage trends remain visible across the team, while each collected conversation retains the detail needed to inspect its recorded work.
