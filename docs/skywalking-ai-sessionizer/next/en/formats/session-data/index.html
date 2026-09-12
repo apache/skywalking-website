@@ -31,15 +31,15 @@
 
   <meta itemprop="name" content="Session Data">
   <meta itemprop="description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
-  <meta itemprop="wordCount" content="2632">
+  <meta itemprop="wordCount" content="3444">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Data">
   <meta name="twitter:description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
 
 
 
-<link rel="preload" href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" as="style">
-<link href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.9ce49d4f546484b5c169617eb39be1d35c1f88f87ceb2ec1d906824d13dcead9.css" as="style">
+<link href="/scss/main.min.9ce49d4f546484b5c169617eb39be1d35c1f88f87ceb2ec1d906824d13dcead9.css" rel="stylesheet" integrity="">
 
 
 
@@ -624,7 +624,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 55cf9cc</div>
+                  <div class="commit-id">Commit Id: d77d595</div>
                 
 
 
@@ -839,7 +839,7 @@ role names. The part level carries what the content is.</p>
   <tbody>
       <tr>
           <td><code>ord</code>, <code>off</code>, <code>sha</code>, <code>bytes</code></td>
-          <td>where the record was in the source: its line number counting from 1, the byte offset its line starts at, the first twelve hexadecimal characters of the SHA-256 of its bytes, and their size. The bytes themselves are not kept. The digest stays, so provenance is provable and a record that claims a source it did not come from is detectable.</td>
+          <td>where the record was in the source: its line number counting from 1, the byte offset its line starts at, the first twelve hexadecimal characters of the SHA-256 of its bytes, and their size. The source record is not always kept whole. <a href="#what-data-holds">What data holds</a> describes what its parts keep. The digest stays, so provenance is provable and a record that claims a source it did not come from is detectable.</td>
       </tr>
       <tr>
           <td><code>id</code>, <code>parent</code></td>
@@ -898,9 +898,15 @@ is a child&rsquo;s synchronous return, which is the parent&rsquo;s copy of the c
 the flag only on a <code>journal</code> record. Nothing removes the parent&rsquo;s copy, so it stays as the result
 of the call that started the child.</p>
 <p><code>asz verify</code> checks <code>ord</code>, <code>off</code> and <code>bytes</code> without the source. In each stream or run, across its
-files of one kind, <code>ord</code> must run 1, 2, 3 with no gap, and each record must start at the byte after
-the previous record&rsquo;s line ends. A skipped line would otherwise show only as a shorter
-conversation. A repeated record is not a gap (see <a href="../storage-root#landed-files">Landed files</a>).</p>
+files of one kind, <code>ord</code> must run 1, 2, 3 with no gap, starting at 1. The first record must start
+at byte 0, and each record after it at the byte after the previous record&rsquo;s line ends. Where the
+stream has an append cursor, the records must reach the line and the byte the cursor names (see
+<a href="../storage-root#append-cursors">Append cursors</a>). A skipped line, or a lost file of a source that
+is a stream of lines, would otherwise show only as a shorter conversation. The Claude Code
+adapter&rsquo;s <code>agent_meta</code>, <code>workflow_manifest</code> and <code>workflow_script</code> files are each one document with
+a snapshot cursor, so a lost one is found only by the round chain (see
+<a href="../storage-root#retention">Retention</a>). A repeated record is not a gap (see
+<a href="../storage-root#landed-files">Landed files</a>).</p>
 <h3 id="addressing-a-record">Addressing a record</h3>
 <p>A round points at a record with <code>{seq, row}</code>, and at one of its parts with <code>{seq, row, block}</code>
 (see <a href="../session-flow#entities">Session Flow</a>). In Session Data terms:</p>
@@ -982,13 +988,49 @@ reads every landed file this way.</p>
       <tr>
           <td><code>unknown</code></td>
           <td>content the dialect could not describe</td>
-          <td>the raw bytes as one JSON string in <code>data</code>, and the reason in <code>text</code></td>
+          <td>the bytes in <code>data</code> as one JSON string, the bytes themselves or their base64 when <code>encoding</code> is <code>base64</code>, and the reason in <code>text</code></td>
       </tr>
   </tbody>
 </table>
 <p>Every part carries <code>state</code> and <code>bytes</code>. <code>state</code> is one of <code>available</code>, <code>truncated</code>, <code>redacted</code>,
 <code>omitted</code> or <code>unavailable</code>, and <code>bytes</code> is the size of the original even when the part holds less.
 A reader is always told how much of the original it has.</p>
+<h3 id="what-data-holds">What data holds</h3>
+<p><code>data</code> is one JSON value. What it holds depends on the part:</p>
+<ul>
+<li>A piece of the source&rsquo;s own JSON: a call&rsquo;s input, a result&rsquo;s structured form or content that is
+not text, an attachment with no prose, or a record or document with no message. A journal line,
+sidecar, manifest, system record or line the asz plugin wrote can land whole this way. The
+writer inserts that JSON after <code>json.Compact</code>, keeping its bytes apart from whitespace between
+tokens. This keeps each landed record on one line. Whitespace inside strings is unchanged.</li>
+<li>Bytes the dialect could not describe: an <code>unknown</code> part holds them inside one JSON string,
+using base64 when needed, as described below. <code>Part.Raw</code> returns the original bytes whatever
+escapes that string uses.</li>
+<li>A value the adapter built: a <code>media</code> part&rsquo;s base64 is written again as a string, and a
+<code>changes/1</code> record derived beside a result uses asz&rsquo;s own encoding. These are not source slices.</li>
+</ul>
+<p>The writer never re-encodes <code>data</code>, so its bytes after compaction do not depend on whether asz
+uses Go&rsquo;s JSON v2 engine. Existing escapes stay as the source wrote them. Unknown strings and
+derived change records still use Go&rsquo;s <code>json.Marshal</code>, and plugin lines keep the escapes their
+producer wrote. Strings the writer encodes itself, such as <code>text</code>, <code>label</code> and identifiers, are
+values rather than source bytes. It writes <code>&lt;</code>, <code>&gt;</code> and <code>&amp;</code> literally in those strings, but escapes
+U+2028 and U+2029 as <code>\u2028</code> and <code>\u2029</code>.</p>
+<p>Whitespace between tokens is removed without a <code>dropped</code> entry or warning. If a runtime starts
+writing such whitespace, those bytes will be lost silently. The
+<a href="../../guides/scenario#check">scenario check</a> compares source bytes only in scenarios; it does not
+monitor real source files.</p>
+<p>Earlier writers, including asz 0.2.0 and development builds before this change, encoded <code>&lt;</code>, <code>&gt;</code>
+and <code>&amp;</code> as <code>\u003c</code>, <code>\u003e</code> and <code>\u0026</code>, including inside <code>data</code>. They encoded U+2028 and U+2029
+there as <code>\u2028</code> and <code>\u2029</code>. The JSON values are the same, but the bytes can differ. Old files
+are never rewritten, and <code>asz repack</code> carries their record lines unchanged. Old and new files can
+share one root and round chain; each digest covers the bytes actually written.</p>
+<p>Measured on 2026-09-12 on one machine&rsquo;s Claude Code sources, the writer kept all 229,341 parts
+carrying source JSON byte for byte. The earlier encoding kept 144,464 (62.99%). The sample held
+6,377 files from 85 sessions, with 444,881 source records, copied over 34 seconds and then read
+from the frozen copies. No source JSON in that sample needed whitespace removed. Both Go 1.27.1
+JSON engines gave the same result through the final writer and reader. Separately, all 177
+unknown parts returned their bytes through <code>Part.Raw</code>. The 2,560 derived change parts were not
+counted as source JSON, and the sample held no plugin change records.</p>
 <p>No fixed rule could decide how much of a part to keep or show, because tool output varies too much.
 The measured corpus is 62 Claude Code sessions: 3,032 files and 1,100.1 MB of source records. One
 tool result in it was 1.1 MB. Over its 28 sessions larger than 1 MB, the share of a session that is
@@ -1003,6 +1045,21 @@ The Claude Code dialect leaves some content out with no <code>dropped</code> ent
 such as <code>the record is not valid JSON</code> or <code>block type &quot;x&quot; is not one this dialect describes</code>. Its
 <code>state</code> is <code>available</code>, because every byte is kept, and <code>bytes</code> is their size. A reader that shows
 <code>text</code> as the message would show the reason in its place.</p>
+<p>An <code>unknown</code> part&rsquo;s <code>data</code> is always one JSON string, and it holds the bytes in one of two forms.
+When the bytes are valid UTF-8, the string is the bytes themselves, and the part has no <code>encoding</code>.
+A JSON string cannot hold bytes that are not valid UTF-8: Go&rsquo;s JSON encoder writes U+FFFD in their
+place, and the byte is lost. So when any byte is not valid UTF-8, the string is all of the bytes in
+standard base64, and <code>encoding</code> is <code>base64</code>. <code>encoding</code> has no other value, and no other kind of
+part carries it. A reader that does not know <code>encoding</code> still reads one string, and shows base64
+text where the bytes were not text. <code>Part.Raw</code> in <code>pkg/sessiondata</code> applies the rule.</p>
+<p>Every <code>unknown</code> part landed before <code>encoding</code> existed is one string with no <code>encoding</code>, and reads as
+it always did. Where its bytes were not valid UTF-8, that string holds U+FFFD in their place.
+Claude Code and the asz plugin write UTF-8, but such bytes can still reach an adapter. A write cut
+short and joined to the next line is one way, and a workflow script saved in another encoding is
+another. Measured on 2026-09-11 on one machine&rsquo;s storage root of 60 sessions, 151 of its 408,439
+parts were <code>unknown</code>: 150 workflow scripts and one block of a type the dialect did not describe.
+None of them held U+FFFD. So none had lost a byte, and all of them keep the form without
+<code>encoding</code>.</p>
 <p>Media is kept inline. A <code>media</code> part&rsquo;s <code>data</code> is the base64 text the runtime wrote, as one JSON
 string. <code>media</code> is its media type, and <code>bytes</code> is the length of the base64 text. There is no
 separate store for media. The measured corpus held 41 image blocks, so inline costs little. A
@@ -1020,12 +1077,13 @@ counts.</p>
 </span></span></code></pre></div><p><code>dropped</code> exists so a loss is stated rather than silent. It lists only what the dialect understood
 and chose not to carry. Everything it did not understand travels as an <code>unknown</code> part, so a later
 version of the dialect can interpret it without collecting again.</p>
-<p>The source bytes are not kept, so a <code>.sd</code> file is the only landed copy of what it holds, and
-everything above the adapter treats it as the authority. A conversion error on content the dialect
-understood, a message, a thought, a call or a result, can be corrected only by collecting again
-from the runtime&rsquo;s source, and only while that source exists. Claude Code deletes its own
-transcripts, and a storage root outlives them (see <a href="../storage-root#size">Storage Root</a>). Only an
-<code>unknown</code> part can be read again from the store alone, because only it carries its original bytes.</p>
+<p>A source record is not always kept whole, so a <code>.sd</code> file is the only landed copy of what its parts
+hold, and everything above the adapter treats it as the authority. Content that was converted to
+text, such as a message or a thought, needs the runtime&rsquo;s source to correct a conversion error.
+Claude Code deletes its own transcripts, and a storage root outlives them (see
+<a href="../storage-root#size">Storage Root</a>). An <code>unknown</code> part can be interpreted again from its original
+bytes in the store. A part that keeps the source&rsquo;s JSON can also be interpreted again, subject to
+the whitespace and older-file limits in <a href="#what-data-holds">What data holds</a>.</p>
 <h2 id="producing-session-data">Producing Session Data</h2>
 <p>There is no Go interface to implement. An adapter is whatever lands Session Data in a storage root.
 Nothing above it reads a runtime field, so another runtime needs no code on the assembling side
@@ -1094,7 +1152,11 @@ dialect: what its runtime calls each name the model uses. <code>cmd/asz</code> g
           </ul>
         </li>
         <li><a href="#closing-line">Closing line</a></li>
-        <li><a href="#parts">Parts</a></li>
+        <li><a href="#parts">Parts</a>
+          <ul>
+            <li><a href="#what-data-holds">What data holds</a></li>
+          </ul>
+        </li>
         <li><a href="#dropped">Dropped</a></li>
         <li><a href="#producing-session-data">Producing Session Data</a></li>
       </ul>

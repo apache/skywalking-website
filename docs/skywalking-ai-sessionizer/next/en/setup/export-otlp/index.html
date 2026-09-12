@@ -33,7 +33,7 @@
   <meta itemprop="name" content="Export over OpenTelemetry">
   <meta itemprop="description" content="Export over OpenTelemetry asz push sends what the storage root holds to an OpenTelemetry logs receiver: every landed file and every round, as OTLP logs over gRPC, or over HTTP with a protobuf body. The SkyWalking OAP accepts both, on its gRPC port and on its REST port, and so does an OpenTelemetry Collector.
 # asz.yaml export: otlp: protocol: grpc # the default; http posts to the receiver&#39;s /v1/logs instead endpoint: 127.0.0.1:11800 # the OAP&#39;s gRPC port; with http, http://127.0.0.1:12800 ./bin/asz push # send everything not yet sent, then exit ./bin/asz collect # land, parse and send, once every collector interval One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names.">
-  <meta itemprop="wordCount" content="2720">
+  <meta itemprop="wordCount" content="3068">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Export over OpenTelemetry">
   <meta name="twitter:description" content="Export over OpenTelemetry asz push sends what the storage root holds to an OpenTelemetry logs receiver: every landed file and every round, as OTLP logs over gRPC, or over HTTP with a protobuf body. The SkyWalking OAP accepts both, on its gRPC port and on its REST port, and so does an OpenTelemetry Collector.
@@ -41,8 +41,8 @@
 
 
 
-<link rel="preload" href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" as="style">
-<link href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.9ce49d4f546484b5c169617eb39be1d35c1f88f87ceb2ec1d906824d13dcead9.css" as="style">
+<link href="/scss/main.min.9ce49d4f546484b5c169617eb39be1d35c1f88f87ceb2ec1d906824d13dcead9.css" rel="stylesheet" integrity="">
 
 
 
@@ -627,7 +627,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 55cf9cc</div>
+                  <div class="commit-id">Commit Id: d77d595</div>
                 
 
 
@@ -703,6 +703,21 @@ is a small record, and the same conversation is 306 records.</p>
 <p>Landed files and rounds are both write-once, so each is sent once. <code>push.state</code> in the storage
 root lists what was sent, with the digest each file had; a file is recorded only after the request
 carrying it succeeded, so a failed request leaves it for the next pass.</p>
+<p><code>push.state</code> also names the receivers the files went to, with one <code>endpoint</code> line each:
+<code>grpc://host:port</code>, <code>grpcs://host:port</code> with <code>tls: true</code>, or the HTTP base URL. A <code>rejected</code> line
+names each file of a request a receiver took while it rejected some of its records, as
+<a href="#transport">Transport</a> describes. Every save writes all three kinds, so neither new line is lost
+at the next request. An older asz passes over both, and drops them when it saves the file.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>schema 1
+</span></span><span style="display:flex;"><span>updated_at 2026-09-11T10:00:00Z
+</span></span><span style="display:flex;"><span>endpoint grpc://127.0.0.1:11800
+</span></span><span style="display:flex;"><span>pushed &lt;session-id&gt;/streams/main/transcript-20260911T095959.000000000Z-000001.sd 9f2c…
+</span></span><span style="display:flex;"><span>rejected &lt;session-id&gt;/streams/main/transcript-20260911T095959.000000000Z-000001.sd
+</span></span></code></pre></div><p>Removing a <a href="../../guides/scenario#removal-a-session-goes-once-it-is-sent">scenario session</a>
+depends on these lines. A session goes only when <code>push.state</code> names exactly one receiver, the one
+the pipeline sends to, and no file of the session has a <code>rejected</code> line. A <code>push.state</code> that lists
+files and names no receiver was written before these lines existed, or saved by an older asz. It
+then names the receiver <code>unknown</code>, and no scenario session on that root is removed after that.</p>
 <h2 id="transport">Transport</h2>
 <p>The request is the <code>ExportLogsServiceRequest</code> of the OpenTelemetry protocol, built from the
 protocol&rsquo;s own Go definitions and sent by the gRPC client of the official module, or posted
@@ -732,7 +747,18 @@ logs receiver reads it.</p>
 <p><code>headers</code> travel with every request on both transports, as gRPC metadata or as HTTP headers,
 which is where an authorization token goes. A receiver that answers with a partial success,
 saying it rejected some records, has taken the request, and the protocol says not to send it
-again: the count is reported on the pass line as <code>rejected</code>, and the files are marked sent.</p>
+again: the count is reported on the pass line as <code>rejected</code>, and the files are marked sent. Each
+file of that request also gets a <code>rejected</code> line in <code>push.state</code>, because the answer does not say
+which records were rejected. A scenario session with such a file is never removed.</p>
+<p>Over HTTP, a request counts as taken only when the answer has a 2xx status and a body that is empty
+or protobuf: <code>application/x-protobuf</code>, as OTLP names it, or <code>application/protobuf</code>, whatever the
+parameters. A 2xx answer with a body of any other type is an error. Nothing in the request is
+recorded as sent, so it goes again on the next pass:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>otlp: http://127.0.0.1:12800/v1/logs answered 200 OK with text/html, not an OTLP response; nothing is recorded as sent
+</span></span></code></pre></div><p>A redirect is not followed. It is an error like any other answer outside 2xx, and a receiver that
+moved is configured again. Before this rule, an HTML page answered with 200, and a redirect to a
+login page, both left files recorded as sent that no receiver stored. The rule is the same for logs
+and metrics. Over gRPC, a call that returns without an error always carries the receiver&rsquo;s answer.</p>
 <h2 id="what-every-record-carries">What every record carries</h2>
 <p>The resource, which names the service a record belongs to:</p>
 <table>
@@ -982,7 +1008,8 @@ and not the other is sent what it takes.
 On the way out the resource is normalised to asz&rsquo;s identity, the service, the layer, the sender,
 so the OAP holds one service for the runtime. A receiver that answers with a partial success has
 taken the request, and the protocol says not to send it again: the rejected records or points are
-counted on the pass line as <code>rejected</code> and the file is marked sent.</p>
+counted on the pass line as <code>rejected</code>, the file is marked sent, and <code>push.state</code> gets a <code>rejected</code>
+line for it.</p>
 <h2 id="rate">Rate</h2>
 <p>A first push sends the whole history of the storage root, which can be hundreds of megabytes, as
 fast as the receiver takes it. <code>export.otlp.max_bytes_per_minute</code> caps what goes on the wire: a

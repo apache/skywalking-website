@@ -33,7 +33,7 @@ tools/release.sh runs the stages, one command for each. None of them pushes to m
   <meta itemprop="name" content="How to Release">
   <meta itemprop="description" content="How to Release This guide is for the release manager, and for anyone checking a release candidate before voting. Apache SkyWalking AI Sessionizer follows the Apache release process. The SkyWalking PMC votes on a candidate, and only after the vote passes is anything published as a release.
 tools/release.sh runs the stages, one command for each. None of them pushes to main. For every stage this page shows the command, says what it does, and lists the svn commands it runs, so a release manager can finish a stage by hand when the script stops.">
-  <meta itemprop="wordCount" content="7429">
+  <meta itemprop="wordCount" content="8232">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="How to Release">
   <meta name="twitter:description" content="How to Release This guide is for the release manager, and for anyone checking a release candidate before voting. Apache SkyWalking AI Sessionizer follows the Apache release process. The SkyWalking PMC votes on a candidate, and only after the vote passes is anything published as a release.
@@ -41,8 +41,8 @@ tools/release.sh runs the stages, one command for each. None of them pushes to m
 
 
 
-<link rel="preload" href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" as="style">
-<link href="/scss/main.min.9ebc1aad14a60beb4f2d187cb59e63ec25323bd8334eef48cd5d0d2aaab610bd.css" rel="stylesheet" integrity="">
+<link rel="preload" href="/scss/main.min.9ce49d4f546484b5c169617eb39be1d35c1f88f87ceb2ec1d906824d13dcead9.css" as="style">
+<link href="/scss/main.min.9ce49d4f546484b5c169617eb39be1d35c1f88f87ceb2ec1d906824d13dcead9.css" rel="stylesheet" integrity="">
 
 
 
@@ -627,7 +627,7 @@ tools/release.sh runs the stages, one command for each. None of them pushes to m
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 55cf9cc</div>
+                  <div class="commit-id">Commit Id: d77d595</div>
                 
 
 
@@ -780,7 +780,10 @@ after the tag, and <code>main</code> holds it once the prepare pull request has 
 <li><code>candidate</code>, <code>vote-result</code> and <code>publish</code> write their files under <code>dist/$VERSION/</code> in the
 checkout, and <code>complete</code> reads the voted packages from there. <code>prepare</code> writes nothing there.
 Git ignores <code>dist/</code>.</li>
-<li><code>--dry-run</code> prints what the stage would do and writes nothing.</li>
+<li><code>--dry-run</code> prints what the stage would do. It makes no commit and no push, changes nothing on
+dist.apache.org or GitHub, and writes no file in <code>dist/</code>. <code>candidate</code>, <code>publish</code> and <code>complete</code>
+read the tag to make the plan. So, like a real run, they fetch <code>v$VERSION</code> from origin into the
+local repository when it does not have the tag. They fetch that one tag and no other.</li>
 <li>An option that belongs to another stage is refused, never ignored.</li>
 <li>When <code>APACHE_ID</code> is set, every svn command runs as <code>svn --username &quot;$APACHE_ID&quot;</code>. Set it when
 your local user name is not your Apache ID.</li>
@@ -802,8 +805,10 @@ PMC member can commit to that file:</p>
 </span></span><span style="display:flex;"><span><span style="color:#0550ae">(</span>gpg --list-sigs &lt;key id&gt; <span style="color:#0550ae">&amp;&amp;</span> gpg --armor --export &lt;key id&gt;<span style="color:#0550ae">)</span> &gt;&gt; KEYS
 </span></span><span style="display:flex;"><span>svn commit -m <span style="color:#0a3069">&#34;Add the key of &lt;your name&gt;&#34;</span> KEYS
 </span></span></code></pre></div><p><code>candidate</code> refuses to build with a key that is not in KEYS, because every voter checks the
-signatures against that file. It also refuses a key that is not RSA of at least 2048 bits, or
-that has no user ID with an apache.org address.</p>
+signatures against that file. It also refuses a key that has expired or is revoked in KEYS, a
+key that is not RSA of at least 2048 bits, and a key that has no user ID with an apache.org
+address. gpg reads the expiry of a key from KEYS, not from your machine. So when you extend
+your key, have a PMC member commit the renewed public key to KEYS before the next candidate.</p>
 </li>
 <li>
 <p><strong>The tools.</strong> git, Go 1.27 or later, make, gpg, shasum, tar, zip, unzip, file, curl, svn, and
@@ -918,7 +923,7 @@ asking for the passphrase, run <code>export GPG_TTY=$(tty)</code> first.</p>
 <code>docs/en/changes/changes.md</code> must name <code>$VERSION</code> in its heading and carry no in-development
 note, as <code>prepare</code> leaves it in the commit it tags. The vote mail links that page. A local tag
 of the same name must be the same object as the one on origin. When there is no local tag, it
-fetches the tag.</p>
+fetches that one tag from origin, in a dry run too, and says so.</p>
 </li>
 <li>
 <p><strong>Name the packages.</strong> They are the ones the Makefile in the tag builds: the source package,
@@ -958,9 +963,23 @@ keyring, and refuses when:</p>
 <ul>
 <li>the primary key is not there. A voter checks every signature against KEYS, so a key missing
 there is found before the build, not during the vote.</li>
+<li>gpg marks the primary key, or the subkey that signs, as expired or revoked in that keyring.
+Every voter&rsquo;s gpg reads the same KEYS, and would warn about it. The
+<a href="https://infra.apache.org/release-signing.html">ASF release signing guide</a> counts a signature
+as valid only when gpg verifies it as a good signature and does not complain about expired
+or revoked keys. The usual case is a key extended on your machine, while KEYS still holds the
+old copy.</li>
+<li>gpg, reading that keyring, does not report the signature of the scratch file as good, or
+reports the key that signed, or the signature, as expired or revoked. Those are the
+<code>EXPKEYSIG</code>, <code>REVKEYSIG</code> and <code>EXPSIG</code> lines of its status output. A KEYS entry that also
+holds an old subkey that has expired, beside a newer subkey that signs, is not refused. gpg
+prints a good signature by the newer subkey and nothing about the old one. Its status output
+has a <code>KEYEXPIRED</code> line for the old subkey. That line is not about the signature, so
+<code>candidate</code> does not refuse it.</li>
 <li>the key that signed is not RSA, or has fewer than 2048 bits. The ASF requires both. A key of
 fewer than 4096 bits gets a warning, because the ASF asks a new key to be 4096 bits.</li>
-<li>no user ID of the key, as KEYS holds it, has an apache.org address.</li>
+<li>no user ID of the key, as KEYS holds it, has an apache.org address. A revoked or expired user
+ID does not count.</li>
 </ul>
 </li>
 <li>
@@ -972,11 +991,21 @@ hold exactly what the tag holds. By hand:</p>
 </span></span><span style="display:flex;"><span>git -C dist/<span style="color:#953800">$VERSION</span>/build checkout v<span style="color:#953800">$VERSION</span>
 </span></span><span style="display:flex;"><span><span style="color:#0550ae">(</span><span style="color:#6639ba">cd</span> dist/<span style="color:#953800">$VERSION</span>/build <span style="color:#0550ae">&amp;&amp;</span> make release <span style="color:#953800">VERSION</span><span style="color:#0550ae">=</span><span style="color:#953800">$VERSION</span> <span style="color:#953800">GPG_USER</span><span style="color:#0550ae">=</span>&lt;key&gt;<span style="color:#0550ae">)</span>
 </span></span><span style="display:flex;"><span>mv dist/<span style="color:#953800">$VERSION</span>/build/dist/*.tgz* dist/<span style="color:#953800">$VERSION</span>/build/dist/*.zip* dist/<span style="color:#953800">$VERSION</span>/
-</span></span></code></pre></div><p><code>make release</code> refuses to run unless the tag is checked out and the tree has no change and no
-untracked file. An untracked Go file would be compiled into the binaries while the source
-package, made from the tag, does not hold it. It also refuses when git tracks a file of a type
-<code>COMPILED_TYPES</code> in the Makefile names, because an Apache source release must not carry compiled
-code. It removes packages left in <code>dist/</code> by an earlier build, so none is signed with these.
+</span></span></code></pre></div><p><code>make release</code> refuses to run unless the tag is checked out, and the tree has no change and no
+file that git does not track, ignored files included. Only its build output may be there, in
+<code>dist/</code>, <code>bin/</code> and <code>plugins/claude-code/bin/</code>. An untracked Go file would be compiled into the
+binaries. <code>asz</code> embeds every file in <code>internal/view/conversation-view/</code> whose name does not
+start with <code>.</code> or <code>_</code>. The binary packages take the plugin&rsquo;s <code>.claude-plugin/</code> and <code>hooks/</code> and
+<code>dist-material/licenses/</code> whole, so an ignored <code>.DS_Store</code> there would be packaged. The source
+package, made from the tag, holds none of them. The binaries are built with <code>GOWORK=off</code> and
+<code>GOFLAGS=-mod=readonly</code>, so a <code>go.work</code> in the tree or in a directory above it does not change
+what they are built from.
+<code>make release</code> also refuses when git tracks a file of a type <code>COMPILED_TYPES</code> in the Makefile
+names, or with a name <code>COMPILED_FILES</code> names, because an Apache source release must not carry
+compiled code. <code>COMPILED_FILES</code> is for the compiled files <code>file</code> cannot tell by type: the
+<code>file</code> 5.41 that ships with macOS reports a WebAssembly module and a Python <code>.pyc</code> file as
+<code>application/octet-stream</code>. It removes packages left in <code>dist/</code> by an earlier build, so none is
+signed with these.
 Then it builds the packages <a href="#what-make-release-builds">described below</a>. Right after
 <code>git archive</code>, it lists the source package and stops when a font file is in it. It looks for
 the file types step 3 looks for, which <code>FONT_FILES</code> in the Makefile names. It removes that
@@ -987,10 +1016,13 @@ source package before any checksum or signature is made, so it cannot be uploade
 <ul>
 <li>Every package is there with its <code>.asc</code> and <code>.sha512</code>, and no other package is.</li>
 <li><code>shasum -a 512 -c</code> passes for each package.</li>
-<li><code>gpg --verify</code> passes for each package against the KEYS keyring, signed by the checked key.</li>
+<li>gpg, reading the KEYS keyring, reports a good signature by the checked key for each package.
+It does not report the key that signed, or the signature, as expired or revoked: no
+<code>EXPKEYSIG</code>, <code>REVKEYSIG</code> or <code>EXPSIG</code> line. gpg exits 0 for a key that has expired in KEYS
+too, so its exit status is not enough.</li>
 <li>The source package holds <code>LICENSE</code> and <code>NOTICE</code> at its top level, and nothing outside its top
-directory. It holds no font file, and <code>file</code> finds no file of a type <code>COMPILED_TYPES</code> in the
-tag&rsquo;s Makefile names.</li>
+directory. It holds no font file. <code>file</code> finds no file of a type <code>COMPILED_TYPES</code> in the
+tag&rsquo;s Makefile names, and no file has a name <code>COMPILED_FILES</code> there names.</li>
 <li>Each binary package holds <code>asz</code>, <code>claude-code-plugin/bin/asz-claude-plugin</code>,
 <code>claude-code-plugin/.claude-plugin/</code>, <code>claude-code-plugin/hooks/</code>, <code>LICENSE</code>, <code>NOTICE</code> and
 <code>licenses/</code>. On Windows the two binaries end in <code>.exe</code>.</li>
@@ -1029,9 +1061,11 @@ because a candidate was uploaded from this checkout. When svn is installed, it a
 area and the release directory, and refuses when a candidate of <code>$VERSION</code> is there or <code>$VERSION</code>
 is released already. A new build would replace the uploaded or voted files in <code>dist/$VERSION/</code>,
 and its signatures at least would differ from them.</p>
-<p><code>--dry-run</code> builds, runs, uploads and writes nothing, but it still signs a scratch file, so gpg may
-ask for the passphrase, and it reads svn and KEYS. Its plan names the package it would run on this
-machine.</p>
+<p><code>--dry-run</code> builds, runs and uploads nothing, and writes nothing into <code>dist/$VERSION/</code>. It still
+fetches a missing tag, as step 1 says. It still checks the signing key as step 5 does: it signs a
+scratch file, so gpg may ask for the passphrase, and it reads svn and KEYS. The scratch file, its
+signature and the KEYS keyring are in a temporary directory that it removes. Its plan names the
+package it would run on this machine.</p>
 <p>Running <code>candidate</code> again rebuilds everything in <code>dist/$VERSION/</code> from the tag. After an upload it
 refuses, as step 4 says.</p>
 <h3 id="what-make-release-builds">What make release builds</h3>
@@ -1047,8 +1081,10 @@ system fonts.</li>
 binary package for each platform. Each holds <code>asz</code> (<code>asz.exe</code> on Windows), <code>claude-code-plugin/</code>
 with the Claude Code plugin&rsquo;s <code>.claude-plugin/</code>, <code>hooks/</code> and <code>bin/asz-claude-plugin</code>, and the
 <code>LICENSE</code>, <code>NOTICE</code> and <code>licenses/</code> of a binary distribution, generated into <code>dist-material/</code>.
-The binaries embed the two fonts, which <code>dist-material/LICENSE</code> names.</li>
-<li>A <code>.sha512</code> checksum and an <code>.asc</code> signature beside every package. <code>GPG_USER</code> picks the key.</li>
+They name the modules built into the two binaries on the six platforms, and no module that
+only tests need. The binaries embed the two fonts, which <code>dist-material/LICENSE</code> names.</li>
+<li>A <code>.sha512</code> checksum and an <code>.asc</code> signature beside every package. <code>GPG_USER</code> picks the key.
+The first package that cannot be checksummed or signed stops the release.</li>
 </ul>
 <p>The platforms are the <code>PLATFORMS</code> list in the Makefile: macOS on Apple silicon and Intel, Linux on
 x86-64 and ARM 64, and Windows on x86-64 and ARM 64. That is seven packages with the source
@@ -1101,7 +1137,7 @@ the mail is:</p>
 </span></span><span style="display:flex;"><span> * https://github.com/apache/skywalking-ai-sessionizer/blob/v$VERSION/docs/en/guides/how-to-release.md
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>Notes for voters:
-</span></span><span style="display:flex;"><span> * internal/view/conversation-view/ in the source package is the build output of Horizon&#39;s conversation renderer, from apache/skywalking-horizon-ui at the commit its HORIZON_COMMIT file names. It is Apache-2.0 code of the ASF with no third-party code in it. The source package builds and runs with it as it is. `make conversation-view-check`, which needs Node.js 24 and pnpm, rebuilds it from that commit and compares.
+</span></span><span style="display:flex;"><span> * internal/view/conversation-view/ in the source package is the build output of Horizon&#39;s conversation renderer, from apache/skywalking-horizon-ui at the commit its HORIZON_COMMIT file names. It is Apache-2.0 code of the ASF with no third-party code in it. The source package builds and runs with it as it is. `make conversation-view-check`, which needs Node.js 24 and pnpm, rebuilds it from that commit and compares. In the unpacked source package it compares every file except the two fonts, which the source package does not carry, and it names the two it left out.
 </span></span><span style="display:flex;"><span> * The two fonts the page draws with are under the SIL Open Font License, a Category B license, so they are in the binary packages only. A build from the source package draws the page with system fonts.
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>Voting will start now and will remain open for at least 72 hours. All PMC members are requested to give their votes.
@@ -1133,9 +1169,15 @@ and <code>.sha512</code>. The platforms are the <code>PLATFORMS</code> list in t
 <p><code>shasum -a 512 -c</code> passes for each package.</p>
 </li>
 <li>
-<p><code>gpg --verify</code> passes for each package, with a key from KEYS. gpg prints <code>Good signature</code>. A
-warning that the key is not certified with a trusted signature only says your own keyring does
-not vouch for that key.</p>
+<p><code>gpg --verify</code> passes for each package, with a key from KEYS. gpg prints <code>Good signature</code>,
+and nothing about an expired or revoked key: no <code>[expired]</code> after the name, no
+<code>Note: This key has expired!</code>, and no warning that the key or a subkey
+<code>has been revoked by its owner</code>. gpg 2.5.18 prints <code>Good signature</code> and exits 0 for an expired
+or revoked key too. The
+<a href="https://infra.apache.org/release-signing.html">ASF release signing guide</a> counts a signature
+as valid only when gpg verifies it as a good signature and does not complain about expired or
+revoked keys. A warning that the key is not certified with a trusted signature only says your
+own keyring does not vouch for that key.</p>
 </li>
 <li>
 <p>The source package is the tag. It unpacks into one directory, and holds exactly what
@@ -1154,10 +1196,16 @@ without the in-development note:</p>
 </span></span><span style="display:flex;"><span><span style="color:#0550ae">[</span> <span style="color:#0a3069">&#34;</span><span style="color:#cf222e">$(</span>head -1 <span style="color:#953800">$p</span><span style="color:#cf222e">)</span><span style="color:#0a3069">&#34;</span> <span style="color:#0550ae">=</span> <span style="color:#0a3069">&#34;# Changes in </span><span style="color:#953800">$VERSION</span><span style="color:#0a3069">&#34;</span> <span style="color:#0550ae">]</span> <span style="color:#0550ae">&amp;&amp;</span> ! grep -q <span style="color:#0a3069">&#39;^&gt; In development&#39;</span> <span style="color:#953800">$p</span> <span style="color:#0550ae">&amp;&amp;</span> <span style="color:#6639ba">echo</span> <span style="color:#0a3069">&#34;the changelog is final&#34;</span>
 </span></span></code></pre></div></li>
 <li>
-<p>The source package carries no compiled file and no font file. Both commands print nothing:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>find apache-skywalking-ai-sessionizer-<span style="color:#953800">$VERSION</span>-src -type f -exec file <span style="color:#0550ae">{}</span> + <span style="color:#1f2328">|</span> grep -E <span style="color:#0a3069">&#39;ELF|Mach-O|PE32&#39;</span>
+<p>The source package carries no compiled file and no font file. All three commands print
+nothing:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>find apache-skywalking-ai-sessionizer-<span style="color:#953800">$VERSION</span>-src -type f -exec file <span style="color:#0550ae">{}</span> + <span style="color:#1f2328">|</span> grep -E <span style="color:#0a3069">&#39;ELF|Mach-O|PE32|current ar archive|Java archive|compiled Java|WebAssembly|byte-compiled&#39;</span>
+</span></span><span style="display:flex;"><span>find apache-skywalking-ai-sessionizer-<span style="color:#953800">$VERSION</span>-src -type f <span style="color:#1f2328">|</span> grep -E <span style="color:#0a3069">&#39;\.(a|o|so|dylib|dll|exe|lib|obj|class|jar|war|pyc|pyo|wasm)$&#39;</span>
 </span></span><span style="display:flex;"><span>find apache-skywalking-ai-sessionizer-<span style="color:#953800">$VERSION</span>-src -type f <span style="color:#1f2328">|</span> grep -E <span style="color:#0a3069">&#39;\.(woff2?|ttf|otf|eot)$&#39;</span>
-</span></span></code></pre></div><p>Fonts come under licenses such as the SIL Open Font License, which the ASF puts in Category B.
+</span></span></code></pre></div><p>The first finds compiled files by what <code>file</code> says they are: executables, libraries, object
+files, Java classes and archives, WebAssembly modules and Python byte code. The second finds
+them by name, because <code>file</code> cannot tell some of them. The <code>file</code> 5.41 that ships with macOS
+calls a Python <code>.pyc</code> file only <code>data</code>. These are the files <code>make release</code> refuses too.</p>
+<p>Fonts come under licenses such as the SIL Open Font License, which the ASF puts in Category B.
 A Category B work may be in a convenience binary, never in a source release.</p>
 </li>
 <li>
@@ -1166,13 +1214,19 @@ conversation renderer, from apache/skywalking-horizon-ui at the commit its <code
 names. It is Apache-2.0 code of the ASF. Horizon&rsquo;s package has development dependencies only,
 and none of them is bundled into it, so no third-party code is in it. Its JavaScript file
 carries no license header, and its CSS files carry Horizon&rsquo;s. With Node.js 24 and pnpm,
-<code>make conversation-view-check</code> rebuilds it from that commit and fails when it differs.</p>
+<code>make conversation-view-check</code> rebuilds it from that commit and fails when it differs. In the
+unpacked source package it leaves the two fonts, <code>inter-latin-wght-normal.woff2</code> and
+<code>jetbrains-mono-latin-wght-normal.woff2</code>, out of the comparison, because the source package does
+not carry them, and it prints their names. It compares every other file. In a clone of the tag
+it compares the fonts too.</p>
 </li>
 <li>
 <p>Every package carries <code>LICENSE</code> and <code>NOTICE</code>. A binary package also carries <code>licenses/</code>, and
 its <code>NOTICE</code> carries the notices of the bundled modules. In the unpacked source,
 <code>make license-check</code> checks the license header of every source file, and
-<code>make dep-licenses-check</code> says whether <code>dist-material/</code> is what the dependencies resolve to.</p>
+<code>make dep-licenses-check</code> says whether <code>dist-material/</code> is what the modules built into the two
+binaries resolve to. A module that <code>go.mod</code> requires only for the tests of a dependency, such as
+<code>github.com/kr/text</code>, is not in the binaries, so <code>dist-material/</code> does not list it.</p>
 </li>
 <li>
 <p>The source package builds and passes its tests:</p>
@@ -1352,7 +1406,8 @@ because both download from the GitHub release. When older versions are in the re
 directory, the last step is the later run with <code>--remove-old</code>.</p>
 </li>
 </ol>
-<p><code>--dry-run</code> reads svn and prints the plan. It moves, removes, fetches and writes nothing.</p>
+<p><code>--dry-run</code> reads svn and prints the plan. It fetches no package, and moves, removes and writes
+nothing. Like a real run, it fetches a missing tag, as <code>candidate</code> does.</p>
 <h2 id="6-complete">6. Complete</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>tools/release.sh <span style="color:#6639ba">complete</span> <span style="color:#953800">$VERSION</span>
 </span></span></code></pre></div><p>downloads.apache.org serves the release directory a short while after the move. How long that
