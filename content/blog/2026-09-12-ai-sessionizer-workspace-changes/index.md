@@ -1,108 +1,98 @@
 ---
-title: "From Conversation Replay to File Changes: Progress in SkyWalking AI Sessionizer"
+title: "Beyond Agent Replay: Metrics and Change Detection in SkyWalking"
 date: 2026-09-12
 author: Sheng Wu
-description: "Follow recorded file changes back to an AI agent's conversation and tool calls, with workspace diffs in Apache SkyWalking AI Sessionizer and centralized inspection through OAP and Horizon UI."
+description: "Apache SkyWalking moves beyond local AI agent replay with metrics dashboards and change detection: understand agent usage, find conversations, and inspect the file changes recorded during their work."
 tags:
   - AI
   - Engineering
   - Community
 ---
 
-In our [first look at Apache SkyWalking AI Sessionizer](/blog/2026-09-03-ai-sessionizer-first-look/), we started with replay: reconstructing a Claude Code conversation from the records already on your machine, then exploring its messages, tools, and child agents. Since then, the work has advanced across Sessionizer, OAP, and Horizon UI. Remote conversation export and agent dashboards have moved from the agenda into working code.
+In our [first look at Apache SkyWalking AI Sessionizer](/blog/2026-09-03-ai-sessionizer-first-look/), we started with a conversation already on your machine. You could replay its messages, inspect tool calls, and follow child agents through a long task. Remote observation and metrics dashboards were still on the agenda.
 
-The most useful new connection is between **what the agent discussed, which tools it called, and what changed in the files it worked on**. A conversation can now carry recorded workspace changes, with diffs attached to the relevant tool steps and a conversation-wide view of the affected files.
+Since then, **SkyWalking has gained two capabilities around that replay experience: metrics dashboards for understanding agent usage, and change detection for inspecting what happened to the files an agent worked on**. Collected conversations can now be stored centrally and explored alongside agent metrics, extending the experience beyond the machine where a task ran.
 
-This post follows that experience using screenshots from our own development work. It covers development toward **AI Sessionizer 0.3.0, OAP 11.1, and Horizon UI 1.1**.
+Together, these capabilities help answer questions at different scales. Where is token usage going across our agents and machines? What happened in a particular conversation? Which files changed during that work, and what discussion and tool activity surrounded those changes?
 
-## Start with the files a conversation changed
+The screenshots below come from our own development work. They show the progress from local replay toward observing AI agent work in SkyWalking as a whole.
 
-An agent may work through dozens of edits, run shell commands, and delegate parts of a task before producing its final response. Reviewing the resulting files tells you where the work ended. The conversation adds the path it took: the request, the successive edits, and the operations recorded along the way.
+## See where agent usage is going
 
-The conversation header now includes a **Changes** count. Open it to see files grouped by workspace root, with each recorded observation listed under its file. Select an observation to jump to the associated tool step and open its **Changes** inspector.
+One conversation can explain a task in detail. Metrics make activity across many tasks visible over time.
 
-![The conversation-wide Workspace changes panel in Horizon, grouping recorded edits by workspace and file.](workspace-changes-featured.png)
-*Figure 1: This development conversation contains 93 change records across 39 files. Repeated writes and edits remain visible under each path, and each linked record opens its associated tool step.*
+The **AI Agent Overview** brings daily and hourly token heatmaps together with totals and a ranking of reporting agents. It gives you a place to start when reviewing usage: find busy periods, see which agents report the most tokens, and decide where to look more closely.
 
-The example is itself a conversation about adding AI agent metrics and change inspection to Horizon. Its file list includes the planning document, dashboard templates, documentation, and changelog. You can follow how one file evolved across several calls without searching the transcript for every occurrence of its name.
+![SkyWalking's AI Agent Overview, showing daily and hourly token heatmaps and reporting agent services.](ai-agent-overview.png)
+*Figure 1: Daily and hourly heatmaps show how token usage develops over time. The footer makes coverage explicit: this example includes the eight busiest of nine reporting services.*
 
-**The count describes observations, not unique files or a final Git diff.** One call can produce records for several workspace roots, and separate producers can record the same call. Added and removed line totals sum those records; they can include repeated edits to the same lines. These numbers help navigate the work, while the individual records explain what was observed.
+Agent dashboards then break usage down by **token type, model, and main agent or subagent**, with cache read share alongside them. Input, output, cache reads, and cache creation appear separately, making it easier to understand what contributes to a large token total. You can also inspect the same metrics for an individual agent runtime, such as the collector running on one machine.
 
-## Open a change, then follow its evidence
+For example, a rise in usage gives you a reason to compare models, look at main-agent and subagent activity, and examine the token types involved. The runtime view helps narrow that investigation to the machine reporting the activity. These are useful views for a team operating several agents, as well as for a developer reviewing their own usage over a week.
 
-Tool cards and timeline steps carry change indicators. Expanding a card shows the affected paths, operations, and line counts; expanding a file shows a unified diff with additions and deletions. The inspector can also open in a larger panel, giving a long diff room to read.
+The available measurements depend on the data you collect. Existing Claude Code transcripts provide a subset of token metrics. With Claude Code's own telemetry exporter configured, the dashboards can also show reported cost by model, active time, sessions started, lines added and removed, commits, pull requests, and edit permission decisions. Those additional widgets appear when their metrics are reported; values are not estimated from conversation text.
 
-![The Changes tab of a Write tool's inspector, showing the runtime-reported patch, its source location, and a unified diff.](tool-change-inspector.png)
-*Figure 2: A recorded Write operation on the planning document. The inspector identifies Claude Code as the source, shows the observation time and landed record location, and links to the Evidence tab.*
+The [AI Agents dashboard guide](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/dashboards/ai_agent/) explains the metrics and collection options, including how to select one token-reporting path so the same activity is not counted twice. The services shown in an overview reflect the telemetry being reported; conversation replay currently has a Claude Code adapter, with Codex and LangChain/LangGraph adapters still planned.
 
-Here the diff shows a revision to the plan after checking the repositories. Beside it, the transcript retains the user's request and the agent's response; the timeline retains the model and tool activity. That makes it possible to inspect a concrete change in the context of the discussion that led to it.
+## Find the conversations behind the activity
 
-The connection uses the **tool-use ID**, rather than matching an edit to whichever message happened nearby in time. Each change retains who captured it and the basis of that observation. A patch reported by Claude Code and a workspace scan performed by the plugin remain separate records when both are present. The [conversation replay documentation](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/ai-agent-conversations/#changes) explains the card indicators, inspector, and conversation-wide panel.
+Once a period or agent deserves a closer look, the **Conversations** tab lets you search the collected conversations for that agent. Set the conversation query's time range and filter by runtime, title text, or conversation ID, then open a conversation in its own tab.
 
-## Native patches first, broader capture with an optional plugin
+![SkyWalking's AI Agents Conversations tab with runtime and title filters, activity counts, and recorded change totals.](conversation-list.png)
+*Figure 2: The conversation list summarizes talks, model calls, subagents, Bash runs, and recorded changes before you open an individual task.*
 
-The first post's starting point still holds: **replay reads existing Claude Code history without installing a plugin or changing Claude Code's configuration**. Change inspection builds on that path. Sessionizer now extracts the patches Claude Code records for successful main-stream editing calls, including `Edit` and `Write`.
+This is the replay experience from the first post, now available through SkyWalking's central UI. You can read the transcript beside its execution timeline, explore delegated work, and inspect the evidence behind a tool call. The address retains the selected talk, step, and stream, so a colleague with the required access can open the same position.
 
-For activity the transcript does not describe fully, the optional **asz-changes** Claude Code plugin adds observations:
+Metrics and conversations serve different parts of the investigation. Dashboards show usage patterns over time; the conversation records the requests, responses, and operations within a task. You can select the relevant agent and time range, find a conversation, and examine its work without returning to the originating machine.
 
-| Source | What it contributes |
-| --- | --- |
-| Claude Code's own records | Native editing patches on the main stream, collected alongside the tool result. |
-| Optional asz-changes plugin | Before-and-after workspace scans around shell tools such as `Bash`, `PowerShell`, and `Monitor`, plus reported editing patches inside subagents. |
+## See which files changed during the work
 
-This extends inspection to files changed by a script or command, as well as edits made during delegated work. The plugin writes its own records; Sessionizer collects them and connects them to the appropriate execution stream and tool call. It can only observe activity while installed. Older shell commands cannot acquire before-and-after snapshots retroactively.
+Replay now reaches into the workspace as well. A conversation carries recorded file changes, giving you a way to connect the discussion and tool activity with edits to actual files.
 
-Native patches are extracted when Sessionizer collects a transcript. A storage root collected by an earlier version does not gain those change records simply by reopening it in the new viewer.
+Open the **Changes** count in the conversation header to see affected files grouped by workspace root. Each file lists its recorded changes. Select one to jump to the associated tool step and open its change inspector.
 
-The observation boundaries remain visible. When tool windows overlap, affected files can be marked **shared**, with the other windows named. Changes detected between observed calls appear separately as **Changes outside observed tool windows**. A shell command classified as read-only may skip scanning; that means the workspace was not scanned, whereas a completed scan can report that it found no changes. Partial scans disclose gaps, and binary or oversized files can carry paths and hashes without a text diff.
+![The conversation-wide Workspace changes panel, grouping recorded edits by workspace and file.](workspace-changes-featured.png)
+*Figure 3: This development conversation contains 93 change records across 39 files. Each linked record opens the tool step associated with that observation.*
 
-These distinctions matter when reviewing concurrent agent work. A before-and-after scan establishes a change within an observation window; it does not prove that one tool alone authored every byte. See the [plugin guide](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/) for capture rules and configuration.
+The example is a conversation about adding the very agent dashboards and change inspection shown in this post. Its file list includes the planning document, dashboard templates, documentation, and changelog. Repeated edits remain visible under each path, so you can follow how a file evolved through the task without searching every mention in the transcript.
 
-## Carry the same conversation into OAP and Horizon
+The count describes **recorded observations**. Several calls can edit one file, and separate sources can record the same call. Line totals can therefore include repeated changes to the same lines; use the individual diffs to inspect the work, and Git to review the final net change.
 
-The first article described centralized observation as a next step. That path is now implemented: **Sessionizer → OAP → Horizon**.
+## Read an edit in the context of the conversation
 
-Sessionizer exports collected evidence files and conversation rounds through OpenTelemetry logs. OAP verifies file digests and line counts, stores the files under the **AI_AGENT** layer, and assembles the conversation document that Horizon reads. Workspace change records travel with that evidence, preserving their connection to the tools and streams. The [OAP conversation guide](https://skywalking.apache.org/docs/main/next/en/setup/backend/ai-agent-conversation/) describes ingestion, storage, and queries.
+Tool cards and timeline steps now show change indicators. Expand a card to see affected paths, operations, and line counts, then expand a file to read its unified diff. A larger inspector gives longer diffs room to read alongside the conversation.
 
-Horizon and Sessionizer's local viewer use the same conversation renderer and document format. The transcript, execution timeline, child-agent navigation, and change inspector therefore follow the same model in both places.
+![A Write tool's Changes inspector, showing the reported patch, its source location, and a unified diff.](tool-change-inspector.png)
+*Figure 4: A recorded Write operation revises the planning document. The inspector shows the patch, its capture source and time, and a link to the supporting evidence.*
 
-![Horizon's AI Agents Conversations tab with runtime and title filters, activity counts, and recorded change totals.](conversation-list.png)
-*Figure 3: The centralized conversation list brings talks, model calls, subagents, Bash runs, change records, and unresolved references into one view.*
+Here, the diff captures a revision to the plan after checking the repositories. The surrounding transcript retains the user's request and the agent's response. You can read what changed together with the discussion that led up to it, then inspect the recorded tool call and result.
 
-In Horizon, choose an agent and query conversations by time range, agent runtime, title text, or conversation ID. Open a row to investigate it in a dedicated tab. The address preserves the selected talk, step, and stream, so a colleague with Horizon access and conversation-read permission can open the same position.
+Changes are linked through the **tool-use ID**. Each record also retains its capture source, so a patch reported by Claude Code and a workspace scan made around a shell command remain distinguishable. The [conversation replay documentation](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/operate/ai-agent-conversations/#changes) describes the change indicators, file list, and inspector.
 
-That gives change inspection an entry point beyond a single machine. A reviewer can find a conversation, identify the files it touched, and follow a record into the operation and discussion behind it.
+## Include shell commands and delegated edits
 
-## Usage dashboards provide the wider context
+The starting point remains straightforward: collecting existing Claude Code history requires no plugin or configuration changes in Claude Code. Successful editing calls such as `Edit` and `Write` can already carry native patches, which are extracted during collection. An older collection needs to be collected again to gain these records; reopening it in a newer viewer is not enough.
 
-Alongside individual conversations, Horizon now has agent and runtime dashboards for token usage by type, model, and main agent or subagent, together with cache read share. An **AI Agent Overview** adds daily and hourly token heatmaps and a ranking of reporting agents.
+For broader capture, the optional **asz-changes** plugin adds before-and-after workspace scans around shell tools such as `Bash`, `PowerShell`, and `Monitor`, plus reported editing patches from subagents. This brings changes made by scripts and delegated work into the same inspection experience. Shell snapshots are available for activity observed while the plugin is installed.
 
-![Horizon's AI Agent Overview, showing daily and hourly token heatmaps and reporting agent services.](ai-agent-overview.png)
-*Figure 4: Usage over time provides context for individual investigations. The heatmap footer states its coverage: this example includes the eight busiest of nine reporting services.*
+The view also preserves capture limits. Overlapping tool windows can mark changes as **shared**, and changes detected between calls appear as **Changes outside observed tool windows**. Skipped or partial scans remain identifiable, and binary or oversized files may have paths and hashes without a text diff. A scan establishes what changed within its observation window; concurrent work can prevent attribution to one tool alone. See the [plugin guide](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/) for the capture rules.
 
-Sessionizer can reconstruct the subset of token metrics available in collected transcripts. Additional measures, including cost and active time, come from Claude Code's own telemetry exporter when configured. They are not estimated from conversation text. The [AI Agents dashboard guide](https://skywalking.apache.org/docs/skywalking-horizon-ui/next/dashboards/ai_agent/) explains the sources and how to choose one token-reporting path without counting the same activity twice.
+## Try it with your own agent work
 
-The service names shown in an overview are the services reporting to OAP. They do not establish Sessionizer adapter support: **Claude Code remains the implemented adapter**, with Codex and LangChain/LangGraph still planned.
+These capabilities are available in development toward **AI Sessionizer 0.3.0, OAP 11.1, and Horizon UI 1.1**. Sessionizer collects the local evidence and exports it to SkyWalking, where OAP stores the data and Horizon provides the dashboards and conversation views. The collected evidence retains the connections between conversations, tools, and file changes throughout that path.
 
-## Try the current development version
-
-With Go 1.27 or later, build Sessionizer from source and start the collection pipeline and local viewer:
+To start locally, follow the [quick start](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/quick-start/) to build Sessionizer, then run:
 
 ```sh
-git clone https://github.com/apache/skywalking-ai-sessionizer.git
-cd skywalking-ai-sessionizer
-make build
 ./bin/asz server
 ```
 
-Open [http://127.0.0.1:8787](http://127.0.0.1:8787). **The command has changed since the first post:** `asz server` collects, assembles, and serves; `asz view` now reads an existing storage root. Export runs as part of the pipeline when an OAP endpoint is configured.
-
-To add shell and subagent change capture to a new Claude Code session, the same build includes the optional plugin:
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787). The command has changed since the first post: `asz server` now runs collection and the local viewer, while `asz view` reads an existing collection. To capture additional shell and subagent changes in a new Claude Code session, launch it from the Sessionizer checkout with:
 
 ```sh
 claude --plugin-dir plugins/claude-code
 ```
 
-Run these commands from the Sessionizer checkout. For centralized inspection, set `export.otlp.endpoint` in `asz.yaml` to your OAP receiver, choose the sessions to collect through the adapter filters, and use compatible OAP 11.1 and Horizon 1.1 development builds. The [export guide](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/export-otlp/) covers the transport and configuration; the [quick start](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/quick-start/) covers local collection.
+For centralized inspection, configure `export.otlp.endpoint` in `asz.yaml` and use compatible development builds of OAP and Horizon. The [export guide](https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/export-otlp/) and [backend conversation guide](https://skywalking.apache.org/docs/main/next/en/setup/backend/ai-agent-conversation/) cover that setup. Choose your metrics source using the dashboard guide above, then open **AI Agents** in SkyWalking.
 
-We now have a concrete path from a recorded conversation to its workspace changes, with centralized inspection and usage metrics around it. Broader runtime adapters and whole-conversation evaluation remain work ahead. Try a conversation whose files you know well, inspect how its changes connect to the recorded tools, and share cases we should improve in [Apache SkyWalking Discussions](https://github.com/apache/skywalking/discussions).
+Start with a period of agent activity you know well. Review its token usage, find a conversation from that period, and inspect the files changed during the work. The first article made a recorded agent session navigable. Metrics dashboards and change detection now put that session in a wider context: the resources agents use and the workspace changes recorded along the way.
