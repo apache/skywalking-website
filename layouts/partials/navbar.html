@@ -1,35 +1,81 @@
 {{ $cover := .HasShortcode "blocks/cover" }}
 {{- /* current top-level section, e.g. "events", "blog", "docs" … */ -}}
 {{ $sec := .Section }}
-<nav class="js-navbar-scroll navbar navbar-expand  {{ if $cover}} td-navbar-cover {{ end }}flex-column flex-md-row td-navbar">
-    <div class="sidebar-button">
-      <i class="iconfont icon-menu"></i>
-    </div>
+{{ $isCalendar := hasPrefix .RelPermalink ("/events/calendar/" | relLangURL) }}
+{{ $isBlog := in (slice "blog" "tags") $sec }}
+{{- /* Desktop shows these links directly when they fit; mobile uses a flat page list. */ -}}
+{{ $desktopEntries := dict }}
+{{ range .Site.Menus.main }}
+  {{ if eq .Name "Event Calendar" }}{{ $desktopEntries = merge $desktopEntries (dict .Name .) }}{{ end }}
+  {{ if eq .Name "Community" }}
+    {{ range .Children }}{{ $desktopEntries = merge $desktopEntries (dict .Name .) }}{{ end }}
+  {{ end }}
+{{ end }}
+{{ $blog := index $desktopEntries "Blogs" }}
+{{ $desktopLinks := slice }}
+{{ range slice "Release Posts" "Event Calendar" "Users" "Team" "中文博客" }}
+  {{ with index $desktopEntries . }}
+    {{ $childPath := strings.TrimSuffix "/" (strings.TrimPrefix "/" .URL) }}
+    {{ $active := eq $childPath $sec }}
+    {{ if eq $childPath "zh" }}{{ $active = in (slice "zh" "zh_tags") $sec }}{{ end }}
+    {{ if eq $childPath "events" }}{{ $active = and (eq $sec "events") (not $isCalendar) }}{{ end }}
+    {{ if eq $childPath "events/calendar" }}{{ $active = $isCalendar }}{{ end }}
+    {{ $desktopLinks = $desktopLinks | append (dict "entry" . "key" $childPath "active" $active) }}
+  {{ end }}
+{{ end }}
+<nav class="js-navbar-scroll navbar navbar-expand{{ if $cover }} td-navbar-cover{{ end }} td-navbar" aria-label="Main navigation">
+  <div class="sw-navbar-inner">
+    <button type="button" class="sidebar-button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="site-navigation-drawer">
+      <i class="iconfont icon-menu" aria-hidden="true"></i>
+    </button>
     <a class="navbar-brand" href="{{ .Site.Home.RelPermalink }}">
         <span class="navbar-logo">{{ if .Site.Params.ui.navbar_logo }}<img width="130" src="/images/logo.svg" alt="SkyWalking"></span> {{ else }}
         <span class="text-uppercase font-weight-bold">{{ .Site.Title }}</span> {{ end }}
     </a>
     <div class="td-navbar-nav-scroll navbar-nav-wrapper" id="navigation">
         <ul class="navbar-nav mt-lg-0">
-            {{ $p := . }} {{ range .Site.Menus.main }}
-            {{ if .HasChildren }}
-            {{ else }}
+            {{ range .Site.Menus.main }}
+            {{ if eq .Name "Projects" }}
+            <li class="nav-item dropdown sw-projects-item">
+                <button type="button" class="nav-link dropdown-toggle sw-projects-toggle{{ if in (slice "docs" "downloads") $sec }} active{{ end }}" id="projects-menu-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">{{ .Name }}</button>
+                <div class="dropdown-menu sw-projects-menu" aria-labelledby="projects-menu-toggle">
+                    {{ partial "project-menu.html" (dict "Page" $ "Mobile" false) }}
+                </div>
+            </li>
+            {{ else if eq .Name "Event Calendar" }}
+            {{ with $blog }}
+            <li class="nav-item"><a class="nav-link{{ if $isBlog }} active{{ end }}" href="{{ .URL | relLangURL }}"{{ if $isBlog }} aria-current="page"{{ end }}>{{ .Name }}</a></li>
+            {{ end }}
+            {{ else if and .HasChildren (eq .Name "Community") }}
+            {{ range $desktopLinks }}
+            <li class="nav-item" data-nav-promote="{{ .key }}" hidden><a class="nav-link{{ if .active }} active{{ end }}" href="{{ .entry.URL | relLangURL }}"{{ if .active }} aria-current="page"{{ end }}>{{ .entry.Name }}</a></li>
+            {{ end }}
+            {{ $moreActive := in (slice "zh" "zh_tags" "team" "users" "events") $sec }}
+            <li class="nav-item dropdown" data-nav-more>
+                <button type="button" class="nav-link dropdown-toggle sw-more-toggle{{ if $moreActive }} active{{ end }}" id="more-menu-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More</button>
+                <div class="dropdown-menu sw-more-menu" aria-labelledby="more-menu-toggle">
+                    {{ range $desktopLinks }}
+                    <a class="dropdown-item{{ if .active }} active{{ end }}" data-nav-overflow="{{ .key }}" href="{{ .entry.URL | relLangURL }}"{{ if .active }} aria-current="page"{{ end }}>{{ .entry.Name }}</a>
+                    {{ end }}
+                </div>
+            </li>
+            {{ else if and (not .HasChildren) (ne .Name "Get started") }}
             <li class="nav-item mr-3 mb-lg-0">
 				{{ $u := urls.Parse .URL }}
 				{{ $path := strings.TrimPrefix "/" $u.Path }}
 				{{ $path = strings.TrimSuffix "/" $path }}
 				{{ $first := index (split $path "/") 0 }}
 				{{ $active := and (ne $sec "") (eq $first $sec) }}
-				{{ $baseurl := urls.Parse $.Site.Params.Baseurl }}
-				<a class="nav-link{{ if $active }} active{{ end }}" href="{{ with .Page }}{{ .RelPermalink }}{{ else }}{{ .URL | relLangURL }}{{ end }}" {{ if ne $u.Host $baseurl.Host }}target="_blank" {{ end }}><span{{ if $active }} class="active"{{ end }}>{{ .Name }}</span></a>
+				{{ if eq $path "" }}{{ $active = $.IsHome }}{{ end }}
+				{{/* The calendar and release archive share a section, but have separate menu entries. */}}
+				{{ if and $active (eq $sec "events") }}
+				  {{ $active = eq (eq $path "events/calendar") $isCalendar }}
+				{{ end }}
+                {{ $baseurl := urls.Parse $.Site.Params.Baseurl }}
+                <a class="nav-link{{ if $active }} active{{ end }}" href="{{ with .Page }}{{ .RelPermalink }}{{ else }}{{ .URL | relLangURL }}{{ end }}"{{ if $active }} aria-current="page"{{ end }} {{ if ne $u.Host $baseurl.Host }}target="_blank" {{ end }}><span{{ if $active }} class="active"{{ end }}>{{ .Name }}</span></a>
 			</li>
             {{ end }}
             {{ end }}
-            {{ $zhActive := or (eq $sec "zh") (eq $sec "zh_tags") }}
-            <li class="nav-item mr-3 mb-lg-0">
-                <a class="nav-link{{ if $zhActive }} active{{ end }}" href="/zh/"><span{{ if $zhActive }} class="active"{{ end }}>中文博客</span></a>
-            </li>
-
             {{ if  .Site.Params.versions }}
 			<li class="nav-item dropdown d-none d-lg-block">
 				{{ partial "navbar-version-selector.html" . }}
@@ -43,12 +89,12 @@
         </ul>
     </div>
 
-    <div class="navbar-nav d-none d-lg-block search-input-box">
+    <div class="sw-navbar-actions">
         {{ partial "search-input.html" . }}
-
+        <div class="navbar-nav d-none d-lg-block search-input-box">
         {{- /* Apache dropdown — to the right of search — new ASF oak-leaf */ -}}
         {{ range .Site.Menus.main }}
-            {{ if .HasChildren }}
+            {{ if and .HasChildren (eq .Name "Links") }}
             <span class="link dropdown sw-navdd">
                 <a class="link-name nav-link dropdown-toggle sw-navdd-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <img class="sw-navdd-asf" src="/images/asf-oakleaf.svg" alt="" aria-hidden="true"> Apache
@@ -70,5 +116,12 @@
             </span>
             {{ end }}
         {{ end }}
+        {{ range .Site.Menus.main }}
+            {{ if eq .Name "Get started" }}
+            <a class="sw-nav-cta" href="{{ .URL | relLangURL }}"{{ if eq $sec "get-started" }} aria-current="page"{{ end }}>{{ .Name }}</a>
+            {{ end }}
+        {{ end }}
+        </div>
     </div>
+  </div>
 </nav>

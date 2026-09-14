@@ -1,48 +1,62 @@
 {{ define "main" }}
+{{ $events := .RegularPagesRecursive }}
 {{- if .Parent.IsHome -}}
-{{ $.Scratch.Set "evpages" (where .Site.RegularPages "Section" .Section) }}
-{{- else -}}
-{{ $.Scratch.Set "evpages" .Pages }}
+{{ $events = where .Site.RegularPages "Section" .Section }}
 {{- end -}}
-{{ $pag := .Paginate (($.Scratch.Get "evpages").GroupByDate (i18n "year")) }}
+{{- /* Paginate one representative page per month so a month's posts stay
+       together. Paginating PageGroups directly would split them by post count. */ -}}
+{{ $monthPages := slice }}
+{{ $months := dict }}
+{{ range $events.GroupByDate "2006-01" }}
+  {{ $monthPages = $monthPages | append (index .Pages 0) }}
+  {{ $months = merge $months (dict .Key .Pages) }}
+{{ end }}
+{{ $pag := .Paginate $monthPages 6 }}
 
 <section class="ev-hero">
   <div class="container">
-    <span class="eyebrow">EVENTS &amp; RELEASES</span>
-    <h1>Where the SkyWalking community ships &amp; meets</h1>
-    <p>Releases, conference talks, meetups and weekly office hours — newest first.</p>
-    {{ partial "events-tabs.html" (dict "active" "releases") }}
+    <span class="eyebrow">COMMUNITY</span>
+    <h1>Release Posts</h1>
+    <p>Software releases and announcements from the SkyWalking community, grouped by month.</p>
     {{ partial "feed-subscribe.html" (dict "href" "/events/feed.xml" "label" "Subscribe via RSS") }}
   </div>
 </section>
 
 <div class="container ev-wrap">
-  {{ range $pag.PageGroups }}
-  <div class="ev-group">
-    <div class="ev-year"><span>{{ .Key }}</span></div>
-    <ul class="ev-timeline">
-      {{ range .Pages }}
+  {{ range $pag.Pages }}
+  {{ $month := .Date.Format "2006-01" }}
+  {{ $posts := index $months $month }}
+  <section class="ev-month" aria-labelledby="month-{{ $month }}">
+    <header class="ev-month-head">
+      <h2 id="month-{{ $month }}"><time datetime="{{ $month }}">{{ .Date.Format "January 2006" }}</time></h2>
+      <span class="ev-month-count">{{ len $posts }} {{ if eq (len $posts) 1 }}post{{ else }}posts{{ end }}</span>
+    </header>
+    <ul class="ev-posts">
+      {{ range $posts }}
       {{ $isRelease := hasPrefix (lower .LinkTitle) "release" }}
-      <li class="ev-item{{ if $isRelease }} is-release{{ end }}">
-        <span class="ev-dot" aria-hidden="true"></span>
-        <a class="ev-card" href="{{ .RelPermalink }}">
+      <li class="ev-post">
+        <article class="ev-card">
           <div class="ev-meta">
-            <span class="ev-date">{{ .Date.Format "Jan 2" }}</span>
+            <time class="ev-date" datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "Jan 2, 2006" }}</time>
             {{ if $isRelease }}
             <span class="ev-tag is-release">Release</span>
             {{ else }}
             <span class="ev-tag">Post</span>
             {{ end }}
-            {{ with .Params.author }}<span class="ev-author">{{ . | markdownify }}</span>{{ end }}
           </div>
-          <h3 class="ev-title">{{ .LinkTitle }}</h3>
-          <p class="ev-desc">{{ with .Description }}{{ . }}{{ else }}{{ .Plain | safeHTML | truncate 200 }}{{ end }}</p>
-          <span class="ev-more">{{ T "ui_read_more" }} →</span>
-        </a>
+          <h3 class="ev-title"><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></h3>
+          {{ if not $isRelease }}
+            {{ with .Description }}<p class="ev-desc">{{ . | plainify }}</p>{{ end }}
+          {{ end }}
+          <div class="ev-card-footer">
+            {{ with .Params.author }}<span class="ev-author">{{ . | markdownify }}</span>{{ end }}
+            <a class="ev-more" href="{{ .RelPermalink }}">{{ if $isRelease }}Release notes{{ else }}{{ T "ui_read_more" }}{{ end }} <span aria-hidden="true">→</span></a>
+          </div>
+        </article>
       </li>
       {{ end }}
     </ul>
-  </div>
+  </section>
   {{ end }}
 
   <div class="ev-pagination">

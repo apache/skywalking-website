@@ -1,49 +1,142 @@
+{{- /* Project downloads share the same catalog and release data as Projects. */ -}}
+{{ $catalog := partialCached "project-catalog-data.html" .Site }}
+{{ $groups := slice }}
+{{ range .Site.Data.projects.catalogs }}
+  {{ $entries := slice }}
+  {{ range .projects }}
+    {{ with index $catalog .repo }}{{ if or .downloads .images }}{{ $entries = $entries | append . }}{{ end }}{{ end }}
+  {{ end }}
+  {{ if $entries }}{{ $groups = $groups | append (dict "id" .id "title" .name "entries" $entries) }}{{ end }}
+{{ end }}
 <!doctype html>
 <html lang="{{ partial "seo/lang.html" . }}" class="no-js">
-<head>
-  {{ partial "head.html" . }}
-</head>
-<body class="td-{{ .Kind }} td-downloads">
-<header>
-  {{ partial "navbar.html" . }}
-</header>
-<div class="container-fluid td-outer">
-  <main class="td-main" role="main">
-    {{ block "main" . }}{{ end }}
-  </main>
-  {{ partial "footer.html" . }}
-</div>
-{{ partial "event-popup.html" . }}
-{{ partial "sidebar-skywalking.html" . }}
-{{ partial "active-scripts.html" . }}
-{{ partial "scripts.html" . }}
-<script>
-  // A folded archived category must still open when something inside it is
-  // linked directly, e.g. /downloads/#BanyanDBJavaClient or its own chip.
-  function openTargetDetails() {
-    var hash = location.hash;
-    if (!hash || hash.length < 2) return;
-    var el;
-    try { el = document.querySelector(hash); } catch (e) { return; }
-    if (!el) return;
-    var d = el.closest('details');
-    while (d) {
-      d.open = true;
-      d = d.parentElement ? d.parentElement.closest('details') : null;
-    }
-    el.scrollIntoView();
-  }
-  window.addEventListener('hashchange', openTargetDetails);
-  openTargetDetails();
-
-  $('.download-wrapper').on('click', function (e) {
-    var label = $(e.target).data('label')
-    if (label) {
-      if (window.ga) { ga('send', 'event', 'Download Link', 'click', label, { nonInteraction: true }); }
-      if (window.gtag) { gtag('event', 'click', { 'event_category': 'download_click', 'event_label': label, 'non_interaction': true }); }
-    }
-  })
-</script>
-{{ partial "card-permalink.html" . }}
-</body>
+  <head>{{ partial "head.html" . }}</head>
+  <body class="td-{{ .Kind }} download-hub">
+    <header>{{ partial "navbar.html" . }}</header>
+    <main class="td-main" role="main">
+      <section class="dh-hero">
+        <div class="dh-shell">
+          <a class="dh-breadcrumb" href="/docs/"><span aria-hidden="true">←</span> Projects</a>
+          <h1>Downloads</h1>
+          <p>Choose a SkyWalking project to find its releases, packages, and container images.</p>
+        </div>
+      </section>
+      <div class="dh-shell dh-layout">
+        <aside class="dh-sidebar" aria-label="Choose a project">
+          <h2 class="dh-sidebar-title">Browse by category</h2>
+          <div class="dh-search" hidden>
+            <label for="download-search">Find a project</label>
+            <input id="download-search" type="search" placeholder="Search projects" autocomplete="off" aria-controls="download-project-nav">
+            <span class="sr-only" id="download-search-status" role="status" aria-live="polite"></span>
+          </div>
+          <div class="dh-project-picker" hidden>
+            <label for="download-project">Project</label>
+            <select id="download-project" aria-controls="download-content">
+              {{ range $groups }}
+              <optgroup label="{{ .title }}">
+                {{ range .entries }}<option value="{{ .project.repo }}">{{ .project.name }}</option>{{ end }}
+              </optgroup>
+              {{ end }}
+            </select>
+          </div>
+          <nav class="dh-project-nav" id="download-project-nav" aria-label="Projects with downloads">
+            {{ range $groups }}
+            <details class="dh-nav-group" id="{{ .id }}" data-download-group="{{ .id }}" open>
+              <summary class="dh-nav-heading">
+                <span class="dh-nav-category">{{ .title }}</span>
+                <span class="dh-nav-count" aria-label="{{ len .entries }} projects">{{ len .entries }}</span>
+                <svg class="dh-nav-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 4 4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </summary>
+              <div class="dh-nav-projects">
+              {{ $group := . }}
+              {{ range .entries }}
+              <a class="dh-nav-link" href="#{{ .project.repo }}" data-download-link="{{ .project.repo }}" data-download-search="{{ printf "%s %s %s %s" .project.name .project.repo (.project.description | plainify) $group.title | lower }}">
+                {{ with .project.icon }}<img src="/images/project/{{ . }}.svg" width="22" height="22" alt="">{{ end }}
+                <span>{{ .project.name }}</span>
+              </a>
+              {{ end }}
+              </div>
+            </details>
+            {{ end }}
+          </nav>
+          <p class="dh-search-empty" hidden>No matching projects. Try another name or capability.</p>
+        </aside>
+        <div class="dh-content" id="download-content">
+          <span class="sr-only dh-selection-status" role="status" aria-live="polite"></span>
+          {{ range $groups }}
+          {{ range .entries }}
+          {{ $entry := . }}
+          {{ $repo := .project.repo }}
+          <section class="dh-project" id="{{ $repo }}" data-download-project aria-labelledby="download-title-{{ $repo }}" tabindex="-1">
+            <header class="dh-project-header">
+              <div class="dh-project-title">
+                {{ with .project.icon }}<img src="/images/project/{{ . }}.svg" width="44" height="44" alt="">{{ end }}
+                <h2 id="download-title-{{ $repo }}">{{ .project.name }}</h2>
+              </div>
+              <div class="dh-project-description">{{ .project.description | markdownify }}</div>
+              <div class="dh-project-actions">
+                <a class="dh-action" href="https://github.com/{{ .project.user }}/{{ $repo }}" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+                <a class="dh-action" href="/docs/#{{ replaceRE `[ ()]` "" .project.name }}">Project details <span aria-hidden="true">→</span></a>
+              </div>
+            </header>
+            {{ $componentId := printf "%s-component-0" $repo }}
+            {{ if .downloads }}
+            <section class="dh-component" aria-labelledby="{{ $componentId }}-title">
+              <h3 id="{{ $componentId }}-title">Releases</h3>
+              {{ if .project.archived }}<p class="dh-archived">Archived project</p>{{ end }}
+              {{ with .project.downloadNote }}<div class="dh-source-note">{{ . | markdownify }}</div>{{ end }}
+              <div class="dh-version-control" hidden>
+                <label for="{{ $componentId }}-version">Release version</label>
+                <select class="dh-version-select" id="{{ $componentId }}-version" aria-label="{{ .project.name }} release version" aria-controls="{{ $componentId }}-releases">
+                  {{ range .downloads }}<option value="{{ .version }}"{{ if .latest }} selected{{ end }}>{{ default .version .label }}{{ if .latest }}{{ if $entry.project.archived }} — Final release{{ else }} — Latest{{ end }}{{ end }}</option>{{ end }}
+                </select>
+              </div>
+              <div class="dh-releases" id="{{ $componentId }}-releases">
+                {{ range .downloads }}
+                <section class="dh-release" data-release-version="{{ .version }}" aria-label="{{ $entry.project.name }} {{ .version }} release">
+                  <div class="dh-release-heading">
+                    <strong>{{ default .version .label }}</strong>
+                    {{ if and .latest (not $entry.project.archived) }}<span class="dh-latest">Latest release</span>{{ end }}
+                    {{ with .date }}<span class="dh-release-date">{{ . }}</span>{{ end }}
+                  </div>
+                  {{ with .docs }}<a class="dh-action dh-release-docs" href="{{ .link }}">Read docs <span aria-hidden="true">→</span></a>{{ end }}
+                  {{ with .downloads }}
+                  <div class="dh-artifacts">
+                    {{ with where . "type" "source" }}
+                    <div class="dh-artifact-group"><h4>Source release</h4>{{ partial "project-release-files.html" . }}</div>
+                    {{ end }}
+                    {{ with where . "type" "binary" }}
+                    <div class="dh-artifact-group"><h4>Binaries &amp; packages</h4>{{ partial "project-release-files.html" . }}</div>
+                    {{ end }}
+                  </div>
+                  {{ end }}
+                </section>
+                {{ end }}
+              </div>
+            </section>
+            {{ end }}
+            {{ with .images }}
+            <section class="dh-images" aria-label="Container images">
+              <h3>Container images</h3>
+              <div class="dh-image-list">
+                {{ range . }}<a class="dh-image-link" href="{{ .link }}" target="_blank" rel="noopener"><strong>{{ .name }}</strong>{{ with .description }}<span>{{ . }}</span>{{ end }}<span class="dh-image-action">Docker Hub <span aria-hidden="true">↗</span></span></a>{{ end }}
+              </div>
+            </section>
+            {{ end }}
+            <p class="dh-note">Apache source releases are official artifacts; binaries and container images are provided for convenience. <a href="#verify-downloads">Verify your download <span aria-hidden="true">↓</span></a></p>
+          </section>
+          {{ end }}
+          {{ end }}
+        </div>
+      </div>
+      {{ partial "project-download-help.html" . }}
+      {{ partial "footer.html" . }}
+    </main>
+    {{ partial "event-popup.html" . }}
+    {{ partial "sidebar-skywalking.html" . }}
+    {{ partial "scripts.html" . }}
+    <script type="application/json" id="download-targets">{{ partial "project-download-targets.html" . | jsonify | safeJS }}</script>
+    {{ $downloadsScript := resources.Get "js/project-downloads.js" | minify | fingerprint }}
+    <script src="{{ $downloadsScript.RelPermalink }}" integrity="{{ $downloadsScript.Data.Integrity }}" defer></script>
+  </body>
 </html>

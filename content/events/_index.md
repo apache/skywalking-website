@@ -1,7 +1,8 @@
 ---
-title: "Events"
+title: "Release Posts"
 outputs: ["HTML", "RSS"]
-linkTitle: "Events"
+linkTitle: "Release Posts"
+description: "Apache SkyWalking software releases and community announcements, grouped by month."
 ---
 
-SkyWalking events.
+Apache SkyWalking releases and community announcements.

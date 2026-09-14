@@ -3,9 +3,9 @@ const process = require('process');
 const path = require('path');
 const YAML = require('yamljs');
 const {execSync} = require('child_process');
+const {loadProjectConfig, deriveDocsList} = require('./scripts/project-config');
 
 const {promises} = fs;
-const docConfig = './data/docs.yml';
 const layoutTemplateFile = '/layouts/projectdoc/baseof.html';
 const NEXT = 'next';
 
@@ -14,7 +14,7 @@ init();
 async function init() {
   try {
     const targetPath = path.join(__dirname, layoutTemplateFile)
-    const docsList = await loadYaml(docConfig)
+    const docsList = deriveDocsList(loadProjectConfig())
     const {tpl, docsInfo} = await traverseDocsList(docsList)
     await generateLayoutTemplate(targetPath, tpl)
     handleDocsFiles(docsInfo)
