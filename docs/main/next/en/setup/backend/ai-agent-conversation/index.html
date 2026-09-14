@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="AI Agent Conversations">
   <meta itemprop="description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
-  <meta itemprop="wordCount" content="3039">
+  <meta itemprop="wordCount" content="3115">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="AI Agent Conversations">
   <meta name="twitter:description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
@@ -3866,7 +3866,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 25c74a8</div>
+                  <div class="commit-id">Commit Id: 810f3c4</div>
                 
 
 
@@ -4048,13 +4048,15 @@ the Sessionizer writes on a round&rsquo;s header, <code>changes</code> with <cod
 and <code>bashRuns</code>, each absent rather than zero when the round did not carry it. The rounds are read newest first, at
 most <code>limit</code> (default 1000), then folded to one row per conversation. An optional <code>conversation</code> narrows the read to
 one conversation by id, and an optional <code>title</code> keeps only the rows whose title contains the text,
-case-insensitively — matched after folding, on the newest round&rsquo;s title, so it never widens the rounds read.</li>
+case-insensitively — matched after folding, on the newest round&rsquo;s title, so it never widens the rounds read.
+On BanyanDB, <code>duration.coldStage: true</code> selects the cold stage; otherwise the query uses the default hot/warm stages.</li>
 <li><code>getConversationRawFiles(condition, files)</code> lists every landed file and round of a conversation with its id,
 digest and size; selecting <code>body</code> returns the files verbatim, which is the export path. The optional <code>files</code>
-argument narrows the read to named files.</li>
+argument narrows the read to named files. On BanyanDB, <code>condition.coldStage: true</code> selects the cold stage,
+defaulting to the hot/warm stages when omitted or false.</li>
 </ul>
 <h3 id="the-conversation-view-route">The conversation view route</h3>
-<pre tabindex="0"><code>GET /ai-agent/conversations/{conversation}/v1/view?service={serviceName}[&amp;instance={instanceName}]
+<pre tabindex="0"><code>GET /ai-agent/conversations/{conversation}/v1/view?service={serviceName}[&amp;instance={instanceName}][&amp;coldStage=true]
 </code></pre><p>It answers with the whole conversation, once, as one <code>asz.view</code> version 1.0 document, the document the
 Sessionizer defines under
 <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view document</a>
@@ -4085,6 +4087,10 @@ and nothing is cached.</p>
       <tr>
           <td><code>instance</code></td>
           <td>optional, the sender&rsquo;s instance name from the list row; with it, every storage read is a full series lookup</td>
+      </tr>
+      <tr>
+          <td><code>coldStage</code></td>
+          <td>optional, false by default. On BanyanDB, true selects only the cold stage; otherwise the read uses the default hot/warm stages. The UI passes its selected stage when opening a conversation. Other storages ignore it.</td>
       </tr>
       <tr>
           <td><code>Accept</code></td>
@@ -4203,9 +4209,10 @@ request budget defaults to 8 MiB for that reason; a single file is cut at 2 MiB,
 with up to <code>maxResponseBytes</code>, 100 MiB by default, as a call option on the shared client in place of its 50 MB
 default, which every other read keeps; the window times <code>maxFileBytes</code> must stay under it. Elasticsearch answers
 at most 10,000 hits to one search.</li>
-<li>A read that is not bound to a duration, the view and the export, covers every retained stage: on BanyanDB the
-default stages and, when the group keeps one, the cold stage. A conversation the list found in cold storage
-is served, and one that spans stages is served whole.</li>
+<li>The view and the export read over the retention window of the caller&rsquo;s selected stages. On BanyanDB, the
+default is hot/warm; cold is queried only when the caller explicitly sets <code>coldStage: true</code>. Every round and
+file read uses that same selection. A conversation spanning stages can therefore report missing rounds or
+files that are outside the selected stages.</li>
 <li>When the caller names no sender, the view and the export read across every sender of the service and keep one
 copy of a file or round two senders both pushed, so a Sessionizer renamed between pushes still yields the
 whole conversation.</li>
