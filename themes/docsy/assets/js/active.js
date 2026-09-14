@@ -2,6 +2,8 @@ $(function () {
   init();
 
   function init() {
+    // Catalog pages handle selection and anchor positioning in their own scripts.
+    if (document.querySelector('.docs-catalog, .download-hub')) return;
     bindClick();
     setActive();
   }
@@ -12,7 +14,7 @@ $(function () {
       if (hash && /^#/.test(hash)) {
         scrollTop(hash);
         $('.card-wrapper .card').removeClass('active');
-        $(hash).parents('.card').addClass('active');
+        targetForHash(hash).parents('.card').addClass('active');
       }
     });
     $('.link-type').on('click', function () {
@@ -21,19 +23,32 @@ $(function () {
     })
   }
 
+  function targetForHash(hash) {
+    if (!hash || hash.charAt(0) !== '#') {
+      return $();
+    }
+    try {
+      return $(document.getElementById(decodeURIComponent(hash.slice(1))));
+    } catch (e) {
+      return $();
+    }
+  }
+
   function scrollTop(hash, offset) {
-    if (!$(hash).length) {
+    var target = targetForHash(hash);
+    if (!target.length) {
       return;
     }
-    $('html,body').animate({scrollTop: $(hash).offset().top - (offset || 160)})
+    $('html,body').animate({scrollTop: target.offset().top - (offset || 160)})
   }
 
   function setActive() {
     var hash = location.hash;
-    if (!location.hash || !$(hash).length) {
+    var target = targetForHash(hash);
+    if (!target.length) {
       return;
     }
-    $(hash).parents('.card').addClass('active');
+    target.parents('.card').addClass('active');
     scrollTop(hash)
   }
 })

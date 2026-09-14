@@ -25,12 +25,39 @@ description: "Release Apache SkyWalking <Component Name> <VERSION>."
 4. Bullet list of user-facing changes from the source repo's `CHANGES.md` at the release tag. Exclude dependency bumps, build-only, and test-only items.
 5. Closing: `All issues and pull requests are [here](<github milestone link>)`
 
-## data/releases.yml Update
+## Project configuration
+
+`data/projects.yml` owns the catalog, project metadata, documentation versions,
+downloads, and container images. Its structure is `catalogs[]` → `projects[]` →
+`next.docs` / `releases[]` / `dockerImages[]`. Catalogs have `id`, `name`, `description`, and optional
+`note`; project `featured` and `menu` metadata control cards and shortcuts, with
+shortcut groups in the top-level `menu` list. Keep repository identities and
+existing `downloadAliases` stable.
+
+`dockerImages` belongs to the project, alongside `releases`. Each item has `name`
+and `link`, with optional presentation metadata. These links point to Docker Hub
+repositories and remain available independently of the selected release.
+
+`data/get-started.yml` owns both Showcase and platform installation, separate
+from `data/projects.yml`. Its `showcase` block contains Showcase metadata,
+`next.docs`, and `quickstart`; its `skywalking` block contains installation commands.
+See the complete YAML example in README.md. Run `node scripts/project-config.js`
+for local configuration validation without fetching repositories or artifacts.
+
+## Releases in data/projects.yml
+
+Each release has `version` and a boolean `latest`. Keep exactly one `latest: true`
+per project with releases; unreleased projects can have `releases: []`. A release
+can contain optional `docs`, `downloads`, `label`, and `date`.
+Each `downloads` item has `name`, `type` (`source` or `binary`), and `link`, with
+`asc` and `sha512` supplied together when available. Keep container images on the
+project rather than in releases; they are not version-pinned image tags.
 
 ### Link rules
-- **Latest version** (top entry): uses `https://www.apache.org/dyn/closer.cgi/skywalking/...` for download and `https://downloads.apache.org/skywalking/...` for asc/sha512.
+- **Latest active release** (`latest: true`, top entry): uses `https://www.apache.org/dyn/closer.cgi/skywalking/...` for download and `https://downloads.apache.org/skywalking/...` for asc/sha512.
 - **Older versions**: use `https://archive.apache.org/dist/skywalking/...` for all links (download, asc, sha512).
-- When adding a new version, insert it at the top and demote the previous latest version's links to `archive.apache.org`.
+- When adding a new version, insert it at the top with `latest: true`, set the previous latest to `latest: false`, and move its Apache download/signature/checksum links to `archive.apache.org`. Preserve registry links and documentation pins.
+- **Archived projects**: set project `archived: true` and use archive URLs even for the final release marked `latest: true`.
 
 ### URL pattern
 All components follow: `skywalking/<url-path-segment>/<version>/<artifact-filename>`
@@ -63,34 +90,29 @@ All components follow: `skywalking/<url-path-segment>/<version>/<artifact-filena
 ### Date format
 Use `Mon. DDth, YYYY` with ordinal suffixes: 1st, 2nd, 3rd, all others th (e.g. `Feb. 16th, 2026`).
 
-## data/docs.yml Update
+## Documentation in data/projects.yml
 
-When releasing a new version, update the component's `docs` section:
+- `next.docs` defines development documentation through `link`, optional explicit
+  `commitId`, and optional display `label`.
+- A release's `docs.link` and `docs.commitId` define its numbered documentation;
+  optional `docs.label` customizes its displayed name.
+- On the release marked `latest: true`, `docs.latestLink` generates the Latest
+  entry and requires an explicit `docs.latestCommitId`. Do not add separate
+  `Next` or `Latest` releases.
+- Hugo-hosted documentation needs project `repoUrl` and paths of the form
+  `/docs/<repo-slug>/<version>/readme/`. External documentation can use HTTP(S)
+  links in either `next.docs` or release `docs`.
 
-1. **Update `Latest`**: change its `commitId` to the new release tag's dereferenced commit SHA (for annotated tags, dereference with `gh api repos/apache/<repo>/git/tags/<tag-sha> --jq '.object.sha'`).
-2. **Add new versioned entry**: insert a `v<VERSION>` entry right after `Latest` with the same commitId and link pattern `/docs/<repo-slug>/v<VERSION>/readme/`.
-3. **Keep old versions** as-is.
+**Explicit documentation commit pins are authoritative.** `docs.commitId` and
+`docs.latestCommitId` can intentionally differ from each other and from the
+release tag. Preserve them exactly; never infer, replace, or synchronize them
+from tag commits. Set new pins only from explicitly supplied documentation
+revisions, and leave existing pins unchanged during unrelated release updates.
 
-`Latest` and the newest `v<VERSION>` entry **must carry the same commitId**. Steps 1
-and 2 give that for free, but it is load-bearing beyond cosmetics: those two URL
-trees render the same source, and `layouts/partials/seo/doc-canonical-map.html`
-compares commitIds to decide which versioned pages point `rel=canonical` at
-`/latest/`. If `Latest` drifts, the duplicate pair silently competes in search and
-`/latest/` serves stale docs — BanyanDB sat on the v0.10.1 commit through two
-releases this way.
-
-### Docs entry types
-Components use two styles in docs.yml:
-- **Hugo-hosted docs** (have `repoUrl`): use `/docs/<repo-slug>/<version>/readme/` links with `commitId`. These have `Next`, `Latest`, and versioned entries.
-- **GitHub-linked docs** (no `repoUrl`): use direct GitHub links like `https://github.com/apache/<repo>/tree/v<VERSION>`. These only have versioned entries, no `Latest`/`Next`.
-
-### Getting the commitId
-```bash
-# Get tag object SHA
-TAG_SHA=$(gh api repos/apache/<repo>/git/ref/tags/v<VERSION> --jq '.object.sha')
-# Dereference annotated tag to actual commit
-COMMIT_SHA=$(gh api repos/apache/<repo>/git/tags/$TAG_SHA --jq '.object.sha')
-```
+`layouts/partials/seo/doc-canonical-map.html` compares the generated entries'
+commit IDs. A numbered tree canonicalizes to Latest only when their explicit
+pins match. Different pins remain self-canonical; do not alter pins to force a
+canonical relationship.
 
 ## SEO metadata
 

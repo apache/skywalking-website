@@ -1,0 +1,54 @@
+{{- /* Resolve the catalog from one project record, including each release's resources. */ -}}
+{{- $projects := dict -}}
+{{- range .Data.projects.catalogs -}}
+  {{- range .projects -}}
+    {{- $project := . -}}
+    {{- $primary := dict -}}
+    {{- $versions := slice -}}
+    {{- $downloads := slice -}}
+    {{- $images := .dockerImages | default slice -}}
+    {{- range .releases -}}
+      {{- if .downloads }}{{ $downloads = $downloads | append . }}{{ end -}}
+      {{- if and .latest .docs -}}
+        {{- $primary = dict "link" (default .docs.link .docs.latestLink) "version" .version -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if not $primary -}}
+      {{- with .next.docs }}{{ $primary = dict "link" .link "version" "Next" }}{{ end -}}
+    {{- end -}}
+    {{- if not $primary -}}
+      {{- range .releases }}{{ if .docs }}{{ $primary = dict "link" .docs.link "version" .version }}{{ break }}{{ end }}{{ end -}}
+    {{- end -}}
+    {{- with .next.docs -}}
+      {{- $versions = $versions | append (dict "label" (default "Next (development)" .label) "link" .link "selected" (eq $primary.version "Next") "downloadLink" "") -}}
+    {{- end -}}
+    {{- $primaryDownload := printf "/downloads/#%s" .repo -}}
+    {{- range .releases -}}
+      {{- $release := . -}}
+      {{- with .docs -}}
+        {{- $label := default $release.version .label -}}
+        {{- $link := .link -}}
+        {{- if $release.latest -}}
+          {{- $label = printf "Latest release (%s)" $label -}}
+          {{- $link = default .link .latestLink -}}
+        {{- end -}}
+        {{- $downloadLink := "" -}}
+        {{- if $release.downloads }}{{ $downloadLink = printf "/downloads/?version=%s#%s" ($release.version | urlquery) $project.repo }}{{ end -}}
+        {{- $selected := eq $link $primary.link -}}
+        {{- $version := dict "label" $label "link" $link "selected" $selected "downloadLink" $downloadLink -}}
+        {{- if $selected -}}
+          {{- $versions = (slice $version) | append $versions -}}
+          {{- if $downloadLink }}{{ $primaryDownload = $downloadLink }}{{ end -}}
+        {{- else -}}
+          {{- $versions = $versions | append $version -}}
+        {{- end -}}
+        {{- if and $release.latest .latestLink -}}
+          {{- /* Latest and numbered docs may intentionally use different commits. */ -}}
+          {{- $versions = $versions | append (dict "label" (default $release.version .label) "link" .link "selected" false "downloadLink" $downloadLink) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $projects = merge $projects (dict .repo (dict "project" $project "primary" $primary "downloads" $downloads "images" $images "versions" $versions "downloadLink" $primaryDownload)) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $projects -}}

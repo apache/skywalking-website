@@ -3,17 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const YAML = require('yamljs');
 const axios = require('axios');
+const {loadProjectConfig, collectRepos} = require('./project-config');
 
 const {promises} = fs;
-const docsFile = path.join(__dirname, '../data/docs.yml');
 const starsFile = path.join(__dirname, '../data/stars.yml');
 
 const SLEEP_MS = 1500;
 const sleep = (ms = SLEEP_MS) => new Promise((r) => setTimeout(r, ms));
-
-function loadYaml(file) {
-  return new Promise((resolve) => YAML.load(file, (data) => resolve(data)));
-}
 
 function loadCached() {
   try {
@@ -21,18 +17,6 @@ function loadCached() {
   } catch (_) {
     return {repos: {}};
   }
-}
-
-function collectRepos(docs) {
-  const repos = new Map();
-  for (const group of docs) {
-    for (const item of group.list || []) {
-      if (item && item.user && item.repo) {
-        repos.set(`${item.user}/${item.repo}`, {user: item.user, repo: item.repo});
-      }
-    }
-  }
-  return [...repos.values()];
 }
 
 async function fetchOne({user, repo}) {
@@ -67,9 +51,9 @@ function hasUsableValue(entry) {
 }
 
 async function main() {
-  const docs = await loadYaml(docsFile);
+  const config = loadProjectConfig();
   const cached = loadCached();
-  const repos = collectRepos(docs);
+  const repos = collectRepos(config);
 
   const out = {repos: {...cached.repos}, totals: {stars: 0, forks: 0, repos: repos.length}, generatedAt: new Date().toISOString()};
 

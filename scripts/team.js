@@ -3,9 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const YAML = require('yamljs');
 const axios = require('axios');
+const {loadProjectConfig, deriveDocsList} = require('./project-config');
 
 const {promises} = fs;
-const docsFile = path.join(__dirname, '../data/docs.yml')
 const teamFile = path.join(__dirname, '../data/team.yml')
 
 const sleep = (ms = 2 * 1000) => {
@@ -14,8 +14,7 @@ const sleep = (ms = 2 * 1000) => {
 }
 
 class GenerateTeamYaml {
-  constructor(docsFile, teamFile) {
-    this.docsFile = docsFile;
+  constructor(teamFile) {
     this.teamFile = teamFile;
     this.nativeObject = [];
     this.logins = {};
@@ -25,7 +24,7 @@ class GenerateTeamYaml {
   async init() {
     try {
       console.log('start...');
-      this.nativeObject = await this.loadYaml(docsFile);
+      this.nativeObject = deriveDocsList(loadProjectConfig());
       await this.getAllRepoData()
       await this.writeFile()
     } catch (err) {
@@ -57,15 +56,6 @@ class GenerateTeamYaml {
     const yamlString = YAML.stringify(data);
     await promises.writeFile(this.teamFile, yamlString, 'utf8');
     console.log('team.yml success!');
-  }
-
-  async loadYaml() {
-    const data = await new Promise((resolve) => {
-      YAML.load(this.docsFile, (result) => {
-        resolve(result)
-      });
-    })
-    return data
   }
 
   handleData(data) {
@@ -107,4 +97,4 @@ class GenerateTeamYaml {
   }
 }
 
-new GenerateTeamYaml(docsFile, teamFile).init()
+new GenerateTeamYaml(teamFile).init()
