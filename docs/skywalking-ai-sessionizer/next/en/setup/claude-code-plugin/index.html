@@ -33,7 +33,7 @@ The plugin is named asz-changes. Its code is under plugins/claude-code/ in the r
   <meta itemprop="name" content="Claude Code Plugin">
   <meta itemprop="description" content="Claude Code Plugin The asz Claude Code plugin records which files each tool call changed. It runs inside Claude Code as a set of hooks, needs nothing from asz, and leaves one JSON line per observed call in its own data directory. asz collects those lines the way it collects Claude Code’s own transcripts, and the conversation page shows each change beside the step that made it.
 The plugin is named asz-changes. Its code is under plugins/claude-code/ in the repository, and its binary, asz-claude-plugin, ships beside asz in every binary package.">
-  <meta itemprop="wordCount" content="3107">
+  <meta itemprop="wordCount" content="3331">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Claude Code Plugin">
   <meta name="twitter:description" content="Claude Code Plugin The asz Claude Code plugin records which files each tool call changed. It runs inside Claude Code as a set of hooks, needs nothing from asz, and leaves one JSON line per observed call in its own data directory. asz collects those lines the way it collects Claude Code’s own transcripts, and the conversation page shows each change beside the step that made it.
@@ -1414,7 +1414,7 @@ The plugin is named asz-changes. Its code is under plugins/claude-code/ in the r
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: d77d595</div>
+                  <div class="commit-id">Commit Id: ae84d5c</div>
                 
 
 
@@ -1582,7 +1582,9 @@ with no file at all.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#0550ae">scan_timeout</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>30s<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#0550ae">size_cap</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">1048576</span><span style="color:#fff">
 </span></span></span></code></pre></div><p><code>roots</code> are the directories observed; empty means the project directory Claude Code hands every
-hook. <code>tools.scope</code> names the tools observed with a scan; the editing tools need no entry.</p>
+hook. Subagent edits must be inside one of these roots and pass the same exclusion and symbolic
+link rules as a scan. Their record names the root containing the file and the policy in force.
+<code>tools.scope</code> names the tools observed with a scan; the editing tools need no entry.</p>
 <h2 id="exclusions">Exclusions</h2>
 <p>Exclusion means no observation: a change under an excluded directory is never seen. Every record
 names the set it ran under and the rules it expanded to, so history explains itself after the
@@ -1718,7 +1720,9 @@ asz checkout adds its own storage root:</p>
 </span></span></span></code></pre></div><p><code>effective = (defaults − remove) ∪ add</code>. A rule with a leading <code>/</code> is anchored to the root; any
 other name matches at any depth. <code>remove</code> names a default to keep observing, for example
 <code>**/vendor/</code>. <code>.gitignore</code> is never read. Symbolic links are neither followed nor recorded. A
-file over <code>size_cap</code>, or one holding a NUL byte, lands as path and hash only, with the reason.</p>
+file over <code>size_cap</code>, or one holding a NUL byte, lands as path and hash only, with the reason.
+This applies to subagent edits too, including patches supplied by the runtime. The cap applies
+to both the original and resulting content, and to the patch itself.</p>
 <h2 id="the-read-only-skip">The read-only skip</h2>
 <p>Before scanning around a shell command, the plugin classifies the command. The classifier is
 small and fails toward scanning. It works on the whole text, never the first word, because most
@@ -1728,27 +1732,40 @@ double quotes still runs a command.</p>
 <p>Any of these makes the command scan: an unquoted redirection to anything but <code>/dev/null</code> or
 another descriptor, a heredoc, a command substitution, a process substitution. Otherwise the
 command is split on unquoted <code>|</code>, <code>||</code>, <code>&amp;&amp;</code>, <code>;</code>, <code>&amp;</code> and newlines, and every segment&rsquo;s first
-word must be on this list, <code>readonly-v1</code>:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>cd grep rg cat ls head tail wc sort uniq cut tr diff cmp echo printf pwd which type stat file
-</span></span><span style="display:flex;"><span>du df date env printenv jq tree basename dirname realpath readlink test [ true false sleep
-</span></span><span style="display:flex;"><span>ps uname hostname whoami id nl column comm od xxd hexdump strings sha256sum shasum md5sum
+word must be on this list, <code>readonly-v2</code>, with the restrictions below:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>cd grep cat ls head tail wc cut tr diff cmp echo printf pwd which type stat
+</span></span><span style="display:flex;"><span>du df date printenv jq basename dirname realpath readlink test [ true false sleep
+</span></span><span style="display:flex;"><span>ps uname hostname whoami id nl column comm od hexdump strings sha256sum shasum md5sum
 </span></span><span style="display:flex;"><span>seq expr wait read
-</span></span><span style="display:flex;"><span>sed    without -i or --in-place
-</span></span><span style="display:flex;"><span>find   without -delete, -exec, -execdir, -ok or -fprint
-</span></span><span style="display:flex;"><span>awk    without system(
-</span></span><span style="display:flex;"><span>xargs  when the program it runs is on this list
-</span></span><span style="display:flex;"><span>git    status log diff show branch remote rev-parse describe blame ls-files ls-tree cat-file
-</span></span><span style="display:flex;"><span>       tag fetch grep shortlog for-each-ref check-ignore reflog version merge-base config
-</span></span><span style="display:flex;"><span>       count-objects name-rev symbolic-ref add, and stash list, stash show, worktree list,
-</span></span><span style="display:flex;"><span>       worktree prune
-</span></span><span style="display:flex;"><span>go     version env list doc
-</span></span></code></pre></div><p><code>git add</code> is on the list because it changes only <code>.git/</code>, which is excluded scope. <code>git commit</code>
-is not, because a pre-commit hook can rewrite files. A miss is not a loss: the next scan compares
-against the last manifest, so a write that slipped through lands as an unattributed change. On
-the corpus above, 69.3% of shell commands are read-only under this list, so most shell commands
-wait for no scan. The fixture
-<code>plugins/claude-code/internal/readonly/testdata/commands.txt</code> holds 93 real commands with the
-outcome each must get, and the classifier&rsquo;s test reads it.</p>
+</span></span><span style="display:flex;"><span>env    with no arguments
+</span></span><span style="display:flex;"><span>sort   without -o, --output or --compress-program
+</span></span><span style="display:flex;"><span>tree   without -o or --output
+</span></span><span style="display:flex;"><span>rg     without --pre or --hostname-bin
+</span></span><span style="display:flex;"><span>sed    only -n followed by a print command, such as &#39;10,20p&#39; or &#39;/start/,/end/p&#39;, then file names
+</span></span><span style="display:flex;"><span>find   without -delete, -exec, -execdir, -ok, -okdir, -fprint, -fprint0, -fprintf or -fls
+</span></span><span style="display:flex;"><span>awk    one inline program without system, redirection, pipes or extensions; no option arguments
+</span></span><span style="display:flex;"><span>git    status log diff show rev-parse describe blame ls-files ls-tree cat-file grep shortlog
+</span></span><span style="display:flex;"><span>       for-each-ref check-ignore version merge-base count-objects name-rev, and stash list,
+</span></span><span style="display:flex;"><span>       stash show, worktree list, worktree prune; branch, remote, tag, config, symbolic-ref
+</span></span><span style="display:flex;"><span>       and reflog only in recognized query forms
+</span></span><span style="display:flex;"><span>go     version, or env without -w or -u
+</span></span></code></pre></div><p>An <code>env</code> invocation with arguments and every <code>xargs</code> invocation are scanned: they can run another
+program or supply writing options. Git commands with explicit output files, external programs,
+filters, text conversion or <code>-c</code> settings are scanned too. <code>git add</code>, <code>git fetch</code> and <code>git commit</code>
+are scanned because filters or hooks can write outside <code>.git/</code>. Go package loading can update
+module files, so <code>go list</code> and <code>go doc</code> are scanned. Unknown forms, including compound <code>for</code> and
+<code>case</code> syntax, also scan.</p>
+<p>A variable assignment at the start of a segment scans too, as in <code>GIT_EXTERNAL_DIFF=./tool git diff</code>,
+because a variable such as <code>GIT_EXTERNAL_DIFF</code>, <code>GIT_CONFIG_*</code> or <code>LD_PRELOAD</code> can run another
+program. A bare assignment scans as well: it changes a variable the shell may already export. Only
+these variables leave a segment read-only, since they change how output is formatted: <code>LANG</code>,
+<code>LANGUAGE</code>, <code>LC_ALL</code>, <code>LC_COLLATE</code>, <code>LC_CTYPE</code>, <code>LC_MESSAGES</code>, <code>LC_NUMERIC</code>, <code>LC_TIME</code>, <code>TZ</code>,
+<code>TERM</code>, <code>COLUMNS</code>, <code>LINES</code>, <code>NO_COLOR</code>, <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code> and <code>FORCE_COLOR</code>.</p>
+<p>The previous <code>readonly-v1</code> classified 69.3% of the corpus above as read-only. The skip rate of
+<code>readonly-v2</code> has not been measured. The fixture
+<code>plugins/claude-code/internal/readonly/testdata/commands.txt</code> holds the same 93 real commands,
+with their expectations updated for this policy, and the classifier&rsquo;s test reads it. The new
+policy has its own name so older records keep the meaning of the classifier they ran under.</p>
 <h2 id="retention">Retention</h2>
 <p>Two rules, and neither waits for a collector:</p>
 <ul>
