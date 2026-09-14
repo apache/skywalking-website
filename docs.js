@@ -75,7 +75,9 @@ function replaceMarkdownText(codeTxt, docInfo, filePath) {
     const prefix = repoUrl.replace('.git', '/tree') + `/${commitId}`;
     const depth = filePath.split('/docs')[1].match(/\//g).length - 2;
 
-    let title = codeTxt.trim().split('\n')[0]
+    // Skip leading HTML comments (e.g. an Apache license header) so the title
+    // comes from the first real line instead of "<!--".
+    let title = codeTxt.replace(/^\s*(<!--[\s\S]*?-->\s*)+/, '').trim().split('\n')[0]
     const titleMatch = title.match(/(?<=([ ])).*/g)
     // When the first line has no space (a single-word heading, or "#Heading"
     // with no space after the marker) match() returns null; fall back to the
