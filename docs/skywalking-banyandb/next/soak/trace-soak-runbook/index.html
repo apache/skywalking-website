@@ -35,7 +35,7 @@ Instrument Entry point What it proves 1 — Container correctness &#43; survival
   <meta itemprop="description" content="Trace Vectorized-Query Soak Runbook This document covers how to run and interpret the two-instrument soak for the trace vectorized-query path in SkyWalking BanyanDB. It mirrors the structure of docs/soak/g5d-runbook.md (the measure soak) but is specific to the trace engine additions introduced in scripts/soak-vectorized.sh SOAK_ENGINE=trace.
 Overview The trace soak uses two instruments that cover complementary failure modes:
 Instrument Entry point What it proves 1 — Container correctness &#43; survival SOAK_ENGINE=trace ./scripts/soak-vectorized.sh Parity (row→vec byte-match), crash/restart survival, goroutine-leak absence, write-load liveness, vec-flag honored 2 — In-process DQB sustained bench DQB_SOAK=1 DQB_ENGINE=trace ./run-docker.sh vtrace.QueryCount() liveness, heap inuse_space leak gate, budget hard-stop &#43; first-block exception engagement Instrument 2 is the authoritative gate for memory leak and vec-liveness because vtrace.QueryCount() is a package-private in-process atomic.Int64 that cannot be read from a separate driver process. Instrument 1 provides the crash/restart, OS-level goroutine, and multi-hour parity signals that an in-process bench cannot reproduce.">
-  <meta itemprop="wordCount" content="2647">
+  <meta itemprop="wordCount" content="2593">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Vectorized-Query Soak Runbook">
   <meta name="twitter:description" content="Trace Vectorized-Query Soak Runbook This document covers how to run and interpret the two-instrument soak for the trace vectorized-query path in SkyWalking BanyanDB. It mirrors the structure of docs/soak/g5d-runbook.md (the measure soak) but is specific to the trace engine additions introduced in scripts/soak-vectorized.sh SOAK_ENGINE=trace.
@@ -2200,7 +2200,7 @@ Instrument Entry point What it proves 1 — Container correctness &#43; survival
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: a86a15b</div>
+                  <div class="commit-id">Commit Id: 4033967</div>
                 
 
 
@@ -2409,11 +2409,10 @@ test binary).</li>
 </span></span></span><span style="display:flex;"><span>  <span style="color:#953800">PARITY_INTERVAL_MIN</span><span style="color:#0550ae">=</span><span style="color:#0550ae">5</span> <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  <span style="color:#953800">SOAK_WRITE_RPS</span><span style="color:#0550ae">=</span><span style="color:#0550ae">500</span> <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  ./scripts/soak-vectorized.sh
-</span></span></code></pre></div><h3 id="phase-0--vec-off-capture-golden-baseline">Phase 0 — vec-off, capture golden baseline</h3>
+</span></span></code></pre></div><h3 id="phase-0--capture-golden-baseline">Phase 0 — capture golden baseline</h3>
 <ol>
-<li><code>BANYANDB_VEC_ENABLED=false docker compose up -d banyandb</code> — standalone
-BanyanDB with <code>--trace-vectorized-enabled=false</code>, resource-limited (2 GB /
-2 CPU).</li>
+<li><code>docker compose up -d banyandb</code> — standalone BanyanDB, resource-limited
+(2 GB / 2 CPU).</li>
 <li>Health-check <code>http://localhost:17913/api/healthz</code> (120-attempt cap, 5 s
 intervals).</li>
 <li><code>docker compose run --rm soak-driver seed-fixture --engine trace --addr banyandb:17912 [--spans N]</code> — creates two groups:
@@ -2433,18 +2432,15 @@ disk before snapshot).</li>
 if any catalog query returns zero traces</strong> (engine-agnostic guard).</li>
 <li>Stop BanyanDB → <code>cp -a data/. data-snapshot/</code> → <code>docker compose down -v</code>.</li>
 </ol>
-<h3 id="phase-1--vec-on-soak">Phase 1 — vec-on, soak</h3>
+<h3 id="phase-1--soak">Phase 1 — soak</h3>
 <ol>
-<li>Restore snapshot → <code>BANYANDB_VEC_ENABLED=true docker compose up -d banyandb</code>.</li>
-<li>Health-check; then <strong>vec-flag-honored gate</strong>: grep startup logs for
-<code>trace-vectorized-enabled=true</code>. This grep is load-bearing because the
-parity-clean S=5 fixture produces identical vec-on/vec-off output by design,
-so parity alone cannot distinguish &ldquo;vec engaged&rdquo; from &ldquo;vec silently disabled&rdquo;.</li>
+<li>Restore snapshot → <code>docker compose up -d banyandb</code>; health-check.</li>
 <li>Initial pprof-grab (heap + goroutine) → <code>pprof-start/</code>.</li>
 <li>Background loops (fail-tolerant — WARN on a bad tick, never abort):
 <ul>
 <li><strong>parity</strong> (every <code>PARITY_INTERVAL_MIN</code>): <code>replay-and-diff --engine trace</code>
-re-runs the catalog vs vec-on live data; writes <code>diff-&lt;ts&gt;.json</code>.</li>
+re-runs the catalog against the live post-restore data; writes
+<code>diff-&lt;ts&gt;.json</code>.</li>
 <li><strong>pprof</strong> (every <code>PPROF_INTERVAL_MIN</code>): heap + goroutine snapshots.</li>
 <li><strong>write-load</strong> (continuous, rate-capped at <code>SOAK_WRITE_RPS</code> spans/s):
 deterministic writes into <code>bench-trace-load</code> using timestamps offset 365
@@ -2535,7 +2531,7 @@ test/integration/distributed/querybench/run-docker.sh
 </code></pre><h3 id="what-testtracevecsoak-does">What <code>TestTraceVecSoak</code> does</h3>
 <p><strong>Phase 1 — parity fixture (200 iterations, liveness + leak gate)</strong></p>
 <ul>
-<li>Boots in-process cluster vec-on; seeds 1000-trace × 20-span uniform fixture
+<li>Boots an in-process cluster; seeds 1000-trace × 20-span uniform fixture
 (budget 256 MiB, never truncates → parity clean).</li>
 <li>Warmup: 3 query iterations to stabilize JIT paths and GC.</li>
 <li>Snapshots post-warmup <code>vtrace.QueryCount()</code> + <code>runtime.ReadMemStats.HeapInuse</code>.</li>
@@ -2615,10 +2611,6 @@ near-flat (cursor-release path releases skipped cursors without leaking).</li>
       <tr>
           <td><strong>Write-load alive</strong></td>
           <td><code>write_load_spans &gt; 0</code> in <code>summary.json</code></td>
-      </tr>
-      <tr>
-          <td><strong>Vec flag honored</strong></td>
-          <td>Startup log grep confirms <code>--trace-vectorized-enabled=true</code> was honored</td>
       </tr>
   </tbody>
 </table>
@@ -2715,7 +2707,7 @@ window <code>[T1_MS - 7d, T1_MS]</code>.</p>
 <pre tabindex="0"><code>dist/soak/&lt;ts&gt;/
   run.log                    # tee&#39;d full orchestrator log
   baseline.json              # array of traceBaselineRecord (proto-JSON Traces)
-  data-snapshot/             # raw BanyanDB /data dir from Phase 0 (vec-off)
+  data-snapshot/             # raw BanyanDB /data dir from Phase 0
   pprof-start/
     heap-&lt;unix&gt;.pb.gz        # gzip pprof heap
     goroutine-&lt;unix&gt;.txt     # goroutine dump (debug=1 text format)
@@ -2736,7 +2728,6 @@ window <code>[T1_MS - 7d, T1_MS]</code>.</p>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;soak_hours&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">48</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;t1_ms&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">1704067200000</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;final_parity_pass&#34;</span><span style="color:#1f2328">:</span> <span style="color:#cf222e">true</span><span style="color:#1f2328">,</span>
-</span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;vec_flag_honored&#34;</span><span style="color:#1f2328">:</span> <span style="color:#cf222e">true</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;goroutine_count_start&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">120</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;goroutine_count_end&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">122</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#0550ae">&#34;memory_alert_lines&#34;</span><span style="color:#1f2328">:</span> <span style="color:#0550ae">0</span><span style="color:#1f2328">,</span>
@@ -2770,8 +2761,8 @@ window <code>[T1_MS - 7d, T1_MS]</code>.</p>
 </span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span>
 </span></span></code></pre></div><h2 id="reading-the-artifacts">Reading the Artifacts</h2>
 <h3 id="quick-all-green-check">Quick all-green check</h3>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#57606a"># Instrument 1: final parity + vec flag + write-load + alerts</span>
-</span></span><span style="display:flex;"><span>jq <span style="color:#0a3069">&#39;{final_parity_pass, vec_flag_honored, write_load_alive, memory_alert_lines,
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#57606a"># Instrument 1: final parity + write-load + alerts</span>
+</span></span><span style="display:flex;"><span>jq <span style="color:#0a3069">&#39;{final_parity_pass, write_load_alive, memory_alert_lines,
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">     goroutine_count_start, goroutine_count_end}&#39;</span> dist/soak/&lt;ts&gt;/summary.json
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#57606a"># Instrument 1: all intermediate diffs</span>
@@ -2794,18 +2785,23 @@ window <code>[T1_MS - 7d, T1_MS]</code>.</p>
 <p><strong>Triage</strong>:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>jq <span style="color:#0a3069">&#39;.divergences&#39;</span> dist/soak/&lt;ts&gt;/diff-&lt;ts&gt;.json
 </span></span></code></pre></div><p><strong>Parity-FAIL disambiguation</strong>: a divergence after Phase 1 could be caused by
-the vec reader or by a merge/data artifact on the Phase-1 data. To distinguish:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#57606a"># Re-run the failing catalog query with vec-off on Phase-1 data:</span>
-</span></span><span style="display:flex;"><span><span style="color:#953800">BANYANDB_VEC_ENABLED</span><span style="color:#0550ae">=</span><span style="color:#6639ba">false</span> <span style="color:#0a3069">\
+the reader or by a merge/data artifact accumulated on the Phase-1 data. There is
+no second query engine to cross-check against — the row path was removed in
+0.12.0 — so the control is the Phase-0 snapshot, which the soak has not written
+to. Restore it into a scratch data dir and replay the same catalog:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#57606a"># Replay the failing catalog query against the untouched Phase-0 snapshot:</span>
+</span></span><span style="display:flex;"><span>rm -rf /tmp/soak-replay <span style="color:#0550ae">&amp;&amp;</span> cp -a dist/soak/&lt;ts&gt;/data-snapshot /tmp/soak-replay
+</span></span><span style="display:flex;"><span><span style="color:#953800">SOAK_DATA_DIR</span><span style="color:#0550ae">=</span>/tmp/soak-replay <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  docker compose -f test/soak/docker-compose.soak.yaml up -d banyandb
 </span></span><span style="display:flex;"><span>docker compose -f test/soak/docker-compose.soak.yaml run --rm soak-driver <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  replay-and-diff --engine trace <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --addr banyandb:17912 <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --catalog /catalog/trace.json <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --baseline /artifacts/baseline.json <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  --report /artifacts/diff-vec-off-debug.json
-</span></span></code></pre></div><p>If <code>diff-vec-off-debug.json</code> also diverges, the cause is in the
-data/merge path, not the vec reader. If it passes, the vec reader is at fault.</p>
+</span></span></span><span style="display:flex;"><span>  --report /artifacts/diff-snapshot-debug.json
+</span></span></code></pre></div><p>If <code>diff-snapshot-debug.json</code> passes, the baseline data still reads correctly and
+the divergence came from what Phase 1 did to the data — merge, compaction or
+expiry. If it also diverges, the reader is at fault.</p>
 <h3 id="memory-alert-lines">Memory-alert lines</h3>
 <p><strong>Symptom</strong>: <code>memory-alerts.log</code> is non-empty.</p>
 <p><strong>Action</strong>: check <code>banyand.log</code> around the alert timestamp. The keywords that
@@ -2817,10 +2813,9 @@ which subsystem logged the event.</p>
 bug against the vectorized trace pipeline with the diff attached.</p>
 <h3 id="instrument-2-liveness-gate-fail">Instrument 2 liveness gate FAIL</h3>
 <p><strong>Symptom</strong>: <code>liveness_pass: false</code> — <code>query_count_delta &lt; 200</code>.</p>
-<p><strong>Meaning</strong>: the vec query path was not reached on every iteration. This can
-happen if the <code>--trace-vectorized-enabled</code> flag was not honored in-process, or
-if a dispatch branch fell through to the row path. Examine the test&rsquo;s <code>t.Log</code>
-output for iteration-level error messages.</p>
+<p><strong>Meaning</strong>: the query path was not reached on every iteration — iterations are
+erroring out before they query. Examine the test&rsquo;s <code>t.Log</code> output for
+iteration-level error messages.</p>
 <h3 id="instrument-2-heap-leak-gate-fail">Instrument 2 heap-leak gate FAIL</h3>
 <p><strong>Symptom</strong>: <code>heap_leak_pass: false</code> — <code>heap_growth_pct &gt; heap_growth_max_pct</code>.</p>
 <p><strong>Action</strong>: the cursor-release path is the primary suspect. Enable pprof in the
@@ -2846,20 +2841,13 @@ A stall means no flush/merge/compaction stress during Phase 1.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#953800">SOAK_ENGINE</span><span style="color:#0550ae">=</span>trace <span style="color:#953800">SMOKE</span><span style="color:#0550ae">=</span><span style="color:#0550ae">1</span> ./scripts/soak-vectorized.sh
 </span></span><span style="display:flex;"><span><span style="color:#953800">DQB_SOAK</span><span style="color:#0550ae">=</span><span style="color:#0550ae">1</span> <span style="color:#953800">DQB_ENGINE</span><span style="color:#0550ae">=</span>trace ./test/integration/distributed/querybench/run-docker.sh --cpus <span style="color:#0550ae">4</span> --memory 8g
 </span></span></code></pre></div><p>Both should complete without errors, <code>summary.json</code> should have
-<code>final_parity_pass: true</code> and <code>vec_flag_honored: true</code>;
+<code>final_parity_pass: true</code>;
 <code>soak-trace-vec-result.json</code> should have all pass fields <code>true</code>.</p>
 </li>
 <li>
 <p><strong>Parity has teeth</strong> (negative control): inject one extra span into the
 Phase-1 fixture and re-run <code>replay-and-diff</code> — <code>diff-final.json</code> must show
 <code>&quot;pass&quot;: false</code>.</p>
-</li>
-<li>
-<p><strong>Vec-engaged confirmation</strong> (separate run): run the soak with a deliberately
-divergent fixture (e.g. extra span on the vec-on side only) and confirm
-<code>diff-final.json</code> FAILs. The parity-clean S=5 fixture cannot distinguish
-vec-engaged from vec-silently-disabled by result content alone; this
-divergent-fixture run corroborates the startup-log grep gate.</p>
 </li>
 <li>
 <p><strong>Measure regression</strong>: <code>SOAK_ENGINE=measure SMOKE=1 ./scripts/soak-vectorized.sh</code>
@@ -2881,12 +2869,11 @@ the liaison itersort merge path <strong>for correctness</strong> over in-process
 covering real network fan-out, on-wire frames, and multi-node container RSS.
 The in-process wire/merge path is already covered for correctness; what remains
 is the production transport layer.</p>
-<h2 id="rollback">Rollback</h2>
-<p>To re-run Phase 1 with vec disabled (reproducing baseline behavior):</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#953800">BANYANDB_VEC_ENABLED</span><span style="color:#0550ae">=</span><span style="color:#6639ba">false</span> <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span><span style="color:#953800">SOAK_DATA_DIR</span><span style="color:#0550ae">=</span>./test/soak/data <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>docker compose -f test/soak/docker-compose.soak.yaml up -d banyandb
-</span></span></code></pre></div><p>Tear down with:</p>
+<h2 id="teardown">Teardown</h2>
+<p>The row-based query path was removed in 0.12.0
+(<a href="https://github.com/apache/skywalking/issues/13998">apache/skywalking#13998</a>),
+so there is no engine to roll back to; a run is torn down, not reverted.</p>
+<p>Tear down with:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>docker compose -f test/soak/docker-compose.soak.yaml down -v
 </span></span></code></pre></div>
 </div>
@@ -2934,8 +2921,8 @@ is the production transport layer.</p>
             <li><a href="#environment-variables">Environment variables</a></li>
             <li><a href="#smoke-invocation">SMOKE invocation</a></li>
             <li><a href="#production-48-hour-invocation">Production 48-hour invocation</a></li>
-            <li><a href="#phase-0--vec-off-capture-golden-baseline">Phase 0 — vec-off, capture golden baseline</a></li>
-            <li><a href="#phase-1--vec-on-soak">Phase 1 — vec-on, soak</a></li>
+            <li><a href="#phase-0--capture-golden-baseline">Phase 0 — capture golden baseline</a></li>
+            <li><a href="#phase-1--soak">Phase 1 — soak</a></li>
             <li><a href="#tapered-monitor-recommended-for-unattended-runs">Tapered monitor (recommended for unattended runs)</a></li>
           </ul>
         </li>
@@ -2981,7 +2968,7 @@ is the production transport layer.</p>
         </li>
         <li><a href="#verification-steps">Verification Steps</a></li>
         <li><a href="#named-v1-gap--production-distributed-topology-soak">Named v1 Gap — Production Distributed-Topology Soak</a></li>
-        <li><a href="#rollback">Rollback</a></li>
+        <li><a href="#teardown">Teardown</a></li>
       </ul>
     </li>
   </ul>

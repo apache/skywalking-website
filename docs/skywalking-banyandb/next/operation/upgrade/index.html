@@ -35,7 +35,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
   <meta itemprop="description" content="Upgrade Procedure This document describes how to upgrade your existing installation of the BanyanDB database.
 Server and File Versioning BanyanDB uses a separate version for the server and the file format. The server version is the version of the BanyanDB server binary, and the file version is the version of the data files stored on the disk.
 You can use “banyand liaison/data/standalone -v” to check the server version. The file version is stored in “metadata” file laid in each “segment” folder.">
-  <meta itemprop="wordCount" content="1299">
+  <meta itemprop="wordCount" content="1924">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Upgrade Procedure">
   <meta name="twitter:description" content="Upgrade Procedure This document describes how to upgrade your existing installation of the BanyanDB database.
@@ -2200,7 +2200,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: a86a15b</div>
+                  <div class="commit-id">Commit Id: 4033967</div>
                 
 
 
@@ -2280,9 +2280,10 @@ You can use “banyand liaison/data/standalone -v” to check the server version
 </ul>
 <blockquote>
 <p><strong>Exception — upgrading to 0.11 or later.</strong> The vectorized query paths change the
-liaison&lt;-&gt;data wire format, and a data node must never have a vectorized path enabled
-that the liaison it answers cannot decode. For 0.11 the order is <strong>reversed</strong>: upgrade
-&ldquo;liaison&rdquo; nodes first, then &ldquo;data&rdquo; nodes. See <a href="#vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default</a>.</p>
+liaison&lt;-&gt;data wire format, and a data node must never emit a frame that the liaison it
+answers cannot decode. For 0.11 and later the order is <strong>reversed</strong>: upgrade &ldquo;liaison&rdquo;
+nodes first, then &ldquo;data&rdquo; nodes. See <a href="#vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default</a>
+for 0.11 and <a href="#row-based-query-path-removed-breaking">Row-based query path removed</a> for 0.12.</p>
 </blockquote>
 <p>To ensure this strategy works, you should have a minimum of one node for each role of node in the cluster. For example, if you have a 2-node cluster, you should have at least one &ldquo;liaison&rdquo; and one &ldquo;data&rdquo; node.</p>
 <p>The cluster should also have enough capacity to handle the load when one node is down for upgrade.</p>
@@ -2296,6 +2297,27 @@ that the liaison it answers cannot decode. For 0.11 the order is <strong>reverse
 </ul>
 <p>The data ingestion and retrieval will be stopped during the upgrade process. The downtime will be the sum of the time taken to stop and start the nodes. All these steps should be running in parallel to minimize the downtime.</p>
 <p>If you don&rsquo;t have enough resource to perform a rolling upgrade or you have a large cluster with many nodes, you can use the minimum downtime strategy.</p>
+<h2 id="upgrading-to-012">Upgrading to 0.12</h2>
+<p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.12.0.</p>
+<h3 id="row-based-query-path-removed-breaking">Row-based query path removed (breaking)</h3>
+<p>The row-based query execution path is gone. Stream, measure and trace queries all execute through the vectorized columnar pipeline, and a distributed data node always answers with a native columnar frame. There is no runtime switch back to row execution or to the protobuf wire format.</p>
+<p><code>--stream-vectorized-enabled</code>, <code>--trace-vectorized-enabled</code> and <code>--measure-vectorized-enabled</code> are still registered so an existing command line keeps parsing, but they are no longer switches:</p>
+<ul>
+<li><code>=true</code>, or the flag omitted, is the only supported setting and changes nothing.</li>
+<li><code>=false</code> makes the node <strong>exit at startup</strong> with an error naming <a href="https://github.com/apache/skywalking/issues/13998">apache/skywalking#13998</a>, rather than silently discarding an explicit rollback request.</li>
+</ul>
+<p>All three flags are removed outright in 0.13.0. Drop them from systemd units, Helm values, container arguments and compose files as part of this upgrade.</p>
+<p><strong>Upgrade &ldquo;liaison&rdquo; nodes BEFORE &ldquo;data&rdquo; nodes</strong>, as in 0.11. A 0.12 data node emits columnar frames unconditionally, and a liaison on an older binary has no frame decoder. The 0.11 workaround — starting the new data nodes with the vectorized paths disabled and enabling them once every liaison is upgraded — is no longer available, because the paths can no longer be disabled. If you cannot control node ordering, use the <a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy</a>.</p>
+<p><strong>Rollback.</strong> Rollback is a binary downgrade, not a flag flip: follow the <a href="#rollback">Rollback</a> procedure below. The on-disk format is unchanged by this release, so no data migration is involved.</p>
+<h3 id="stream-timestamp-order-queries-with-criteria-spanning-multiple-segments">Stream timestamp-order queries with criteria spanning multiple segments</h3>
+<p>Stream queries that are ordered by timestamp, carry a criteria filter, and span more than one segment may now return fewer elements than 0.11.x did. The removed row scan resumed segment by segment: after its first <code>maxElementSize</code>-sized batch it could keep pulling from later segments, accumulating further matches until the requested limit was filled. The vectorized scan does not see segment boundaries, so it caps at <code>maxElementSize</code> and stops there.</p>
+<p>The results it returns are correct and correctly ordered — the response is simply under-filled against the limit where the old path would have gone back for more. Index-order (tag-ordered) queries are unaffected: their merge stays uncapped and still fills the limit.</p>
+<p>A client that needs the missing elements should re-issue the query over a narrower time range or page forward. This divergence was always documented as one the vectorized path deliberately does not emulate; with the row path gone, the vectorized answer is now the only answer.</p>
+<h3 id="index-order-queries-that-do-not-project-the-ordered-tag">Index-order queries that do not project the ordered tag</h3>
+<p>An index-order stream query whose ordered tag is not in the client&rsquo;s tag projection now answers over protobuf on a distributed data node instead of over a columnar frame. The scan projects that tag internally to derive its sort key and hides it again before egress, while the frame egress rebuilds its projection from the batch schema and would leak the hidden tag — so this query shape is routed onto the protobuf path. Results are unaffected; the query simply forgoes the raw-wire fast path.</p>
+<h3 id="stream-query-shapes-with-no-execution-path-breaking">Stream query shapes with no execution path (breaking)</h3>
+<p>A stream query the vectorized engine cannot plan now fails with an error. The row path served these shapes without complaint, so the query returned results instead.</p>
+<p>One shape reaches this: an <code>orderBy</code> naming a tag that no longer resolves against the stream&rsquo;s schema, such as an index rule left behind after its tag was dropped. The error names the reason. Drop the stale index rule, or order by a tag that still exists.</p>
 <h2 id="upgrading-to-011">Upgrading to 0.11</h2>
 <p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.11.0.</p>
 <h3 id="api-version-011">API version 0.11</h3>
@@ -2342,6 +2364,9 @@ BanyanDB cluster during rollback.</p>
 </span></span></span><span style="display:flex;"><span>  --measure-vectorized-enabled<span style="color:#0550ae">=</span><span style="color:#6639ba">false</span>
 </span></span></code></pre></div><p>Standalone deployments are unaffected: the frame is only emitted on a distributed data node, so a standalone server always uses the protobuf path regardless of the flag.</p>
 <p><strong>Rollback.</strong> Pass <code>--stream-vectorized-enabled=false</code> / <code>--trace-vectorized-enabled=false</code> / <code>--measure-vectorized-enabled=false</code> on the standalone or data-node command line and restart. The row path and the protobuf wire format resume immediately; no data migration is involved, because the flags affect only the query and wire paths, never the on-disk format.</p>
+<blockquote>
+<p>This rollback applies to 0.11 only. The row path was removed in 0.12.0 and <code>=false</code> is no longer accepted — see <a href="#row-based-query-path-removed-breaking">Row-based query path removed</a>.</p>
+</blockquote>
 <h2 id="upgrading-to-010">Upgrading to 0.10</h2>
 <p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.10.0.</p>
 <h3 id="property-on-disk-path-change-breaking">Property on-disk path change (breaking)</h3>
@@ -2402,6 +2427,14 @@ BanyanDB cluster during rollback.</p>
         <li><a href="#upgrade-a-single-node">Upgrade a Single Node</a></li>
         <li><a href="#rolling-strategy-to-upgrade-a-cluster">Rolling Strategy to Upgrade a Cluster</a></li>
         <li><a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy to Upgrade a Cluster</a></li>
+        <li><a href="#upgrading-to-012">Upgrading to 0.12</a>
+          <ul>
+            <li><a href="#row-based-query-path-removed-breaking">Row-based query path removed (breaking)</a></li>
+            <li><a href="#stream-timestamp-order-queries-with-criteria-spanning-multiple-segments">Stream timestamp-order queries with criteria spanning multiple segments</a></li>
+            <li><a href="#index-order-queries-that-do-not-project-the-ordered-tag">Index-order queries that do not project the ordered tag</a></li>
+            <li><a href="#stream-query-shapes-with-no-execution-path-breaking">Stream query shapes with no execution path (breaking)</a></li>
+          </ul>
+        </li>
         <li><a href="#upgrading-to-011">Upgrading to 0.11</a>
           <ul>
             <li><a href="#api-version-011">API version 0.11</a></li>
