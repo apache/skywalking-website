@@ -37,7 +37,7 @@ You could configure agent_collector_backend_services (or environment variable SW
 Defaults By default, SkyWalking Python agent uses gRPC protocol to report data to SkyWalking backend, in SkyWalking backend, the port of gRPC protocol is 11800, and the port of HTTP protocol is 12800,
 See all default configuration values in the Configuration Vocabulary
 You could configure agent_collector_backend_services (or environment variable SW_AGENT_COLLECTOR_BACKEND_SERVICES) and set agent_protocol (or environment variable SW_AGENT_PROTOCOL to one of gprc, http or kafka according to the protocol you would like to use.">
-  <meta itemprop="wordCount" content="684">
+  <meta itemprop="wordCount" content="1162">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Legacy Setup">
   <meta name="twitter:description" content="Legacy Setup You can always fall back to our traditional way of integration as introduced below, which is by importing SkyWalking into your project and starting the agent.
@@ -1108,6 +1108,8 @@ You could configure agent_collector_backend_services (or environment variable SW
 
 
 
+
+
                   <div class="description-wrapper">
                     <h5>
                     <img width="26" height="26" src="/images/project/python-agent.svg">
@@ -1442,7 +1444,7 @@ You could configure agent_collector_backend_services (or environment variable SW
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b2565aa</div>
+                  <div class="commit-id">Commit Id: e1ee560</div>
                 
 
 
@@ -1500,7 +1502,7 @@ such as <code>127.0.0.1:11800</code>:</p>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>agent<span style="color:#0550ae">.</span>start<span style="color:#1f2328">()</span>
 </span></span></code></pre></div><h4 id="grpc-multi-address-failover">gRPC multi-address (failover)</h4>
-<p>Pass a comma-separated list. The agent opens <strong>one</strong> gRPC channel and lets C-core <code>pick_first</code> fail over (same idea as Node <code>sw-static</code>). Each process shuffles the preferred backend at channel build; <code>:authority</code> / TLS SNI still use the <strong>first configured</strong> endpoint.</p>
+<p>Pass a comma-separated list. The agent opens <strong>one</strong> gRPC channel and lets C-core <code>pick_first</code> fail over (same idea as Node <code>sw-static</code>). Each process shuffles the preferred backend at channel build; <code>:authority</code> and TLS peer-name checks use the <strong>first configured</strong> endpoint via <code>grpc.default_authority</code> (not the shuffled channel target).</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>config<span style="color:#0550ae">.</span>init<span style="color:#1f2328">(</span>
 </span></span><span style="display:flex;"><span>    agent_collector_backend_services<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;oap-a:11800,oap-b:11800&#39;</span><span style="color:#1f2328">,</span>
 </span></span><span style="display:flex;"><span>    agent_name<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;your awesome service&#39;</span><span style="color:#1f2328">,</span>
@@ -1510,7 +1512,26 @@ such as <code>127.0.0.1:11800</code>:</p>
 <ul>
 <li>Mixed IPv4/IPv6 stays in one list; IPv4 is encoded as IPv4-mapped IPv6 for grpcio so <code>pick_first</code> can try both families.</li>
 <li>Multi-hostname lists are DNS-expanded once at channel build (about 5s lookup budget per name); there is no periodic re-resolve — prefer a single address or stable IPs when DNS changes.</li>
-<li>Channel <code>:authority</code> / TLS SAN uses <code>grpc.default_authority</code> = the first configured endpoint (before shuffle). With <code>agent_force_tls</code>, every backend cert must cover that authority.</li>
+<li>Channel <code>:authority</code> uses <code>grpc.default_authority</code> = the first configured endpoint (before shuffle). With that arg set, gRPC C-core also uses it for TLS peer-name / SNI checks (host only after <code>SplitHostPort</code>; port is never checked) — not the encoded multi-address channel target used for dialing. Prefer a first endpoint whose CN/SAN matches the server cert; multi-backend IP expansion still needs certs that cover those dial targets if you rely on target-derived names without <code>default_authority</code>.</li>
+</ul>
+<h4 id="grpc--http-tls-and-mtls">gRPC / HTTP TLS and mTLS</h4>
+<p>Collector transport security (Kafka protocol does not use these options):</p>
+<ul>
+<li><code>agent_force_tls=true</code> alone → TLS with the process trust store (no client cert). With a usable CA, custom CA (and optional mTLS) still apply.</li>
+<li>If <code>agent_ssl_trusted_ca_path</code> is a readable <strong>and parseable</strong> CA PEM → TLS using that CA, even when <code>agent_force_tls</code> is false.</li>
+<li>A <strong>non-empty</strong> <code>agent_ssl_trusted_ca_path</code> that is missing/unreadable/<strong>invalid PEM</strong> logs a warning. Without <code>agent_force_tls</code>, the collector stays <strong>plaintext</strong> (it does not silently fall back to the system trust store). With <code>agent_force_tls</code>, custom CA is ignored and mTLS is disabled (system-trust one-way TLS only).</li>
+<li>mTLS is on only when a usable custom CA was loaded <strong>and</strong> both <code>agent_ssl_cert_chain_path</code> and <code>agent_ssl_key_path</code> are readable, parseable PEMs. Missing cert/key, only one of the two set, invalid client material, or load/temp-file failure logs a warning and stays one-way TLS (does not abort start). Client cert/key <strong>without</strong> a usable CA also logs a warning and does not enable mTLS (<code>FORCE_TLS</code> alone remains one-way TLS via the process trust store). With a usable CA file present, <code>agent_force_tls</code> is optional.</li>
+<li>Invalid PEM content / path resolution errors must not crash the host process: PEMs and paths are handled when material is built (not deferred to the first collector connect). Degrade table — bad CA + <code>FORCE_TLS</code> → system trust, no client cert; bad CA without <code>FORCE_TLS</code> → plaintext; bad client material → one-way TLS; if even process-trust credential / <code>SSLContext</code> construction fails → <strong>warn and stay plaintext</strong> (including when <code>FORCE_TLS</code> is set — encryption is best-effort so start is never aborted).</li>
+<li>Paths are absolute or relative to the process working directory (symlinks to regular files are followed, e.g. Kubernetes secret mounts). Each PEM is capped at 256KiB. PKCS#1 (<code>BEGIN RSA PRIVATE KEY</code>) is converted to PKCS#8 for stacks that reject PKCS#1 (HTTP and gRPC share the normalized key). Passphrase-encrypted private keys (PKCS#8 encrypted or legacy <code>Proc-Type: 4,ENCRYPTED</code>) are not supported. HTTP reporters write normalized key material to process-lifetime temp files that are deleted on exit; after <code>os.fork()</code> the child does not unlink the parent&rsquo;s temp PEMs.</li>
+<li>Real-OAP e2e covers <strong>gRPC</strong> one-way TLS and mTLS: <code>tests/e2e/case/grpc/ssl/</code> and <code>tests/e2e/case/grpc/mtls/</code>. PEMs are generated by a one-shot <code>gen-certs</code> service that runs digest-pinned <code>alpine/openssl</code> with the shared script <code>tests/e2e/script/prepare/gen-e2e-tls-certs.sh</code> (not committed; no <code>apk</code>). OAP HTTP/REST TLS is server-side only (no client-cert verification), so there is no real-OAP <strong>HTTP mTLS</strong> e2e; the HTTP reporter mTLS path is covered by unit tests and local verification against a TLS terminator that requires a client certificate.</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>config<span style="color:#0550ae">.</span>init<span style="color:#1f2328">(</span>
+</span></span><span style="display:flex;"><span>    agent_collector_backend_services<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;oap.example:11800&#39;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    agent_ssl_trusted_ca_path<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;/etc/skywalking/ca.crt&#39;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    agent_ssl_cert_chain_path<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;/etc/skywalking/client.crt&#39;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span>    agent_ssl_key_path<span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;/etc/skywalking/client.pem&#39;</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span><span style="color:#1f2328">)</span>
+</span></span></code></pre></div><ul>
 <li>Reporters wait until the channel is READY; non-READY skips the RPC rather than failing fast into a black hole.</li>
 <li>After a silent backend switch that stays READY, instance properties are re-reported on the normal properties period so the new OAP learns the instance.</li>
 <li>Reconnect backoff caps at 30s.</li>
@@ -1702,6 +1723,106 @@ such as <code>127.0.0.1:9200</code>, further set <code>agent_protocol</code> (or
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
