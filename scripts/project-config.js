@@ -54,6 +54,10 @@ function validateProjectConfig(config) {
     check(!repos.has(key), `duplicate repo ${project.repo}`);
     repos.add(key);
     if (project.repoUrl !== undefined) check(isWebLink(project.repoUrl), `${where}.repoUrl must be an HTTP(S) URL`);
+    // archive is where every released version of this project stays once it
+    // leaves the download site, such as
+    // https://archive.apache.org/dist/skywalking/ai-sessionizer/.
+    if (project.archive !== undefined) check(isWebLink(project.archive), `${where}.archive must be an HTTP(S) URL`);
     if (project.extraContributors !== undefined) {
       check(Array.isArray(project.extraContributors), `${where}.extraContributors must be an array`);
       project.extraContributors.forEach((person, index) => check(isObject(person) && isText(person.login), `${where}.extraContributors[${index}] requires login`));
