@@ -35,7 +35,7 @@ aggregation over tags, not just fields; an exact COUNT_DISTINCT function; time-b
   <meta itemprop="description" content="Tag Aggregation and Time Bucketing in the Measure Query Engine Status: design — not implemented.
 This document specifies three additions to BanyanDB’s existing measure query engine:
 aggregation over tags, not just fields; an exact COUNT_DISTINCT function; time-bucket grouping — GROUP BY &lt;bucket&gt;, &lt;tags&gt; producing a series, with the bucket width taken from the request or, failing that, from the measure’s interval. They are separable features that share one API surface and one operator, and a dashboard needs all three: (1) and (2) answer “how many distinct things”, (3) answers “over time”.">
-  <meta itemprop="wordCount" content="13395">
+  <meta itemprop="wordCount" content="14196">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Tag Aggregation and Time Bucketing in the Measure Query Engine">
   <meta name="twitter:description" content="Tag Aggregation and Time Bucketing in the Measure Query Engine Status: design — not implemented.
@@ -2198,7 +2198,7 @@ aggregation over tags, not just fields; an exact COUNT_DISTINCT function; time-b
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 4ad47b6</div>
+                  <div class="commit-id">Commit Id: d5f4a84</div>
                 
 
 
@@ -2482,6 +2482,17 @@ presentation concern and needs the client to know the expected bucket set anyway
 <li><strong>Arbitrary bucket origins.</strong> Buckets are anchored at the Unix epoch, matching the <code>DATE_BIN</code>
 call above with <code>TIMESTAMP '1970-01-01 00:00:00'</code>. A configurable origin is not in scope.</li>
 </ul>
+<p><strong>Current limitation, not a design decision: <code>group_by.time_bucket</code> requires <code>agg</code>.</strong> This
+document never states whether a <em>raw</em> bucketed <code>GroupBy</code> (<code>time_bucket</code> set, no <code>agg</code>) is
+supported — it is written throughout as if <code>agg</code> is always present. Implementing §7.2 found a
+concrete reason it cannot be, as things stand: the no-<code>agg</code> shape reuses <code>BatchAggregation</code>&rsquo;s
+empty-<code>AggSpec</code> output layout, which — unlike <code>BatchGroupByFirst</code>, the row-preserving raw-GroupBy
+operator — does not carry the full input schema forward (it drops other fields, the series id,
+and the version), and the distributed row-merge path has no bucket-aware counterpart either. The
+analyzer rejects this combination explicitly (<code>plan.Analyze: time_bucket requires Agg</code>) rather
+than shipping a silently-truncated result. Lifting this is legitimate future work, but it needs
+schema-preservation and distributed-merge work of its own; it is not a small extension of the
+<code>agg</code> case.</p>
 <hr>
 <h2 id="4-background-how-measure-aggregation-works-today">4. Background: how measure aggregation works today</h2>
 <p>The vectorized engine is the default (<code>vectorized/measure/config.go DefaultConfig</code> → <code>Enabled: true</code>); the row engine in <code>pkg/query/logical/measure</code> is explicitly marked <em>&ldquo;Do not extend with
@@ -2834,6 +2845,33 @@ input via Consume, then produces output via NextBatch&rdquo;) relaxes to a pipel
 bucketed case. This also mirrors how the codebase already aggregates over time on the write path:
 <code>pkg/flow/streaming</code> assigns tumbling windows and emits them as they close, using the same
 <code>getWindowStart</code> formula.</p>
+<p><strong>&ldquo;Relaxes to a pipelined operator&rdquo; is not a small tweak to <code>BreakerOperator</code> — it needed a new
+operator shape.</strong> <code>BreakerOperator</code> is driven by <code>breakerStage</code>, which fully drains upstream via
+repeated <code>Consume</code> calls before it ever calls the breaker&rsquo;s own <code>NextBatch</code> — by contract, not by
+a fixable oversight. Wrapping <code>BatchTimeBucket</code> as a <code>BreakerOperator</code> would therefore have pulled
+every upstream batch, closing every bucket the whole scan will ever produce, before emitting the
+first one: exactly the <code>buckets × tagGroups</code> cost this section exists to avoid, just moved from
+the group map into an output queue. (This is precisely the failure mode §11&rsquo;s testing strategy
+calls out under &ldquo;Pipelining&rdquo;: <em>&ldquo;A <code>BreakerOperator</code>-shaped implementation passes every correctness
+test and fails this one.&rdquo;</em>)</p>
+<p>The actual fix: <code>BatchTimeBucket</code> is a genuine <code>vectorized.PullOperator</code> that owns and pulls from
+its upstream directly inside its own <code>NextBatch</code>, rather than being driven by <code>breakerStage</code>. It
+is spliced into the pipeline via a new <code>PipelineBuilder.Transform(fn func(upstream PullOperator) PullOperator)</code> method (<code>pkg/query/vectorized/pipeline.go</code>) — it closes whatever has been built so
+far into one concrete <code>PullOperator</code>, hands it to <code>fn</code>, and makes <code>fn</code>&rsquo;s result the new base for
+whatever follows. <code>Transform</code> is now general pipeline infrastructure, available to any future
+operator with the same requirement: pull upstream lazily, batch by batch, rather than draining it
+before serving anything. (COUNT_DISTINCT, §7.3–§7.4, does not need it — it reuses
+<code>BatchAggregation</code>&rsquo;s existing <code>Consume</code>/<code>NextBatch</code> contract unchanged.)</p>
+<p>A related pitfall surfaced during review even after the <code>PullOperator</code> rewrite: <code>BatchTimeBucket</code>
+originally still drained a closed bucket&rsquo;s aggregator in one synchronous loop before returning
+anything. That is harmless for the streaming path (one bucket&rsquo;s groups are bounded by construction
+either way), but index mode&rsquo;s non-streaming aggregator can represent the <em>entire</em> scan — so
+draining it in one shot re-introduced the same &ldquo;materialize everything before returning the first
+batch&rdquo; shape this whole design exists to avoid, just at the output-queue layer instead of the
+group-map layer. The fix (<code>drainMapModeAggregator</code>) pulls that terminal aggregator one page at a
+time, interleaved with normal output commits, the same discipline the upstream pull loop already
+follows. Any future operator that holds one aggregator across an entire unordered scan — a
+candidate shape for other index-mode fallbacks — should drain it the same way.</p>
 <p><strong>Index mode does not get this guarantee, and must not stream.</strong> <code>query.go:140-147</code> returns
 through the index-mode branch <em>before</em> the ordering setup above ever runs; <code>buildIndexQueryResult</code>
 passes <code>mqo.Order</code> through unchanged (<code>query.go:506-560</code>), and with a nil order
@@ -3230,16 +3268,35 @@ condition check and its rejection. <code>nodeTemplate.Limit</code> is already <c
 <p><strong>Ranking is unchanged.</strong> <code>ApplyTopToReduce</code> (<code>reduce.go:290</code>) resolves <code>RoleField &amp;&amp; Name == top.FieldName</code> on the reduced batch, and the aggregate result is exactly such a column;
 <code>offset</code>/<code>limit</code> are applied by <code>iteratorFromBatches</code> (<code>distributed.go:988</code>). The ranked case
 therefore falls out of §7.4 with no extra work.</p>
-<p><strong>Ordering needs no sort pass.</strong> Because §7.2 streams buckets in ascending order, and
-<code>BatchAggregation</code> already emits groups in insertion order (<code>BatchAggregation.insertion</code>), a
-bucketed result is bucket-ascending by construction — on each node, and at the liaison after the
-k-way merge. Ordering by the bucket ascending — the default a bucketed query wants — is satisfied by the scan
-ordering the engine already provides, not by re-sorting the aggregate. Within a bucket, groups
-keep insertion order unless <code>top</code> or <code>order_by</code> says otherwise.</p>
-<p>This is the second dividend of streaming: a sort over <code>buckets × tagGroups</code> rows would have been
-cheap in absolute terms but would have re-imposed a blocking stage on an otherwise pipelined
-query, forfeiting the latency win. The third is that the bucket-advance check this operator
-already performs is exactly the span boundary run-folding needs (§7.7).</p>
+<p><strong>Node-local ordering needs no sort pass — but that is the only place it&rsquo;s free.</strong> Because §7.2
+streams buckets in ascending order, and <code>BatchAggregation</code> already emits groups in insertion
+order (<code>BatchAggregation.insertion</code>), one node&rsquo;s own bucketed output is bucket-ascending by
+construction, with no extra pass. This is the second dividend of streaming: a sort over
+<code>buckets × tagGroups</code> rows would have been cheap in absolute terms but would have re-imposed a
+blocking stage on an otherwise pipelined query, forfeiting the latency win. The third dividend is
+that the bucket-advance check this operator already performs is exactly the span boundary
+run-folding needs (§7.7).</p>
+<p><strong>An earlier version of this section claimed the liaison merge and index mode inherit that same
+ordering &ldquo;by construction.&rdquo; They do not, and implementing §7.2 surfaced both gaps:</strong></p>
+<ul>
+<li><strong>The liaison reduce.</strong> <code>ReducePartialBatches</code> consumes each node&rsquo;s partial fully before moving
+to the next, so <code>BatchAggregation.insertion</code> ends up only <em>piecewise</em> ascending — node A&rsquo;s
+<code>[2000, 3000]</code> followed by node B&rsquo;s <code>[1000, 2000]</code> inserts as <code>[2000, 3000, 1000]</code>, not merged.
+<code>iteratorFromBatches</code>&rsquo;s offset/limit pagination needs the globally merged order, not the
+per-partial one.</li>
+<li><strong>Index mode&rsquo;s map fallback.</strong> §7.2&rsquo;s non-streaming path holds one persistent aggregator across
+the whole scan precisely because its input may not be time-ordered — so its insertion order is
+first-seen, not bucket order, by design.</li>
+</ul>
+<p>Both are fixed the same way: <code>BatchAggregation.SortInsertionByBucket()</code> stable-sorts
+<code>a.insertion</code> by each group&rsquo;s captured bucket timestamp immediately before it is drained (once in
+<code>ReducePartialBatches</code>, after <code>Finalize</code>; once in <code>BatchTimeBucket</code>&rsquo;s map-mode terminal drain). It
+is a no-op for a streaming-mode instance, since every group in one such instance already shares
+the same bucket by construction — so the fix costs nothing on the already-correct path and only
+does real work where ordering was not actually free. <strong>Any future aggregate that reuses this
+reduce path (COUNT_DISTINCT included — see §7.4, which pushes down through the same
+<code>AggModeMap</code>/<code>AggModeReduce</code> machinery) inherits this fix automatically and must not re-introduce
+the &ldquo;ordering is free&rdquo; assumption.</strong></p>
 <p>Ordering and <code>top</code> interact in the obvious way — <code>top</code> selects globally (§3), then the surviving
 rows are emitted in bucket order. A client wanting &ldquo;the global top 20 devices, plotted over time&rdquo;
 gets exactly that; a client wanting per-bucket top-N wants the TopN RPC.</p>
@@ -3481,13 +3538,19 @@ batch-oriented <code>PullBatch</code> path for index mode should be checked befo
 distinct target in the routing key does not merely make the query <em>pushable</em>, it makes the local
 scan metadata-only.</p>
 <h2 id="8-the-deprecated-row-engine">8. The deprecated row engine</h2>
-<p><code>pkg/query/logical/measure</code> rejects all three new shapes — <code>agg.tag_name</code>, <code>COUNT_DISTINCT</code>, and
-<code>group_by.time_bucket</code> — with
-<code>&quot;tag aggregation and time bucketing require the vectorized measure engine (--measure-vectorized-enabled=true)&quot;</code>.</p>
-<p>The package carries an explicit <em>&ldquo;Do not extend with new features&rdquo;</em> note
-(<code>measure_analyzer.go:62-68</code>), the vectorized engine is on by default, and implementing parity in
-the row iterators would roughly double the work to protect a rollback path that is itself being
-retired. A clear error is more honest than a second implementation that will rot.</p>
+<p><strong>This section is stale — the package it describes no longer exists.</strong> It originally said
+<code>pkg/query/logical/measure</code> would reject all three new shapes (<code>agg.tag_name</code>, <code>COUNT_DISTINCT</code>,
+<code>group_by.time_bucket</code>) with a <code>--measure-vectorized-enabled=true</code> message, on the reasoning that
+implementing parity in the row iterators would roughly double the work to protect a rollback path
+that was itself being retired.</p>
+<p>That rollback path was removed outright — <code>chore: remove the row-based query path from measure, stream and trace</code> (#1326) deleted <code>pkg/query/logical/measure</code> entirely, <em>before</em> this design doc
+was even merged (#1326 landed 2026-09-16; #1360 merged 2026-09-17). There is no row-path analyzer
+left to add a guard to, for any of the three shapes, because there is no row path. The
+<code>--measure-vectorized-enabled</code> flag itself is now a no-op compatibility shim
+(<code>removedRowQueryFlag</code> in <code>banyand/measure/measure.go</code>): <code>=true</code> (or omitting the flag) is
+accepted; <code>=false</code> hard-fails at startup with <code>&quot;row-based query was removed in 0.12.0, see apache/skywalking#13998&quot;</code>. The vectorized engine (<code>pkg/query/vectorized/measure</code>) is the only
+engine, and each new shape&rsquo;s validation lives directly in its analyzer
+(<code>pkg/query/vectorized/measure/plan/analyzer.go</code>) rather than in a parallel rejection guard.</p>
 <hr>
 <h2 id="9-alternatives-considered">9. Alternatives considered</h2>
 <table>
@@ -3808,8 +3871,8 @@ it — otherwise the suite would pass with every bucket collapsed to zero.</p>
       </tr>
       <tr>
           <td>6</td>
-          <td>Guards: row-path rejection, §5.3 width resolution, §6 matrix, multi-stage rejection, ambiguous-tag rejection, TopN, the <code>time_bucket</code> staleness check</td>
-          <td><code>pkg/query/logical/measure/measure_analyzer.go</code>, <code>plan/analyzer.go</code></td>
+          <td>Guards: §5.3 width resolution, §6 matrix, multi-stage rejection, ambiguous-tag rejection, TopN, the <code>time_bucket</code> staleness check — no row-path rejection: that package was deleted (#1326) before this design was even merged, so there is no row path left to guard</td>
+          <td><code>plan/analyzer.go</code></td>
       </tr>
       <tr>
           <td>7</td>
