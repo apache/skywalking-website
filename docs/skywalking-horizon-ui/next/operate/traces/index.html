@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Traces">
   <meta itemprop="description" content="Traces The Traces tab is the distributed-trace explorer inside a layer. You pick a service, set conditions (status, sort, duration, tags, time window), run the query, then click a result to read its span timeline. It surfaces the trace stores the layer is configured for: SkyWalking-native traces, Zipkin traces, and either of those through the TraceQL (Grafana Tempo) API.">
-  <meta itemprop="wordCount" content="3229">
+  <meta itemprop="wordCount" content="3782">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Traces">
   <meta name="twitter:description" content="Traces The Traces tab is the distributed-trace explorer inside a layer. You pick a service, set conditions (status, sort, duration, tags, time window), run the query, then click a result to read its span timeline. It surfaces the trace stores the layer is configured for: SkyWalking-native traces, Zipkin traces, and either of those through the TraceQL (Grafana Tempo) API.">
@@ -2390,7 +2390,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 177f9bd</div>
+                  <div class="commit-id">Commit Id: 810e667</div>
                 
 
 
@@ -2614,7 +2614,112 @@ limitations under the License.
   </tbody>
 </table>
 <p>As with the native tab, conditions are staged and only applied on <strong>Run query</strong>, and the <strong>Filter</strong> / <strong>Trace ID</strong> switch beside the title picks between them and a lookup by id.</p>
-<p>Each Zipkin result shows its duration and error state, with a duration bar colored fast-to-slow (errored traces are forced to the error color). Selecting a trace renders the Zipkin span waterfall, and a span detail panel exposes the span&rsquo;s duration, kind, and Zipkin tags. Because the two stores have different span formats, there is no field mapping between native and Zipkin results — Zipkin spans keep their Zipkin shape.</p>
+<p>Each Zipkin result shows its duration and error state, with a duration bar colored fast-to-slow (errored traces are forced to the error color). Zipkin ships no status field, so that state is read from the span&rsquo;s tags — see <a href="#how-a-spans-status-is-decided">How a span&rsquo;s status is decided</a>. Selecting a trace renders the Zipkin span waterfall, and a span detail panel exposes the span&rsquo;s duration, kind, and Zipkin tags. Because the two stores have different span formats, there is no field mapping between native and Zipkin results — Zipkin spans keep their Zipkin shape.</p>
+<h2 id="how-a-spans-status-is-decided">How a span&rsquo;s status is decided</h2>
+<p><strong>Only native traces carry a status from the backend.</strong> OAP reports whether a native span errored, and the Traces tab shows what it reported. The other two stores have nothing to report: a <strong>Zipkin</strong> span has no status field at all, and an <strong>OTLP</strong> span converted from one arrives with its status <code>unset</code> — OAP&rsquo;s converter sets none. A Tempo search result carries no status either.</p>
+<p>So for those, the status is read from the attributes the span carries, by one table shared across every store — the Zipkin row, the TraceQL rows, and each one&rsquo;s result list. An attribute not listed here is never read as a status.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Attribute</th>
+          <th><code>error</code> when</th>
+          <th><code>ok</code> when</th>
+          <th>says nothing when</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>error</code></td>
+          <td>any other value, an empty one included</td>
+          <td><code>false</code>, <code>0</code></td>
+          <td>—</td>
+      </tr>
+      <tr>
+          <td><code>http.status_code</code></td>
+          <td>400 and above</td>
+          <td>below 400</td>
+          <td>not a number, empty included</td>
+      </tr>
+      <tr>
+          <td><code>http.response.status_code</code></td>
+          <td>400 and above</td>
+          <td>below 400</td>
+          <td>not a number, empty included</td>
+      </tr>
+      <tr>
+          <td><code>rpc.status_code</code></td>
+          <td>any other code, named or numeric</td>
+          <td><code>0</code>, <code>OK</code></td>
+          <td>empty</td>
+      </tr>
+      <tr>
+          <td><code>grpc.status_code</code></td>
+          <td>any other code, named or numeric</td>
+          <td><code>0</code>, <code>OK</code></td>
+          <td>empty</td>
+      </tr>
+      <tr>
+          <td><code>rpc.grpc.status_code</code></td>
+          <td>any other code, named or numeric</td>
+          <td><code>0</code>, <code>OK</code></td>
+          <td>empty</td>
+      </tr>
+      <tr>
+          <td><code>otel.status_code</code></td>
+          <td><code>ERROR</code>, <code>STATUS_CODE_ERROR</code>, <code>2</code></td>
+          <td><code>OK</code>, <code>STATUS_CODE_OK</code>, <code>1</code></td>
+          <td><code>UNSET</code>, or anything else</td>
+      </tr>
+      <tr>
+          <td><code>status.code</code></td>
+          <td><code>ERROR</code>, <code>STATUS_CODE_ERROR</code>, <code>2</code></td>
+          <td><code>OK</code>, <code>STATUS_CODE_OK</code>, <code>1</code></td>
+          <td><code>UNSET</code>, or anything else</td>
+      </tr>
+      <tr>
+          <td><code>exception.type</code></td>
+          <td>present, an empty one included</td>
+          <td>—</td>
+          <td>—</td>
+      </tr>
+      <tr>
+          <td><code>error.kind</code></td>
+          <td>present, an empty one included</td>
+          <td>—</td>
+          <td>—</td>
+      </tr>
+      <tr>
+          <td><code>error.type</code></td>
+          <td>present, an empty one included</td>
+          <td>—</td>
+          <td>—</td>
+      </tr>
+      <tr>
+          <td><code>error.message</code></td>
+          <td>present, an empty one included</td>
+          <td>—</td>
+          <td>—</td>
+      </tr>
+      <tr>
+          <td><code>error.object</code></td>
+          <td>present, an empty one included</td>
+          <td>—</td>
+          <td>—</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>An empty <code>error</code> is a failure, and that is deliberate.</strong> In Zipkin the tag&rsquo;s presence is the signal and its value is only the message, so a span that failed without one writes <code>error=&quot;&quot;</code>. The single place it is read the other way is a <strong>TraceQL search</strong> result: OAP writes every projected attribute onto every span of a trace there, filling in the ones a span does not have with an empty value, so an empty attribute in that one response means the span never carried it. Opening the trace reads the span&rsquo;s real attributes and settles it.</p>
+<p>Two attributes on one span can disagree, and so can two spans in one trace. <strong>Failure wins both times, and success is never assumed:</strong> a span reporting a 200 alongside an <code>exception.type</code> is failed, a trace is failed as soon as one span is, and a trace is successful only when a span says so and none says otherwise. A trace nothing spoke for stays unknown.</p>
+<p>Resolution goes in this order:</p>
+<ol>
+<li>
+<p><strong>A span</strong> — its own status if it has one, otherwise the markers above, otherwise unknown (shown as <code>unset</code> on the TraceQL rows, which is OTLP&rsquo;s own word for it).</p>
+</li>
+<li>
+<p><strong>A trace</strong> — failed as soon as one span is, successful only when a span says so and none says otherwise, unknown when nothing spoke.</p>
+</li>
+</ol>
+<p>Two markers on one span can disagree, and so can two spans in one trace. <strong>Failure wins both times, and success is never assumed:</strong> a span reporting a 200 alongside an <code>exception.type</code> is failed. A trace nothing spoke for stays unknown rather than being called a success.</p>
 <h2 id="traceql-traces">TraceQL traces</h2>
 <p>The TraceQL rows query the same traces through <a href="https://grafana.com/docs/tempo/latest/traceql/">Grafana Tempo&rsquo;s query language</a>, which OAP answers over Tempo&rsquo;s HTTP API. A TraceQL trace is an <strong>OpenTelemetry</strong> trace and is shown as one: opaque span ids, a span kind, a three-valued status (ok / error / unset), resource attributes kept apart from span attributes, and the instrumentation scope. Nothing is folded into SkyWalking&rsquo;s own span shape, so what you read is what the protocol defines.</p>
 <p>The one reading Horizon does add is the span kind. OTLP has no entry and exit — it has client, server, producer and consumer — so the views name them the way every other trace surface does: a <strong>server</strong> or <strong>consumer</strong> span is an <strong>Entry</strong> (a call or a message arriving), a <strong>client</strong> or <strong>producer</strong> span an <strong>Exit</strong> (one leaving), and an <strong>internal</strong> span is <strong>Local</strong>. The protocol&rsquo;s own word is shown beside it on the span detail, in the statistics table and in the waterfall&rsquo;s tooltip, so nothing about the OTLP data is hidden behind the reading.</p>
@@ -2656,7 +2761,7 @@ limitations under the License.
 <li><strong>An <code>unreachable</code> chip on the list</strong> — the trace store did not answer, and the reason is printed in a banner above the results. For native traces this points at OAP or its storage backend; for Zipkin it points at the configured Zipkin endpoint; for a TraceQL row it points at that datasource&rsquo;s URL, or says no URL is configured for it. The stores fail independently — one being down does not blank the others.</li>
 <li><strong>A TraceQL search comes back refused</strong> — the message under the results is OAP&rsquo;s own. It answers what that deployment can do with the query you sent, which is a property of the OAP you are running rather than of Horizon; take it to the OAP side.</li>
 <li><strong>A TraceQL row says the source is not configured</strong> — its URL is empty in <code>oap.traceql</code>. A URL that IS set but does not answer reads <strong>unreachable</strong> instead: the module is off in OAP, or the port is wrong. See <a href="../../setup/oap#traceql-trace-stores-oaptraceql">TraceQL trace stores</a>.</li>
-<li><strong>A TraceQL result&rsquo;s status is unknown rather than OK</strong> — the Tempo search response carries no verdict of its own, so Horizon settles each row from the error markers a span carries and then, once the list is on screen, by reading the traces still undecided; the list header counts those down. What survives is a trace whose spans all report <code>unset</code> — OpenTelemetry&rsquo;s &ldquo;no verdict&rdquo;, which is not turned into a success. Running the query again restarts the check.</li>
+<li><strong>A TraceQL result&rsquo;s status is unknown rather than OK</strong> — the Tempo search response carries no verdict of its own, so Horizon settles each row from the markers a span carries and then, once the list is on screen, by reading the traces still undecided; the list header counts those down. What survives is a trace no span spoke for: none set a status, and none carried a marker either — see <a href="#how-a-spans-status-is-decided">How a span&rsquo;s status is decided</a>. That is not turned into a success. Running the query again restarts the check.</li>
 <li><strong>Run query is greyed out</strong> — the tab does not yet know which service to read. It says which: <em>Resolving service…</em> while the picked service is being looked up, or a note that the selected service is not in this layer (it aged out of OAP, was renamed, or the link points elsewhere) — pick another one. The native and Zipkin tabs read for one service, so they wait instead of querying the whole layer — a lookup by trace id needs none, and the TraceQL rows can search <strong>All services</strong>, because the Tempo API takes a service as an ordinary condition rather than as the subject of the query.</li>
 <li><strong>Rows are segments, not whole traces</strong> — that is expected on storage backends without whole-trace support; the banner says so. Click a segment to fetch its full trace.</li>
 <li><strong>A trace looked up by its id is not found</strong> — a time range you picked has to cover when the trace happened, so widen it or pick <strong>No time range</strong>. With no time range, OAP 11.0.0 and earlier on BanyanDB cover only the last 24 hours, and the cold stage is not read. Open the trace from the log row that named it (which carries its timestamp), or pick a time range around when it happened, with <strong>Cold</strong> on if it has aged into cold storage.</li>
@@ -2717,6 +2822,7 @@ limitations under the License.
             <li><a href="#conditions-1">Conditions</a></li>
           </ul>
         </li>
+        <li><a href="#how-a-spans-status-is-decided">How a span&rsquo;s status is decided</a></li>
         <li><a href="#traceql-traces">TraceQL traces</a>
           <ul>
             <li><a href="#three-ways-to-query">Three ways to query</a></li>
@@ -2841,6 +2947,8 @@ limitations under the License.
 
     </div>
     
+
+
 
 
 
