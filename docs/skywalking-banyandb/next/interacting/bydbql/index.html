@@ -33,7 +33,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
   <meta itemprop="name" content="BanyanDB Query Language (BydbQL)">
   <meta itemprop="description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB’s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, traces, properties, and Top-N queries.
 This document specifies the language’s syntax, its semantics, and the precise mapping from BydbQL statements to the various Request messages.">
-  <meta itemprop="wordCount" content="6568">
+  <meta itemprop="wordCount" content="6910">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="BanyanDB Query Language (BydbQL)">
   <meta name="twitter:description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB’s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, traces, properties, and Top-N queries.
@@ -2195,7 +2195,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: cf44ca3</div>
+                  <div class="commit-id">Commit Id: 89403f9</div>
                 
 
 
@@ -2759,14 +2759,20 @@ integer_literal ::= [0-9]+
 </span></span></span></code></pre></div><h2 id="5-bydbql-for-measures">5. BydbQL for Measures</h2>
 <p>BydbQL for measures is tailored for analytical queries on aggregated numerical data. It supports aggregation, grouping, and mixed selection of tags and fields, mapping to the <code>banyandb.measure.v1.QueryRequest</code> message.</p>
 <h3 id="51-grammar">5.1. Grammar</h3>
-<pre tabindex="0"><code>measure_query     ::= SELECT projection from_measure_clause TIME time_condition [WHERE criteria] [GROUP BY column_list] [ORDER BY order_expression] [LIMIT integer] [OFFSET integer] [WITH QUERY_TRACE]
-from_measure_clause ::= &#34;FROM MEASURE&#34; identifier &#34;IN&#34; [&#34;(&#34;] group_list [&#34;)&#34;] [ON [&#34;(&#34;] stage_list [&#34;)&#34;] STAGES]
-projection        ::= &#34;*&#34; | (column_list | agg_function &#34;(&#34; identifier &#34;)&#34; | top_clause)
+<pre tabindex="0"><code>measure_query     ::= SELECT projection from_measure_clause TIME time_condition [WHERE criteria] [GROUP BY group_list] [ORDER BY order_expression] [LIMIT integer] [OFFSET integer] [WITH QUERY_TRACE]
+from_measure_clause ::= &#34;FROM MEASURE&#34; identifier &#34;IN&#34; [&#34;(&#34;] group_list_id [&#34;)&#34;] [ON [&#34;(&#34;] stage_list [&#34;)&#34;] STAGES]
+projection        ::= &#34;*&#34; | (column_list | agg_function &#34;(&#34; [&#34;DISTINCT&#34;] identifier &#34;)&#34; | top_clause)
 top_clause        ::= &#34;TOP&#34; integer identifier [&#34;ASC&#34; | &#34;DESC&#34;] [&#34;,&#34; column_list]
 column_list       ::= identifier (&#34;,&#34; identifier)* [&#34;::tag&#34; | &#34;::field&#34;]
 stage_list        ::= identifier (&#34;,&#34; identifier)+
 agg_function      ::= &#34;SUM&#34; | &#34;MEAN&#34; | &#34;COUNT&#34; | &#34;MAX&#34; | &#34;MIN&#34;
-group_list        ::= identifier (&#34;,&#34; identifier)+
+	/* &#34;DISTINCT&#34; is only valid with COUNT: COUNT(DISTINCT identifier) */
+group_list        ::= group_column (&#34;,&#34; group_column)+
+group_column      ::= identifier | time_bucket_function
+time_bucket_function ::= &#34;TIME_BUCKET&#34; &#34;(&#34; [string_literal] &#34;)&#34;
+	/* at most one TIME_BUCKET(...) per GROUP BY clause; empty width defers
+	   to the measure&#39;s own interval */
+group_list_id     ::= identifier (&#34;,&#34; identifier)+
 criteria          ::= condition ((&#34;AND&#34; | &#34;OR&#34;) condition)*
 condition         ::= identifier binary_op (value | value_list)
 time_condition    ::= &#34;=&#34; timestamp | &#34;&gt;&#34; timestamp | &#34;&lt;&#34; timestamp | &#34;&gt;=&#34; timestamp | &#34;&lt;=&#34; timestamp | &#34;BETWEEN&#34; timestamp &#34;AND&#34; timestamp
@@ -2788,12 +2794,14 @@ integer_literal   ::= [0-9]+
 <li><code>SELECT &lt;field_key&gt;, &lt;tag_key&gt;</code>: Returns specific fields and tags. The parser will infer the type of each identifier from the measure&rsquo;s schema.</li>
 <li><code>SELECT &lt;identifier&gt;::field, &lt;identifier&gt;::tag</code>: If a field and a tag share the same name, the <code>::field</code> or <code>::tag</code> syntax <strong>must</strong> be used to disambiguate the identifier&rsquo;s type.</li>
 <li>The clause also supports aggregation functions (<code>SUM</code>, <code>MEAN</code>, <code>COUNT</code>, <code>MAX</code>, <code>MIN</code>) and a <code>TOP N</code> clause for ranked results.</li>
+<li>An aggregate function&rsquo;s column resolves against both tags and fields, not just fields — <code>SUM(latency)</code> aggregates a field, <code>COUNT(DISTINCT user_id)</code> aggregates a tag. <code>DISTINCT</code> is only accepted inside <code>COUNT</code>; <code>SUM(DISTINCT x)</code> and similar are rejected as a parse error.</li>
 </ul>
 <h3 id="53-mapping-to-measurev1queryrequest">5.3. Mapping to <code>measure.v1.QueryRequest</code></h3>
 <ul>
 <li><strong><code>FROM MEASURE name IN groups</code></strong> or <strong><code>FROM MEASURE name IN (groups)</code></strong>: Maps to the <code>name</code> and <code>groups</code> fields. Both are required.</li>
 <li><strong><code>SELECT &lt;tag1&gt;, &lt;field1&gt;, &lt;field2&gt;</code></strong>: The transformer inspects each identifier. Those identified as tags (either by schema lookup or <code>::tag</code>) are added to <code>tag_projection</code>. Those identified as fields (by schema lookup or <code>::field</code>) are added to <code>field_projection</code>.</li>
-<li><strong><code>SELECT SUM(field)</code></strong>: Maps to <code>agg</code>.</li>
+<li><strong><code>SELECT SUM(field)</code></strong>: Maps to <code>agg</code>, setting <code>agg.field_name</code>.</li>
+<li><strong><code>SELECT COUNT(DISTINCT tag)</code></strong>: Maps to <code>agg</code> with <code>function = AGGREGATION_FUNCTION_COUNT_DISTINCT</code>, setting <code>agg.tag_name</code> and <code>agg.tag_family</code> instead of <code>agg.field_name</code>. The output column is named after the tag (<code>tag</code>), not after the function. A <code>COUNT(DISTINCT field)</code> over an INT or FLOAT field is also accepted, and sets <code>agg.field_name</code> as any other field aggregation does.</li>
 <li><strong><code>TIME</code> clause (required)</strong>: Maps to <code>time_range</code>:
 <ul>
 <li><strong><code>TIME = '2023-01-01T00:00:00Z'</code></strong>: Sets <code>begin</code> and <code>end</code> to the same timestamp.</li>
@@ -2806,14 +2814,12 @@ integer_literal   ::= [0-9]+
 <li><strong><code>TIME BETWEEN '-1h' AND 'now'</code></strong>: Sets <code>begin</code> to 1 hour ago and <code>end</code> to current time.</li>
 </ul>
 </li>
-<li><strong><code>GROUP BY &lt;tag1&gt;, &lt;tag2&gt;</code></strong>: The <code>GROUP BY</code> clause takes a simple list of tags and maps to <code>group_by.tag_projection</code>.
-<ul>
-<li><strong>Note</strong>: When the query contains an aggregate function (e.g., <code>SUM</code>, <code>AVG</code>, <code>COUNT</code>, <code>MAX</code>, <code>MIN</code>) with <code>GROUP BY</code>, the <code>GROUP BY</code> clause <strong>must include at least one field</strong>. This ensures proper aggregation behavior in measure queries.</li>
-</ul>
-</li>
-<li><strong><code>SELECT TOP N ...</code></strong>: Maps to the <code>top</code> message.</li>
+<li><strong><code>GROUP BY &lt;tag1&gt;, &lt;tag2&gt;</code></strong>: The <code>GROUP BY</code> clause takes a list of tags and maps to <code>group_by.tag_projection</code>. Each grouped tag must also appear in the query&rsquo;s own <code>SELECT</code> projection.</li>
+<li><strong><code>GROUP BY TIME_BUCKET(width), &lt;tag&gt;</code></strong>: Maps to <code>group_by.time_bucket</code>, setting <code>group_by.time_bucket.width</code>. An empty <code>width</code> (<code>TIME_BUCKET()</code>) defers to the measure&rsquo;s own <code>interval</code>; a duration string (e.g. <code>'5m'</code>) uses the same units as <code>Measure.interval</code> (<code>ns</code>, <code>us</code>/<code>µs</code>, <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code>, plus the custom <code>d</code> suffix — see <code>pkg/timestamp.ParseDuration</code>). At most one <code>TIME_BUCKET(...)</code> is allowed per <code>GROUP BY</code> clause. Results are pre-ordered by bucket ascending, so a bucketed query needs no <code>ORDER BY</code> for that purpose — a non-time <code>ORDER BY DESC</code> is rejected on a bucketed query.</li>
+<li><strong><code>SELECT TOP N ...</code></strong>: Maps to the <code>top</code> message. <code>TOP</code> can rank by a tag-targeted aggregation&rsquo;s own output column (e.g. <code>TOP 10 user_id DESC</code> when <code>COUNT(DISTINCT user_id)</code> is projected), not only by a field.</li>
 <li><strong><code>WITH QUERY_TRACE</code></strong>: Maps to the <code>trace</code> field to enable distributed tracing of query execution.</li>
 </ul>
+<p><strong>Note on <code>LIMIT</code> and <code>TIME_BUCKET</code></strong>: <code>LIMIT</code> defaults to 100 when omitted. A bucketed <code>GROUP BY</code> returns one row per (bucket, tag-group), so a wide time window with a narrow bucket width can produce far more than 100 rows; without an explicit <code>LIMIT</code> sized to the expected row count, the response is silently truncated to the first 100 rows in bucket-ascending order rather than returning an error. Always set <code>LIMIT</code> explicitly for a bucketed query.</p>
 <h3 id="54-examples">5.4. Examples</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#57606a">-- Select a specific tag and a specific field
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff">
@@ -2929,6 +2935,23 @@ integer_literal   ::= [0-9]+
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>service_cpm<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>us<span style="color:#0550ae">-</span>west<span style="color:#fff"> </span><span style="color:#cf222e">ON</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span>warn<span style="color:#1f2328">,</span><span style="color:#fff"> </span>cold<span style="color:#1f2328">)</span><span style="color:#fff"> </span>STAGES<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span>TIME<span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;-30m&#39;</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>region<span style="color:#1f2328">;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a">-- Count distinct users per region
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span>region<span style="color:#1f2328">,</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span><span style="color:#cf222e">DISTINCT</span><span style="color:#fff"> </span>user_id<span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>service_cpm<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>us<span style="color:#0550ae">-</span>west<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span>TIME<span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;-30m&#39;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>region<span style="color:#1f2328">;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a">-- Bucket a metric into 5-minute windows, per region
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span>region<span style="color:#1f2328">,</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>latency<span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>service_cpm<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>us<span style="color:#0550ae">-</span>west<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span>TIME<span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;-2h&#39;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>TIME_BUCKET<span style="color:#1f2328">(</span><span style="color:#0a3069">&#39;5m&#39;</span><span style="color:#1f2328">),</span><span style="color:#fff"> </span>region<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">500</span><span style="color:#1f2328">;</span><span style="color:#fff">
 </span></span></span></code></pre></div><h2 id="6-bydbql-for-top-n">6. BydbQL for Top-N</h2>
 <p>Top-N queries use a specialized, command-like syntax for clarity and to reflect the optimized nature of the underlying <code>banyandb.measure.v1.TopNRequest</code>. The <code>FROM</code> clause is mandatory.</p>
 <h3 id="61-grammar">6.1. Grammar</h3>
@@ -3613,6 +3636,14 @@ integer_literal       ::= [0-9]+
 
     </div>
     
+
+
+
+
+
+
+
+
 
 
 

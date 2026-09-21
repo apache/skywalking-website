@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Traces">
   <meta itemprop="description" content="Traces The Traces tab is the distributed-trace explorer inside a layer. You pick a service, set conditions (status, sort, duration, tags, time window), run the query, then click a result to read its span timeline. It surfaces the trace stores the layer is configured for: SkyWalking-native traces, Zipkin traces, and either of those through the TraceQL (Grafana Tempo) API.">
-  <meta itemprop="wordCount" content="3782">
+  <meta itemprop="wordCount" content="3983">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Traces">
   <meta name="twitter:description" content="Traces The Traces tab is the distributed-trace explorer inside a layer. You pick a service, set conditions (status, sort, duration, tags, time window), run the query, then click a result to read its span timeline. It surfaces the trace stores the layer is configured for: SkyWalking-native traces, Zipkin traces, and either of those through the TraceQL (Grafana Tempo) API.">
@@ -2390,7 +2390,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 810e667</div>
+                  <div class="commit-id">Commit Id: dc31135</div>
                 
 
 
@@ -2491,6 +2491,10 @@ limitations under the License.
       <tr>
           <td><strong>TraceQL - Zipkin</strong></td>
           <td>The TraceQL API over the Zipkin spans.</td>
+      </tr>
+      <tr>
+          <td><strong>TraceQL - OTLP</strong></td>
+          <td>The TraceQL API over the OTLP spans OAP stored as they arrived, converting nothing.</td>
       </tr>
   </tbody>
 </table>
@@ -2616,8 +2620,9 @@ limitations under the License.
 <p>As with the native tab, conditions are staged and only applied on <strong>Run query</strong>, and the <strong>Filter</strong> / <strong>Trace ID</strong> switch beside the title picks between them and a lookup by id.</p>
 <p>Each Zipkin result shows its duration and error state, with a duration bar colored fast-to-slow (errored traces are forced to the error color). Zipkin ships no status field, so that state is read from the span&rsquo;s tags — see <a href="#how-a-spans-status-is-decided">How a span&rsquo;s status is decided</a>. Selecting a trace renders the Zipkin span waterfall, and a span detail panel exposes the span&rsquo;s duration, kind, and Zipkin tags. Because the two stores have different span formats, there is no field mapping between native and Zipkin results — Zipkin spans keep their Zipkin shape.</p>
 <h2 id="how-a-spans-status-is-decided">How a span&rsquo;s status is decided</h2>
-<p><strong>Only native traces carry a status from the backend.</strong> OAP reports whether a native span errored, and the Traces tab shows what it reported. The other two stores have nothing to report: a <strong>Zipkin</strong> span has no status field at all, and an <strong>OTLP</strong> span converted from one arrives with its status <code>unset</code> — OAP&rsquo;s converter sets none. A Tempo search result carries no status either.</p>
-<p>So for those, the status is read from the attributes the span carries, by one table shared across every store — the Zipkin row, the TraceQL rows, and each one&rsquo;s result list. An attribute not listed here is never read as a status.</p>
+<p><strong>Where a span reports its own status, that is what you see.</strong> A native span carries OAP&rsquo;s error flag, and a natively stored <strong>OTLP</strong> span keeps the status its SDK set. A <strong>Zipkin</strong> span has no status field at all, and an OTLP span <em>converted</em> to Zipkin arrives <code>unset</code> — OAP&rsquo;s converter sets none — so for those there is nothing to report.</p>
+<p><strong>Where it does not, the status is read from the attributes the span carries</strong>, by one table shared across every store — the Zipkin row, the TraceQL rows, and each one&rsquo;s result list. An attribute not listed here is never read as a status.</p>
+<p>A TraceQL <strong>search</strong> result is a third case: it carries a <code>status</code> of its own per span, so a list can show failures without opening each trace. Where that says <code>error</code> or <code>ok</code> the row is settled at once; where it says <code>unset</code>, the traces still undecided are read afterwards and the markers below settle them.</p>
 <table>
   <thead>
       <tr>
@@ -2721,7 +2726,9 @@ limitations under the License.
 </ol>
 <p>Two markers on one span can disagree, and so can two spans in one trace. <strong>Failure wins both times, and success is never assumed:</strong> a span reporting a 200 alongside an <code>exception.type</code> is failed. A trace nothing spoke for stays unknown rather than being called a success.</p>
 <h2 id="traceql-traces">TraceQL traces</h2>
-<p>The TraceQL rows query the same traces through <a href="https://grafana.com/docs/tempo/latest/traceql/">Grafana Tempo&rsquo;s query language</a>, which OAP answers over Tempo&rsquo;s HTTP API. A TraceQL trace is an <strong>OpenTelemetry</strong> trace and is shown as one: opaque span ids, a span kind, a three-valued status (ok / error / unset), resource attributes kept apart from span attributes, and the instrumentation scope. Nothing is folded into SkyWalking&rsquo;s own span shape, so what you read is what the protocol defines.</p>
+<p>The TraceQL rows query traces through <a href="https://grafana.com/docs/tempo/latest/traceql/">Grafana Tempo&rsquo;s query language</a>, which OAP answers over Tempo&rsquo;s HTTP API. A TraceQL trace is an <strong>OpenTelemetry</strong> trace and is shown as one: opaque span ids, a span kind, a three-valued status (ok / error / unset), resource attributes kept apart from span attributes, and the instrumentation scope. Nothing is folded into SkyWalking&rsquo;s own span shape, so what you read is what the protocol defines.</p>
+<p><strong>Each row is a different store, not a different view of one.</strong> <em>TraceQL - Native</em> reads the SkyWalking spans and <em>TraceQL - Zipkin</em> the Zipkin ones, both converted to OTLP to answer. <em>TraceQL - OTLP</em> reads spans OAP stored exactly as they arrived, converting nothing — so attributes keep their own types, and events, links, status messages and the instrumentation scope are what the SDK exported. Where a deployment&rsquo;s OTLP traces live depends on how its receiver was configured to keep them, and only one of the two rows will hold them.</p>
+<p>The OTLP row also has fields the other two cannot offer: the <code>kind</code> intrinsic, <code>resource.service.instance.id</code>, and Tempo&rsquo;s <code>span:</code>-prefixed spellings. The <strong>Schema reference</strong> on each row lists what that store can filter, which is the shortest way to see the difference.</p>
 <p>The one reading Horizon does add is the span kind. OTLP has no entry and exit — it has client, server, producer and consumer — so the views name them the way every other trace surface does: a <strong>server</strong> or <strong>consumer</strong> span is an <strong>Entry</strong> (a call or a message arriving), a <strong>client</strong> or <strong>producer</strong> span an <strong>Exit</strong> (one leaving), and an <strong>internal</strong> span is <strong>Local</strong>. The protocol&rsquo;s own word is shown beside it on the span detail, in the statistics table and in the waterfall&rsquo;s tooltip, so nothing about the OTLP data is hidden behind the reading.</p>
 <p>The page is laid out like the native one — conditions and a duration distribution on top, results below, the trace opening beside the list — and the same Default / Tree / Statistics views, span dialog, and trace-id and URL copy buttons are there.</p>
 <h3 id="three-ways-to-query">Three ways to query</h3>
@@ -2947,6 +2954,14 @@ limitations under the License.
 
     </div>
     
+
+
+
+
+
+
+
+
 
 
 
