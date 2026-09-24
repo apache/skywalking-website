@@ -35,7 +35,7 @@ Where the data comes from langsmith, the tracing client, is a dependency of lang
   <meta itemprop="description" content="LangChain How an agent built on LangChain or LangGraph maps onto the unified conversation model, what the langsmith-ingest adapter reads, and what the wire cannot supply.
 For turning it on, see LangChain and LangGraph. For the words, see the LangChain glossary.
 Where the data comes from langsmith, the tracing client, is a dependency of langchain-core, so every LangChain application already carries it. It is pointed at asz with environment variables and sends what the graph did. asz accepts what that client sends; it carries none of its code and claims no affiliation with the product it was written for.">
-  <meta itemprop="wordCount" content="2890">
+  <meta itemprop="wordCount" content="3084">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="LangChain">
   <meta name="twitter:description" content="LangChain How an agent built on LangChain or LangGraph maps onto the unified conversation model, what the langsmith-ingest adapter reads, and what the wire cannot supply.
@@ -1525,7 +1525,7 @@ Where the data comes from langsmith, the tracing client, is a dependency of lang
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 9986b10</div>
+                  <div class="commit-id">Commit Id: 38fff28</div>
                 
 
 
@@ -1892,8 +1892,24 @@ can change that.</li>
 <li><strong>Which call a failed tool answered.</strong> A tool that raises has empty outputs and names the call
 nowhere. asz reads it from the model call that asked for the tool, and only when exactly one call
 of that name in that trace is unanswered. Otherwise the result lands joined to nothing.</li>
-<li><strong>A context reset.</strong> LangChain has no compaction, so a conversation is one epoch however long it
-runs.</li>
+<li><strong>A context reset, unless the framework marks it.</strong> <code>SummarizationMiddleware</code> marks the summary
+message it writes with <code>additional_kwargs.lc_source</code> set to <code>summarization</code>. A model call sent that
+message starts a new epoch in its stream, with the message as its summary, the same way a Claude
+Code compaction does. The summariser&rsquo;s own call read the old history, so it stays in the old
+epoch. <code>trim_messages</code>, langmem&rsquo;s <code>SummarizationNode</code> and <code>RemoveMessage</code> write no mark. A
+conversation that uses them is one epoch however long it runs, because a changed message list
+alone cannot say whether the history was trimmed, summarised, edited or started again. Three
+limits follow from the evidence:
+<ul>
+<li>The middleware summarises inside a turn, so the talk it happens in stays in the epoch where the
+turn began, as it does for a Claude Code compaction in the middle of a turn.</li>
+<li>The reset lands with the arrival that carries the request. In the captured corpus every model
+call&rsquo;s first arrival carried its request, 71 of 71. A request that arrives after its call has
+begun puts that one call in the old epoch.</li>
+<li>A marked message with no <code>id</code> makes no reset. The middleware gives every message one. Without
+it, one summary could not be told from another with the same words.</li>
+</ul>
+</li>
 <li><strong>A delegation, by name.</strong> Nothing on the wire says a nested run is an agent, and nothing names
 what it was asked to do. The boundary is read from the run tree instead: work that ran inside a
 tool is that tool&rsquo;s. Whether that work was a program or a single model call is read from what
