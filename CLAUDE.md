@@ -29,7 +29,7 @@ description: "Release Apache SkyWalking <Component Name> <VERSION>."
 
 `data/projects.yml` owns the catalog, project metadata, documentation versions,
 downloads, and container images. Its structure is `catalogs[]` → `projects[]` →
-`next.docs` / `releases[]` / `dockerImages[]`. Catalogs have `id`, `name`, `description`, and optional
+`docs` / `releases[]` / `dockerImages[]`. Catalogs have `id`, `name`, `description`, and optional
 `note`; project `featured` and `menu` metadata control cards and shortcuts, with
 shortcut groups in the top-level `menu` list. Keep repository identities and
 existing `downloadAliases` stable.
@@ -40,7 +40,7 @@ repositories and remain available independently of the selected release.
 
 `data/get-started.yml` owns both Showcase and platform installation, separate
 from `data/projects.yml`. Its `showcase` block contains Showcase metadata,
-`next.docs`, and `quickstart`; its `skywalking` block contains installation commands.
+`docs`, and `quickstart`; its `skywalking` block contains installation commands.
 See the complete YAML example in README.md. Run `node scripts/project-config.js`
 for local configuration validation without fetching repositories or artifacts.
 
@@ -92,27 +92,30 @@ Use `Mon. DDth, YYYY` with ordinal suffixes: 1st, 2nd, 3rd, all others th (e.g. 
 
 ## Documentation in data/projects.yml
 
-- `next.docs` defines development documentation through `link`, optional explicit
-  `commitId`, and optional display `label`.
+- The project's `docs` block defines the two generated trees: `link` is the
+  development documentation (Next), and `latest` is where the Latest tree is
+  served. Optional `commitId` pins Next explicitly, and optional `label`
+  customizes its displayed name.
 - A release's `docs.link` and `docs.commitId` define its numbered documentation;
   optional `docs.label` customizes its displayed name.
-- On the release marked `latest: true`, `docs.latestLink` generates the Latest
-  entry and requires an explicit `docs.latestCommitId`. Do not add separate
-  `Next` or `Latest` releases.
+- Latest renders the `commitId` of the release marked `latest: true`. A release
+  carries one pin, and there is no separate Latest pin to keep in step. Do not
+  add separate `Next` or `Latest` releases. `latestLink` and `latestCommitId` on
+  a release are retired, and the validator rejects them.
 - Hugo-hosted documentation needs project `repoUrl` and paths of the form
   `/docs/<repo-slug>/<version>/readme/`. External documentation can use HTTP(S)
-  links in either `next.docs` or release `docs`.
+  links in the project `docs` or a release's `docs`.
 
-**Explicit documentation commit pins are authoritative.** `docs.commitId` and
-`docs.latestCommitId` can intentionally differ from each other and from the
-release tag. Preserve them exactly; never infer, replace, or synchronize them
-from tag commits. Set new pins only from explicitly supplied documentation
-revisions, and leave existing pins unchanged during unrelated release updates.
+**Explicit documentation commit pins are authoritative.** `docs.commitId` can
+intentionally differ from the release tag, as when a documentation branch carries
+fixes made after the tag. Preserve pins exactly; never infer or replace them from
+tag commits. Set new pins only from explicitly supplied documentation revisions,
+and leave existing pins unchanged during unrelated release updates.
 
 `layouts/partials/seo/doc-canonical-map.html` compares the generated entries'
-commit IDs. A numbered tree canonicalizes to Latest only when their explicit
-pins match. Different pins remain self-canonical; do not alter pins to force a
-canonical relationship.
+commit IDs, so the numbered tree of the latest release canonicalizes to Latest,
+which renders the same commit. Older versions never match and stay
+self-canonical.
 
 ## SEO metadata
 

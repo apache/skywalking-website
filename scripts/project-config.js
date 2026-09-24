@@ -62,9 +62,16 @@ function validateProjectConfig(config) {
       check(Array.isArray(project.extraContributors), `${where}.extraContributors must be an array`);
       project.extraContributors.forEach((person, index) => check(isObject(person) && isText(person.login), `${where}.extraContributors[${index}] requires login`));
     }
-    if (project.next !== undefined) {
-      check(isObject(project.next), `${where}.next must be an object`);
-      validateDocs(project.next.docs, project, 'Next', `${where}.next.docs`);
+    if (project.docs !== undefined) {
+      validateDocs(project.docs, project, 'Next', `${where}.docs`);
+      if (project.docs.latest !== undefined) {
+        check(/^\/docs\/[^/?#\s]+\/latest\/readme\/$/.test(project.docs.latest), `${where}.docs.latest must be a /docs/.../latest/readme/ path`);
+        // Latest serves the same documentation tree as the other versions of
+        // this project, so it sits under the same slug.
+        check(project.docs.latest.split('/')[2] === project.docs.link.split('/')[2], `${where}.docs.latest must serve the same documentation as ${where}.docs.link`);
+        check(!localDocs.has(project.docs.latest.toLowerCase()), `duplicate docs link ${project.docs.latest}`);
+        localDocs.add(project.docs.latest.toLowerCase());
+      }
     }
     const releases = project.releases === undefined ? [] : project.releases;
     check(Array.isArray(releases), `${where}.releases must be an array`);
@@ -82,12 +89,10 @@ function validateProjectConfig(config) {
       if (release.latest) latestCount++;
       if (release.docs !== undefined) {
         validateDocs(release.docs, project, release.version, `${releasePath}.docs`);
-        if (release.docs.latestLink !== undefined) {
-          check(/^\/docs\/[^/?#\s]+\/latest\/readme\/$/.test(release.docs.latestLink), `${releasePath}.docs.latestLink must be a /docs/.../latest/readme/ path`);
-          check(isText(release.docs.latestCommitId), `${releasePath}.docs.latestLink requires an explicit latestCommitId`);
-          if (release.latest) validateDocs({...release.docs, link: release.docs.latestLink, commitId: release.docs.latestCommitId}, project, 'Latest', `${releasePath}.docs latest alias`);
-        } else if (release.docs.latestCommitId !== undefined) {
-          check(false, `${releasePath}.docs.latestCommitId requires latestLink`);
+        ['latestLink', 'latestCommitId'].forEach(field => check(release.docs[field] === undefined, `${releasePath}.docs.${field} is gone: the Latest tree is served at ${where}.docs.latest and renders the commitId of the release marked latest`));
+        // The Latest tree renders this pin, so it must be there to render.
+        if (release.latest && project.docs !== undefined && project.docs.latest !== undefined) {
+          check(isText(release.docs.commitId), `${releasePath}.docs requires a commitId: ${where}.docs.latest renders it`);
         }
       }
       const downloads = release.downloads === undefined ? [] : release.downloads;
@@ -153,12 +158,13 @@ function docsForProject(project) {
     if (entry.commitId) doc.commitId = entry.commitId;
     docs.push(doc);
   }
-  if (project.next && project.next.docs) add('Next', project.next.docs);
+  if (project.docs) add('Next', project.docs);
   const releases = project.releases || [];
   const latest = releases.find(release => release.latest);
-  if (latest && latest.docs && latest.docs.latestLink) {
-    // Latest can intentionally use a documentation fix newer than the release pin.
-    add('Latest', {link: latest.docs.latestLink, commitId: latest.docs.latestCommitId});
+  if (project.docs && project.docs.latest && latest && latest.docs) {
+    // Latest is the release marked latest, served at its own URL, from the
+    // same commit. The two can never drift apart.
+    add('Latest', {link: project.docs.latest, commitId: latest.docs.commitId});
   }
   releases.forEach(release => { if (release.docs) add(release.version, release.docs); });
   return docs;

@@ -31,8 +31,9 @@ featured cards and menu shortcuts; the top-level `menu` list configures shortcut
 groups. Project shortcuts open the matching catalog card, where visitors can
 choose documentation or downloads.
 
-Development documentation belongs in `next.docs`. Released versions belong in
-`releases`, with exactly one `latest: true` when the list is nonempty. Projects
+Development documentation belongs in the project's `docs.link`, and `docs.latest`
+is where the Latest tree is served. Released versions belong in `releases`, with
+exactly one `latest: true` when the list is nonempty. Projects
 without releases can use `releases: []`. For example:
 
 ```yaml
@@ -46,17 +47,15 @@ catalogs:
         user: apache
         repoUrl: https://github.com/apache/skywalking.git
         description: SkyWalking primary repository and docs.
-        next:
-          docs:
-            link: /docs/main/next/readme/
+        docs:
+          link: /docs/main/next/readme/
+          latest: /docs/main/latest/readme/
         releases:
           - version: v11.0.0
             latest: true
             docs:
               link: /docs/main/v11.0.0/readme/
               commitId: 6f1fd78e872f1d380a14f271c26e8d68eb2430fc
-              latestLink: /docs/main/latest/readme/
-              latestCommitId: 6f1fd78e872f1d380a14f271c26e8d68eb2430fc
             downloads:
               - name: Source archive
                 type: source
@@ -69,12 +68,13 @@ catalogs:
 menu: []
 ```
 
-`docs.link` and `docs.commitId` define the numbered documentation. The latest
-release's `docs.latestLink` generates the Latest documentation choice and requires
-its own explicit `docs.latestCommitId`. **These two commit pins are authoritative
-and may intentionally differ from each other and from the release tag. Preserve
-them exactly; never infer or replace them from tags.** Optional `docs.label`
-customizes the displayed version name, including for `next.docs`.
+A release's `docs.link` and `docs.commitId` define its numbered documentation.
+The project's `docs.latest` generates the Latest choice, which renders the
+`commitId` of the release marked `latest: true`, so a release carries one pin and
+Latest can never drift from it. **Commit pins are authoritative and may differ
+from the release tag. Preserve them exactly; never infer or replace them from
+tags.** Optional `docs.label` customizes the displayed version name, including
+for the project's development documentation.
 
 Each release can have documentation, downloads, or both. Each download has `name`,
 `type` (`source` or `binary`), and `link`; provide `asc` and `sha512` together when
@@ -100,7 +100,7 @@ matches automatically, and keeps the selected project's category expanded.
 
 The separate `/get-started/` page contains Showcase and installation quickstarts.
 Both come from `data/get-started.yml`, separate from the project catalog. Its
-`showcase` block contains Showcase's identity, `next.docs`, and `quickstart`
+`showcase` block contains Showcase's identity, `docs`, and `quickstart`
 commands; its `skywalking` block contains platform installation commands.
 
 `showcase.diagram` defines the interactive application and observability graphs,
@@ -112,7 +112,7 @@ the music application; BanyanDB stores SkyWalking telemetry. Show ecosystem
 integrations separately from native agents: the Showcase collectors export
 OTLP metrics, while its Kubernetes mesh scenario supplies ALS access logs and
 Zipkin traces. Broader receiver capabilities belong in the component details.
-The documentation link comes from `showcase.next.docs.link`.
+The documentation link comes from `showcase.docs.link`.
 
 #### Search and AI answers
 
