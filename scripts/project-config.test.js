@@ -9,13 +9,10 @@ function fixture() {
         name: 'Example', user: 'apache', repo: 'example', repoUrl: 'https://github.com/apache/example.git',
         icon: 'example', description: 'Example project.', extraContributors: [{login: 'extra-person'}],
         dockerImages: [{name: 'Server', link: 'https://hub.docker.com/r/apache/example'}],
-        next: {docs: {link: '/docs/example/next/readme/', commitId: 'main', label: 'Development'}},
+        docs: {link: '/docs/example/next/readme/', latest: '/docs/example/latest/readme/', commitId: 'main', label: 'Development'},
         releases: [{
           version: 'v2.0.0', latest: true,
-          docs: {
-            link: '/docs/example/v2.0.0/readme/', commitId: 'release-pin', label: '2.0.0 (Platform 11)',
-            latestLink: '/docs/example/latest/readme/', latestCommitId: 'latest-docs-fix-pin',
-          },
+          docs: {link: '/docs/example/v2.0.0/readme/', commitId: 'release-pin', label: '2.0.0 (Platform 11)'},
           downloads: [{name: 'Source archive', type: 'source', link: 'https://downloads.example.org/v2.tar.gz', asc: 'https://downloads.example.org/v2.tar.gz.asc', sha512: 'https://downloads.example.org/v2.tar.gz.sha512'}],
         }, {
           version: 'v1.0.0', latest: false,
@@ -26,20 +23,20 @@ function fixture() {
     }],
     showcase: {
       name: 'Showcase', user: 'apache', repo: 'example-showcase', repoUrl: 'https://github.com/apache/example-showcase.git',
-      description: 'Runnable demo.', next: {docs: {link: '/docs/example-showcase/next/readme/', label: 'Showcase for v11'}},
+      description: 'Runnable demo.', docs: {link: '/docs/example-showcase/next/readme/', label: 'Showcase for v11'},
     },
   };
 }
 
 function project(config) { return config.catalogs[0].projects[0]; }
 
-test('preserves the complete docs URL set, labels, order and intentionally different commit pins', () => {
+test('preserves the complete docs URL set, labels and order, with Latest on the latest release pin', () => {
   const config = validateProjectConfig(fixture());
   const groups = deriveDocsList(config);
   assert.deepEqual(groups[0].list[0].docs, [{version: 'Next', link: '/docs/example-showcase/next/readme/', versionName: 'Showcase for v11'}]);
   assert.deepEqual(groups[1].list[1].docs, [
     {version: 'Next', link: '/docs/example/next/readme/', commitId: 'main', versionName: 'Development'},
-    {version: 'Latest', link: '/docs/example/latest/readme/', commitId: 'latest-docs-fix-pin'},
+    {version: 'Latest', link: '/docs/example/latest/readme/', commitId: 'release-pin'},
     {version: 'v2.0.0', link: '/docs/example/v2.0.0/readme/', commitId: 'release-pin', versionName: '2.0.0 (Platform 11)'},
     {version: 'v1.0.0', link: '/docs/example/v1.0.0/readme/', commitId: 'old-release-pin'},
   ]);
@@ -54,12 +51,12 @@ test('a release addition updates the generated Latest entry without a separate L
   item.releases[0].latest = false;
   item.releases.unshift({
     version: 'v3.0.0', latest: true,
-    docs: {link: '/docs/example/v3.0.0/readme/', commitId: 'new-release-pin', latestLink: '/docs/example/latest/readme/', latestCommitId: 'new-latest-docs-pin'},
+    docs: {link: '/docs/example/v3.0.0/readme/', commitId: 'new-release-pin'},
   });
   validateProjectConfig(config);
   const docs = docsForProject(item);
   assert.equal(docs.filter(doc => doc.version === 'Latest').length, 1);
-  assert.equal(docs.find(doc => doc.version === 'Latest').commitId, 'new-latest-docs-pin');
+  assert.equal(docs.find(doc => doc.version === 'Latest').commitId, 'new-release-pin');
   assert.equal(docs.find(doc => doc.version === 'v3.0.0').commitId, 'new-release-pin');
   assert.deepEqual(docs.map(doc => doc.link).sort(), [...previousUrls, '/docs/example/v3.0.0/readme/'].sort());
   assert.equal(item.releases.some(release => release.version === 'Latest'), false);
@@ -69,23 +66,27 @@ test('preserves external versioned docs without inventing a Latest alias', () =>
   const config = fixture();
   const item = project(config);
   delete item.repoUrl;
-  delete item.next;
+  delete item.docs;
   item.releases = [{version: 'v1.0.0', latest: true, docs: {link: 'https://github.com/apache/example/tree/v1.0.0'}}];
   validateProjectConfig(config);
   assert.deepEqual(docsForProject(item), [{version: 'v1.0.0', link: 'https://github.com/apache/example/tree/v1.0.0'}]);
 });
 
-test('requires an explicit Latest pin and accepts intentional differences from versioned pins', () => {
+test('serves Latest from the latest release pin, and rejects the retired per-release Latest keys', () => {
   const config = fixture();
   assert.doesNotThrow(() => validateProjectConfig(config));
+  // Latest renders the pin of the release marked latest, so it cannot be missing.
   delete project(config).releases[0].docs.commitId;
-  const docs = docsForProject(config.catalogs[0].projects[0]);
-  assert.equal(docs.find(doc => doc.version === 'Latest').commitId, 'latest-docs-fix-pin');
-  assert.equal(Object.hasOwn(docs.find(doc => doc.version === 'v2.0.0'), 'commitId'), false);
   assert.throws(() => validateProjectConfig(config), /requires an explicit documentation commitId/);
   project(config).releases[0].docs.commitId = 'release-pin';
-  delete project(config).releases[0].docs.latestCommitId;
-  assert.throws(() => validateProjectConfig(config), /latestLink requires an explicit latestCommitId/);
+  for (const field of ['latestLink', 'latestCommitId']) {
+    const stale = fixture();
+    project(stale).releases[0].docs[field] = '/docs/example/latest/readme/';
+    assert.throws(() => validateProjectConfig(stale), new RegExp(`docs\\.${field} is gone`));
+  }
+  const elsewhere = fixture();
+  project(elsewhere).docs.latest = '/docs/other/latest/readme/';
+  assert.throws(() => validateProjectConfig(elsewhere), /must serve the same documentation/);
 });
 
 test('rejects missing or multiple latest releases', () => {
