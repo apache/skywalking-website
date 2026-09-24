@@ -25,6 +25,56 @@ description: "Release Apache SkyWalking <Component Name> <VERSION>."
 4. Bullet list of user-facing changes from the source repo's `CHANGES.md` at the release tag. Exclude dependency bumps, build-only, and test-only items.
 5. Closing: `All issues and pull requests are [here](<github milestone link>)`
 
+## Chinese blog translation
+
+Chinese editions of English posts live in `content/zh/<same directory name>/index.md`.
+`content/zh` holds Chinese posts only; it is not a translated site.
+
+**总原则：不逐句对齐英文，而是保留技术含义、重写中文句子。** 目标是让文章读起来像中文作者
+自己写的，而不是翻译稿。
+
+**抽象词还原为具体说法.** 英文技术写作偏爱高抽象名词，直译到中文会变空洞：
+
+| 英文 | 不要 | 应该（视上下文） |
+|------|------|------------------|
+| cost / economics | 成本、经济性 | 时间、人力、精力、代价、负担、划不划算 |
+| scope | 范围 | 边界、覆盖面、做到什么程度 |
+| capability | 能力 | 能做什么（仅泛指时用"能力"） |
+| pipeline / workflow | 管道、工作流 | 流水线、流程、一整套步骤、做法、怎么干 |
+| compromise | 妥协 | 折中、退而求其次、不得不接受的方案 |
+| affordable / sustainable / repeatable | 可负担、可持续、可重复 | 做得起、划算；能长期维护、不会越做越累；能反复执行、下次还能用 |
+
+**改写英文句法为中文句法.** 不保留英文句子结构：
+
+| 英文结构 | 翻译腔 | 中文写法 |
+|----------|--------|----------|
+| This means that... | 这意味着…… | 问题在于…… / 换句话说…… |
+| What changed was... | 真正改变的是…… | 关键变化是…… / 变化在于…… |
+| The result was not X but Y | 结果不是X而是Y | 最终产出的不只是X，更重要的是Y |
+| It is X that matters | 重要的是X | X才是关键 |
+| ...which makes it... | ……这使得它…… | ……所以…… / ……于是…… |
+| by doing X, we achieved Y | 通过做X，我们实现了Y | 做了X之后，Y就…… |
+
+长定语从句拆成短句；英文的动词并列（scanning, compiling, and regenerating）要断句或用顿号；
+一句话里超过三个"的"就拆句。
+
+**被动语态改成主动或无主语：** `X was replaced by Y` → 我们用Y替换了X（不要"X被Y替换了"）；
+`It can be observed that` → 从结果来看 / 实际上。
+
+**术语.** 保留英文：专有名称与代码标识（GraalVM, Native Image, AOT, SPI, FQCN, OAL, MAL, LAL,
+BanyanDB, same-FQCN, classpath, manifest）、工具名（Claude Code, Docker, Kubernetes）、项目名
+（Apache SkyWalking）。中文化普通技术词：replacement classes → 替换类；drift detector → 漂移检测；
+consistency check → 一致性检查；code comprehension → 读懂代码。
+
+**语气.** 专业但不板着脸，可用"我们""说实话"这类第一人称；段落不要照搬英文的长段。
+
+**Frontmatter.** `title` 和 `description` 用中文重写而不是直译；`author` 的 "Sheng Wu" 改为
+"吴晟"；`date` 和 `tags` 保持不变。
+
+Before finishing, check: no `这意味着` / `真正改变的是` style translation-ese, abstract words
+resolved to concrete ones, no passive voice left, long clauses split, terminology handled
+consistently — and that it reads as if written in Chinese.
+
 ## Project configuration
 
 `data/projects.yml` owns the catalog, project metadata, documentation versions,
