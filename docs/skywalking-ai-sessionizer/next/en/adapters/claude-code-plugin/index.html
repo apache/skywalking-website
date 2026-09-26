@@ -33,7 +33,7 @@ What is recorded, and by whom Claude Code records some changes itself. Every suc
   <meta itemprop="name" content="Claude Code Plugin Internals">
   <meta itemprop="description" content="Claude Code Plugin Internals How the Claude Code plugin decides what to record, what it writes, and what was verified. The plugin is named asz-changes. Its code is under plugins/claude-code/, and what Claude Code installs, the manifest and the hooks, is under plugins/claude-code/plugin/.
 What is recorded, and by whom Claude Code records some changes itself. Every successful Edit and Write on the main stream carries the runtime’s own patch in the transcript, measured on 2,221 of 2,221 such results in a 52-session corpus. asz reads those without the plugin: the Claude Code adapter copies each patch into a change record beside the raw result when it lands the transcript.">
-  <meta itemprop="wordCount" content="3471">
+  <meta itemprop="wordCount" content="3739">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Claude Code Plugin Internals">
   <meta name="twitter:description" content="Claude Code Plugin Internals How the Claude Code plugin decides what to record, what it writes, and what was verified. The plugin is named asz-changes. Its code is under plugins/claude-code/, and what Claude Code installs, the manifest and the hooks, is under plugins/claude-code/plugin/.
@@ -1530,7 +1530,7 @@ What is recorded, and by whom Claude Code records some changes itself. Every suc
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 9511667</div>
+                  <div class="commit-id">Commit Id: 130601c</div>
                 
 
 
@@ -1667,6 +1667,33 @@ See <a href="../../setup/configuration#the-changes-adapter">Configuration</a>.</
 the model&rsquo;s own words, not in Claude Code&rsquo;s shape. Records of a different shape get a different
 dialect, even when the same runtime produced them, as the
 <a href="../../concepts-and-designs/unified-conversation-model#adapter-contract">adapter contract</a> says.</p>
+<h2 id="calls-to-mcp-servers">Calls to MCP servers</h2>
+<p>Claude Code runs the plugin&rsquo;s hook after every call to an MCP server, on the main stream and inside
+subagents. The hooks match <code>mcp__.*</code>: <code>PostToolUse</code> after a call that returned, and
+<code>PostToolUseFailure</code> after one that did not. The plugin appends one <code>execution/1</code> record per call,
+to a file beside the stream&rsquo;s change records:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>${CLAUDE_PLUGIN_DATA}/output/&lt;session-id&gt;/main.execution.jsonl
+</span></span><span style="display:flex;"><span>${CLAUDE_PLUGIN_DATA}/output/&lt;session-id&gt;/&lt;agent-id&gt;.execution.jsonl
+</span></span></code></pre></div><p>A record names the call by its tool-use id. It carries the server&rsquo;s name and where its
+configuration came from, how the call ended, <code>returned</code>, <code>failed</code> or <code>interrupted</code>, and the time
+Claude Code measured around it. It keeps the size and the SHA-256 of the arguments and of the
+answer, never their text. <code>pkg/execution</code> in the repository defines the shape, and
+<a href="../../formats/session-data#execution-records">Execution records</a> describes it as asz lands it.</p>
+<p>Measured on Claude Code 2.1.282 with a test MCP server, in the fixture
+<code>plugins/claude-code/testdata/mcp-hooks-2.1.282.jsonl</code>:</p>
+<ul>
+<li>An error the server returned, a server that exited and a call that timed out all reach
+<code>PostToolUseFailure</code>.</li>
+<li>Every hook carried <code>duration_ms</code>, failures included.</li>
+<li>A call the permission check denied reaches no hook and leaves no record.</li>
+<li>The arguments a record measures are what the server received. A <code>PreToolUse</code> hook that rewrote
+the input changed what the server received and what the hook after the call saw. The transcript
+kept the model&rsquo;s own input.</li>
+<li>A server started with <code>--mcp-config</code> has the source <code>dynamic</code>.</li>
+<li>Claude Code passes a tool&rsquo;s annotations, such as a hint that it only reads, to neither the model,
+the hooks nor the transcript. So a record cannot say whether a tool reads or writes.</li>
+</ul>
+<p><code>mcp.enabled: false</code> in the settings turns the records off.</p>
 <h2 id="exclusions">Exclusions</h2>
 <p>Exclusion means no observation: a change under an excluded directory is never seen. Every record
 names the set it ran under and the rules it expanded to, so history explains itself after the
@@ -2031,6 +2058,7 @@ project sits under a short name gets the same question from Claude Code.</p>
       <ul>
         <li><a href="#what-is-recorded-and-by-whom">What is recorded, and by whom</a></li>
         <li><a href="#output">Output</a></li>
+        <li><a href="#calls-to-mcp-servers">Calls to MCP servers</a></li>
         <li><a href="#exclusions">Exclusions</a></li>
         <li><a href="#the-read-only-skip">The read-only skip</a></li>
         <li><a href="#retention">Retention</a></li>

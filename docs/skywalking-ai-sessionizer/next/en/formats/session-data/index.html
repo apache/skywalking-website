@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Session Data">
   <meta itemprop="description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
-  <meta itemprop="wordCount" content="4397">
+  <meta itemprop="wordCount" content="5013">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Data">
   <meta name="twitter:description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
@@ -1527,7 +1527,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 9511667</div>
+                  <div class="commit-id">Commit Id: 130601c</div>
                 
 
 
@@ -1718,6 +1718,12 @@ is a directory with one file per body, and each record names its own file.</p>
           <td>the files the asz Claude Code plugin saw a tool call change, one line per call</td>
           <td>one record per observed call, with <code>id</code>, <code>tool</code> and <code>time</code> lifted from it and the line whole as one <code>data</code> part, a <code>changes/1</code> record; no <code>from</code> and no flags, so assembly emits no node for it</td>
           <td>nothing in a round; the view joins each to its step by <code>tool</code>. A transcript&rsquo;s <code>Edit</code> and <code>Write</code> results carry the same record as a second <code>data</code> part, from the runtime&rsquo;s own patch. See the <a href="../../setup/claude-code-plugin">Claude Code plugin</a>.</td>
+      </tr>
+      <tr>
+          <td><code>execution</code></td>
+          <td>what the asz Claude Code plugin&rsquo;s hook saw of each call to an MCP server, one line per call, in a file of its own beside the stream&rsquo;s change file</td>
+          <td>one record per observation, with <code>id</code>, <code>tool</code> and <code>time</code> lifted from it and the line whole as one <code>data</code> part, an <code>execution/1</code> record; no <code>from</code> and no flags, so assembly emits no node for it</td>
+          <td>nothing in a round; the view joins each to its step by <code>tool</code>, and one step can have several. See <a href="#execution-records">Execution records</a></td>
       </tr>
       <tr>
           <td><code>provider_body</code></td>
@@ -1956,7 +1962,7 @@ reads every landed file this way.</p>
       <tr>
           <td><code>call</code></td>
           <td>a request to run something</td>
-          <td><code>id</code>, <code>name</code>, <code>data</code></td>
+          <td><code>id</code>, <code>name</code>, <code>data</code>, and <code>server</code> and <code>server_tool</code> for a call to an MCP server</td>
       </tr>
       <tr>
           <td><code>result</code></td>
@@ -1980,6 +1986,12 @@ reads every landed file this way.</p>
       </tr>
   </tbody>
 </table>
+<p><code>server</code> and <code>server_tool</code> say which MCP server a call is addressed to and which of its tools. An
+adapter sets them only where its runtime&rsquo;s name for the call splits exactly. Claude Code names such a
+call <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>, and the split is made only when exactly one <code>__</code> follows <code>mcp__</code>: a
+name that holds a second <code>__</code> could split two ways, so it is left whole. The server is Claude Code&rsquo;s
+form of the configured name, so &ldquo;claude.ai Claude Docs&rdquo; is <code>claude_ai_Claude_Docs</code>. The name the
+server was configured with is in the call&rsquo;s execution record, when there is one.</p>
 <p>Every part carries <code>state</code> and <code>bytes</code>. <code>state</code> is one of <code>available</code>, <code>truncated</code>, <code>redacted</code>,
 <code>omitted</code> or <code>unavailable</code>, and <code>bytes</code> is the size of the original even when the part holds less.
 A reader is always told how much of the original it has.</p>
@@ -2060,6 +2072,80 @@ and reading that as success would report something the runtime never claimed.</p
 Claude Code files, six content-block shapes exist and four cover 99.99% of content blocks. The
 Claude Code <a href="../../adapters/claude-code#session-data-mapping">Session Data mapping</a> gives the
 counts.</p>
+<h2 id="execution-records">Execution records</h2>
+<p>An <code>execution/1</code> record says what one observer around a tool call saw it do. The transcript says what
+the model asked for and what came back. It does not say which server ran the call, how long the call
+took, or what the server was sent. The one observer today is the asz Claude Code plugin, whose hook
+runs after every call to an MCP server. Measured on Claude Code 2.1.282:</p>
+<ul>
+<li>The hook after a call names the server and where its configuration came from, the time the
+runtime measured around the call, and the input as the server received it. A hook before the call
+that rewrote the input changed what the server received and what this hook sees, while the
+transcript kept the model&rsquo;s own input.</li>
+<li>An error the server returned, a lost connection and a timeout all reach the failure hook, not the
+success hook.</li>
+<li>A call the runtime refused never reaches a hook, so it has no record.</li>
+<li>A server&rsquo;s declaration that a tool only reads, or can destroy, reaches neither the model, nor the
+hooks, nor the transcript.</li>
+</ul>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Holds</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>schema</code></td>
+          <td><code>execution/1</code></td>
+      </tr>
+      <tr>
+          <td><code>id</code></td>
+          <td>the observation&rsquo;s own identity: the tool-use id and where it was observed. One call can have several records, each with its own id. The same event handed over twice is one record</td>
+      </tr>
+      <tr>
+          <td><code>observed_by</code>, <code>boundary</code></td>
+          <td>who observed the call, <code>asz-plugin</code>, and where it stood, <code>client_hook</code>: the runtime&rsquo;s hook after the call</td>
+      </tr>
+      <tr>
+          <td><code>session</code>, <code>stream</code></td>
+          <td>the session, and <code>main</code> or the agent id the call ran under</td>
+      </tr>
+      <tr>
+          <td><code>tool</code>, <code>tool_name</code></td>
+          <td>the call&rsquo;s tool-use id, the only join to its step, and the name the runtime called it by</td>
+      </tr>
+      <tr>
+          <td><code>cwd</code></td>
+          <td>the working directory the runtime reported, which the collector&rsquo;s session filters are judged by</td>
+      </tr>
+      <tr>
+          <td><code>protocol</code></td>
+          <td><code>mcp</code></td>
+      </tr>
+      <tr>
+          <td><code>server</code></td>
+          <td><code>name</code>, the server&rsquo;s configured name, and <code>source</code>, where its configuration came from in the runtime&rsquo;s own word: for Claude Code <code>user</code>, <code>project</code>, <code>local</code>, or <code>dynamic</code> for a server given on the command line</td>
+      </tr>
+      <tr>
+          <td><code>time</code></td>
+          <td>when the observation ended</td>
+      </tr>
+      <tr>
+          <td><code>duration_ms</code></td>
+          <td>the time the runtime measured around the call, which includes any waiting before it started. It is not the server&rsquo;s own time. Absent when the observer did not say</td>
+      </tr>
+      <tr>
+          <td><code>outcome</code></td>
+          <td><code>returned</code>, <code>failed</code> or <code>interrupted</code></td>
+      </tr>
+      <tr>
+          <td><code>arguments</code>, <code>result</code></td>
+          <td>only the <code>bytes</code> and the <code>sha256</code> of the value as compact JSON with sorted keys, and <code>state</code> <code>size_only</code>. Two observations of one value have one digest, so a digest that differs from the model&rsquo;s input shows the input was changed on the way. <code>result</code> is only on a call that returned</td>
+      </tr>
+  </tbody>
+</table>
 <h2 id="dropped">Dropped</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#0a3069">&#34;dropped&#34;</span><span style="color:#f6f8fa;background-color:#82071e">:</span><span style="color:#1f2328">[{</span><span style="color:#0550ae">&#34;what&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;reasoning signature&#34;</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;bytes&#34;</span><span style="color:#1f2328">:</span><span style="color:#0550ae">588</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;why&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;a provider verifies it; a reader cannot read it&#34;</span><span style="color:#1f2328">}]</span>
 </span></span></code></pre></div><p><code>dropped</code> exists so a loss is stated rather than silent. It lists only what the dialect understood
@@ -2146,6 +2232,7 @@ dialect: what its runtime calls each name the model uses. <code>cmd/asz</code> g
             <li><a href="#what-data-holds">What data holds</a></li>
           </ul>
         </li>
+        <li><a href="#execution-records">Execution records</a></li>
         <li><a href="#dropped">Dropped</a></li>
         <li><a href="#producing-session-data">Producing Session Data</a></li>
       </ul>
