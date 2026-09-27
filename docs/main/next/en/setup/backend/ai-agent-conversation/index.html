@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="AI Agent Conversations">
   <meta itemprop="description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
-  <meta itemprop="wordCount" content="4177">
+  <meta itemprop="wordCount" content="6175">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="AI Agent Conversations">
   <meta name="twitter:description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
@@ -3834,7 +3834,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 778da3d</div>
+                  <div class="commit-id">Commit Id: d9e895f</div>
                 
 
 
@@ -3950,15 +3950,16 @@ documented by the Sessionizer under
 <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-flow/">Session Flow</a>, and
 the wire attributes under
 <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/export-otlp/">Export over OpenTelemetry</a>.</p>
-<p>The OAP routes these records like every other OTLP log: by layer, to the bundled LAL rule
-<code>lal/ai-agent.yaml</code>. The rule&rsquo;s output type, <code>ConversationFile</code>, checks the body&rsquo;s sha256 against
-<code>asz.file.digest</code> and its line count against <code>asz.lines</code>, and stores the file in the table its format names. A
-file that fails either check is dropped and counted in the <code>ai_agent_conversation_files_rejected</code> self-observability
-metric with the reason as a label, and so is a file larger than <code>maxFileBytes</code>, under the reason <code>size</code>: one
-file over the storage&rsquo;s message limit fails the write it travels in, and every record behind it in that write
-with it, so the limit is applied where one file is one record; a stored file is a verified file. A round&rsquo;s title and counts are read only
-when the record carries them: they came with a later round header, and a round from before them lands and lists
-with zero counts. The service and its instance appear on the service list under the <code>AI_AGENT</code> layer as for any
+<p>The OAP routes these records like every other OTLP log: by layer, to the bundled LAL rule <code>lal/ai-agent.yaml</code>. The
+rule&rsquo;s output type, <code>ConversationFile</code>, checks the body&rsquo;s sha256 against <code>asz.file.digest</code> and its line count against
+<code>asz.lines</code>, and stores the file in the table its format names. A file that fails either check is dropped and counted
+in the <code>ai_agent_conversation_files_rejected</code> self-observability metric with the reason as a label, and so is a file
+larger than <code>maxFileBytes</code>, under the reason <code>size</code>: one file over the storage&rsquo;s message limit fails the write it
+travels in, and every record behind it in that write with it, so the limit is applied where one file is one record; a
+stored file is a verified file. A round&rsquo;s title and counts are read only when the record carries them: they came with
+a later round header, and a round from before them lands and lists with zero talks, steps, streams, segments and
+unresolved references, and no value for the counts added later: changes, lines added and removed, model calls,
+subagents and Bash runs. The service and its instance appear on the service list under the <code>AI_AGENT</code> layer as for any
 other log sender.</p>
 <p>Nothing is folded or decoded at ingest, so an OAP cluster needs no shared state for this feature.</p>
 <h2 id="storage">Storage</h2>
@@ -3987,18 +3988,21 @@ other log sender.</p>
       </tr>
   </tbody>
 </table>
-<p>A Session Data row carries nothing but its keys and the file: the file&rsquo;s kind, stream or run, time range and name
-are on its first line and are read from there. A round&rsquo;s stored-only columns exist for the list page, which reads
-them without opening a body; its <code>round</code> number is queryable so a long chain is read window by window. The row&rsquo;s
-timestamp is the file&rsquo;s latest record time, or the conversation&rsquo;s last activity for a round, so a conversation&rsquo;s
-files are found by its own time range. A row belongs to its sender: its id is the service, the instance and the
-file&rsquo;s digest, so the same file pushed again by the same sender lands on the same row, and pushed by another
+<p>A Session Data row carries nothing but its keys and the file: the file&rsquo;s kind, its stream or run, its collected time
+and its seq are on its first line, its name is made from them, and its time range is read from its records. A round&rsquo;s
+stored-only columns exist for the list page, which reads them without opening a body; its <code>round</code> number is queryable
+so a long chain is read window by window. The row&rsquo;s timestamp is the file&rsquo;s latest record time, or the conversation&rsquo;s
+last activity for a round, so a conversation&rsquo;s files are found by its own time range. A file whose records carry no
+time, such as a manifest, a script or a child&rsquo;s meta file, takes the session&rsquo;s latest record time as known when it was
+sent. When no record of the session has a time yet, it takes its own collected time. A round from before the last
+activity was carried takes the time it was sent. A row belongs to its sender: its id is the service, the instance and
+the file&rsquo;s digest, so the same file pushed again by the same sender lands on the same row, and pushed by another
 service or sender makes another.</p>
 <ul>
-<li><strong>BanyanDB</strong>: both models live in their own group, <code>recordsAIAgent</code>, configured like the log group with hot,
-warm and cold stages under <code>SW_STORAGE_BANYANDB_AI_AGENT_*</code>, 30 days hot by default. Both tables expire
-together, because a round whose files are gone is a broken chain. See the
-<a href="../storages/banyandb">BanyanDB storage document</a>.</li>
+<li><strong>BanyanDB</strong>: both models live in their own group, <code>recordsAIAgent</code>, configured like the log group with hot, warm
+and cold stages under <code>SW_STORAGE_BANYANDB_AI_AGENT_*</code>, 30 days hot by default. Both models follow the one
+retention, each row by its own time, so the oldest files of a long conversation can expire before the newest round
+that read them; the document then names them as missing. See the <a href="../storages/banyandb">BanyanDB storage document</a>.</li>
 <li><strong>Elasticsearch</strong>: two super-dataset index families, <code>sw_ai_agent_session_data-*</code> and
 <code>sw_ai_agent_session_flow-*</code>, sharded by <code>superDatasetIndexShardsFactor</code>; retention is the single
 <code>recordDataTTL</code>. The columns the reads sort and range on, <code>seq</code>, <code>round</code> and <code>timestamp</code>, keep doc values.</li>
@@ -4006,6 +4010,82 @@ together, because a round whose files are gone is a broken chain. See the
 MySQL, since a body near <code>maxFileBytes</code> outgrows <code>MEDIUMTEXT</code> once encoded, <code>MEDIUMTEXT</code> on H2, a CLOB there,
 and <code>TEXT</code> on PostgreSQL; retention is <code>recordDataTTL</code>.</li>
 </ul>
+<h2 id="session-data-files-and-how-they-connect">Session Data files and how they connect</h2>
+<p>A conversation is two kinds of file. Session Data files are the records as the Sessionizer collected them. Session
+Flow rounds are the structure it assembled from them. Every Session Data file of a session has a <code>seq</code>, one counter
+across every stream and every kind, so a session and a seq name exactly one file. A round names the range of files it
+read, <code>from_seq</code> to <code>through_seq</code>, and its input digest chains the digest of every file in that range, so the OAP can
+tell when a file is missing or changed. A node of a round points at the record it stands on by <code>seq</code>, <code>row</code> and
+<code>block</code>: the file; the record in it, counted from 1 without the header, so row 1 is the file&rsquo;s second line; and, when
+the node stands on one part of the record, the part, counted from 0. The document takes a step&rsquo;s text and time from
+that record.</p>
+<p>A file&rsquo;s kind is on its first line, the header, and so are its stream or run and its collected time <code>at</code>. The OAP
+names the file from the header as the Sessionizer does: a prefix for its kind, the stamp from <code>at</code>, and the seq, such
+as <code>transcript-20260101T000000.000000000Z-000001.sd</code>. These are the kinds:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Kind</th>
+          <th>Path under the session</th>
+          <th>Holds</th>
+          <th>Connects to the conversation</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>transcript</code></td>
+          <td><code>streams/&lt;stream&gt;/transcript-…</code></td>
+          <td>one execution stream: the main one, a child agent&rsquo;s, or an auxiliary one, the model calls made inside a tool</td>
+          <td>the round&rsquo;s nodes point at its records; almost every step takes its text and time from here</td>
+      </tr>
+      <tr>
+          <td><code>agent_meta</code></td>
+          <td><code>streams/&lt;stream&gt;/meta-…</code></td>
+          <td>what the runtime recorded about a child agent when it began it</td>
+          <td>the child&rsquo;s stream node takes its label from it, and a child of a child is tied to the agent that started it by it</td>
+      </tr>
+      <tr>
+          <td><code>journal</code></td>
+          <td><code>runs/&lt;run&gt;/journal-…</code></td>
+          <td>a workflow run&rsquo;s journal</td>
+          <td>ties the run&rsquo;s children to the call that launched them, and gives the value each child returned; a stream without a label is named from it</td>
+      </tr>
+      <tr>
+          <td><code>workflow_manifest</code></td>
+          <td><code>runs/&lt;run&gt;/manifest-…</code></td>
+          <td>a workflow run&rsquo;s manifest</td>
+          <td>the call that launched the run, found by the run&rsquo;s batch, points at it and takes the run&rsquo;s name as <code>launched</code> in its attributes</td>
+      </tr>
+      <tr>
+          <td><code>workflow_script</code></td>
+          <td><code>runs/&lt;run&gt;/script-…</code></td>
+          <td>the program a workflow ran</td>
+          <td>nothing; it is kept because it is part of the session</td>
+      </tr>
+      <tr>
+          <td><code>changes</code></td>
+          <td><code>streams/&lt;stream&gt;/changes-…</code></td>
+          <td>the files an observation saw change, one line per observation</td>
+          <td>no node of a round; the document joins each record to its step by tool-use id, see <a href="#workspace-changes">Workspace changes</a></td>
+      </tr>
+      <tr>
+          <td><code>execution</code></td>
+          <td><code>streams/&lt;stream&gt;/execution-…</code></td>
+          <td>what the plugin saw of each call to an MCP server, one per call</td>
+          <td>no node of a round; the document joins each record to its step by tool-use id, see <a href="#tool-executions">Tool executions</a></td>
+      </tr>
+      <tr>
+          <td><code>provider_body</code></td>
+          <td><code>provider_body/provider_body-…</code></td>
+          <td>the request and response bodies of model calls</td>
+          <td>the round carries the join: an <code>llm.call</code> names its bodies, and a reader rebuilds a body from the files, see <a href="#provider-bodies">Provider bodies</a></td>
+      </tr>
+  </tbody>
+</table>
+<p>Every kind is verified and stored the same way, nothing in it is decoded at ingest, and the document lists each file
+under <code>files</code> with its kind. A kind the OAP does not know is stored and listed too, under its stream, or its run when
+it names no stream. The kinds and their records are defined by the Sessionizer under
+<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-data/">Session Data</a>.</p>
 <h2 id="query">Query</h2>
 <p>The list is a GraphQL query in <code>ai-agent-conversation.graphqls</code>. The conversation itself and its stored files are
 HTTP routes on the same server, because a document is as large as the conversation, and the files larger still.</p>
@@ -4016,26 +4096,30 @@ the Sessionizer writes on a round&rsquo;s header, <code>changes</code> with <cod
 and <code>bashRuns</code>, each absent rather than zero when the round did not carry it. The rounds are read newest first, at
 most <code>limit</code> (default 1000), then folded to one row per conversation. An optional <code>conversation</code> narrows the read to
 one conversation by id, and an optional <code>title</code> keeps only the rows whose title contains the text,
-case-insensitively — matched after folding, on the newest round&rsquo;s title, so it never widens the rounds read.
-On BanyanDB, <code>duration.coldStage: true</code> selects the cold stage; otherwise the query uses the default hot/warm stages.</li>
+case-insensitively — matched after folding, on the newest round&rsquo;s title, so it never widens the rounds read. On
+BanyanDB, <code>duration.coldStage: true</code> selects the cold stage; otherwise the query uses the default hot/warm stages.</li>
 </ul>
 <h3 id="the-conversation-view-route">The conversation view route</h3>
 <pre tabindex="0"><code>GET /ai-agent/conversations/{conversation}/v1/view?service={serviceName}&amp;instance={instanceName}[&amp;coldStage=true]
-</code></pre><p>It answers with the whole conversation, once, as one <code>asz.view</code> version 1.0 document, the document the
-Sessionizer defines under
-<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view document</a>
-and serves from its own viewer; the OAP&rsquo;s document equals it, key for key, for the same files. <code>v1</code> in the path
-is the document version. The OAP reads the conversation&rsquo;s rounds over the whole retention window, then the
-files of each session the head round names over the time range the head round carries, checks the chain, folds
-the rounds, resolves every reference into the landed records, and renders the document. Verification is
-content, not an error: a missing round or file, or a failed digest, is written into the document&rsquo;s
-<code>summary.state</code> and <code>summary.problems</code>, and the rest of the document holds whatever could still be folded. The
-fold shows as much as landed: a round that is missing, that does not read, or that the fold refuses is skipped,
-the chain resumes at the next stored round, and the absent rounds are named once as a range, as are the files a
-round names that did not land. The round the chain resumes at is listed unverified, because nothing links it to
-what is absent; the rounds after it verify against it; <code>head</code> names the last round folded. This goes further
-than the Sessionizer&rsquo;s own viewer, whose fold stops before the first gap. The document is built on every call
-and nothing is cached.</p>
+</code></pre><p>It answers with the whole conversation, once, as one <code>asz.view</code> version 1.0 document, the document the Sessionizer
+defines under <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view
+document</a> and serves from its
+own viewer; the OAP&rsquo;s document equals it, key for key, for the same files. <code>v1</code> in the path is the document version. The
+OAP reads the conversation&rsquo;s rounds over the whole retention window, then the files of each session the head round names
+over the time range the head round carries, checks the chain, folds the rounds, resolves every reference into the landed
+records, and renders the document. Verification is content, not an error: a missing round or file, or a failed digest,
+is written into the document&rsquo;s <code>summary.state</code> and <code>summary.problems</code>, and the rest of the document holds whatever could
+still be folded. The fold shows as much as landed: a round that is missing, that does not read, or that the fold refuses
+is skipped, the chain resumes at the next stored round, and the absent rounds are named once as a range, as are the
+files a round names that did not land. After a round that is missing or does not read, the round the chain resumes at is
+listed unverified, because nothing links it to what is absent; a round the fold refused still reads, so the round after
+it verifies against it. The rounds after the resumed one verify against it; <code>head</code> names the last round folded. This
+goes further than the Sessionizer&rsquo;s own viewer, whose fold stops before the first gap. A round does not read when a line
+of it is not a JSON object, holds more than 256 objects and lists open at once, or has a field of another type than
+Session Flow gives it, such as a count written as a string. It does not read either when a sequence, a row or the round
+number in it is negative. No round the Sessionizer writes does. In a Session Data file, the records end before a line
+that is not a JSON object or nests that deep. No landed line measured nests deeper than sixteen levels. The document is
+built on every call and nothing is cached.</p>
 <table>
   <thead>
       <tr>
@@ -4070,21 +4154,22 @@ and nothing is cached.</p>
       </tr>
       <tr>
           <td>status</td>
-          <td>200 with the document; 400 when the service or the instance is not named, or when <code>coldStage</code> is neither true nor false; 404 when the sender stores no round of the conversation; 500 on a storage failure. An error is <code>application/problem+json</code> (<a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>): <code>{&quot;type&quot;: &quot;about:blank&quot;, &quot;title&quot;: &quot;Not Found&quot;, &quot;status&quot;: 404, &quot;detail&quot;: &quot;...&quot;}</code></td>
+          <td>200 with the document; 400 when the service or the instance is not named, or when <code>coldStage</code> is neither true nor false; 404 when the sender stores no round of the conversation; 500 on a storage failure; 503 when <code>viewRequestTimeout</code> runs out before the document starts, and a response already started is cut short instead. An error is <code>application/problem+json</code> (<a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>): <code>{&quot;type&quot;: &quot;about:blank&quot;, &quot;title&quot;: &quot;Not Found&quot;, &quot;status&quot;: 404, &quot;detail&quot;: &quot;...&quot;}</code></td>
       </tr>
   </tbody>
 </table>
 <p>The route is on the core HTTP server beside <code>/graphql</code>, so it has the same host, port, context path and TLS
-settings, and serves HTTP/1.1 and HTTP/2 alike. The body is streamed: it is written to the response as it is
-rendered, never held whole in memory, and a slow client holds back the render. The route runs under its own
+settings, and serves HTTP/1.1 and HTTP/2 alike. The document is built whole from the folded rounds and the files it
+reads, so its memory grows with the conversation; its text is then streamed, written to the response as it is
+rendered, and a slow client holds back the render. The route runs under its own
 timeout, <code>viewRequestTimeout</code>, in place of the server&rsquo;s default of ten seconds, because the floor for a large
 conversation is seconds of storage reads plus seconds of fold and render.</p>
 <p>The conversation page of the UI opens a conversation with this route. What a step only points at, such as the provider
 bodies of an <code>llm.call</code>, it loads through the files route when a reader opens it.</p>
 <h3 id="the-conversation-files-route">The conversation files route</h3>
-<pre tabindex="0"><code>GET /ai-agent/conversations/{conversation}/v1/files?service={serviceName}&amp;instance={instanceName}&amp;session={session}&amp;seq={seq}[&amp;seq={seq}...][&amp;coldStage=true]
-</code></pre><p>It answers with chosen Session Data files of a conversation&rsquo;s session, streamed, so a page loads what a step points at,
-such as the provider bodies of an <code>llm.call</code>, only when a reader opens it. A file is chosen by its session and its
+<pre tabindex="0"><code class="language-GET" data-lang="GET">/ai-agent/conversations/{conversation}/v1/files?service={serviceName}&amp;instance={instanceName}&amp;session={session}&amp;seq={seq}[&amp;seq={seq}...][&amp;coldStage=true]
+</code></pre><p>It answers with chosen Session Data files of a conversation&rsquo;s session, streamed, so a page loads what a step points
+at, such as the provider bodies of an <code>llm.call</code>, only when a reader opens it. A file is chosen by its session and its
 landed seq: the Sessionizer assigns a seq once per file within a session, one counter for every stream and kind, and
 the storage reads a file by exactly those two. The document&rsquo;s <code>files[]</code> gives every file&rsquo;s <code>seq</code> and its name, whose
 first segment is its session. There is no read of every file: a reader chooses each one. The route reads the named
@@ -4107,7 +4192,7 @@ session under the named sender, so the session is the caller&rsquo;s to choose, 
       </tr>
       <tr>
           <td><code>seq</code></td>
-          <td>required, one to 32 times, a file&rsquo;s landed seq. The Sessionizer cuts a file at 2 MiB, so a response holds about 64 MiB at most; a reader wanting more asks again</td>
+          <td>required, one to 32 times, a file&rsquo;s landed seq. The Sessionizer cuts a file at 2 MiB by default, so a response is usually no more than about 64 MiB; a file holding one larger record is larger, up to <code>maxFileBytes</code>. A reader wanting more files asks again</td>
       </tr>
       <tr>
           <td><code>Accept</code></td>
@@ -4119,7 +4204,7 @@ session under the named sender, so the session is the caller&rsquo;s to choose, 
       </tr>
       <tr>
           <td>status</td>
-          <td>200 with the files, none when no seq is stored; 400 when the service, the instance or the session is not named, when no seq is, when more than 32 are, when one is not a positive whole number, or when <code>coldStage</code> is neither true nor false; 404 when the sender stores no round of the conversation; 500 on a storage failure before the first file. A failure after the first file ends the response early.</td>
+          <td>200 with the files, none when no seq is stored; 400 when the service, the instance or the session is not named, when no seq is, when more than 32 are, when one is not a positive whole number, or when <code>coldStage</code> is neither true nor false; 404 when the sender stores no round of the conversation; 500 on a storage failure before the first file; 503 when the route&rsquo;s timeout runs out before the first file. A failure after the first file ends the response early.</td>
       </tr>
   </tbody>
 </table>
@@ -4129,33 +4214,38 @@ session under the named sender, so the session is the caller&rsquo;s to choose, 
 ...
 {&#34;t&#34;:&#34;end&#34;,&#34;records&#34;:14,&#34;digest&#34;:&#34;...&#34;}
 </code></pre><p>The naming line carries the file&rsquo;s name as the document lists it, its <code>seq</code>, its own newline count <code>lines</code>, its size
-<code>bytes</code>, and the sha256 of its bytes <code>digest</code>. It also carries <code>copies</code> where the read saw that seq more than
-once, which happens when the same seq was stored with different bytes - two roots of one session pushed by one sender,
-after a repack. The file served is the first, and <code>copies</code> says the others are there, so a reader can say so rather
-than show one copy as the whole truth; the field is absent when there is one. It counts what the read returned rather
-than what the storage holds, since a storage caps what one query answers with, so read it as &ldquo;more than one&rdquo;. Exactly <code>bytes</code> bytes follow: the file,
-byte for byte. A non-empty file
-that does not end with a newline is followed by one, which is not part of it, so the next naming line starts a line; an
-empty file is followed by nothing. A file the Sessionizer wrote ends with a newline, so a reader may equally take
-<code>lines</code> lines. Nothing in a file is escaped. The files come in seq order, which is the order a reader must add provider
-bodies in, because a body refers to pieces and bodies that landed before it. A seq no stored file answers is left out
-rather than failing the request. A line can be as large as the largest file, so a reader must not assume short lines.</p>
+<code>bytes</code>, and the sha256 of its bytes <code>digest</code>. It also carries <code>copies</code> where the read saw that seq more than once,
+which happens when the same seq was stored with different bytes - two roots of one session pushed by one sender, after
+a repack. The file served is the first, and <code>copies</code> says the others are there, so a reader can say so rather than
+show one copy as the whole truth; the field is absent when there is one. It counts what the read returned rather than
+what the storage holds, since a storage caps what one query answers with, so read it as &ldquo;more than one&rdquo;. Exactly
+<code>bytes</code> bytes follow: the file, byte for byte. A non-empty file that does not end with a newline is followed by one,
+which is not part of it, so the next naming line starts a line; an empty file is followed by nothing. A file the
+Sessionizer wrote ends with a newline, so a reader may equally take <code>lines</code> lines. Nothing in a file is escaped. The
+files come in seq order, which is the order a reader must add provider bodies in, because a body refers to pieces and
+bodies that landed before it. A seq no stored file answers is left out rather than failing the request. A line can be
+as large as the largest file, so a reader must not assume short lines.</p>
 <p>The files are read one storage window at a time and each window is written before the next is read, so a response is
-never held whole. The files are read over the time range of the conversation&rsquo;s newest intact round, from its session&rsquo;s
-first activity to its last or the round&rsquo;s own stored time, whichever is later, even when the view cannot fold that
-round; up to the head round&rsquo;s own time when no round is intact. A file stamped outside that range is left out.</p>
+never held whole. The files are read over the time range of the conversation&rsquo;s newest intact round among its newest
+16, from its session&rsquo;s first activity to its last or the round&rsquo;s own stored time, whichever is later, even when the
+view cannot fold that round; from the start of time up to the head round&rsquo;s own time when none of those 16 is intact. A
+file stamped outside that range is left out.</p>
 <h2 id="workspace-changes">Workspace changes</h2>
-<p>The Sessionizer&rsquo;s Claude Code plugin records, beside each tool call, which files the call changed and how, as a
-git-style diff. Those records reach the OAP two ways, and the document shows both:</p>
+<p>The Sessionizer&rsquo;s Claude Code plugin records which files changed while a tool call ran, within the directories it
+watches, and how, as a git-style diff. A record says how much it saw: a scan cut short has <code>coverage: partial</code> and may
+list its <code>gaps</code>, and a file whose hunks could not be kept, such as one over the size cap, carries its hashes without
+them. Those records reach the OAP two ways, and the document shows both:</p>
 <ul>
 <li><strong>A <code>changes</code> file</strong>, a Session Data file of kind <code>changes</code> under the stream the tool ran on,
-<code>&lt;session&gt;/streams/&lt;stream&gt;/changes-&lt;stamp&gt;-&lt;seq&gt;.sd</code>, one line per observed call. It lands, is verified and is
-stored like any other Session Data file: it takes a seq of its own between the transcript files that landed around
-it, a round&rsquo;s window covers it and its input digest chains it, and it is listed under <code>files</code> with its kind. Nothing
-about it is decoded at ingest.</li>
-<li><strong>The runtime&rsquo;s own patch.</strong> Claude Code records a patch for its own <code>Edit</code>, <code>Write</code> and <code>NotebookEdit</code> calls, and
-the Sessionizer lands it as a second <code>data</code> part on the call&rsquo;s result record in the transcript, beside the raw
-result, which stays byte for byte.</li>
+<code>&lt;session&gt;/streams/&lt;stream&gt;/changes-&lt;stamp&gt;-&lt;seq&gt;.sd</code>, one line per observation: a call watched in several
+directories has one record for each, and a change no call&rsquo;s window covered has an unattributed one of its own, which
+names no tool. It lands, is verified and is stored like any other Session Data file: it takes a seq of its own
+between the transcript files that landed around it, a round&rsquo;s window covers it and its input digest chains it, and
+it is listed under <code>files</code> with its kind. Nothing about it is decoded at ingest.</li>
+<li><strong>The runtime&rsquo;s own patch.</strong> Claude Code records what its own <code>Edit</code>, <code>Write</code> and <code>NotebookEdit</code> calls changed: a
+patch for the first two, and the notebook before and after for the third, whose hunks the Sessionizer works out. The
+Sessionizer lands the result as a second <code>data</code> part on the call&rsquo;s result record in the transcript, beside the raw
+result, which is kept as the runtime wrote it, apart from the white space between its JSON tokens.</li>
 </ul>
 <p>Each record is a <code>changes/1</code> document: the tool-use id it belongs to, who captured it, <code>claude-code</code> for a patch the
 runtime recorded or <code>asz-plugin</code> for one the plugin observed, the basis of the observation, the windows scanned, and
@@ -4163,24 +4253,57 @@ one entry per file with its operation, the hashes on both sides and the hunks. T
 by the tool-use id, which the record names and the step&rsquo;s call part carries; nothing is matched by time. In the
 <code>asz.view</code> document:</p>
 <ul>
-<li><code>workspace_changes</code> lists every record of the session in time order, each with the <code>step</code> it belongs to and the
-<code>ref</code> it was read from, then the record&rsquo;s own fields as <code>changes/1</code> lists them;</li>
+<li><code>workspace_changes</code> lists, in time order, every record of the session&rsquo;s <code>changes</code> files and the runtime&rsquo;s own patch
+of every tool step the fold holds, each with the <code>step</code> it belongs to and the <code>ref</code> it was read from, then the
+record&rsquo;s own fields as <code>changes/1</code> lists them, in its order, a data part of another shape not being a record; a
+patch on a result record no step reads is not listed;</li>
 <li><code>summary.changes</code> counts them;</li>
 <li>a tool step lists the ids of its records under <code>changes</code>.</li>
 </ul>
-<p>The runtime&rsquo;s record and the plugin&rsquo;s record of one call share its id and are both kept, the runtime&rsquo;s first. A record
-with <code>basis: skipped_read_only</code> carries no changes and means the call was not observed, never that nothing changed. A
-session folds to the same nodes with and without its <code>changes</code> files: they are evidence beside a stream, not steps of
-it. The record and the entry are defined by the Sessionizer under
-<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view document</a>, and
-the plugin under
-<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/">The Claude Code plugin</a>.</p>
+<p>A record is kept once by who captured it and its id. The runtime&rsquo;s record and the plugin&rsquo;s record of one call name the
+same tool-use id and are both kept, and when their times are equal the runtime&rsquo;s comes first. A record that joins no
+step, such as an unattributed one, is kept with an empty <code>step</code>. A record with <code>basis: skipped_read_only</code> carries no
+changes and means the call was not observed, never that nothing changed. A session folds to the same nodes with and
+without its <code>changes</code> files: they are evidence beside a stream, not steps of it. The record and the entry are defined
+by the Sessionizer under <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view
+document</a>, and the plugin
+under <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/">The Claude Code
+plugin</a>.</p>
+<h2 id="tool-executions">Tool executions</h2>
+<p>The Sessionizer&rsquo;s Claude Code plugin also records what each call to an MCP server did: which server ran it, where the
+server&rsquo;s configuration came from, how the call ended and how long the runtime waited for it.</p>
+<ul>
+<li><strong>An <code>execution</code> file</strong>, a Session Data file of kind <code>execution</code> under the stream the call ran on,
+<code>&lt;session&gt;/streams/&lt;stream&gt;/execution-&lt;stamp&gt;-&lt;seq&gt;.sd</code>, one line per observed call. It lands, is verified and is
+stored like any other Session Data file, and nothing about it is decoded at ingest.</li>
+</ul>
+<p>Each record is an <code>execution/1</code> document: its own id, the tool-use id of the call it observed, who observed it and
+where, the server, and the outcome, <code>returned</code>, <code>failed</code> or <code>interrupted</code>. When the hook reported them, it also has
+the milliseconds the runtime measured around the call, the size and the SHA-256 of the arguments, and, for a call that
+returned, the size and the SHA-256 of the answer; never their text. In the <code>asz.view</code> document:</p>
+<ul>
+<li><code>tool_executions</code> lists every record of the session in time order, each with the <code>step</code> it belongs to and the
+<code>ref</code> it was read from, then the record&rsquo;s own fields as <code>execution/1</code> lists them, in its order, a data part of
+another shape not being a record; records of one instant are in the order they were read;</li>
+<li>a tool step lists the ids of its records under <code>executions</code>;</li>
+<li>a call to an MCP server carries <code>mcp_server</code> and <code>mcp_tool</code> in its <code>attrs</code> when its name, <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>,
+splits into exactly one server and one tool. The attributes come with the round.</li>
+</ul>
+<p>The join is the tool-use id, which the record names and the step&rsquo;s call part carries; nothing is matched by time. One
+call can have several records, and a record is kept once by its own id, so a line landed twice is one record. A record
+whose call is not a step of the document is kept with no step. A session folds to the same nodes with and without its
+<code>execution</code> files. The record is defined by the Sessionizer under <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view
+document</a>, and the plugin
+under <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin/">The Claude Code
+plugin</a>.</p>
 <h2 id="provider-bodies">Provider bodies</h2>
-<p>The Sessionizer can also land the request and response bodies an agent runtime exchanged with its model provider.
-A request carries what no transcript records: the system prompt, the tool definitions and the reminders the runtime
-inserted. Every call sends its whole message list again, so the Sessionizer cuts each body into what the session
-did not hold yet and a manifest that rebuilds it byte for byte, from its own pieces and from pieces and bodies that
-landed before it.</p>
+<p>The Sessionizer can also land what each model call was sent and what came back. For Claude Code these are the request
+and response bodies it exchanged with its model provider: a request carries what no transcript records, the system
+prompt, the tool definitions and the reminders the runtime inserted. For LangChain and LangGraph they are each model
+run&rsquo;s inputs and outputs, as the LangSmith client sent them. Every call sends its whole message list again, so the
+Sessionizer cuts each body into what the session did not hold yet and a manifest that rebuilds it byte for byte, from
+its own pieces and from pieces and bodies that landed before it. A body it cannot cut safely is kept whole, as an
+<code>unknown</code> part that says why.</p>
 <ul>
 <li><strong>A <code>provider_body</code> file</strong>, a Session Data file of kind <code>provider_body</code>, one directory for the session,
 <code>&lt;session&gt;/provider_body/provider_body-&lt;stamp&gt;-&lt;seq&gt;.sd</code>, one record per body. It lands, is verified and is stored
@@ -4191,20 +4314,25 @@ is never rebuilt by the OAP.</li>
 <ul>
 <li>an <code>llm.call</code> step lists its bodies under <code>provider_bodies</code>, its request and then its response, each as its <code>role</code>
 and the <code>ref</code> of the landed record, never the body itself;</li>
-<li><code>summary.provider_bodies</code> counts the session&rsquo;s bodies, and <code>summary.captured_prompts</code> the calls whose request is
-listed.</li>
+<li><code>summary.provider_bodies</code> counts the session&rsquo;s bodies as of the folded chain, joined or not, and
+<code>summary.captured_prompts</code> the calls whose request is listed.</li>
 </ul>
-<p>A response joins to the call whose message id it carries. A request joins to the call of a stream whose previous
-call&rsquo;s response carries the request id the request names, and whose prompt is the prompt the request names, when
-exactly one request and one call carry those two ids. A synthetic call takes part in no join, and no request joins in
-a stream whose landed transcript lines have a gap. Nothing is matched by position or by time. A body refers to earlier
-records of the same session, sometimes in an earlier file, so a reader that wants a body takes the <code>provider_body</code>
-entries of <code>files[]</code> with a seq up to the one its <code>ref</code> names, reads them through the files route by session and seq,
-and rebuilds the body as the Sessionizer describes. A session folds to
-the same nodes with and without its <code>provider_body</code> files. The record, the manifest and the join are defined by the
-Sessionizer under
-<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-data/">Session Data</a> and
-<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view document</a>.</p>
+<p>The OAP does not make the join. The Sessionizer makes it when it parses a round, and the round carries it: an
+<code>llm.call</code> node names its bodies in its <code>provider_bodies</code> attribute, and the <code>session</code> node states
+<code>provider_bodies_landed</code>, how many bodies the session holds. The OAP reads both from the fold and opens no body to do
+it. A round whose <code>provider_bodies</code> attribute is malformed, a value other than null that is not a list of bodies, a
+role that is not <code>request</code> or <code>response</code>, a seq or row below one, or a reference past the round&rsquo;s own range, is refused
+like a round with any other bad reference. Whether the record a body names exists and rebuilds is not checked here: a
+missing file is the chain&rsquo;s problem, and a body is only rebuilt by a reader. The document lists the bodies on the
+step, not in its <code>attrs</code>. A missing <code>provider_body</code> file does not change what a call names: the file is the chain&rsquo;s
+problem, named under <code>summary.problems</code>.</p>
+<p>A body refers to earlier records of the same session, sometimes in an earlier file, so a reader that wants a body
+takes the <code>provider_body</code> entries of <code>files[]</code> with a seq up to the one its <code>ref</code> names, reads them through the files
+route by session and seq, and rebuilds the body as the Sessionizer describes. The record, the manifest and the rules
+of the join are defined by the Sessionizer under <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-data/">Session
+Data</a>, <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-flow/">Session
+Flow</a> and <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view
+document</a>.</p>
 <h2 id="configuration">Configuration</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">ai-agent-conversation</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">selector</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION:default}<span style="color:#fff">
@@ -4233,7 +4361,7 @@ Sessionizer under
       </tr>
       <tr>
           <td><code>readWindow</code></td>
-          <td>how many Session Data files, or Session Flow rounds, one storage query fetches. A batch size and not a limit: a view reads every round of the chain and every file of the conversation, and the files route the named ones, this many per query, so a conversation of 865 rounds is 55 queries at 16. Raising it trades bytes in one response for round trips, which are most of the wait before a view&rsquo;s first byte; it must stay within <code>maxResponseBytes</code>. Both are cut at 2 MiB by the Sessionizer, so a window is a few tens of megabytes.</td>
+          <td>how many Session Data files, or Session Flow rounds, one storage query fetches. A batch size and not a limit: a view reads every round of the chain and every file of the conversation, and the files route the named ones, this many per query, so a conversation of 865 rounds is 55 queries at 16. Raising it trades bytes in one response for round trips, which are most of the wait before a view&rsquo;s first byte; it must stay within <code>maxResponseBytes</code>. Both are cut at 2 MiB by default by the Sessionizer, so a window is usually a few tens of megabytes.</td>
       </tr>
       <tr>
           <td><code>maxResponseBytes</code></td>
@@ -4241,21 +4369,24 @@ Sessionizer under
       </tr>
       <tr>
           <td><code>maxFileBytes</code></td>
-          <td>the largest file stored, in bytes; a larger one is rejected at ingest and counted under the reason <code>size</code>. 15 MiB by default, under BanyanDB&rsquo;s 16 MiB gRPC message limit. The Sessionizer cuts files at 2 MiB, so only a record landed whole comes near it; a test lowers this to prove the rejection without pushing a file that size.</td>
+          <td>the largest file stored, in bytes; a larger one is rejected at ingest and counted under the reason <code>size</code>. 15 MiB by default, under BanyanDB&rsquo;s 16 MiB gRPC message limit. The Sessionizer cuts files at 2 MiB by default, and a file can still be larger: for a Claude Code transcript the budget is on the source bytes read, and when one source line is over it the file takes that line and every complete line after it; a provider body over it lands alone; a test lowers this to prove the rejection without pushing a file that size.</td>
       </tr>
   </tbody>
 </table>
 <h3 id="turning-the-feature-off">Turning the feature off</h3>
 <p>The GraphQL query module requires this module, so the <code>-</code> selector cannot remove it; <code>SW_AI_AGENT_CONVERSATION=none</code>
-selects the <code>none</code> provider instead, which answers <code>listConversations</code> with an empty result and an <code>errorReason</code> saying
-the module is disabled, and registers no conversation route, so a <code>GET</code> on the view or the files route is a 404.</p>
+selects the <code>none</code> provider instead, which answers <code>listConversations</code> with an empty result and an <code>errorReason</code>
+saying the module is disabled, and registers no conversation route, so a <code>GET</code> on the view or the files route is a
+404.</p>
 <p>It also disables the two record models, so nothing of the feature reaches the storage: neither table is created, nor
 the BanyanDB <code>recordsAIAgent</code> group, whose only members they are. A file the bundled LAL rule still verifies is
 dropped for want of a record worker; drop <code>ai-agent</code> from <code>SW_LOG_LAL_FILES</code> as well to skip that work.</p>
 <h2 id="limits-on-the-path">Limits on the path</h2>
 <ul>
 <li>The OAP&rsquo;s OTLP/HTTP endpoint accepts requests of up to 10 MiB, the HTTP server&rsquo;s default. The Sessionizer&rsquo;s
-request budget defaults to 8 MiB for that reason; a single file is cut at 2 MiB, so it always fits.</li>
+request budget defaults to 8 MiB for that reason, and a file is cut at 2 MiB by default. A file holding one record
+larger than that, and a round covering only such a file, are sent whole, so the receiver&rsquo;s limit and <code>maxFileBytes</code>
+must allow the largest one.</li>
 <li>The files of a conversation, and its rounds, are read in windows of <code>readWindow</code> per storage query, inside one
 view request. On BanyanDB each of those queries may answer
 with up to <code>maxResponseBytes</code>, 100 MiB by default, as a call option on the shared client in place of its 50 MB
@@ -4274,18 +4405,28 @@ document in about five seconds after about six seconds of storage reads, which i
 route with its own timeout and not a GraphQL query.</li>
 </ul>
 <h2 id="metrics-of-the-agent-runtime">Metrics of the agent runtime</h2>
-<p>Beside the files, the layer takes the agent runtime&rsquo;s own OpenTelemetry metrics, from either of two senders:</p>
+<p>Beside the files, the Sessionizer&rsquo;s collection pipeline derives metrics from the files it lands and sends them over
+the same connection; <code>asz push</code> sends the metrics a storage root already holds, and derives none. It derives them when
+its <code>metrics.enabled</code> is on and sends them when its <code>export.otlp.metrics</code> is on, both by default. Its first derivation
+over a root reaches back only <code>metrics.lookback</code>, 72 hours by default, so a conversation older than that has its files
+in the OAP but not its metrics; <code>0</code> or <code>none</code> derives all of it. They are one family, named for any agent:</p>
 <ul>
-<li><strong>The Sessionizer</strong>, with <code>metrics: true</code> on its <code>claude-code-local</code> adapter: <code>asz collect</code> derives Claude Code&rsquo;s
-token metric from the landed transcripts and sends it beside the files over the same connection, as <code>asz push</code> does
-for a storage root that is already there. It is a reconstructed subset of what the runtime&rsquo;s exporter sends: the
-same name, unit and kind, the four token types, <code>main</code> and <code>subagent</code> as the query source, the model and the
-session. Cost, active time and the user, terminal and attribution labels are not in a transcript, and are never
-estimated.</li>
-<li><strong>Claude Code&rsquo;s own exporter</strong>, pointed at the OAP directly, <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> on 11800 over gRPC or on
-12800 over HTTP, or through the Sessionizer&rsquo;s <code>claude-code-otlp</code> adapter, which lands each request as received: the
-full family with every label, and the exporter&rsquo;s other metrics with it.</li>
+<li><code>agent.token.usage</code>, the tokens of each finished model call of a Claude Code transcript: the four token types,
+<code>main</code> and <code>subagent</code> as the query source, the model and the session. For those calls it counts what Claude Code&rsquo;s
+own exporter calls <code>claude_code.token.usage</code>. The exporter also counts auxiliary calls, such as the one that names a
+session, which never reach a transcript, so their tokens are not here. Cost, active time and the user, terminal and
+attribution labels are not in a transcript either, and are never estimated.</li>
+<li><code>agent.mcp.calls</code> and <code>agent.mcp.duration</code>, one per call to an MCP server the Claude Code plugin recorded, and the
+milliseconds the runtime measured around it: the server, the tool, the source of the server&rsquo;s configuration, the
+outcome and the query source. A call whose record has no duration counts as a call and adds no time; on Claude Code
+2.1.282 every record had one.</li>
 </ul>
+<p>Claude Code&rsquo;s own exporter can also be pointed at the OAP directly, <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> on 11800 over gRPC
+or on 12800 over HTTP. The rules read its other metrics, cost, active time, sessions, lines of code, commits, pull
+requests and edit decisions, and not its token metric: the tokens come from the Sessionizer, so a call is never
+counted twice when both send. The exporter names its service <code>claude-code</code> unless told otherwise, and the rules group
+by service, so set its <code>service.name</code> in <code>OTEL_RESOURCE_ATTRIBUTES</code> to the Sessionizer&rsquo;s service, <code>Claude Code</code> by
+default, to see both on one service.</p>
 <p>Whichever sends, the resource must carry <code>service.layer=AI_AGENT</code>, which is what the rules filter on, and a
 <code>service.instance.id</code> naming the sender; the Sessionizer sets both, <code>AI_AGENT</code> and <code>user@host</code> by default, and the
 exporter takes them from <code>OTEL_RESOURCE_ATTRIBUTES</code>. The rule set is <code>otel-rules/ai-agent/*</code>, enabled by default in
@@ -4306,81 +4447,115 @@ exporter takes them from <code>OTEL_RESOURCE_ATTRIBUTES</code>. The rule set is 
           <td><code>tokens</code></td>
           <td></td>
           <td>tokens per minute, every type</td>
-          <td>both</td>
+          <td>the Sessionizer</td>
       </tr>
       <tr>
           <td><code>tokens_by_type</code></td>
           <td><code>type</code>: <code>input</code>, <code>output</code>, <code>cacheRead</code>, <code>cacheCreation</code></td>
           <td>tokens per minute</td>
-          <td>both</td>
+          <td>the Sessionizer</td>
       </tr>
       <tr>
           <td><code>tokens_by_model</code></td>
           <td><code>model</code>, <code>type</code></td>
           <td>tokens per minute</td>
-          <td>both</td>
+          <td>the Sessionizer</td>
       </tr>
       <tr>
           <td><code>tokens_by_source</code></td>
-          <td><code>query_source</code>: <code>main</code>, <code>subagent</code>, and from the exporter also <code>auxiliary</code>; <code>type</code></td>
+          <td><code>query_source</code>: <code>main</code>, <code>subagent</code>; <code>type</code></td>
           <td>tokens per minute</td>
-          <td>both</td>
+          <td>the Sessionizer</td>
       </tr>
       <tr>
           <td><code>cache_read_share</code></td>
           <td></td>
           <td>percent of what the model read that came from cache: <code>cacheRead</code> over every type but <code>output</code></td>
-          <td>both</td>
+          <td>the Sessionizer</td>
       </tr>
       <tr>
           <td><code>cost_by_model</code></td>
           <td><code>model</code></td>
           <td>micro-dollars (USD × 1,000,000) per minute</td>
-          <td>the exporter</td>
+          <td>Claude Code&rsquo;s exporter</td>
       </tr>
       <tr>
           <td><code>active_time</code></td>
           <td><code>type</code>: <code>user</code>, <code>cli</code></td>
           <td>milliseconds per minute</td>
-          <td>the exporter</td>
+          <td>Claude Code&rsquo;s exporter</td>
       </tr>
       <tr>
           <td><code>sessions</code></td>
           <td></td>
           <td>sessions started per minute</td>
-          <td>the exporter</td>
+          <td>Claude Code&rsquo;s exporter</td>
       </tr>
       <tr>
           <td><code>lines_of_code</code></td>
           <td><code>type</code>: <code>added</code>, <code>removed</code></td>
           <td>lines per minute</td>
-          <td>the exporter</td>
+          <td>Claude Code&rsquo;s exporter</td>
       </tr>
       <tr>
           <td><code>commits</code>, <code>pull_requests</code></td>
           <td></td>
           <td>per minute</td>
-          <td>the exporter</td>
+          <td>Claude Code&rsquo;s exporter</td>
       </tr>
       <tr>
           <td><code>edit_decisions</code></td>
           <td><code>decision</code>: <code>accept</code>, <code>reject</code></td>
           <td>permission decisions on the editing tools per minute</td>
-          <td>the exporter</td>
+          <td>Claude Code&rsquo;s exporter</td>
       </tr>
   </tbody>
 </table>
-<p>Three things to know when reading them:</p>
+<p><code>mcp_endpoint.yaml</code> gives the MCP metrics per endpoint, under the prefix <code>meter_ai_agent_mcp_</code>. An endpoint is one MCP
+target the agent called, named <code>&lt;server&gt;/&lt;tool&gt;</code> under the agent&rsquo;s service, such as <code>status/lookup</code>. When the
+runtime&rsquo;s name for a call does not split into exactly one server and one tool, the tool is that whole name.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Value</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>calls</code></td>
+          <td></td>
+          <td>calls per minute</td>
+      </tr>
+      <tr>
+          <td><code>calls_by_outcome</code></td>
+          <td><code>outcome</code>: <code>returned</code>, <code>failed</code>, <code>interrupted</code></td>
+          <td>calls per minute</td>
+      </tr>
+      <tr>
+          <td><code>duration</code></td>
+          <td></td>
+          <td>milliseconds per minute, summed over the calls; divided by <code>calls</code>, the mean when every call had a duration, as every one did on Claude Code 2.1.282</td>
+      </tr>
+  </tbody>
+</table>
+<p>When reading them:</p>
 <ul>
 <li>Every point is a delta, the tokens of the minute a call ended and not of the minute it ran, so a long call&rsquo;s tokens
-land in one minute. The receiver keeps a delta point as its value at its time, and a request that carries a series
-of minutes, as the Sessionizer&rsquo;s does, is analysed a minute at a time, see the
-<a href="../opentelemetry-receiver">OpenTelemetry receiver</a>. The rules sum a minute&rsquo;s points over every session and sender
-and downsample by <code>SUM</code>, so an hour is the total over its minutes. <code>session.id</code> is summed away on purpose: a series
-per session is the cardinality of a busy team, and the conversation page knows a session&rsquo;s tokens from its own
-records.</li>
+land in one minute; an MCP call counts in the minute it was observed. The Sessionizer stamps a point with the end of
+that minute, and the receiver keeps a delta point as its value at its time, so a call&rsquo;s tokens show under the next
+minute; a point the Sessionizer places after a later one of its series, to keep a series&rsquo; windows apart, shows later
+still. A request that carries a series of minutes, as the Sessionizer&rsquo;s does, is analysed a minute at a time, see
+the <a href="../opentelemetry-receiver">OpenTelemetry receiver</a>. The rules sum a minute&rsquo;s points over every session and
+sender and downsample by <code>SUM</code>, so an hour is the total over its minutes. <code>cache_read_share</code> is the exception: it is
+a percent computed for each request&rsquo;s points in a minute, and a minute or an hour holds the average of those
+percents, not the share of all the tokens in it. <code>session.id</code> is summed away on purpose: a series per session is the
+cardinality of a busy team, and the conversation page knows a session&rsquo;s tokens from its own records.</li>
 <li>A metric value is a whole number, so a fraction is scaled first: cost to micro-dollars, active time to milliseconds,
 the cache share to percent.</li>
+<li>An MCP call&rsquo;s duration is the runtime&rsquo;s own time around the call. It includes any wait before the call started, and
+it is not the server&rsquo;s own time.</li>
 <li>Cache reads dominate. On one five-day conversation they were 98% of all tokens, so a chart that stacks the four
 types shows a flat line for the other three unless it is split.</li>
 </ul>
@@ -4420,6 +4595,7 @@ types shows a flat line for the other three unless it is split.</li>
       <ul>
         <li><a href="#how-a-file-reaches-the-oap">How a file reaches the OAP</a></li>
         <li><a href="#storage">Storage</a></li>
+        <li><a href="#session-data-files-and-how-they-connect">Session Data files and how they connect</a></li>
         <li><a href="#query">Query</a>
           <ul>
             <li><a href="#the-conversation-view-route">The conversation view route</a></li>
@@ -4427,6 +4603,7 @@ types shows a flat line for the other three unless it is split.</li>
           </ul>
         </li>
         <li><a href="#workspace-changes">Workspace changes</a></li>
+        <li><a href="#tool-executions">Tool executions</a></li>
         <li><a href="#provider-bodies">Provider bodies</a></li>
         <li><a href="#configuration">Configuration</a>
           <ul>
