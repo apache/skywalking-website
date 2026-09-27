@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Session Data">
   <meta itemprop="description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
-  <meta itemprop="wordCount" content="5013">
+  <meta itemprop="wordCount" content="5361">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Data">
   <meta name="twitter:description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
@@ -1527,7 +1527,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 130601c</div>
+                  <div class="commit-id">Commit Id: fc04fa1</div>
                 
 
 
@@ -1829,6 +1829,27 @@ adapter&rsquo;s <code>agent_meta</code>, <code>workflow_manifest</code> and <cod
 a snapshot cursor, so a lost one is found only by the round chain (see
 <a href="../storage-root#retention">Retention</a>). A repeated record is not a gap (see
 <a href="../storage-root#landed-files">Landed files</a>).</p>
+<h3 id="reading-a-record">Reading a record</h3>
+<p>The format is JSON, and a reader in any language reads it with its own JSON library. The rules
+below and the rest of this page are the contract. A reader does not have to copy what asz&rsquo;s code
+does with input that asz never writes.</p>
+<p>Every field of a record, as the table in <a href="#record">Record</a> lists them, has one type. <code>ord</code>, <code>off</code>
+and <code>bytes</code> are integers, and <code>ord</code> and <code>off</code> are never negative. <code>flags</code> is a list of strings.
+<code>parts</code> and <code>dropped</code> are lists of objects, typed in <a href="#parts">Parts</a> and <a href="#dropped">Dropped</a>.
+<code>usage</code> is an object whose <code>in</code>, <code>out</code>, <code>cache_read</code> and <code>cache_write</code> are integers. Every other
+field is a string. An integer is a whole number, written with no fraction and no exponent, that
+fits in 64 bits with its sign. A field written as null is the same as a field left out. A reader
+ignores a field this page does not list, so a later version can add one.</p>
+<p>A line with a field of another type is not a record. asz&rsquo;s reader stops at a line it cannot
+decode, such as one whose <code>off</code> is a string, as it stops at a line that is not JSON, and reads no
+record after it in the file.</p>
+<p>A <code>time</code> is written as RFC 3339: a four-digit year, the letter <code>T</code>, the time of day to the
+second with a fraction of up to nine digits or none, and <code>Z</code> or an offset such as <code>+08:00</code>. Times
+compare as the instants they name, never as text. As text, <code>2026-01-01T12:00:00.11Z</code> sorts before
+<code>2026-01-01T12:00:00.1Z</code>, and <code>2026-01-01T12:00:00.5Z</code> before <code>2026-01-01T12:00:00Z</code>: in both
+pairs the first is the later time. <code>2026-01-01T20:00:00+08:00</code> sorts after <code>2026-01-01T12:00:01Z</code>
+as text, though it is a second earlier. A value that is not such a time means the record has no
+time.</p>
 <h3 id="addressing-a-record">Addressing a record</h3>
 <p>A round points at a record with <code>{seq, row}</code>, and at one of its parts with <code>{seq, row, block}</code>
 (see <a href="../session-flow#entities">Session Flow</a>). In Session Data terms:</p>
@@ -1986,6 +2007,8 @@ reads every landed file this way.</p>
       </tr>
   </tbody>
 </table>
+<p>In a part, <code>k</code>, <code>text</code>, <code>id</code>, <code>name</code>, <code>of</code>, <code>server</code>, <code>server_tool</code>, <code>media</code>, <code>encoding</code> and
+<code>state</code> are strings, <code>bytes</code> is an integer, <code>failed</code> is a boolean, and <code>data</code> is any JSON value.</p>
 <p><code>server</code> and <code>server_tool</code> say which MCP server a call is addressed to and which of its tools. An
 adapter sets them only where its runtime&rsquo;s name for the call splits exactly. Claude Code names such a
 call <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>, and the split is made only when exactly one <code>__</code> follows <code>mcp__</code>: a
@@ -2150,7 +2173,8 @@ hooks, nor the transcript.</li>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#0a3069">&#34;dropped&#34;</span><span style="color:#f6f8fa;background-color:#82071e">:</span><span style="color:#1f2328">[{</span><span style="color:#0550ae">&#34;what&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;reasoning signature&#34;</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;bytes&#34;</span><span style="color:#1f2328">:</span><span style="color:#0550ae">588</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;why&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;a provider verifies it; a reader cannot read it&#34;</span><span style="color:#1f2328">}]</span>
 </span></span></code></pre></div><p><code>dropped</code> exists so a loss is stated rather than silent. It lists only what the dialect understood
 and chose not to carry. Everything it did not understand travels as an <code>unknown</code> part, so a later
-version of the dialect can interpret it without collecting again.</p>
+version of the dialect can interpret it without collecting again. In an entry, <code>what</code> and <code>why</code>
+are strings and <code>bytes</code> is an integer.</p>
 <p>A source record is not always kept whole, so a <code>.sd</code> file is the only landed copy of what its parts
 hold, and everything above the adapter treats it as the authority. Content that was converted to
 text, such as a message or a thought, needs the runtime&rsquo;s source to correct a conversion error.
@@ -2222,6 +2246,7 @@ dialect: what its runtime calls each name the model uses. <code>cmd/asz</code> g
         <li><a href="#file-kinds">File kinds</a></li>
         <li><a href="#record">Record</a>
           <ul>
+            <li><a href="#reading-a-record">Reading a record</a></li>
             <li><a href="#addressing-a-record">Addressing a record</a></li>
           </ul>
         </li>
