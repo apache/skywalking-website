@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="AI Agents">
   <meta itemprop="description" content="AI Agents The AI_AGENT layer is where the SkyWalking AI Sessionizer lands the conversations of long-lived AI agents, and where the agent’s own metrics land beside them. The Sessionizer collects an agent’s transcripts on the machine where the agent runs, assembles them into conversations, and pushes them to OAP; OAP stores them under this layer and answers Horizon’s reads. Nothing in Horizon talks to the agent or to the Sessionizer directly.">
-  <meta itemprop="wordCount" content="1524">
+  <meta itemprop="wordCount" content="1533">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="AI Agents">
   <meta name="twitter:description" content="AI Agents The AI_AGENT layer is where the SkyWalking AI Sessionizer lands the conversations of long-lived AI agents, and where the agent’s own metrics land beside them. The Sessionizer collects an agent’s transcripts on the machine where the agent runs, assembles them into conversations, and pushes them to OAP; OAP stores them under this layer and answers Horizon’s reads. Nothing in Horizon talks to the agent or to the Sessionizer directly.">
@@ -2390,7 +2390,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 43235ad</div>
+                  <div class="commit-id">Commit Id: a19cd02</div>
                 
 
 
@@ -2476,17 +2476,15 @@ limitations under the License.
 <p>The widgets and metrics below are read from the bundled AI_AGENT template; if an operator has published a customized template to OAP, the live dashboard reflects that copy instead. See <a href="../../customization/layer-templates">Layer Dashboard Templates</a> for how the bundled default, your local draft, and the OAP-published copy relate.</p>
 </blockquote>
 <h2 id="where-the-metrics-come-from">Where the metrics come from</h2>
-<p>The metric family is Claude Code&rsquo;s own: the same names its OpenTelemetry exporter uses. Two agent runtimes can produce it, and a deployment picks one arrangement per agent:</p>
+<p>Two sources feed the layer, each with metrics of its own:</p>
 <ul>
 <li>
-<p><strong>The Sessionizer derives the token metric from the transcripts it lands</strong> (the <code>metrics</code> switch on its Claude Code adapter). This gives tokens by type, by model and by source, and nothing else: cost, active time, sessions, lines of code, commits, pull requests and edit decisions are not in a transcript, and the Sessionizer never estimates them.</p>
+<p><strong>The Sessionizer derives the tokens and the calls to MCP servers from the files it lands</strong>, as <code>agent.token.usage</code>, <code>agent.mcp.calls</code> and <code>agent.mcp.duration</code>; its <code>metrics</code> section turns them on and is on by default. The tokens come from the transcripts: by type, by model, and by source, <code>main</code> or <code>subagent</code>. The calls to MCP servers come from the records its Claude Code plugin writes around each call, one per call, with the server that ran it, how it ended and how long the runtime measured it. A transcript does not say which server ran a call or how long it took, so without the plugin the MCP tools tab stays empty.</p>
 </li>
 <li>
-<p><strong>Claude Code&rsquo;s own exporter sends the full family</strong>, either to the Sessionizer&rsquo;s OpenTelemetry receiver adapter, which relays every request to OAP under the agent&rsquo;s identity, or straight to OAP with the resource attributes <code>service.layer=AI_AGENT</code> and a <code>service.instance.id</code> naming the agent runtime. To land under the same agent as the conversations, give the exporter the same <code>service.name</code>; its default is <code>claude-code</code>.</p>
+<p><strong>Claude Code&rsquo;s own exporter</strong>, sent straight to OAP with the resource attributes <code>service.layer=AI_AGENT</code> and a <code>service.instance.id</code> naming the agent runtime, adds what no transcript holds: cost, active time, sessions, lines of code, commits, pull requests and edit decisions. OAP does not read the exporter&rsquo;s token metric, <code>claude_code.token.usage</code>: tokens come only from the Sessionizer, so a call is never counted twice when both send. To land under the same agent as the conversations, give the exporter the same <code>service.name</code>; its default is <code>claude-code</code>. The Sessionizer&rsquo;s own OpenTelemetry receiver accepts the exporter&rsquo;s requests and keeps none of them, so the exporter sends to OAP directly for these metrics.</p>
 </li>
 </ul>
-<p>The calls to MCP servers come from neither: the Sessionizer derives them from the records its Claude Code plugin writes around each call to an MCP server, one per call, with the server that ran it, how it ended and how long the runtime measured it. A transcript does not say which server ran a call or how long it took, and Claude Code&rsquo;s exporter sends nothing for them. Without the plugin, the MCP tools tab stays empty.</p>
-<p>Never combine the first arrangement with an exporter that sends straight to OAP for the same sessions: every token would be counted twice, and OAP cannot tell the two sources apart, whatever the agent runtime names. The Sessionizer refuses a configuration where it both derives and relays, for the same reason.</p>
 <h2 id="agents-list">Agents list</h2>
 <p>Before opening a agent, the layer landing page lists every agent with two sortable columns, sorted by <strong>Tokens</strong> by default. The values describe one completed hour, named beside them:</p>
 <ul>
@@ -2499,13 +2497,13 @@ limitations under the License.
 </ul>
 <h2 id="agent-dashboard">Agent dashboard</h2>
 <p>The primary drill-down for one selected agent. Four widgets are always shown; seven more appear only when Claude Code&rsquo;s own exporter reports, because a Sessionizer-only deployment never has those metrics and a permanently empty widget would read as broken. The last, <strong>MCP tools</strong>, is empty for an agent that called no MCP server.</p>
-<p><strong>Tokens, from either agent runtime</strong></p>
+<p><strong>Tokens, from the Sessionizer</strong></p>
 <ul>
 <li>
 <p><strong>Tokens by type</strong> — one line per token type: <code>input</code>, <code>output</code>, <code>cacheRead</code>, <code>cacheCreation</code> (<code>meter_ai_agent_tokens_by_type</code>). Cache reads are most of the total, so the types are separate lines rather than a stack.</p>
 </li>
 <li>
-<p><strong>Main agent and subagents</strong> — tokens by where the call was made: <code>main</code>, <code>subagent</code>, and <code>auxiliary</code> from the exporter only (<code>meter_ai_agent_tokens_by_source</code>).</p>
+<p><strong>Main agent and subagents</strong> — tokens by where the call was made: <code>main</code> or <code>subagent</code> (<code>meter_ai_agent_tokens_by_source</code>). OAP reads tokens only from the Sessionizer&rsquo;s <code>agent.token.usage</code>, so the exporter&rsquo;s <code>auxiliary</code> calls, which never reach a transcript, are not here.</p>
 </li>
 <li>
 <p><strong>Tokens by model</strong> — one line per model the calls ran on (<code>meter_ai_agent_tokens_by_model</code>).</p>
@@ -2545,13 +2543,13 @@ limitations under the License.
 <p>Each MCP tool of an agent is one entity, named <code>&lt;server&gt;/&lt;tool&gt;</code>: the server the plugin reported, by the name it was configured with, and the tool as the runtime names it after <code>mcp__&lt;server&gt;__</code>. A call whose name does not split that way keeps the whole name as its tool. Pick one on the MCP tools tab.</p>
 <ul>
 <li>
-<p><strong>Calls</strong> — calls to the tool, counted in the minute each ended (<code>meter_ai_agent_mcp_calls</code>).</p>
+<p><strong>Calls</strong> — calls to the tool (<code>meter_ai_agent_mcp_calls</code>). A call is counted at the end of the minute it ended, so it shows under the next minute.</p>
 </li>
 <li>
 <p><strong>Calls by outcome</strong> — <code>returned</code>, <code>failed</code> or <code>interrupted</code>, as the runtime&rsquo;s hook reported the call (<code>meter_ai_agent_mcp_calls_by_outcome</code>). An error the server returned, a lost connection and a timeout are all <code>failed</code>.</p>
 </li>
 <li>
-<p><strong>Average time</strong> — the time the runtime measured around each call, averaged over the calls of the bucket (<code>meter_ai_agent_mcp_duration / meter_ai_agent_mcp_calls</code>).</p>
+<p><strong>Average time</strong> — time in calls divided by calls (<code>meter_ai_agent_mcp_duration / meter_ai_agent_mcp_calls</code>). A call whose record reports no time counts as a call with none and pulls the average down; every call measured so far reported one.</p>
 </li>
 <li>
 <p><strong>Time in calls</strong> — the same time, summed: how long the agent spent in this tool (<code>meter_ai_agent_mcp_duration</code>).</p>
@@ -2560,7 +2558,7 @@ limitations under the License.
 <h2 id="reading-the-numbers">Reading the numbers</h2>
 <ul>
 <li>
-<p><strong>A point is the total of its bucket, counted at the minute a call ended.</strong> The step follows the time range: minutes up to four hours, hours up to fourteen days, days beyond. A long call&rsquo;s tokens land in the one minute it finished. A push that carries a whole session&rsquo;s minutes, as the Sessionizer&rsquo;s does, is analysed a minute at a time, so history pushed after the fact draws where it happened, not when it arrived.</p>
+<p><strong>A point is the total of its bucket, counted at the end of the minute a call ended.</strong> So a call shows under the next minute. The step follows the time range: minutes up to four hours, hours up to fourteen days, days beyond. A long call&rsquo;s tokens land in the one minute after it finished. A push that carries a whole session&rsquo;s minutes, as the Sessionizer&rsquo;s does, is analysed a minute at a time, so history pushed after the fact draws where it happened, not when it arrived.</p>
 </li>
 <li>
 <p><strong>The Sessionizer&rsquo;s metrics are a subset.</strong> Tokens by type, model and source are there; the other seven metrics come only from Claude Code&rsquo;s exporter, and nothing is estimated in their place. A agent runtime that derives sees <code>main</code> and <code>subagent</code> as sources; <code>auxiliary</code>, the agent&rsquo;s own side calls, never reaches a transcript.</p>
