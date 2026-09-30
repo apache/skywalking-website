@@ -37,7 +37,7 @@ We need the following files:">
 Creating SSL/TLS Certificates The first step is to generate certificates and key files for encrypting communication. This is fairly straightforward: use openssl from the command line.
 Use this script if you are not familiar with how to generate key files.
 We need the following files:">
-  <meta itemprop="wordCount" content="244">
+  <meta itemprop="wordCount" content="673">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Support Transport Layer Security (TLS)">
   <meta name="twitter:description" content="Support Transport Layer Security (TLS) Transport Layer Security (TLS) is a very common security way when transport data through Internet. In some use cases, end users report the background:
@@ -1446,7 +1446,7 @@ We need the following files:">
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c4c1345</div>
+                  <div class="commit-id">Commit Id: 697caf7</div>
                 
 
 
@@ -1483,7 +1483,7 @@ In some use cases, end users report the background:</p>
 <h2 id="creating-ssltls-certificates">Creating SSL/TLS Certificates</h2>
 <p>The first step is to generate certificates and key files for encrypting communication. This is
 fairly straightforward: use <code>openssl</code> from the command line.</p>
-<p>Use this <a href="https://github.com/apache/skywalking-go/tree/c4c1345e370dbf27ce20887150595b1201065064/tools/TLS/tls_key_generate.sh">script</a> if you are not familiar with how to generate key files.</p>
+<p>Use this <a href="https://github.com/apache/skywalking-go/tree/697caf7ebb5a887c1b1a58b93c3dbab54c747df5/tools/TLS/tls_key_generate.sh">script</a> if you are not familiar with how to generate key files.</p>
 <p>We need the following files:</p>
 <ul>
 <li><code>client.pem</code>: A private RSA key to sign and authenticate the public key. It&rsquo;s either a PKCS#8(PEM) or PKCS#1(DER).</li>
@@ -1542,6 +1542,55 @@ fairly straightforward: use <code>openssl</code> from the command line.</p>
       </tr>
   </tbody>
 </table>
+<h2 id="multi-address-backends">Multi-address backends</h2>
+<p>Configure comma-separated backends:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">reporter</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">grpc</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">backend_service</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>oap-a:11800,oap-b:11800<span style="color:#fff">
+</span></span></span></code></pre></div><p>Use <code>host:port</code> entries with numeric ports from 1 to 65535 and brackets around
+IPv6 addresses (<code>[::1]:11800</code>). The agent trims whitespace, ignores empty entries,
+and removes duplicates. Invalid entries in a comma-separated list are skipped
+with a warning during initialization. These warnings are not repeated when
+reconnecting. A list that normalizes to one address uses the existing
+single-address connection behavior. If no valid entries remain, the gRPC
+reporter is disabled (discard reporter) and the application continues; the Kafka
+reporter still initializes and runs without CDS when the gRPC backend list is
+invalid.</p>
+<p>A single non-<code>host:port</code> token such as <code>dns:///oap:11800</code> or <code>unix:///tmp/oap.sock</code>
+is passed through unchanged so legacy gRPC target URIs keep working.</p>
+<p>For multiple addresses, the agent creates one gRPC channel and shuffles its
+static endpoint list once. Native <code>pick_first</code> selects the first reachable
+backend in that order and keeps using it until its transport fails. Resolver
+refreshes preserve the shuffled order. The configured list stays fixed; Go&rsquo;s TCP
+dialer resolves hostname entries when opening a connection, with no periodic DNS
+refresh of the list. Each address has its own dial/handshake timeout covering
+TCP, TLS, and HTTP/2 negotiation so a silent peer cannot starve the rest of the
+connect budget. Client keepalive probes help
+detect half-open peers so <code>pick_first</code> can move to a standby; keepalive Time
+is at least 30s and otherwise follows <code>reporter.check_interval</code> plus 10s so
+healthy management heartbeats suppress pings against OAP&rsquo;s default server
+policy.</p>
+<p>Telemetry uses long-lived Collect streams. A failed send is discarded and
+<strong>never replayed</strong>: the backend may already have accepted it. Automatic gRPC
+retries apply only to the idempotent <code>reportInstanceProperties</code> RPC on
+<code>UNAVAILABLE</code>, with at most three attempts.</p>
+<p>RPC deadlines and stream cancellation bound individual operations. Client
+keepalive closes the transport to a half-open peer so <code>pick_first</code> can move to
+a standby, and a bounded send timeout unblocks a stuck Send. Established
+streams are not canceled based on channel state, so streams draining after a
+graceful GOAWAY can finish.</p>
+<h3 id="tls-servername-per-address">TLS ServerName per address</h3>
+<p>Each static resolver endpoint sets <code>ServerName</code> from that address&rsquo;s host so TLS
+SNI and certificate verification follow the dialed backend. An explicit
+server-name override in transport credentials still takes precedence. Prefer
+hostnames that match each backend&rsquo;s certificate when enabling TLS across a
+multi-address list.</p>
+<h3 id="authentication-failures">Authentication failures</h3>
+<p><code>UNAUTHENTICATED</code> / <code>PERMISSION_DENIED</code> are not retryable in the multi-backend
+service configuration. A bad shared credential will not usefully rotate across
+backends. The connection interceptor emits an authentication diagnostic at most
+once per 30 seconds and keeps the existing channel. Check
+<code>reporter.grpc.authentication</code> and the OAP authentication configuration.</p>
 
 </div>
 
@@ -1579,6 +1628,12 @@ fairly straightforward: use <code>openssl</code> from the command line.</p>
         <li><a href="#creating-ssltls-certificates">Creating SSL/TLS Certificates</a></li>
         <li><a href="#authentication-mode">Authentication Mode</a></li>
         <li><a href="#enable-tls">Enable TLS</a></li>
+        <li><a href="#multi-address-backends">Multi-address backends</a>
+          <ul>
+            <li><a href="#tls-servername-per-address">TLS ServerName per address</a></li>
+            <li><a href="#authentication-failures">Authentication failures</a></li>
+          </ul>
+        </li>
       </ul>
     </li>
   </ul>
@@ -1692,24 +1747,6 @@ fairly straightforward: use <code>openssl</code> from the command line.</p>
 
     </div>
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
