@@ -6,6 +6,14 @@ description: "Release Apache SkyWalking Java Agent 9.8.0."
 ---
 
 SkyWalking Java Agent 9.8.0 is released. Go to [downloads](/downloads) page to find release tars.
+
+**Notice on 9.7.0.** The 9.7.0 binary distribution, `apache-skywalking-java-agent-9.7.0.tgz`, was packaged on macOS
+and carries AppleDouble `._*` metadata files next to every jar, see
+[apache/skywalking#14080](https://github.com/apache/skywalking/issues/14080). The agent tries to load the `._*.jar`
+entries as plugins and activations, logs `could not be resolved` errors at startup, and the Logback activation can
+fail to initialize, which breaks `GRPCLogClientAppender` log reporting. Traces and metrics still work, but the
+distribution is not what was intended. 9.7.0 has therefore been removed from the downloads and documentation pages
+on this site. Users on 9.7.0 should upgrade to 9.8.0, whose source and binary archives are built without these files.
 Changes by Version
 
 9.8.0
