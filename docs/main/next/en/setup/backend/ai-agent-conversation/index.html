@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="AI Agent Conversations">
   <meta itemprop="description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
-  <meta itemprop="wordCount" content="6175">
+  <meta itemprop="wordCount" content="7456">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="AI Agent Conversations">
   <meta name="twitter:description" content="AI Agent Conversations Since 11.1.0, SkyWalking stores and serves the conversations of long-lived AI agents. The feature requires the SkyWalking AI Sessionizer as the sender: it is the producer of the files described here, and a record under this layer without their attributes is rejected. The Sessionizer collects an agent runtime’s transcripts into two file formats, Session Data (.sd, the records as collected) and Session Flow (.sf, an append-only chain of rounds that describe the conversation’s structure), and pushes every file as one OTLP log record. The OAP verifies each file on arrival, stores it verbatim, and answers a conversation query with one asz.view document that a viewer renders without opening any file.">
@@ -3834,7 +3834,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 65ca527</div>
+                  <div class="commit-id">Commit Id: cfd5920</div>
                 
 
 
@@ -4154,7 +4154,7 @@ built on every call and nothing is cached.</p>
       </tr>
       <tr>
           <td>status</td>
-          <td>200 with the document; 400 when the service or the instance is not named, or when <code>coldStage</code> is neither true nor false; 404 when the sender stores no round of the conversation; 500 on a storage failure; 503 when <code>viewRequestTimeout</code> runs out before the document starts, and a response already started is cut short instead. An error is <code>application/problem+json</code> (<a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>): <code>{&quot;type&quot;: &quot;about:blank&quot;, &quot;title&quot;: &quot;Not Found&quot;, &quot;status&quot;: 404, &quot;detail&quot;: &quot;...&quot;}</code></td>
+          <td>200 with the document, less what the <code>hide</code> setting <a href="#withholding">withholds</a>; 400 when the service or the instance is not named, or when <code>coldStage</code> is neither true nor false; 404 when the sender stores no round of the conversation; 500 on a storage failure; 503 when <code>viewRequestTimeout</code> runs out before the document starts, and a response already started is cut short instead. An error is <code>application/problem+json</code> (<a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>): <code>{&quot;type&quot;: &quot;about:blank&quot;, &quot;title&quot;: &quot;Not Found&quot;, &quot;status&quot;: 404, &quot;detail&quot;: &quot;...&quot;}</code></td>
       </tr>
   </tbody>
 </table>
@@ -4184,7 +4184,7 @@ session under the named sender, so the session is the caller&rsquo;s to choose, 
   <tbody>
       <tr>
           <td><code>service</code>, <code>instance</code>, <code>coldStage</code></td>
-          <td>as for the view route</td>
+          <td>as for the view route. When the <code>hide</code> setting names anything, a file is served with what it holds of those names masked, as <a href="#withholding">Withholding</a> says, and every file of the session up to the highest seq asked for is read first, to rebuild its requests</td>
       </tr>
       <tr>
           <td><code>session</code></td>
@@ -4218,8 +4218,10 @@ session under the named sender, so the session is the caller&rsquo;s to choose, 
 which happens when the same seq was stored with different bytes - two roots of one session pushed by one sender, after
 a repack. The file served is the first, and <code>copies</code> says the others are there, so a reader can say so rather than
 show one copy as the whole truth; the field is absent when there is one. It counts what the read returned rather than
-what the storage holds, since a storage caps what one query answers with, so read it as &ldquo;more than one&rdquo;. Exactly
-<code>bytes</code> bytes follow: the file, byte for byte. A non-empty file that does not end with a newline is followed by one,
+what the storage holds, since a storage caps what one query answers with, so read it as &ldquo;more than one&rdquo;. A file served
+with something masked carries two more: <code>withheld</code>, the names applied, and <code>served_digest</code>, the sha256 of the bytes
+served; <code>digest</code> stays the stored file&rsquo;s, which the document&rsquo;s <code>files[]</code> names, and <code>bytes</code> and <code>lines</code> are the served
+file&rsquo;s. Both are absent when the bytes are the stored ones. Exactly <code>bytes</code> bytes follow: the file, byte for byte. A non-empty file that does not end with a newline is followed by one,
 which is not part of it, so the next naming line starts a line; an empty file is followed by nothing. A file the
 Sessionizer wrote ends with a newline, so a reader may equally take <code>lines</code> lines. Nothing in a file is escaped. The
 files come in seq order, which is the order a reader must add provider bodies in, because a body refers to pieces and
@@ -4308,7 +4310,8 @@ its own pieces and from pieces and bodies that landed before it. A body it canno
 <li><strong>A <code>provider_body</code> file</strong>, a Session Data file of kind <code>provider_body</code>, one directory for the session,
 <code>&lt;session&gt;/provider_body/provider_body-&lt;stamp&gt;-&lt;seq&gt;.sd</code>, one record per body. It lands, is verified and is stored
 like any other Session Data file, and a round&rsquo;s window covers it. Nothing about it is decoded at ingest, and a body
-is never rebuilt by the OAP.</li>
+is rebuilt by the OAP in one case only: to mask a request for a reader that <a href="#withholding">withholds</a> the system
+prompt or the tool schemas.</li>
 </ul>
 <p>In the <code>asz.view</code> document:</p>
 <ul>
@@ -4333,6 +4336,79 @@ of the join are defined by the Sessionizer under <a href="https://skywalking.apa
 Data</a>, <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-flow/">Session
 Flow</a> and <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/">The asz.view
 document</a>.</p>
+<h2 id="withholding">Withholding</h2>
+<p>An operator who shows conversations to the people an agent served may need to keep from them what the runtime sent
+the model, the system prompt and the tool schemas. The <code>hide</code> setting names what this OAP withholds, and it applies
+to every reader: the OAP knows nothing about who is reading, and the routes take no parameter for it. Two audiences
+are two OAPs over the same storage, each behind the deployment&rsquo;s own authentication. With the setting, both routes
+rewrite what they serve: the document loses the text of the steps that carry the names, and a file is served with
+that content masked inside it. The names are the two the Sessionizer&rsquo;s <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/session-data/#flags">Session
+Data</a> page lists:
+<code>system_prompt</code>, the system prompt a runtime sent its model, and <code>tool_schemas</code>, the schemas of the tools it offered.</p>
+<p>Withholding happens as a conversation is served, and only then. The storage holds every file whole, the ingest and
+the rounds do not change, and the GraphQL list carries only the runtime&rsquo;s own title and counts, so it needs none. A
+reader of this OAP cannot ask for less or for more than the setting names.</p>
+<p>The OAP withholds by the flags the Sessionizer&rsquo;s adapter set on a record, never by the text or the size of a part. The
+Claude Code adapter names the <code>prompt_snapshot</code> and <code>deferred_tools_record</code> attachments that hold them; the LangChain
+adapter names the records that can hold a model request. A record landed before the Sessionizer set these flags carries
+none, so nothing of its transcript is withheld and <code>summary.withheld</code> counts zero for it; its request bodies are masked
+all the same, since a request is known by its manifest, not by a flag.</p>
+<p><strong>The document</strong> follows the asz.view page&rsquo;s
+<a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/formats/asz-view/#withholding">Withholding</a>
+rules:</p>
+<ul>
+<li>a step read from a record carrying a withheld name keeps its node, <code>flags</code> and <code>bytes</code>, has no <code>text</code>, and has
+<code>state</code> <code>omitted</code>; a tool&rsquo;s result read from such a record has no <code>result</code> and <code>result_state</code> <code>omitted</code>; a model
+call carries the names a reader may withhold that its own record holds, withheld or not, and is marked the same
+way when one of them is withheld;</li>
+<li>an injection carrying either name names no talk, and a journal record carrying one names no stream, in every
+document, withheld or not; a person&rsquo;s input names its talk whatever it carries;</li>
+<li><code>summary.withheld</code> lists every name asked for with the records carrying it across the session&rsquo;s landed files, once
+per record id, a zero included; it is <code>{}</code> when nothing was asked;</li>
+<li>every count stays: nothing is deleted, so the round chain and the verification state still hold.</li>
+</ul>
+<p>It differs from the Sessionizer&rsquo;s own viewer in two things, since that viewer refuses the bodies where the OAP masks
+them: every call keeps its <code>provider_bodies</code> and the summary its <code>captured_prompts</code>; and under <code>provider_bodies</code>,
+<code>summary.withheld</code> counts the session&rsquo;s request bodies, each of which the files route serves masked where it holds
+what is withheld.</p>
+<p><strong>A file</strong> is served with what it holds of the withheld names masked, and is the stored bytes otherwise:</p>
+<ul>
+<li>in a transcript, and in every kind but <code>provider_body</code>, a record carrying a withheld name keeps its envelope and its
+flags, and every part keeps its kind, its size and its other fields, loses <code>text</code>, <code>data</code> and <code>encoding</code>, and has
+<code>state</code> <code>omitted</code>; every other line is the stored line;</li>
+<li>in a <code>provider_body</code> file, a request is rebuilt from the session&rsquo;s bodies, as a reader rebuilds it, and masked by
+the names in force, at any depth, by the shapes the Sessionizer&rsquo;s <a href="https://skywalking.apache.org/docs/skywalking-ai-sessionizer/next/en/adapters/langsmith/#what-each-call-was-sent">LangChain
+page</a>
+lists, since a client may nest them in a configuration of its own, such as Gemini&rsquo;s <code>config</code> or Bedrock&rsquo;s
+<code>toolConfig</code>. Every string under a key the request carries the prompt under, <code>system</code>, <code>instructions</code>,
+<code>system_instruction</code>, <code>preamble</code>, <code>system_message</code>, <code>system_prompt</code>, <code>system_instructions</code>, <code>instruction</code> and a
+completion&rsquo;s <code>prompts</code>, becomes <code>[withheld: system_prompt]</code>, apart from a block&rsquo;s <code>type</code> and <code>role</code>, which say what
+it is; so does the content of a message of the <code>system</code> or <code>developer</code> role, wherever it sits, LangChain&rsquo;s pair of
+a role and its content, and LangChain&rsquo;s serialized system message, whose role LangChain JS writes only in its
+<code>id</code>. Each tool under <code>tools</code>, <code>functions</code>, <code>function_declarations</code>, <code>tool_definitions</code> or <code>available_tools</code> keeps
+its name, or the name of the one object it wraps, which the transcript&rsquo;s tool calls name anyway, and is otherwise
+<code>{&quot;withheld&quot;:&quot;tool_schemas&quot;}</code>. The masked request is written
+back as a body of its own: one <code>lit</code> segment, <code>depth</code> 0, no <code>copy</code> and no <code>piece</code>, its own <code>sha256</code> and <code>bytes</code>,
+and <code>withheld</code> naming what was applied, so a reader that checks a body against its manifest still can. The request&rsquo;s
+own pieces stay except the ones that are a withheld block&rsquo;s text or a tool, whose bytes are the secret, and a body
+kept whole in an <code>unknown</code> part, which holds them all. A response holds neither and is the stored line, unless it
+refers to a request&rsquo;s bytes, when it is written whole the same way, which hides nothing. A request that does not
+rebuild, or is not one JSON object, is withheld whole, as a transcript record is; so is one whose rebuild would
+hold more than <code>maxResponseBytes</code> at once, counted from the manifests before anything is built: the body, and
+beside it the body it copies from, so about two bodies for a chain of copies. So is a record with no manifest of a
+schema the OAP knows, since it may be a request;</li>
+<li>a rewritten file gets a closing line of its own, so it still reads and checks on its own; its records keep their
+rows, so every reference into it still resolves; a file whose records stop before its closing line ends where a
+reader stops, and gets none; a file whose stored closing line does not check keeps that line, so a reader refuses
+the served file as it refuses the stored one;</li>
+<li>the naming line says so with <code>withheld</code> and <code>served_digest</code>; <code>digest</code> stays the stored file&rsquo;s.</li>
+</ul>
+<p>A masked body no longer matches the digest the stored round chained, and a masked request can be larger than the
+stored one, since it no longer shares its front with the request before it. When the setting names anything, the
+files route reads every file of the session up to the highest seq asked for, as the view route reads them all, since
+a file&rsquo;s kind is known only from the file, and rebuilds the requests in memory: whether one fits depends on it alone,
+never on the other files asked for, and the bodies kept for later copies stay within <code>maxResponseBytes</code>, the oldest
+going first.</p>
 <h2 id="configuration">Configuration</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">ai-agent-conversation</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">selector</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION:default}<span style="color:#fff">
@@ -4343,6 +4419,7 @@ document</a>.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">readWindow</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION_READ_WINDOW:16}<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">maxResponseBytes</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION_MAX_RESPONSE_BYTES:104857600}<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">maxFileBytes</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION_MAX_FILE_BYTES:15728640}<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">hide</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_AI_AGENT_CONVERSATION_HIDE:}<span style="color:#fff">
 </span></span></span></code></pre></div><table>
   <thead>
       <tr>
@@ -4365,7 +4442,11 @@ document</a>.</p>
       </tr>
       <tr>
           <td><code>maxResponseBytes</code></td>
-          <td>the most bytes one storage query may answer with. <strong>BanyanDB alone accepts it</strong>, carried as a call option on the shared client in place of the 50 MB it holds every other read to, so nothing else&rsquo;s read changes; Elasticsearch and JDBC ignore it and bound a read by hits and by rows. 100 MiB by default, above sixteen files at the 2 MiB cut with room for files landed whole. For a root whose files land whole, raise it or lower <code>readWindow</code>; a read over the limit fails as a storage error.</td>
+          <td>the most bytes one storage query may answer with. <strong>BanyanDB alone accepts it</strong>, carried as a call option on the shared client in place of the 50 MB it holds every other read to, so nothing else&rsquo;s read changes; Elasticsearch and JDBC ignore it and bound a read by hits and by rows. 100 MiB by default, above sixteen files at the 2 MiB cut with room for files landed whole. For a root whose files land whole, raise it or lower <code>readWindow</code>; a read over the limit fails as a storage error. When <code>hide</code> names anything, it also bounds what rebuilding one request body holds at once, as <a href="#withholding">Withholding</a> says.</td>
+      </tr>
+      <tr>
+          <td><code>hide</code></td>
+          <td>the names withheld from every reader, separated by commas: <code>system_prompt</code>, <code>tool_schemas</code>, as <a href="#withholding">Withholding</a> says. Spaces around a name and empty entries are ignored, and a repeated name counts once. A name nothing withholds is refused at startup. Empty withholds nothing, which is the default.</td>
       </tr>
       <tr>
           <td><code>maxFileBytes</code></td>
@@ -4605,6 +4686,7 @@ types shows a flat line for the other three unless it is split.</li>
         <li><a href="#workspace-changes">Workspace changes</a></li>
         <li><a href="#tool-executions">Tool executions</a></li>
         <li><a href="#provider-bodies">Provider bodies</a></li>
+        <li><a href="#withholding">Withholding</a></li>
         <li><a href="#configuration">Configuration</a>
           <ul>
             <li><a href="#turning-the-feature-off">Turning the feature off</a></li>
@@ -4725,6 +4807,8 @@ types shows a flat line for the other three unless it is split.</li>
 
     </div>
     
+
+
 
 
 

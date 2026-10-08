@@ -25,22 +25,19 @@
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="Data Export and Import">
   <meta property="og:description" content="Data Export and Import Status: design — not implemented.
-BanyanDB already supports snapshots, backup/restore, and lifecycle management, but it still lacks an operations-oriented, cluster-level data import/export workflow. Backup moves a whole node’s files to remote storage; lifecycle moves data between stages inside one cluster. Neither lets an operator take a named set of groups out of one cluster and put it into another.
-This document specifies that workflow as two bydbctl subcommands, a pair of gRPC services, and an on-disk artifact format. Two things shape most of the design. First, the client never touches a data node directly — everything crosses a liaison, which relays frames without storing them. Second, the same logical shard routinely exists on several nodes, so the artifact carries every copy and the decision about which copies to push happens on the import side, where a wrong guess costs a re-run rather than data.">
+NIDX-03 note. This document was written while the per-segment series index (seg-*/sidx/) was still Bluge-backed. NIDX-03 cut seg-*/sidx/ over to the native ICE v3 engine (pkg/index/native) and removed the legacy Bluge-backed series store entirely: there is no bluge.pid lock, no bluge.OpenWriter, and no engine flag for it any more, so every claim below that describes seg-*/sidx/ as “a Bluge inverted directory” or routes its snapshot/export path through pkg/index/inverted’s ReadOnlyWalkDocuments / ReadOnlyDocCount (now pkg/index/native’s own read-only API) needs re-validation against the native engine before this design is implemented. The Stream element index (shard-N/idx/) is a separate cutover from NIDX-03: PR #1390 already moved the live element-index write/query path onto the same native ICE v3 engine, so it is not “unaffected” in the sense of still being live-Bluge, and every claim below that describes shard-N/idx/ itself as a Bluge inverted directory needs the same re-validation as seg-*/sidx/ above. The one thing that still produces legacy Bluge-format output is the NIDX-04 migration tool (banyand/stream/migration_element_index.go), an offline, one-shot tool that migrates pre-native element-index data; it is not on the live write or query path.">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="docs">
 
   <meta itemprop="name" content="Data Export and Import">
   <meta itemprop="description" content="Data Export and Import Status: design — not implemented.
-BanyanDB already supports snapshots, backup/restore, and lifecycle management, but it still lacks an operations-oriented, cluster-level data import/export workflow. Backup moves a whole node’s files to remote storage; lifecycle moves data between stages inside one cluster. Neither lets an operator take a named set of groups out of one cluster and put it into another.
-This document specifies that workflow as two bydbctl subcommands, a pair of gRPC services, and an on-disk artifact format. Two things shape most of the design. First, the client never touches a data node directly — everything crosses a liaison, which relays frames without storing them. Second, the same logical shard routinely exists on several nodes, so the artifact carries every copy and the decision about which copies to push happens on the import side, where a wrong guess costs a re-run rather than data.">
-  <meta itemprop="wordCount" content="14952">
+NIDX-03 note. This document was written while the per-segment series index (seg-*/sidx/) was still Bluge-backed. NIDX-03 cut seg-*/sidx/ over to the native ICE v3 engine (pkg/index/native) and removed the legacy Bluge-backed series store entirely: there is no bluge.pid lock, no bluge.OpenWriter, and no engine flag for it any more, so every claim below that describes seg-*/sidx/ as “a Bluge inverted directory” or routes its snapshot/export path through pkg/index/inverted’s ReadOnlyWalkDocuments / ReadOnlyDocCount (now pkg/index/native’s own read-only API) needs re-validation against the native engine before this design is implemented. The Stream element index (shard-N/idx/) is a separate cutover from NIDX-03: PR #1390 already moved the live element-index write/query path onto the same native ICE v3 engine, so it is not “unaffected” in the sense of still being live-Bluge, and every claim below that describes shard-N/idx/ itself as a Bluge inverted directory needs the same re-validation as seg-*/sidx/ above. The one thing that still produces legacy Bluge-format output is the NIDX-04 migration tool (banyand/stream/migration_element_index.go), an offline, one-shot tool that migrates pre-native element-index data; it is not on the live write or query path.">
+  <meta itemprop="wordCount" content="15132">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Data Export and Import">
   <meta name="twitter:description" content="Data Export and Import Status: design — not implemented.
-BanyanDB already supports snapshots, backup/restore, and lifecycle management, but it still lacks an operations-oriented, cluster-level data import/export workflow. Backup moves a whole node’s files to remote storage; lifecycle moves data between stages inside one cluster. Neither lets an operator take a named set of groups out of one cluster and put it into another.
-This document specifies that workflow as two bydbctl subcommands, a pair of gRPC services, and an on-disk artifact format. Two things shape most of the design. First, the client never touches a data node directly — everything crosses a liaison, which relays frames without storing them. Second, the same logical shard routinely exists on several nodes, so the artifact carries every copy and the decision about which copies to push happens on the import side, where a wrong guess costs a re-run rather than data.">
+NIDX-03 note. This document was written while the per-segment series index (seg-*/sidx/) was still Bluge-backed. NIDX-03 cut seg-*/sidx/ over to the native ICE v3 engine (pkg/index/native) and removed the legacy Bluge-backed series store entirely: there is no bluge.pid lock, no bluge.OpenWriter, and no engine flag for it any more, so every claim below that describes seg-*/sidx/ as “a Bluge inverted directory” or routes its snapshot/export path through pkg/index/inverted’s ReadOnlyWalkDocuments / ReadOnlyDocCount (now pkg/index/native’s own read-only API) needs re-validation against the native engine before this design is implemented. The Stream element index (shard-N/idx/) is a separate cutover from NIDX-03: PR #1390 already moved the live element-index write/query path onto the same native ICE v3 engine, so it is not “unaffected” in the sense of still being live-Bluge, and every claim below that describes shard-N/idx/ itself as a Bluge inverted directory needs the same re-validation as seg-*/sidx/ above. The one thing that still produces legacy Bluge-format output is the NIDX-04 migration tool (banyand/stream/migration_element_index.go), an offline, one-shot tool that migrates pre-native element-index data; it is not on the live write or query path.">
 
 
 
@@ -54,7 +51,7 @@ This document specifies that workflow as two bydbctl subcommands, a pair of gRPC
 <script src="/js/jquery-3.6.0.min.js"></script>
 
 <link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/data-export-import/readme/">
-<meta name="description" content="Data Export and Import Status: design — not implemented. BanyanDB already supports snapshots, backup/restore, and lifecycle management, but it still lacks an…">
+<meta name="description" content="Data Export and Import Status: design — not implemented. NIDX-03 note. This document was written while the per-segment series index (seg-*/sidx/) was still…">
 
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Data Export and Import","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/data-export-import/readme/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/data-export-import/readme/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/data-export-import/readme/","name":"Data Export and Import","position":3}]}]}</script>
 
@@ -2081,7 +2078,7 @@ This document specifies that workflow as two bydbctl subcommands, a pair of gRPC
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: df5f88a</div>
+                  <div class="commit-id">Commit Id: 7e1418a</div>
                 
 
 
@@ -2135,6 +2132,27 @@ This document specifies that workflow as two bydbctl subcommands, a pair of gRPC
 <div class="td-content">
 	<h1 id="data-export-and-import">Data Export and Import</h1>
 <p>Status: <strong>design</strong> — not implemented.</p>
+<blockquote>
+<p><strong>NIDX-03 note.</strong> This document was written while the per-segment series
+index (<code>seg-*/sidx/</code>) was still Bluge-backed. NIDX-03 cut <code>seg-*/sidx/</code> over
+to the native ICE v3 engine (<code>pkg/index/native</code>) and removed the legacy
+Bluge-backed series store entirely: there is no <code>bluge.pid</code> lock, no
+<code>bluge.OpenWriter</code>, and no engine flag for it any more, so every claim below
+that describes <code>seg-*/sidx/</code> as &ldquo;a Bluge inverted directory&rdquo; or routes its
+snapshot/export path through <code>pkg/index/inverted</code>&rsquo;s <code>ReadOnlyWalkDocuments</code>
+/ <code>ReadOnlyDocCount</code> (now <code>pkg/index/native</code>&rsquo;s own read-only API) needs
+re-validation against the native engine before this design is implemented.
+The Stream element index (<code>shard-N/idx/</code>) is a separate cutover from
+NIDX-03: PR #1390 already moved the live element-index write/query path
+onto the same native ICE v3 engine, so it is <strong>not</strong> &ldquo;unaffected&rdquo; in the
+sense of still being live-Bluge, and every claim below that describes
+<code>shard-N/idx/</code> itself as a Bluge inverted directory needs the same
+re-validation as <code>seg-*/sidx/</code> above. The one thing that still produces
+legacy Bluge-format output is the <strong>NIDX-04 migration tool</strong>
+(<code>banyand/stream/migration_element_index.go</code>), an offline, one-shot tool
+that migrates pre-native element-index data; it is not on the live write
+or query path.</p>
+</blockquote>
 <p>BanyanDB already supports snapshots, backup/restore, and lifecycle management, but it still lacks
 an operations-oriented, cluster-level data import/export workflow. Backup moves a whole node&rsquo;s
 files to remote storage; lifecycle moves data between stages inside one cluster. Neither lets an
@@ -4717,6 +4735,8 @@ corresponding data nodes.</li>
 
     </div>
     
+
+
 
 
 
