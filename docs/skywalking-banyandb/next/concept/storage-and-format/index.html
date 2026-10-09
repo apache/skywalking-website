@@ -35,7 +35,7 @@ The API unifies what the storage separates. A single API resource can be backed 
   <meta itemprop="description" content="Storage &amp; File Format This document describes how BanyanDB physically stores data on disk, organized from the API perspective: for each resource a user creates (Measure, Stream, Trace, Property, TopNAggregation), it explains the API surface first, then the storage engine(s) that actually back it.
 The central idea to keep in mind:
 The API unifies what the storage separates. A single API resource can be backed by completely different storage engines. The clearest example is Measure: one schema, one write RPC, one query RPC — but a single boolean flag (index_mode) silently swaps the entire on-disk engine. This document makes those hidden forks explicit.">
-  <meta itemprop="wordCount" content="4589">
+  <meta itemprop="wordCount" content="4558">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Storage & File Format">
   <meta name="twitter:description" content="Storage &amp; File Format This document describes how BanyanDB physically stores data on disk, organized from the API perspective: for each resource a user creates (Measure, Stream, Trace, Property, TopNAggregation), it explains the API surface first, then the storage engine(s) that actually back it.
@@ -2081,7 +2081,7 @@ The API unifies what the storage separates. A single API resource can be backed 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 7e1418a</div>
+                  <div class="commit-id">Commit Id: ca86e9a</div>
                 
 
 
@@ -2184,7 +2184,7 @@ The API unifies what the storage separates. A single API resource can be backed 
         ├── &lt;016x&gt;/                   #     PART (one immutable flush/merge output)
         │   └── … columnar files …
         ├── &lt;016x&gt;.snp               #     snapshot manifest = JSON array of live part dir names
-        ├── idx/                      #     STREAM only: per-shard element inverted index (native ICE v3; only the offline NIDX-04 migration tool still emits legacy Bluge output)
+        ├── idx/                      #     STREAM only: per-shard element inverted index (native ICE v3)
         └── sidx/&lt;ruleName&gt;/&lt;016x&gt;/   #     TRACE only: ordered secondary-index parts (one tree per index rule)
 </code></pre><pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TD
     G[&#34;group/ (lock)&#34;] --&gt; S1[&#34;seg-20240901/&#34;]
@@ -2204,7 +2204,7 @@ The API unifies what the storage separates. A single API resource can be backed 
 <li><strong>Segment</strong> directories are named <code>seg-</code> + the segment-start time formatted as <code>2006010215</code> (hour granularity) or <code>20060102</code> (day granularity), chosen by the group&rsquo;s <code>segment_interval</code> unit.</li>
 <li><strong>Part</strong> directories are named <code>&lt;016x&gt;</code> of a monotonically increasing epoch. A part is immutable once written.</li>
 <li><strong>Snapshot (MVCC):</strong> <code>&lt;016x&gt;.snp</code> is a JSON array listing which part directories are <em>live</em> at that epoch. Readers only see parts in the current snapshot; a part dropped from the snapshot is GC&rsquo;d at the next flush/merge. The newest <code>.snp</code> (highest epoch) is the current one.</li>
-<li>The <strong>segment-level <code>sidx/</code></strong> is the <em>series index</em> (a native ICE v3 inverted index, <code>pkg/index/native</code>; <code>banyand/internal/storage</code> never imports the retired Bluge-backed engine for it). Note the <strong>name collision</strong>: <code>Trace</code> also has a <code>sidx/</code> directory, but at the <strong>shard</strong> level and with a completely different meaning (ordered secondary index, see §6). Same name, different depth, different engine.</li>
+<li>The <strong>segment-level <code>sidx/</code></strong> is the <em>series index</em> (a native ICE v3 inverted index, <code>pkg/index/native</code>; <code>banyand/internal/storage</code> never imports the retired legacy engine for it). Note the <strong>name collision</strong>: <code>Trace</code> also has a <code>sidx/</code> directory, but at the <strong>shard</strong> level and with a completely different meaning (ordered secondary index, see §6). Same name, different depth, different engine.</li>
 </ul>
 <p><code>Property</code> does <strong>not</strong> use this skeleton — see §7.</p>
 <h3 id="21-part-lifecycle">2.1 Part lifecycle</h3>
@@ -2382,7 +2382,7 @@ The API unifies what the storage separates. A single API resource can be backed 
 <li><strong>Synthetic fields</strong> added only in this mode: <code>_im_name</code> (the measure subject) and <code>_im_entity_tag_&lt;tag&gt;</code> (so entity components are independently queryable), plus internal <code>_series_id</code>, <code>_timestamp</code>, <code>_version</code>, <code>_id</code>.</li>
 <li><strong>Write path:</strong> <code>handleIndexMode</code> builds the document → <code>segment.IndexDB().Update(docs)</code>. <code>mustAddDataPoints</code> is never called.</li>
 <li><strong>Query path:</strong> short-circuits to <code>buildIndexQueryResult</code> → <code>IndexDB().SearchWithoutSeries</code> — it reads projected stored fields straight out of the index over a time range and de-dupes by series ID with a roaring bitmap. There is no series-list pre-resolution and no block scan.</li>
-<li><strong>What does NOT apply:</strong> field <code>encoding_method</code>/<code>compression_method</code>, columnar block layout, part compaction, and TopN — all of those are Mode-A concepts. Index-mode segments use the native ICE encoder&rsquo;s own S2 (<code>github.com/klauspost/compress/s2</code>) compression for stored fields — the same compression family the retired Bluge-backed engine used, carried forward by <code>pkg/index/internal/nativeice</code>, not inherited from Bluge itself.</li>
+<li><strong>What does NOT apply:</strong> field <code>encoding_method</code>/<code>compression_method</code>, columnar block layout, part compaction, and TopN — all of those are Mode-A concepts. Index-mode segments use the native ICE encoder&rsquo;s own S2 (<code>github.com/klauspost/compress/s2</code>) compression for stored fields — the same compression family the retired legacy engine used, carried forward by <code>pkg/index/internal/nativeice</code>, not inherited from the legacy engine itself.</li>
 </ul>
 <p>Index-mode is intended for low-cardinality, non-time-series-shaped data (e.g. service traffic / metadata) where every tag should be searchable.</p>
 <h3 id="35-topnaggregation-derived-from-a-normal-mode-measure">3.5 TopNAggregation (derived from a normal-mode measure)</h3>
@@ -2451,7 +2451,7 @@ The API unifies what the storage separates. A single API resource can be backed 
 <p>(No <code>fv.bin</code> — streams have no fields.) Unlike Measure, rows with the same timestamp but different <code>element_id</code> are <strong>both</strong> stored (no dedup). Stream defines <code>maxUncompressedBlockSize</code>/<code>maxValuesBlockSize</code>/<code>maxTagFamiliesMetadataSize</code>/<code>maxUncompressedPrimaryBlockSize</code> but <strong>no <code>maxBlockLength</code></strong> — blocks are cut by size or series change only.</p>
 <ol start="2">
 <li>
-<p><strong>Shard-level element index <code>idx/</code></strong> — a native ICE v3 inverted index (<code>pkg/index/native</code>, via <code>pkg/index/nativeadapter</code>) mapping indexed-tag terms → element IDs (with a parallel timestamp posting list). This resolves <code>TYPE_INVERTED</code> predicates and sort-by-tag. (This is the element-level analogue of the series index, and is <strong>undocumented</strong> in the older <code>tsdb.md</code>.) It was cut over from the legacy Bluge-backed engine separately from the series index&rsquo;s NIDX-03 cutover; the only remaining Bluge producer is the offline <strong>NIDX-04 migration tool</strong> (<code>banyand/stream/migration_element_index.go</code>), which writes legacy Bluge-format output when migrating pre-native element-index data — it is not on the live write or query path.</p>
+<p><strong>Shard-level element index <code>idx/</code></strong> — a native ICE v3 inverted index (<code>pkg/index/native</code>, via <code>pkg/index/nativeadapter</code>) mapping indexed-tag terms → element IDs (with a parallel timestamp posting list). This resolves <code>TYPE_INVERTED</code> predicates and sort-by-tag. (This is the element-level analogue of the series index, and is <strong>undocumented</strong> in the older <code>tsdb.md</code>.) It was cut over from the legacy engine separately from the series index&rsquo;s NIDX-03 cutover (NIDX-04); the offline migration tool (<code>banyand/stream/migration_element_index.go</code>) that once bridged pre-native element-index data now writes the native format too — it is not on the live write or query path.</p>
 </li>
 <li>
 <p><strong>Segment-level series index</strong> — holds the entity (<code>seriesID ↔ entity values</code>), shared with the other engines.</p>
@@ -2632,7 +2632,7 @@ The API unifies what the storage separates. A single API resource can be backed 
 </ul>
 <p>Storage options are on the <strong>group</strong>: only <code>shard_num</code> matters; <code>segment_interval</code> and <code>ttl</code> on the group are <strong>silently ignored</strong> for properties.</p>
 <h3 id="62-storage-a-native-inverted-index-document-store-not-kv-not-tsdb">6.2 Storage: a native inverted-index document store (not KV, not TSDB)</h3>
-<p>Despite the KV-style API, there is no KV engine and no time-series engine. Each <code>(group, shard)</code> is <strong>one native ICE v3 inverted index</strong> (<code>pkg/index/native</code>); every property revision is <strong>one document</strong>. The legacy Bluge-backed writer this used before NIDX-03 is gone — there is no engine flag and no switch between engines.</p>
+<p>Despite the KV-style API, there is no KV engine and no time-series engine. Each <code>(group, shard)</code> is <strong>one native ICE v3 inverted index</strong> (<code>pkg/index/native</code>); every property revision is <strong>one document</strong>. The legacy writer this used before NIDX-03 is gone — there is no engine flag and no switch between engines.</p>
 <pre tabindex="0"><code>&lt;property-root&gt;/property/data/&lt;group&gt;/shard-&lt;N&gt;/
 ├── &lt;012x&gt;.seg     # ICE-v3 segment: documents (stored _source JSON + indexed terms)
 └── &lt;012x&gt;.snp     # snapshot manifest: live segments + per-segment DELETED roaring drop-set
@@ -2800,7 +2800,7 @@ The API unifies what the storage separates. A single API resource can be backed 
       <tr>
           <td>Stream element index</td>
           <td><code>shard-N/idx/</code></td>
-          <td>native ICE v3 <code>&lt;012x&gt;.seg</code> · <code>&lt;012x&gt;.snp</code> (legacy Bluge <code>&lt;012x&gt;.seg</code> · <code>&lt;012x&gt;.snp</code> · <code>bluge.pid</code> only as output of the offline NIDX-04 migration tool)</td>
+          <td>native ICE v3 <code>&lt;012x&gt;.seg</code> · <code>&lt;012x&gt;.snp</code></td>
       </tr>
   </tbody>
 </table>

@@ -35,7 +35,7 @@ Where the data comes from langsmith, the tracing client, is a dependency of lang
   <meta itemprop="description" content="LangChain How an agent built on LangChain or LangGraph maps onto the unified conversation model, what the langsmith-ingest adapter reads, and what the wire cannot supply.
 For turning it on, see LangChain and LangGraph. For the words, see the LangChain glossary.
 Where the data comes from langsmith, the tracing client, is a dependency of langchain-core, so every LangChain application already carries it. It is pointed at asz with environment variables and sends what the graph did. asz accepts what that client sends; it carries none of its code and claims no affiliation with the product it was written for.">
-  <meta itemprop="wordCount" content="3765">
+  <meta itemprop="wordCount" content="4609">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="LangChain">
   <meta name="twitter:description" content="LangChain How an agent built on LangChain or LangGraph maps onto the unified conversation model, what the langsmith-ingest adapter reads, and what the wire cannot supply.
@@ -1533,7 +1533,7 @@ Where the data comes from langsmith, the tracing client, is a dependency of lang
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b5c2c30</div>
+                  <div class="commit-id">Commit Id: 7d270e3</div>
                 
 
 
@@ -1640,6 +1640,53 @@ affiliation with the product it was written for.</p>
 <p>Two of those decide the design. Runs arrive more than once, so a run is a thing that is <em>updated</em>
 rather than a thing that is <em>reported</em>. And a rejected batch comes back identical, so delivery is
 at-least-once and the receiver deduplicates.</p>
+<p>LangSmith JS, the client a LangChain JS or LangGraph JS application carries, is pointed at the
+receiver the same way and differs in what it sends. Measured with LangSmith JS 0.10.8,
+<code>@langchain/core</code> 1.2.17 and <code>@langchain/langgraph</code> 1.4.21, on the two cases under
+<code>tests/apps/langchain-js</code>:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Measured</th>
+          <th>LangSmith JS</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Body</td>
+          <td>sent in chunks, with no length</td>
+      </tr>
+      <tr>
+          <td>Run times</td>
+          <td><code>start_time</code> as RFC 3339 text, <code>end_time</code> as the milliseconds since the epoch</td>
+      </tr>
+      <tr>
+          <td>Updates</td>
+          <td>as the Python client: a run is sent when it starts and when it ends, as one post of the finished run when both fall in one batch. Every run of both captures was: 12 posts, no patch</td>
+      </tr>
+      <tr>
+          <td>A message</td>
+          <td>a constructor whose kind is named only by the class that ends its <code>id</code>, its fields under <code>kwargs</code> with no <code>type</code></td>
+      </tr>
+      <tr>
+          <td>A decorated function</td>
+          <td>no <code>ls_method</code>; <code>extra.runtime.library</code> is <code>langsmith</code>, where LangChain&rsquo;s runs say <code>langchain-js</code></td>
+      </tr>
+      <tr>
+          <td>Metadata</td>
+          <td>a decorated function&rsquo;s is not passed to the runs inside it</td>
+      </tr>
+  </tbody>
+</table>
+<p>The receiver reads either time, and a message by its class as by its type, so a JS conversation
+lands as the Python one does: the person&rsquo;s question opens the turn, a tool&rsquo;s result is what the
+tool said, and a decorated function keeps its arguments. Read as the Python client writes them,
+every JS run was refused for its end time, and, with that read, no question opened a LangGraph JS
+conversation and a tool&rsquo;s result landed as the serialized message. Because the metadata is not
+passed down, a model call made inside a decorated function supplies no thread of its own. It takes
+the function&rsquo;s, as <a href="#ownership-is-a-namespace">Ownership is a namespace</a> says a run that supplies
+none does; landed under its trace, the answer was a conversation of its own and the question&rsquo;s had
+none. A LangGraph JS graph puts the thread on every run.</p>
 <p>An update carries only what changed. <code>update_run(id, outputs=...)</code> sends the id and the outputs,
 with the trace, the project, the kind of run and the dotted order all null — read on its own,
 a run belonging to no conversation and of no kind. So the runs that have started and not ended
@@ -1693,8 +1740,10 @@ every field comes from an earlier arrival about the same run.</p>
   </tbody>
 </table>
 <h3 id="a-record-is-an-arrival-not-a-run">A record is an arrival, not a run</h3>
-<p>A run is posted when it starts and patched when it ends, so the same run reaches asz more than
-once. Each arrival is its own record, with the run as its <code>call</code>.</p>
+<p>A run is posted when it starts and patched when it ends, so the same run can reach asz more than
+once. Both clients send the two as one post of the finished run when they fall in one batch, as
+most runs do: in the captured corpus 462 of 476 posts carried their run&rsquo;s end. Each arrival is its
+own record, with the run as its <code>call</code>.</p>
 <p>They cannot share one record id. The index keeps the first entry for an id, and in the streaming
 capture a tool&rsquo;s result exists only in the patch — one id would have hidden it, and the
 conversation would have shown a tool call that never returned.</p>
@@ -1777,8 +1826,10 @@ test on the shape kept something large that was already landed elsewhere.</p>
 <p>A <code>@traceable</code> function has no graph and may have no model call at all. Its arguments and its
 return value live nowhere else, so for those runs the fields are kept — dropping them landed such
 traces with no content in them at all.</p>
-<p>The runtime says which is which on every arrival, and that is measured: every run of a decorated
-trace carries <code>ls_method</code>, and no run of a graph trace does. A field that is a message list and
+<p>The runtime says which is which on every arrival, and that is measured: every run of a Python
+decorated trace carries <code>ls_method</code>, and no run of a graph trace does. LangSmith JS writes no
+<code>ls_method</code>; both clients write which library made the run, <code>langsmith</code> for a decorated function
+and a LangChain library for everything else, and that is read too. A field that is a message list and
 nothing else is still a repeat and is dropped; a field carrying anything beside it is kept whole,
 because what is beside it is the function&rsquo;s own and is recorded nowhere else.</p>
 <p><code>ls_method</code> is inherited, so it is never read as proof on its own: decorating a function that
@@ -1872,7 +1923,8 @@ the trace, so every stream of one trace does not share the trace as its prompt.<
 LangChain&rsquo;s serialized message form — and not the bytes the provider received. The manifest says
 which adapter it came from, and a reader must not take it for the wire.</p>
 <p><strong>Where the system prompt and the tools land.</strong> The system message and the tools a model was offered
-reach asz only in a model call&rsquo;s <code>inputs</code> and <code>extra</code>. Measured on the 72 model arrivals of the
+reach asz in a model call&rsquo;s <code>inputs</code> and <code>extra</code>, and in any run the application hands them to, such
+as a decorated function, which the paragraphs below cover. Measured on the 75 model arrivals of the
 captured corpus, every one sent its inputs out of band, and the 43 that offered tools sent them in
 an out-of-band <code>extra</code>. The system message lands in the provider bodies, as part of a request&rsquo;s
 inputs, and a reader that <a href="../../formats/asz-view#withholding">withholds</a> anything is served no
@@ -1882,7 +1934,7 @@ kept, so no reader is shown them, withheld or not.</p>
 lands that arrival&rsquo;s whole run envelope, whether or not a later arrival finishes it. The envelope
 held neither on the corpus, but a client that put them inside it would land them there. A trace
 whose root is the model call itself, with no message list in its inputs, such as a completion asked
-with a list of prompts, lands those inputs whole as its first input. All 46 trace roots of the
+with a list of prompts, lands those inputs whole as its first input. All 48 trace roots of the
 corpus are chain runs, so none landed this way. Each record is named <code>system_prompt</code> when it holds
 inputs of any shape, since they are the request the model was sent, and the envelope also when its
 <code>extra</code> holds a prompt by shape, under a key a provider takes it by. It is named <code>tool_schemas</code> when
@@ -1899,10 +1951,13 @@ result is never named.</p>
 <ul>
 <li><code>system_prompt</code> names a message whose type or role is <code>system</code> or <code>developer</code>, in any case, with
 content that holds something, and LangChain&rsquo;s pair of a role and its content in a list of
-messages. A list of two words, or an event of the application&rsquo;s own with no content, is not a
-message. It also names a value under a key a provider takes the prompt by: <code>system</code>,
-<code>instructions</code>, <code>instruction</code>, <code>system_instruction</code>, <code>system_instructions</code>, <code>preamble</code>,
-<code>system_message</code> or <code>system_prompt</code>, compared without case, underscores or dashes.</li>
+messages. A message LangChain serializes is a constructor: Python writes its role as the type in
+its <code>kwargs</code>, and LangChain JS writes only the fields the message was built with, so its role is
+only the class that ends its <code>id</code>, <code>SystemMessage</code> or <code>SystemMessageChunk</code>, which names it too. A
+list of two words, or an event of the application&rsquo;s own with no content, is not a message. It
+also names a value under a key a provider takes the prompt by: <code>system</code>, <code>instructions</code>,
+<code>instruction</code>, <code>system_instruction</code>, <code>system_instructions</code>, <code>preamble</code>, <code>system_message</code> or
+<code>system_prompt</code>, compared without case, underscores or dashes.</li>
 <li><code>tool_schemas</code> names a list of objects, or objects keyed by name, under a <code>tools</code>, <code>functions</code>,
 <code>function_declarations</code>, <code>tool_definitions</code> or <code>available_tools</code> key. A list of names or a flag
 is not a schema. An object of another kind there counts, since nothing tells it from a tool.</li>
@@ -1914,9 +1969,10 @@ another shape lands unnamed, so an application that passes its own system prompt
 its own is shown to every reader. A model call&rsquo;s own request does not depend on this: it lands in
 the provider bodies, which a reader that withholds anything is never served.</p>
 <p>A value of the application&rsquo;s own that takes one of these shapes is named too, since nothing tells
-the two apart, and it is safer to withhold it. No captured record matches either shape. A reader
-withholds such a record like any other, and the document counts it, although no step stands on a
-run&rsquo;s own record.</p>
+the two apart, and it is safer to withhold it. On the captured corpus one record is named by shape:
+the arguments of the LangChain JS traced function, which hold the system message it passes to its
+model call. A reader withholds such a record like any other, and the document counts it, although
+no step stands on a run&rsquo;s own record.</p>
 <h3 id="a-conversation-is-named-by-what-was-asked">A conversation is named by what was asked</h3>
 <p>Nothing on this wire carries a name. The client names runs — <code>LangGraph</code>, <code>agent</code>,
 <code>should_continue</code> — and those name the program rather than the conversation, so a list of them
@@ -1936,8 +1992,30 @@ and thread.</p>
 and <code>会话-1</code> as real thread keys, so the session directory is derived from them: a readable slug and
 a digest of the whole namespace, under an <code>ls-</code> prefix that keeps it off the leading underscore
 enumeration skips and away from every Windows device name.</p>
-<p>A trace with no supplied key is not given one. It lands under a name that says the identity was not
-supplied, and nothing merges it with anything else.</p>
+<p>A run that supplies no key takes the conversation of the nearest run it ran inside whose
+conversation was supplied. The run&rsquo;s dotted order names every run it ran inside, and that run
+supplied the thread, so nothing is guessed. A run with no dotted order is not given one. A run that
+supplies its own key keeps it. The Python client passes a decorated function&rsquo;s metadata down to the
+runs inside it, and LangSmith JS does not, so without this a model call made inside a JS function
+landed apart from the question it answered.</p>
+<p>The order runs arrive in does not decide it. A run waits for its ancestry, as
+<a href="#a-nested-agent-is-its-own-stream">A nested agent is its own stream</a> says, and its conversation is
+decided when the ancestry has arrived. A run above it that supplied nothing, or landed unassigned,
+is passed over. A run above it that is not known, because it has not arrived when the run has
+waited as long as it may or was forgotten after 24 hours, stops the search: it may have supplied a
+thread of its own, so the one further up is not taken, and the run lands as one that supplied none.
+A run&rsquo;s own key decides from the first of its arrivals that brings one, as long as the run has not
+landed yet; once it has, every later arrival of the same run lands where it did, while the receiver
+remembers the run, so one run is not split across two conversations.</p>
+<p>An update carries only what changed, so it can name a thread with no project, and arrive before the
+run&rsquo;s start, which carries the project. A thread named before the run&rsquo;s project is known is not a
+whole conversation. It does not decide while the run waits, so a later arrival that carries the
+project still does. The run does not take a conversation from a run above it in place of its own
+thread, and a run below it does not pass over it to take one from further up. If it lands before
+any arrival carries the project, it lands under its thread with an empty project. All 11 updates in
+the captures carry their project with their metadata, so none of them has met this.</p>
+<p>A trace with no supplied key anywhere is not given one. It lands under a name that says the
+identity was not supplied, and nothing merges it with anything else.</p>
 <h2 id="what-the-wire-cannot-supply">What the wire cannot supply</h2>
 <ul>
 <li><strong>A child&rsquo;s own conversation.</strong> An agent invoked with its own <code>thread_id</code> reports the parent&rsquo;s on
@@ -1959,7 +2037,7 @@ limits follow from the evidence:
 <li>The middleware summarises inside a turn, so the talk it happens in stays in the epoch where the
 turn began, as it does for a Claude Code compaction in the middle of a turn.</li>
 <li>The reset lands with the arrival that carries the request. In the captured corpus every model
-call&rsquo;s first arrival carried its request, 71 of 71. A request that arrives after its call has
+call&rsquo;s first arrival carried its request, 74 of 74. A request that arrives after its call has
 begun puts that one call in the old epoch.</li>
 <li>A marked message with no <code>id</code> makes no reset. The middleware gives every message one. Without
 it, one summary could not be told from another with the same words.</li>
@@ -1987,8 +2065,9 @@ question verbatim, cannot be told apart from one asking again.</li>
 </ul>
 <h2 id="what-it-supplies-that-a-transcript-does-not">What it supplies that a transcript does not</h2>
 <ul>
-<li><strong>Work in progress.</strong> Runs arrive before they finish, so a slow turn is visible while it runs and
-a process that died mid-turn still leaves what it had reported.</li>
+<li><strong>Work in progress.</strong> A run still going when its client sends a batch arrives before it
+finishes, so a slow turn is visible while it runs and a process that died mid-turn still leaves
+what it had reported.</li>
 <li><strong>Per-call duration.</strong> Every run carries its own start and end.</li>
 <li><strong>The whole message list per call.</strong> <code>inputs.messages</code> is what the framework sent, so continuity
 between turns can be checked rather than assumed.</li>

@@ -33,7 +33,7 @@ Historical record — superseded by 0.12.0. This document describes the vectoriz
   <meta itemprop="name" content="G5d Phase D — Soak Summary">
   <meta itemprop="description" content="G5d Phase D — Soak Summary Run: dist/soak/20260511T005933/ Branch: vectorized-query @ commit 90aacda9 Phase 0 (vec-off baseline): 2026-05-11 00:59 Z → 02:03 Z (~1 h 4 min) Phase 1 (vec-on soak): 2026-05-11 02:03 Z → 2026-05-13 02:03 Z (48 h 0 min) Host: 32-core Linux, 31 GB RAM, no swap; Docker daemon 29.3.1 Harness: scripts/soak-vectorized.sh &#43; scripts/soak-monitor.sh &#43; cmd/soak-driver
 Historical record — superseded by 0.12.0. This document describes the vectorized-query rollout gate as it ran while the row-based query path still existed. The --measure-vectorized-enabled flag it toggles no longer selects a query engine: the row path was removed in 0.12.0 (apache/skywalking#13998), the flag is a no-op that fails fast on =false, and it is removed entirely in 0.13.0. The procedure is preserved verbatim for provenance — do not run it against a 0.12.0 or later build.">
-  <meta itemprop="wordCount" content="951">
+  <meta itemprop="wordCount" content="986">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="G5d Phase D — Soak Summary">
   <meta name="twitter:description" content="G5d Phase D — Soak Summary Run: dist/soak/20260511T005933/ Branch: vectorized-query @ commit 90aacda9 Phase 0 (vec-off baseline): 2026-05-11 00:59 Z → 02:03 Z (~1 h 4 min) Phase 1 (vec-on soak): 2026-05-11 02:03 Z → 2026-05-13 02:03 Z (48 h 0 min) Host: 32-core Linux, 31 GB RAM, no swap; Docker daemon 29.3.1 Harness: scripts/soak-vectorized.sh &#43; scripts/soak-monitor.sh &#43; cmd/soak-driver
@@ -2078,7 +2078,7 @@ Historical record — superseded by 0.12.0. This document describes the vectoriz
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 7e1418a</div>
+                  <div class="commit-id">Commit Id: ca86e9a</div>
                 
 
 
@@ -2186,12 +2186,12 @@ procedure is preserved verbatim for provenance — do not run it against a 0.12.
 <p><strong>Δ = +152, +27 %</strong> — exceeds the 5 % threshold.</p>
 <p><strong>Root cause is not the vectorized query path.</strong> The growth has a clean signature: two step-function events spaced exactly 24 hours apart, each adding ~76 goroutines, with zero growth between events. Stack-diff between <code>pprof-start/goroutine-*.txt</code> and <code>pprof-end/goroutine-*.txt</code>:</p>
 <ul>
-<li><strong>+108 in <code>github.com/blugelabs/bluge/index.analysisWorker</code></strong> (<code>OpenWriter.func1</code>, <code>writer.go:77</code> → <code>writer.go:667</code>)</li>
-<li><strong>~+44 orchestration goroutines</strong> around new bluge writers (<code>pkg/flow.Transmit</code>, channel waiters)</li>
+<li><strong>+108 in the legacy index engine&rsquo;s <code>index.analysisWorker</code></strong> (<code>OpenWriter.func1</code>, <code>writer.go:77</code> → <code>writer.go:667</code>)</li>
+<li><strong>~+44 orchestration goroutines</strong> around new legacy index writers (<code>pkg/flow.Transmit</code>, channel waiters)</li>
 <li>Every other stack signature is <strong>identical count</strong> start vs end — <code>pkg/flow.Transmit</code> 108→108, <code>grpc/internal/grpcsync.CallbackSerializer.run</code> 54→54</li>
 </ul>
-<p>The 108 = 2 segment-rotation events × ~54 analysisWorker goroutines per new bluge writer (the pool sizes itself from GOMAXPROCS = 32 on this host). With <code>SegmentInterval: 1 day</code>, each UTC midnight crossing rotates the tsTable to a new segment, opening a fresh bluge index writer whose analysis-worker pool is not released when the previous segment goes idle.</p>
-<p>The vectorized query path does not touch bluge writers — the same growth would appear under vec-off, on a row-path-only build. Filed upstream as <strong><a href="https://github.com/apache/skywalking/issues/13874">apache/skywalking#13874</a></strong> (label: <code>database</code>, milestone: <code>BanyanDB - 0.11.0</code>).</p>
+<p>The 108 = 2 segment-rotation events × ~54 analysisWorker goroutines per new legacy index writer (the pool sizes itself from GOMAXPROCS = 32 on this host). With <code>SegmentInterval: 1 day</code>, each UTC midnight crossing rotates the tsTable to a new segment, opening a fresh legacy index writer whose analysis-worker pool is not released when the previous segment goes idle.</p>
+<p>The vectorized query path does not touch the legacy index writer — the same growth would appear under vec-off, on a row-path-only build. Filed upstream as <strong><a href="https://github.com/apache/skywalking/issues/13874">apache/skywalking#13874</a></strong> (label: <code>database</code>, milestone: <code>BanyanDB - 0.11.0</code>).</p>
 <h2 id="verdict">Verdict</h2>
 <table>
   <thead>
@@ -2220,23 +2220,23 @@ procedure is preserved verbatim for provenance — do not run it against a 0.12.
       <tr>
           <td>4</td>
           <td>Goroutine drift ≤ 5 %</td>
-          <td>✗ — root cause attributed to bluge writer lifecycle (apache/skywalking#13874), pre-existing storage-layer behavior independent of the vec path</td>
+          <td>✗ — root cause attributed to legacy index writer lifecycle (apache/skywalking#13874), pre-existing storage-layer behavior independent of the vec path</td>
       </tr>
   </tbody>
 </table>
 <p><strong>Recommendation: proceed with G5e (default flip).</strong> The criterion-4 miss does not block the rollout:</p>
 <ul>
-<li>It is caused by code paths the vectorized query layer does not touch (segment-rotation bluge writer creation in the storage layer).</li>
+<li>It is caused by code paths the vectorized query layer does not touch (segment-rotation legacy index writer creation in the storage layer).</li>
 <li>It would be reproduced under vec-off on the row path with the same configuration.</li>
 <li>The growth pattern is bounded by segment count (not query rate or time), so it does not interact with the flag flip in any way that worsens production behavior post-flip.</li>
 <li>Three of four criteria — including the parity check that the G5b/G5c architectural path was specifically built to satisfy — passed cleanly.</li>
 </ul>
-<p>The bluge writer lifecycle fix is tracked at apache/skywalking#13874 and should be picked up under the 0.11.0 milestone independent of G5.</p>
+<p>The legacy index writer lifecycle fix is tracked at apache/skywalking#13874 and should be picked up under the 0.11.0 milestone independent of G5. (The legacy index engine itself was fully removed in a later milestone; this entry remains as the historical record of the soak run.)</p>
 <h2 id="next-steps">Next steps</h2>
 <ol>
 <li><strong>G5e default flip</strong> — pre-drafted at <code>.omc/g5e-flip-draft.md</code>: one-line change in <code>pkg/query/vectorized/measure/config.go</code> (<code>Enabled: false</code> → <code>true</code>) plus a CHANGES.md entry. Verification command list and commit message template included.</li>
 <li><strong>G6 operator wiring</strong> — distinct multi-commit arc (BatchLimit / BatchGroupBy / BatchAggregation / BatchTop into <code>NewMIterator</code>); recommended in a fresh branch.</li>
-<li><strong>apache/skywalking#13874</strong> — bluge writer pool lifecycle fix; not on the v1 rollout critical path.</li>
+<li><strong>apache/skywalking#13874</strong> — legacy index writer pool lifecycle fix; not on the v1 rollout critical path.</li>
 </ol>
 <h2 id="artifact-paths-local-gitignored">Artifact paths (local, gitignored)</h2>
 <pre tabindex="0"><code>dist/soak/20260511T005933/
