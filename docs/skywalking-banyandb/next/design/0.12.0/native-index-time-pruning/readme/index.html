@@ -1,0 +1,12967 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="twitter:site" content="skywalking.apache.org">
+<meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+<meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+
+<meta name="generator" content="Hugo 0.159.0">
+
+<META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
+<link rel="stylesheet" href="/css/iconfont/iconfont.css">
+
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png">
+<link rel="manifest" href="/favicons/site.webmanifest">
+<link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+<title>Time-Range Pruning in the Native Inverted Index | Apache SkyWalking</title><meta property="og:url" content="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/native-index-time-pruning/readme/">
+  <meta property="og:site_name" content="Apache SkyWalking">
+  <meta property="og:title" content="Time-Range Pruning in the Native Inverted Index">
+  <meta property="og:description" content="Time-Range Pruning in the Native Inverted Index Status: implemented.
+The native inverted index (pkg/index/native, pkg/index/internal/nativeice) already writes everything a time-range query needs: per-segment time bounds and a multi-precision _timestamp term trie. No query reads either. Every query applies its time range per document, after decoding that document’s stored fields. This design makes the time range narrow candidates before any stored document is decoded, in two layers:
+Segment pruning — skip a segment whose time bounds miss the query range, and drop the per-document time check for a segment the range fully contains. Trie candidates — for a segment the range only overlaps, turn the range into a few dozen _timestamp terms at mixed precision, OR their postings, and intersect the result with the series and filter candidates. It also fixes a prerequisite defect: the streaming merge writes zero time bounds, so a merged segment currently reports “no timestamps”.">
+  <meta property="og:locale" content="en">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="docs">
+
+  <meta itemprop="name" content="Time-Range Pruning in the Native Inverted Index">
+  <meta itemprop="description" content="Time-Range Pruning in the Native Inverted Index Status: implemented.
+The native inverted index (pkg/index/native, pkg/index/internal/nativeice) already writes everything a time-range query needs: per-segment time bounds and a multi-precision _timestamp term trie. No query reads either. Every query applies its time range per document, after decoding that document’s stored fields. This design makes the time range narrow candidates before any stored document is decoded, in two layers:
+Segment pruning — skip a segment whose time bounds miss the query range, and drop the per-document time check for a segment the range fully contains. Trie candidates — for a segment the range only overlaps, turn the range into a few dozen _timestamp terms at mixed precision, OR their postings, and intersect the result with the series and filter candidates. It also fixes a prerequisite defect: the streaming merge writes zero time bounds, so a merged segment currently reports “no timestamps”.">
+  <meta itemprop="wordCount" content="3330">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Time-Range Pruning in the Native Inverted Index">
+  <meta name="twitter:description" content="Time-Range Pruning in the Native Inverted Index Status: implemented.
+The native inverted index (pkg/index/native, pkg/index/internal/nativeice) already writes everything a time-range query needs: per-segment time bounds and a multi-precision _timestamp term trie. No query reads either. Every query applies its time range per document, after decoding that document’s stored fields. This design makes the time range narrow candidates before any stored document is decoded, in two layers:
+Segment pruning — skip a segment whose time bounds miss the query range, and drop the per-document time check for a segment the range fully contains. Trie candidates — for a segment the range only overlaps, turn the range into a few dozen _timestamp terms at mixed precision, OR their postings, and intersect the result with the series and filter candidates. It also fixes a prerequisite defect: the streaming merge writes zero time bounds, so a merged segment currently reports “no timestamps”.">
+
+
+
+<link rel="preload" href="/scss/main.min.c970279f2301f0c9cf2beb4e5df2392fb1a258d8f52d8fc73e2ee4b6b26e0e05.css" as="style">
+<link href="/scss/main.min.c970279f2301f0c9cf2beb4e5df2392fb1a258d8f52d8fc73e2ee4b6b26e0e05.css" rel="stylesheet" integrity="">
+
+
+
+<link rel="stylesheet" href="/css/highlight-github.css" />
+
+<script src="/js/jquery-3.6.0.min.js"></script>
+
+<link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/native-index-time-pruning/readme/">
+<meta name="description" content="Time-Range Pruning in the Native Inverted Index Status: implemented. The native inverted index (pkg/index/native, pkg/index/internal/nativeice) already writes…">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Time-Range Pruning in the Native Inverted Index","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/native-index-time-pruning/readme/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/native-index-time-pruning/readme/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/native-index-time-pruning/readme/","name":"Time-Range Pruning in the Native Inverted Index","position":3}]}]}</script>
+
+
+<link rel="alternate" type="application/rss+xml" href="https://skywalking.apache.org/feed.xml" title="Apache SkyWalking">
+
+
+
+  </head>
+  <body class="td-page  project-doc">
+    <header>
+      
+
+
+
+  
+  
+
+  
+  
+
+  
+  
+
+  
+  
+    
+  
+
+  
+  
+
+  
+  
+
+
+
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+<nav class="js-navbar-scroll navbar navbar-expand td-navbar" aria-label="Main navigation">
+  <div class="sw-navbar-inner">
+    <button type="button" class="sidebar-button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="site-navigation-drawer">
+      <i class="iconfont icon-menu" aria-hidden="true"></i>
+    </button>
+    <a class="navbar-brand" href="/">
+        <span class="navbar-logo"><img width="130" src="/images/logo.svg" alt="SkyWalking"></span> 
+    </a>
+    <div class="td-navbar-nav-scroll navbar-nav-wrapper" id="navigation">
+        <ul class="navbar-nav mt-lg-0">
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				
+				
+                
+                <a class="nav-link" href="/" ><span>Home</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item dropdown sw-projects-item">
+                <button type="button" class="nav-link dropdown-toggle sw-projects-toggle active" id="projects-menu-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Projects</button>
+                <div class="dropdown-menu sw-projects-menu" aria-labelledby="projects-menu-toggle">
+                    
+
+
+<div class="sw-projects-content">
+  <a class="dropdown-item sw-projects-intro" href="/get-started/">
+    <span><strong>Get started in minutes</strong><span>Try the Showcase or install SkyWalking</span></span>
+    <span aria-hidden="true">→</span>
+  </a>
+  <div class="sw-projects-groups">
+    
+    
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+    <div class="sw-projects-group">
+      <p class="sw-projects-label">Platform</p>
+    
+      <div class="sw-projects-group-links">
+        <div class="sw-projects-columns">
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalking">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking</strong><span class="sw-project-description">Core observability server</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link active" href="/docs/#BanyanDB">
+          <img src="/images/project/banyan-db.svg" width="28" height="28" alt="">
+          <span><strong>BanyanDB</strong><span class="sw-project-description">Observability database</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#HorizonUI">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>Horizon UI</strong><span class="sw-project-description">Next-generation UI</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#AISessionizer">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>AI Sessionizer</strong><span class="sw-project-description">AI agent observability</span></span>
+        </a>
+        
+        
+        </div>
+        
+        </div>
+        
+        <a class="dropdown-item sw-projects-more" href="/docs/#SkyWalkingServers">All platform projects <span aria-hidden="true">→</span></a>
+        
+      </div>
+    </div>
+    
+    
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+    <div class="sw-projects-group sw-projects-group-wide">
+      <p class="sw-projects-label">Agents &amp; collection</p>
+    
+      <div class="sw-projects-group-links">
+        <div class="sw-projects-columns">
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#JavaAgent">
+          <img src="/images/project/java-agent.svg" width="28" height="28" alt="">
+          <span><strong>Java Agent</strong><span class="sw-project-description">Java tracing and profiling</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#GoAgent">
+          <img src="/images/project/skywalking-go.svg" width="28" height="28" alt="">
+          <span><strong>Go Agent</strong><span class="sw-project-description">Go tracing and metrics</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#PythonAgent">
+          <img src="/images/project/python-agent.svg" width="28" height="28" alt="">
+          <span><strong>Python Agent</strong><span class="sw-project-description">Python tracing and profiling</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#NodeJSAgent">
+          <img src="/images/project/nodejs-agent.svg" width="28" height="28" alt="">
+          <span><strong>NodeJS Agent</strong><span class="sw-project-description">Node.js distributed tracing</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#PHPAgent">
+          <img src="/images/project/php-agent.svg" width="28" height="28" alt="">
+          <span><strong>PHP Agent</strong><span class="sw-project-description">PHP distributed tracing</span></span>
+        </a>
+        
+        
+        </div>
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingRover">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Rover</strong><span class="sw-project-description">eBPF metrics and profiling</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingSatellite">
+          <img src="/images/project/skywalking-satellite.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Satellite</strong><span class="sw-project-description">Lightweight telemetry collector</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#KubernetesEventExporter">
+          <img src="/images/project/kubernetes.svg" width="28" height="28" alt="">
+          <span><strong>Kubernetes Event Exporter</strong><span class="sw-project-description">Kubernetes event collection</span></span>
+        </a>
+        
+        
+        </div>
+        
+        </div>
+        
+        <a class="dropdown-item sw-projects-more" href="/docs/#Agents">View all agents &amp; collectors <span aria-hidden="true">→</span></a>
+        
+      </div>
+    </div>
+    
+    
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+    <div class="sw-projects-group">
+      <p class="sw-projects-label">Operations &amp; tools</p>
+    
+      <div class="sw-projects-group-links">
+        <div class="sw-projects-columns">
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingCLI">
+          <img src="/images/project/skywalking-cli.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking CLI</strong><span class="sw-project-description">Command-line operations</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingMCP">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking MCP</strong><span class="sw-project-description">Observability for AI assistants</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#KubernetesHelm">
+          <img src="/images/project/helm.svg" width="28" height="28" alt="">
+          <span><strong>Kubernetes Helm</strong><span class="sw-project-description">Deploy SkyWalking with Helm</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingCloudonKubernetes">
+          <img src="/images/project/kubernetes.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Cloud on Kubernetes</strong><span class="sw-project-description">Kubernetes operator</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingEyes">
+          <img src="/images/project/skywalking-eyes.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Eyes</strong><span class="sw-project-description">License checks and fixes</span></span>
+        </a>
+        
+        
+        </div>
+        
+        </div>
+        
+        <a class="dropdown-item sw-projects-more" href="/docs/#Operation">All operations projects <span aria-hidden="true">→</span></a>
+        
+      </div>
+    </div>
+    
+  </div>
+  <div class="sw-projects-footer">
+    <a class="dropdown-item sw-projects-all" href="/docs/">All projects <span aria-hidden="true">→</span></a>
+    <a class="dropdown-item sw-projects-downloads" href="/downloads/">Downloads <span aria-hidden="true">→</span></a>
+  </div>
+</div>
+
+                </div>
+            </li>
+            
+            
+            
+            
+            <li class="nav-item"><a class="nav-link" href="/blog">Blogs</a></li>
+            
+            
+            
+            
+            
+            <li class="nav-item" data-nav-promote="events" hidden><a class="nav-link" href="/events/">Release Posts</a></li>
+            
+            <li class="nav-item" data-nav-promote="events/calendar" hidden><a class="nav-link" href="/events/calendar/">Event Calendar</a></li>
+            
+            <li class="nav-item" data-nav-promote="users" hidden><a class="nav-link" href="/users">Users</a></li>
+            
+            <li class="nav-item" data-nav-promote="team" hidden><a class="nav-link" href="/team">Team</a></li>
+            
+            <li class="nav-item" data-nav-promote="zh" hidden><a class="nav-link" href="/zh/">中文博客</a></li>
+            
+            
+            <li class="nav-item dropdown" data-nav-more>
+                <button type="button" class="nav-link dropdown-toggle sw-more-toggle" id="more-menu-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More</button>
+                <div class="dropdown-menu sw-more-menu" aria-labelledby="more-menu-toggle">
+                    
+                    <a class="dropdown-item" data-nav-overflow="events" href="/events/">Release Posts</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="events/calendar" href="/events/calendar/">Event Calendar</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="users" href="/users">Users</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="team" href="/team">Team</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="zh" href="/zh/">中文博客</a>
+                    
+                </div>
+            </li>
+            
+            
+            
+            
+            
+            
+            
+			
+        </ul>
+    </div>
+
+    <div class="sw-navbar-actions">
+        <button type="button" class="sw-kapa-search" aria-label="Search SkyWalking documentation and ask AI" aria-haspopup="dialog" title="Search and ask AI">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/></svg>
+  <span>Search</span>
+</button>
+
+        <div class="navbar-nav d-none d-lg-block search-input-box">
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <span class="link dropdown sw-navdd">
+                <a class="link-name nav-link dropdown-toggle sw-navdd-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <img class="sw-navdd-asf" src="/images/asf-oakleaf.svg" alt="" aria-hidden="true"> Apache
+                </a>
+                <div class="dropdown-menu sw-navmenu sw-navmenu--wide">
+                    <div class="sw-navmenu-head">
+                        <img src="/images/asf-oakleaf.svg" alt="Apache Software Foundation feather">
+                        <div><strong>The Apache Software Foundation</strong><span>governance · trademarks · sponsorship</span></div>
+                    </div>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Software Foundation</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/issues" target="_blank" rel="noopener noreferrer">
+                        <span>GitHub Issue Tracker</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/discussions" target="_blank" rel="noopener noreferrer">
+                        <span>Discussion</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank" rel="noopener noreferrer">
+                        <span>Dev Mailing List</span>
+                        <em>lists.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home" target="_blank" rel="noopener noreferrer">
+                        <span>WIKI</span>
+                        <em>cwiki.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/licenses/" target="_blank" rel="noopener noreferrer">
+                        <span>License</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/events/current-event" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Events</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/security/" target="_blank" rel="noopener noreferrer">
+                        <span>Security</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noopener noreferrer">
+                        <span>Sponsor and Donate</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/thanks.html" target="_blank" rel="noopener noreferrer">
+                        <span>Thanks</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://apache.org/foundation/policies/privacy.html" target="_blank" rel="noopener noreferrer">
+                        <span>Privacy</span>
+                        <em>apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                </div>
+            </span>
+            
+        
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <a class="sw-nav-cta" href="/get-started/">Get started</a>
+            
+        
+            
+        
+        </div>
+    </div>
+  </div>
+</nav>
+
+    </header>
+    <div class="container-fluid td-outer">
+
+      <div class="td-main">
+        <div class="row flex-xl-nowrap">
+          <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  <div class="description-wrapper">
+                    <h5>
+                    <img width="26" height="26" src="/images/project/banyan-db.svg">
+                    BanyanDB
+                    </h5>
+                    <p>An observability database aims to ingest, analyze and store Metrics, Tracing and Logging data.</p>
+                  </div>
+                  
+                  <div class="version-wrapper">Version: 
+                  <select class="version-select">
+                  
+                    
+                    
+                    <option selected value="next">
+                    
+                      next
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="latest">
+                    
+                      latest
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="v0.11.1">
+                    
+                      v0.11.1
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="v0.11.0">
+                    
+                      v0.11.0
+                    
+                    </option>
+                  
+                  </select>
+                  </div>
+                  
+                  <ul class="sidebar-menu">
+    
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/readme">Welcome</a>
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">User Guide<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">Installation<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/binaries">Get Binaries</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/standalone">Standalone Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/cluster">Cluster Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/docker">Installation On Docker</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/kubernetes">Installation On Kubernetes</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Basic Concepts and Terminology<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/data-model">Data Model</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/guides/quick-start/quick-start">Quick Start Tutorial</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/versions">Versions and Compatibility</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Interacting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">CLI<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/bydbctl">bydbctl</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/agent">BYDBQL Agent TUI</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">CRUD Schema<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/group">Group</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/index-rule">IndexRule</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/index-rule-binding">IndexRuleBinding</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Querying Data<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/filter-operation">Filter Operation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/property">CRUD Property</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/analyze">Analyzing Data</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/client">Client APIs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/canopy">Web Console (Canopy)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/data-lifecycle">Data Lifecycle</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Schema Consistency<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/barriers">Barrier RPCs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/revision-gates">Revision Gates</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/scenarios">Scenarios</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbql">BydbQL</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Operation and Maintenance<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/configuration">Configure BanyanDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/disk-management">Disk Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/system">System Configuration</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/upgrade">Upgrade</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Trace Pipeline Plugins<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins-development">Development Guide</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins">Packaging and Deployment</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins-debugging">Debugging (Offline)</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Observability<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/logging">Logging</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/metrics">Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/providers">Metrics Providers</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/profiling">Profiling</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/tracing">Query Tracing</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/cluster">Cluster Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Troubleshooting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/error-checklist">Error Checklist</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/install">Troubleshooting Installation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/crash">Troubleshooting Crash</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/no-data">Troubleshooting No Data</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/overhead">Troubleshooting Overhead</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/query">Troubleshooting Query</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/common-issues">Common Issues</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/security">Security</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/backup">Backup</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/restore">Restore</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/lifecycle">Lifecycle Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">MCP Server<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/setup">Setup MCP</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/inspector">Test via Inspector</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/build">Build and Package</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/plugin">Plugin Packaging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">First Occurrence Data Collection (FODC)<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/ktm_metrics">KTM Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/apis">Proxy APIs and CLI Flags</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/topology">Cluster Topology Rendering</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Benchmark<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/benchmark/benchmark-single-model">Single‑Model Benchmark (Trace / Log / Measure / Property)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/benchmark/benchmark-hybrid">Hybrid Scenario Benchmark</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">File Format<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/storage-and-format">Storage &amp; File Format (by API resource)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/tsdb">v1.3.0</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Concepts<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/clustering">Clustering</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/distributed-measure-aggregation">Distributed Measure Aggregation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/tsdb">TSDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/rotation">Data Rotation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Contribute<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/contribute/debugging">Debugging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+</ul>
+<script src="/js/sidebar-menu.js"></script>
+<script>
+  (function (){
+    $.sidebarMenu($('.sidebar-menu'))
+    var path = window.location.pathname;
+    var hash = window.location.hash;
+    var $a = $('.sidebar-menu a')
+    $a.each(function (e){
+      if($(this).attr('href')+'/' === path || $(this).attr('href').replace('#','/#') === path+hash){
+        $(this).parents('li').addClass('active').show()
+      }
+    })
+    $a.on('click',function (){
+      var url = $(this).attr('href')
+      if(url!=='#'){
+        window.location.href = url
+      }
+    })
+  })()
+</script>
+
+                  <div class="commit-id">Commit Id: fade662</div>
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+              <i class="iconfont icon-menu-doc doc-menu-button"></i>
+              
+<div class="td-content">
+	<h1 id="time-range-pruning-in-the-native-inverted-index">Time-Range Pruning in the Native Inverted Index</h1>
+<p>Status: <strong>implemented</strong>.</p>
+<p>The native inverted index (<code>pkg/index/native</code>, <code>pkg/index/internal/nativeice</code>) already writes
+everything a time-range query needs: per-segment time bounds and a multi-precision <code>_timestamp</code>
+term trie. No query reads either. Every query applies its time range per document, after
+decoding that document&rsquo;s stored fields. This design makes the time range narrow candidates
+<strong>before</strong> any stored document is decoded, in two layers:</p>
+<ol>
+<li><strong>Segment pruning</strong> — skip a segment whose time bounds miss the query range, and drop the
+per-document time check for a segment the range fully contains.</li>
+<li><strong>Trie candidates</strong> — for a segment the range only overlaps, turn the range into a few dozen
+<code>_timestamp</code> terms at mixed precision, OR their postings, and intersect the result with the
+series and filter candidates.</li>
+</ol>
+<p>It also fixes a prerequisite defect: the streaming merge writes <strong>zero</strong> time bounds, so a merged
+segment currently reports &ldquo;no timestamps&rdquo;.</p>
+<p>The change needs no format change, no new persisted data, and no schema or API change. It is
+confined to the native query layer and the merge writer.</p>
+<hr>
+<h2 id="1-problem">1. Problem</h2>
+<h3 id="11-what-every-query-does-today">1.1 What every query does today</h3>
+<p>All time-scoped native reads go through one of three paths, each checking time per document:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Entry point</th>
+          <th>Per-document time check</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>MatchTermsSet</code>, <code>MatchAllTermSets</code>, <code>MatchField</code>, <code>MatchRange</code> → <code>projectCandidates</code></td>
+          <td><code>query.go:965</code></td>
+      </tr>
+      <tr>
+          <td><code>NewSortCursor</code> / <code>NextPage</code> → <code>SortCursor.project</code></td>
+          <td><code>sort_cursor.go:309</code></td>
+      </tr>
+      <tr>
+          <td><code>memorySegment.MatchTerms</code></td>
+          <td><code>owner.go:2421</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>Candidates are built from series postings (<code>seriesCandidates</code>, <code>query.go:897</code>) and filter terms
+only. Each candidate is then projected, which means:</p>
+<ul>
+<li><code>VisitDocument</code> decodes its stored fields;</li>
+<li>the identifier and series ID are copied;</li>
+<li>the prefix-coded timestamp is decoded.</li>
+</ul>
+<p>Only after all that is the document dropped for being out of range. The sort cursor&rsquo;s &ldquo;no series
+scope&rdquo; path walks <em>every</em> document in the segment (<code>all = true</code>).</p>
+<h3 id="12-why-it-matters">1.2 Why it matters</h3>
+<p>A segment of the stream element index spans one storage segment (a day by default), while typical
+queries ask for minutes. For a 15-minute window over a day-long segment:</p>
+<ul>
+<li>about 99% of the candidates of each matching series are decoded and thrown away;</li>
+<li>in a sort query the same documents also pay for the per-document sort-value lookup and the
+top-N heap work.</li>
+</ul>
+<p>Measured on a related shape (<code>banyand/stream</code>, 500k documents, 4 CPUs, <code>main</code> at <code>ca86e9a2</code>):</p>
+<ul>
+<li>the native <code>SortCursor</code> costs about 0.97 µs wall, 1.4 µs CPU and 16 allocations per candidate;</li>
+<li>every out-of-range candidate pays that cost in full.</li>
+</ul>
+<h3 id="13-data-the-index-already-has">1.3 Data the index already has</h3>
+<p><strong>Per-document <code>_timestamp</code></strong> (<code>owner.go:2141-2160</code>), written for every document with a non-zero
+timestamp:</p>
+<ul>
+<li>stored;</li>
+<li>sortable doc value;</li>
+<li>indexed under <strong>16 terms</strong>, one per precision level.</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#cf222e">for</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#6639ba">uint</span><span style="color:#1f2328">(</span><span style="color:#0550ae">0</span><span style="color:#1f2328">);</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#0550ae">&lt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">60</span><span style="color:#1f2328">;</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#0550ae">+=</span><span style="color:#fff"> </span><span style="color:#0550ae">4</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#6639ba">EncodePrefixCodedInt64Shift</span><span style="color:#1f2328">(</span><span style="color:#1f2328">ts</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#57606a">// [0x20+shift][7-bit groups of (ts^signbit)&gt;&gt;shift]</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>The term at shift <code>s</code> stands for the bucket of all timestamps sharing <code>ts &gt;&gt; s</code>. The levels run
+from 1 ns (shift 0) through 4.3 s (32), 68.7 s (36), 18.3 min (40), 4.9 h (44) and 3.3 days (48),
+up to decades (60). The shift byte leads, so the terms of one level are contiguous in the
+dictionary and sorted by bucket. This is the classic numeric trie that Lucene&rsquo;s
+<code>NumericRangeQuery</code> uses. The native writer emits it to stay compatible with the previous
+release&rsquo;s segments (<code>nidx-03-series-index.md</code>, field table).</p>
+<p><strong>Per-segment bounds:</strong></p>
+<ul>
+<li>flush segments record <code>timeMin</code>/<code>timeMax</code> in the segment footer (<code>footer[36:52]</code>);</li>
+<li>the snapshot manifest also records them (<code>SnapshotSegment.TimeMin/TimeMax</code>);</li>
+<li>in memory, <code>segmentHandle.timeMin/timeMax/hasTime</code> (<code>owner.go:362-365</code>) hold them.</li>
+</ul>
+<h3 id="14-defect-merged-segments-lose-their-bounds">1.4 Defect: merged segments lose their bounds</h3>
+<p><code>streamMerger.write</code> writes <code>0</code> for both bounds (<code>merge_stream.go:432-433</code>). <code>MergeStats</code> carries
+no bounds, and <code>newSegmentFromMergeFile</code> (<code>merge_staging.go:186</code>) builds the handle with
+<code>hasTime = false</code>. Every merged segment therefore claims to have no timestamps, and so does its
+manifest entry once persisted (<code>owner.go:905</code>, <code>989</code>). Merged segments soon hold most of the data,
+so segment pruning is worthless until this is fixed.</p>
+<hr>
+<h2 id="2-goals-and-non-goals">2. Goals and non-goals</h2>
+<p><strong>Goals</strong></p>
+<ul>
+<li>G1. A segment the query range misses costs no document decode.</li>
+<li>G2. In a segment the query range overlaps, out-of-range documents cost no stored-field decode.</li>
+<li>G3. A segment the query range fully contains pays no per-document time check.</li>
+<li>G4. Results are identical to today&rsquo;s for every query, including documents without a timestamp,
+deleted documents, and inclusive or exclusive bounds.</li>
+<li>G5. Merged segments carry exact time bounds, in the footer and in the manifest.</li>
+<li>G6. No format change. Segments written by older code, including merged segments with zero
+bounds, stay readable and return correct results.</li>
+</ul>
+<p><strong>Non-goals</strong></p>
+<ul>
+<li>Index-ordered sort that stops early (walking the sort field&rsquo;s terms in order). This design
+shrinks the sort cursor&rsquo;s candidate set but keeps it a full pass over that set. See §9.</li>
+<li>Projecting only the top-N rows in the stream vectorized scan (sort-then-fetch). That is a
+separate fix for the wide-row memory-budget failure.</li>
+<li>Any change to how callers express time ranges (<code>index.RangeOpts</code>, <code>native.TimeRange</code>).</li>
+</ul>
+<hr>
+<h2 id="3-design-overview">3. Design overview</h2>
+<p>For each query, segment by segment:</p>
+<pre tabindex="0"><code>classify(segment, range):
+    bounds unknown            → OVERLAP
+    bounds ∩ range = ∅        → DISJOINT   — skip the segment
+    bounds ⊆ range            → CONTAINED  — no range comparison
+    otherwise                 → OVERLAP
+
+OVERLAP:
+    if segment.trieUsable:
+        timeBits := trieCandidates(segment, range)     — exact
+        candidates := candidates ∧ timeBits            (or timeBits when &#34;all&#34;)
+        project without a time check
+    else:
+        project with today&#39;s per-document time check  — fallback
+</code></pre><table>
+  <thead>
+      <tr>
+          <th>Layer</th>
+          <th>Removes</th>
+          <th>Cost</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Segment classification</td>
+          <td>all work on disjoint segments; the per-document check on contained ones</td>
+          <td>two integer compares per segment</td>
+      </tr>
+      <tr>
+          <td>Trie candidates</td>
+          <td>stored-field decode of out-of-range documents in overlapping segments</td>
+          <td>at most a few hundred dictionary lookups and posting ORs per segment</td>
+      </tr>
+      <tr>
+          <td>Merge bounds (prerequisite)</td>
+          <td>—</td>
+          <td>one timestamp decode per live document during merge, on a field the merge already decodes</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="4-detailed-design">4. Detailed design</h2>
+<h3 id="41-exact-time-bounds-for-merged-segments">4.1 Exact time bounds for merged segments</h3>
+<p><strong>Where:</strong> <code>internal/nativeice/merge_sections.go</code> (<code>writeStored</code>), <code>merge_stream.go</code> (footer),
+<code>merge.go</code> (<code>MergeStats</code>, the buffered <code>MergeSegments</code>), <code>native/merge_staging.go</code>.</p>
+<ol>
+<li><code>writeStored</code> already walks every stored document of every input, with its fields decoded, and
+knows whether that document survives (<code>dropped</code>). For each <strong>surviving</strong> document, decode the
+<code>_timestamp</code> stored value with <code>DecodePrefixCodedInt64</code> and fold it into running <code>int64</code>
+bounds. Skip documents with no <code>_timestamp</code>, as the flush path skips <code>Timestamp == 0</code>.</li>
+<li>Extend <code>MergeStats</code> with <code>TimeMin</code>, <code>TimeMax</code> and <code>HasTime</code>. The footer writes the bounds into
+the existing <code>footer[36:44]</code> and <code>footer[44:52]</code> slots, encoded as <code>uint64(int64)</code> exactly as
+the flush path does (<code>owner.go:2141-2149</code>).</li>
+<li><code>newSegmentFromMergeFile</code> sets <code>handle.timeMin/timeMax/hasTime</code> from the stats. Persistence
+(<code>owner.go:905</code>, <code>989</code>) and lifecycle (<code>lifecycle.go:126</code>) already copy the handle&rsquo;s bounds
+into the manifest, and the manifest/footer consistency check (<code>nativeice.go:1548</code>, <code>1699</code>) then
+holds by construction.</li>
+<li>The buffered <code>MergeSegments</code> path gets the same treatment, so both merge forms agree.</li>
+</ol>
+<p>The bounds are computed from the surviving documents rather than combined from the inputs'
+bounds. Combining would work, but inputs written by today&rsquo;s code have no bounds; computing them
+directly means every later merge repairs old merged segments, with no migration.</p>
+<p><strong>Compatibility:</strong> flush segments already write non-zero bounds into the same footer slots, so a
+merged segment with non-zero bounds is not a new case for any reader, including the previous
+release&rsquo;s rollback path (the NIDX-03 rollback proof covered flush segments with bounds).</p>
+<h3 id="42-classifying-segments">4.2 Classifying segments</h3>
+<p><strong>Where:</strong> a new helper in <code>native/query.go</code>, used by every entry point in §1.1.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#cf222e">type</span><span style="color:#fff"> </span><span style="color:#1f2328">timeClass</span><span style="color:#fff"> </span><span style="color:#cf222e">uint8</span><span style="color:#fff"> </span><span style="color:#57606a">// timeDisjoint, timeContained, timeOverlap</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">func</span><span style="color:#fff"> </span><span style="color:#6639ba">classifyTime</span><span style="color:#1f2328">(</span><span style="color:#1f2328">h</span><span style="color:#fff"> </span><span style="color:#0550ae">*</span><span style="color:#1f2328">segmentHandle</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">r</span><span style="color:#fff"> </span><span style="color:#0550ae">*</span><span style="color:#1f2328">TimeRange</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">timeClass</span><span style="color:#fff">
+</span></span></span></code></pre></div><ul>
+<li><code>r == nil</code> → <code>timeContained</code>: the query has no time restriction, so behaviour is unchanged.</li>
+<li><code>!h.hasTime</code> → <code>timeOverlap</code>. Unknown bounds never prune.</li>
+<li>Compare in <code>int64</code>, converting the handle&rsquo;s <code>uint64</code> slots back. If <code>int64(timeMin) &gt; int64(timeMax)</code>, the bounds were folded across a sign change, which a pre-epoch timestamp could
+cause; treat them as unknown (<code>timeOverlap</code>).</li>
+<li>Turn <code>r</code> into a closed <code>int64</code> interval <code>[lo, hi]</code>:
+<ul>
+<li><code>lo = r.Lower</code> if inclusive, else <code>r.Lower + 1</code>;</li>
+<li><code>hi = r.Upper</code> if inclusive, else <code>r.Upper - 1</code>;</li>
+<li>guard the ±1 against overflow;</li>
+<li>if <code>lo &gt; hi</code>, the range is empty and every segment is <code>timeDisjoint</code>.</li>
+</ul>
+</li>
+<li>Then:
+<ul>
+<li><code>timeMax &lt; lo || timeMin &gt; hi</code> → <code>timeDisjoint</code>;</li>
+<li><code>lo &lt;= timeMin &amp;&amp; timeMax &lt;= hi</code> → <code>timeContained</code>;</li>
+<li>otherwise <code>timeOverlap</code>.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Exactness of <code>timeContained</code>:</strong> the bounds cover exactly the documents that have a timestamp.
+A contained segment still has to drop documents <em>without</em> a timestamp, because today&rsquo;s contract
+excludes them: &ldquo;a timestamp range excludes documents without a stored native timestamp&rdquo;,
+<code>QueryScope</code> doc, <code>query.go:58</code>. Projection keeps a cheap <code>hasTimestamp</code> check for those but skips
+the range comparison. The <code>_timestamp</code> decode itself is still needed because callers consume
+<code>QueryHit.Timestamp</code>.</p>
+<h3 id="43-turning-a-range-into-trie-candidates">4.3 Turning a range into trie candidates</h3>
+<p><strong>Where:</strong> <code>internal/nativeice/numeric.go</code> (range split) and <code>native/query.go</code> (posting union).</p>
+<p><strong>Range split.</strong> Port Lucene&rsquo;s <code>NumericUtils.splitRange</code> for a 64-bit value with precision step 4.
+It works on the sign-flipped value (<code>uint64(v) ^ 1&lt;&lt;63</code>, the same transform the encoder applies),
+so unsigned order matches signed order.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#57606a">// SplitSortableRange covers the closed sortable interval [lo, hi] with</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a">// the fewest trie buckets and emits each run of consecutive buckets as</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a">// (shift, firstBucket, lastBucket), in sortable units at that shift.</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">func</span><span style="color:#fff"> </span><span style="color:#6639ba">SplitSortableRange</span><span style="color:#1f2328">(</span><span style="color:#1f2328">lo</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#fff"> </span><span style="color:#cf222e">uint64</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">emit</span><span style="color:#fff"> </span><span style="color:#cf222e">func</span><span style="color:#1f2328">(</span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#cf222e">uint</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">first</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">last</span><span style="color:#fff"> </span><span style="color:#cf222e">uint64</span><span style="color:#1f2328">))</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">for</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#6639ba">uint</span><span style="color:#1f2328">(</span><span style="color:#0550ae">0</span><span style="color:#1f2328">);</span><span style="color:#fff"> </span><span style="color:#1f2328">;</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#0550ae">+=</span><span style="color:#fff"> </span><span style="color:#0550ae">4</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">diff</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#6639ba">uint64</span><span style="color:#1f2328">(</span><span style="color:#0550ae">1</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#0550ae">&lt;&lt;</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span><span style="color:#1f2328">shift</span><span style="color:#fff"> </span><span style="color:#0550ae">+</span><span style="color:#fff"> </span><span style="color:#0550ae">4</span><span style="color:#1f2328">)</span><span style="color:#fff">          </span><span style="color:#57606a">// width of the next level&#39;s bucket</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">mask</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#6639ba">uint64</span><span style="color:#1f2328">(</span><span style="color:#0550ae">0xF</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#0550ae">&lt;&lt;</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#fff">              </span><span style="color:#57606a">// this level&#39;s digit</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">hasLower</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#1f2328">lo</span><span style="color:#0550ae">&amp;</span><span style="color:#1f2328">mask</span><span style="color:#fff"> </span><span style="color:#0550ae">!=</span><span style="color:#fff"> </span><span style="color:#0550ae">0</span><span style="color:#fff">                  </span><span style="color:#57606a">// lo is not aligned to the next level</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">hasUpper</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#0550ae">&amp;</span><span style="color:#1f2328">mask</span><span style="color:#fff"> </span><span style="color:#0550ae">!=</span><span style="color:#fff"> </span><span style="color:#1f2328">mask</span><span style="color:#fff">               </span><span style="color:#57606a">// hi does not end the next level&#39;s bucket</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">nextLo</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#1f2328">lo</span><span style="color:#1f2328">;</span><span style="color:#fff"> </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">hasLower</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff"> </span><span style="color:#1f2328">nextLo</span><span style="color:#fff"> </span><span style="color:#0550ae">+=</span><span style="color:#fff"> </span><span style="color:#1f2328">diff</span><span style="color:#fff"> </span><span style="color:#1f2328">};</span><span style="color:#fff"> </span><span style="color:#1f2328">nextLo</span><span style="color:#fff"> </span><span style="color:#0550ae">&amp;^=</span><span style="color:#fff"> </span><span style="color:#1f2328">mask</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">nextHi</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#1f2328">;</span><span style="color:#fff"> </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">hasUpper</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff"> </span><span style="color:#1f2328">nextHi</span><span style="color:#fff"> </span><span style="color:#0550ae">-=</span><span style="color:#fff"> </span><span style="color:#1f2328">diff</span><span style="color:#fff"> </span><span style="color:#1f2328">};</span><span style="color:#fff"> </span><span style="color:#1f2328">nextHi</span><span style="color:#fff"> </span><span style="color:#0550ae">&amp;^=</span><span style="color:#fff"> </span><span style="color:#1f2328">mask</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">shift</span><span style="color:#0550ae">+</span><span style="color:#0550ae">4</span><span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">64</span><span style="color:#fff"> </span><span style="color:#0550ae">||</span><span style="color:#fff"> </span><span style="color:#1f2328">nextLo</span><span style="color:#fff"> </span><span style="color:#1f2328">&gt;</span><span style="color:#fff"> </span><span style="color:#1f2328">nextHi</span><span style="color:#fff"> </span><span style="color:#0550ae">||</span><span style="color:#fff"> </span><span style="color:#1f2328">nextLo</span><span style="color:#fff"> </span><span style="color:#1f2328">&lt;</span><span style="color:#fff"> </span><span style="color:#1f2328">lo</span><span style="color:#fff"> </span><span style="color:#0550ae">||</span><span style="color:#fff"> </span><span style="color:#1f2328">nextHi</span><span style="color:#fff"> </span><span style="color:#1f2328">&gt;</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#6639ba">emit</span><span style="color:#1f2328">(</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">lo</span><span style="color:#0550ae">&gt;&gt;</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#0550ae">&gt;&gt;</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">)</span><span style="color:#fff">     </span><span style="color:#57606a">// the remaining middle, at this level</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#cf222e">return</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">hasLower</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff"> </span><span style="color:#6639ba">emit</span><span style="color:#1f2328">(</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">lo</span><span style="color:#0550ae">&gt;&gt;</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span><span style="color:#1f2328">lo</span><span style="color:#1f2328">|</span><span style="color:#1f2328">mask</span><span style="color:#1f2328">)</span><span style="color:#0550ae">&gt;&gt;</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">hasUpper</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff"> </span><span style="color:#6639ba">emit</span><span style="color:#1f2328">(</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span><span style="color:#1f2328">hi</span><span style="color:#0550ae">&amp;^</span><span style="color:#1f2328">mask</span><span style="color:#1f2328">)</span><span style="color:#0550ae">&gt;&gt;</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#0550ae">&gt;&gt;</span><span style="color:#1f2328">shift</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">lo</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">hi</span><span style="color:#fff"> </span><span style="color:#1f2328">=</span><span style="color:#fff"> </span><span style="color:#1f2328">nextLo</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">nextHi</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>Each emitted run spans at most 16 buckets at its level. The cover therefore has at most
+<code>2·15·15 + 16 = 466</code> terms. For realistic windows it has a few dozen: a 15-minute window is about
+12 buckets at shift 36 plus at most 15 at each finer level on each edge.</p>
+<p><strong>Encoding.</strong> Add <code>encodePrefixCodedSortableShift(sortable, shift)</code>, the existing encoder minus
+its sign flip. Each emitted run <code>(shift, first, last)</code> becomes the dictionary interval
+<code>[enc(first, shift), enc(last, shift)]</code>. Dictionary iterators take an <strong>exclusive</strong> end
+(<code>dictionary_iterator.go:120</code>), so pass <code>enc(last+1, shift)</code>. When <code>last</code> is the largest bucket
+at that level, pass the first key of the next shift level instead: <code>[]byte{0x20 + shift + 1}</code>,
+or nil above shift 60.</p>
+<p><strong>Posting union.</strong></p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#cf222e">func</span><span style="color:#fff"> </span><span style="color:#6639ba">trieCandidates</span><span style="color:#1f2328">(</span><span style="color:#1f2328">ctx</span><span style="color:#fff"> </span><span style="color:#1f2328">context</span><span style="color:#1f2328">.</span><span style="color:#1f2328">Context</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">s</span><span style="color:#fff"> </span><span style="color:#0550ae">*</span><span style="color:#1f2328">memorySegment</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">r</span><span style="color:#fff"> </span><span style="color:#0550ae">*</span><span style="color:#1f2328">TimeRange</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span><span style="color:#0550ae">*</span><span style="color:#1f2328">roaring</span><span style="color:#1f2328">.</span><span style="color:#1f2328">Bitmap</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">error</span><span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span></code></pre></div><ul>
+<li>For each run, iterate the <code>_timestamp</code> dictionary over the interval and OR each term&rsquo;s posting
+(the reader&rsquo;s <code>TermPostingBitmap</code>, or the iterator&rsquo;s posting accessor) into one bitmap.</li>
+<li>Check <code>ctx</code> between runs.</li>
+<li>The bitmap is <strong>exact</strong>. Every timestamped document has exactly one term at each level. The
+cover partitions <code>[lo, hi]</code> into disjoint buckets, so a document is in the union if and only if
+its timestamp is in <code>[lo, hi]</code>. Documents without a timestamp have no <code>_timestamp</code> terms and
+are excluded, which matches today&rsquo;s contract.</li>
+<li>Deleted documents can appear in the bitmap. Deletion is still applied where it is today (the
+<code>segment.deleted</code> check in projection and in <code>SortCursor.project</code>).</li>
+</ul>
+<p><strong>Cost.</strong> Every document in range appears in exactly one posting of the cover. So building the
+bitmap costs O(dictionary lookups in the cover + documents in range) in roaring word operations,
+against today&rsquo;s O(candidates) stored-field decodes. The term count is fixed, and no <code>MaxTerms</code>
+expansion limit applies, because the cover never iterates exact timestamps.</p>
+<h3 id="44-checking-that-a-segment-has-the-trie">4.4 Checking that a segment has the trie</h3>
+<p>The trie is correct only if a segment actually carries the coarse terms. Native and NIDX-era
+segments do (<code>owner.go:2151</code>), and merges copy every term. Older segments are meant to, by the
+compatibility contract, but a segment missing its coarse terms would silently <strong>lose</strong> documents
+under §4.3. To guard against that, every segment handle gets a lazily computed, cached flag:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#1f2328">trieOnce</span><span style="color:#fff">   </span><span style="color:#1f2328">sync</span><span style="color:#1f2328">.</span><span style="color:#1f2328">Once</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">trieUsable</span><span style="color:#fff"> </span><span style="color:#cf222e">bool</span><span style="color:#fff">
+</span></span></span></code></pre></div><ul>
+<li><code>trieUsable</code> is true when the segment has no <code>_timestamp</code> field.</li>
+<li>Otherwise it is true only if the <code>_timestamp</code> dictionary holds at least one term at shift 4
+<strong>and</strong> at least one at shift 60. That is two single-key iterator probes:
+<code>[0x24, 0x25)</code> and <code>[0x5C, 0x5D)</code>.</li>
+<li>Every timestamped document writes both levels, so a segment that has timestamps but misses
+either level was written without the trie, or with a different precision step.</li>
+</ul>
+<p>When <code>trieUsable</code> is false, the segment takes the fallback path: today&rsquo;s per-document check. A
+counter records how often that happens (§6), so no fallback can go unseen.</p>
+<h3 id="45-integration-per-entry-point">4.5 Integration per entry point</h3>
+<p><strong><code>projectCandidates</code> callers</strong> (<code>MatchTermsSet</code>, <code>MatchAllTermSets</code>, <code>MatchField</code>,
+<code>MatchRange</code>). Per segment, before projection:</p>
+<ul>
+<li><code>timeDisjoint</code> → <code>continue</code>. Its candidates do not count toward <code>MaxCandidates</code>.</li>
+<li><code>timeContained</code> → project with the contained flag set, i.e. the <code>hasTimestamp</code> check only.</li>
+<li><code>timeOverlap</code> with a usable trie → <code>candidates.And(trie)</code>, then project with the contained flag.</li>
+<li><code>timeOverlap</code> without a usable trie → project as today.</li>
+</ul>
+<p><code>projectCandidates</code> gets a <code>timeMode</code> parameter in place of its bare <code>*TimeRange</code>. The candidate
+total behind <code>MaxCandidates</code> is computed <strong>after</strong> the intersection. This is a deliberate
+behaviour change: a time-narrowed query that used to fail with <code>ErrQueryLimit</code> now succeeds.
+Ranges outside the time window should never have counted.</p>
+<p><strong><code>NewSortCursor</code>.</strong></p>
+<ul>
+<li><code>timeDisjoint</code> segments are left out of <code>cursor.segments</code>.</li>
+<li>For <code>timeOverlap</code> segments with a usable trie:
+<ul>
+<li>the series path ANDs the trie into <code>candidates</code>;</li>
+<li>the <code>all = true</code> path replaces &ldquo;every ordinal&rdquo; with the trie bitmap (<code>all = false</code>,
+<code>candidates = trie</code>).</li>
+</ul>
+</li>
+<li>Each <code>sortCursorSegment</code> records whether its candidates are exact in time. <code>project</code> then skips
+the range comparison for them (<code>sort_cursor.go:309</code>) but keeps the <code>hasTimestamp</code> requirement.</li>
+</ul>
+<p><strong><code>memorySegment.MatchTerms</code></strong> (<code>owner.go:2361</code>). The same classification applies.
+<code>timeDisjoint</code> returns an empty result, and overlap intersects the term postings with the trie &ndash;
+subject to the same <code>trieMinCandidates</code> threshold as every other entry point (§4.6): the posting
+being narrowed is the candidate set here, so a point lookup whose posting is small is not worth
+narrowing either.</p>
+<p><strong>Not affected:</strong></p>
+<ul>
+<li><code>FilterTermsSet</code> and <code>FilterRange</code> already reject <code>Scope.TimeRange</code>.</li>
+<li><code>ProjectHit</code> and <code>ProjectSortValue</code> act on already-selected hits.</li>
+</ul>
+<h3 id="46-when-to-build-the-trie-bitmap">4.6 When to build the trie bitmap</h3>
+<p>When the non-time candidates are already tiny, decoding them can cost less than OR-ing the
+cover&rsquo;s postings. For example, a point lookup by series with two hits in a long range.</p>
+<p>Rule: build the trie bitmap only when <code>candidates.GetCardinality() &gt;= trieMinCandidates</code>;
+otherwise use the per-document check. For the <code>all</code> path the trie is always built. The threshold
+is a package constant, chosen by the benchmark in §7.2: 128, the crossover
+<code>BenchmarkPointLookupCrossover</code> measured between a 64-candidate posting (per-document still wins)
+and a 128-candidate one (the trie wins decisively). It is not a user-facing flag.</p>
+<hr>
+<h2 id="5-correctness-argument">5. Correctness argument</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Concern</th>
+          <th>Why results are unchanged</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Disjoint pruning</td>
+          <td>Bounds are exact over the timestamped documents (§4.1, flush path), so a disjoint segment has no in-range document. Untimestamped documents are excluded by contract anyway. Unknown bounds never prune.</td>
+      </tr>
+      <tr>
+          <td>Contained skip</td>
+          <td>Every timestamped document is in range; the <code>hasTimestamp</code> check still removes untimestamped ones.</td>
+      </tr>
+      <tr>
+          <td>Trie bitmap</td>
+          <td>Exact cover of <code>[lo, hi]</code> (§4.3); usable only where both probe levels exist (§4.4).</td>
+      </tr>
+      <tr>
+          <td>Exclusive bounds</td>
+          <td>Normalised once to a closed <code>int64</code> interval with overflow guards; an empty interval prunes everything.</td>
+      </tr>
+      <tr>
+          <td>Deletions</td>
+          <td>Unchanged: still applied at projection and in the sort cursor.</td>
+      </tr>
+      <tr>
+          <td>Older segments</td>
+          <td>Zero bounds read as unknown, so no pruning. A missing trie falls back. Both heal on the next merge (§4.1).</td>
+      </tr>
+      <tr>
+          <td>Negative or mixed-sign timestamps</td>
+          <td>Trie order is sign-correct (sign-flipped sortable). Mixed-sign <code>uint64</code> bounds are detected and treated as unknown (§4.2).</td>
+      </tr>
+      <tr>
+          <td>Concurrency</td>
+          <td>Classification reads immutable handle fields. The <code>trieOnce</code> probe is per immutable handle and reads only the pinned reader.</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="6-observability">6. Observability</h2>
+<p><code>pkg/index/metrics</code> gets per-owner counters, labelled like the existing native metrics:</p>
+<ul>
+<li><code>native_time_segments_total{class=&quot;disjoint|contained|overlap_trie|overlap_fallback&quot;}</code></li>
+<li><code>native_time_candidates_pruned_total</code>: candidates removed by the trie intersection, i.e.
+cardinality before minus after.</li>
+</ul>
+<p>A non-zero <code>overlap_fallback</code> on a cluster whose data was written by native code points to a bug.
+On a cluster with segments from older writers it is expected, and should fall as those segments
+are merged.</p>
+<hr>
+<h2 id="7-validation">7. Validation</h2>
+<h3 id="71-tests">7.1 Tests</h3>
+<p><strong><code>nativeice</code> unit tests</strong></p>
+<ul>
+<li><code>SplitSortableRange</code> against brute force:
+<ul>
+<li>property test over random <code>[lo, hi]</code> pairs (fixed seed, about 10k cases), including
+<code>lo == hi</code>, aligned and unaligned edges, <code>MinInt64</code>, <code>MaxInt64</code>, and ranges spanning zero;</li>
+<li>every value in the range lies in exactly one emitted bucket, and no value outside does;</li>
+<li>the term count stays at or below 466.</li>
+</ul>
+</li>
+<li>The encoder: <code>encodePrefixCodedSortableShift(uint64(v)^1&lt;&lt;63, s)</code> equals
+<code>EncodePrefixCodedInt64Shift(v, s)</code> for all 16 shifts.</li>
+</ul>
+<p><strong>Merge tests</strong></p>
+<ul>
+<li>Footer and manifest bounds equal the exact min/max over surviving documents.</li>
+<li>Documents dropped by deletion or <code>Drop</code> are excluded.</li>
+<li>All-deleted or untimestamped input yields <code>HasTime == false</code> and zero slots.</li>
+<li>Streaming and buffered merge agree.</li>
+<li>Merging an input with zero bounds (today&rsquo;s merged output) yields exact bounds.</li>
+</ul>
+<p><strong>Native query tests</strong>, for each entry point in §4.5:</p>
+<ul>
+<li>Results equal those from the per-document path (forced on through a test hook) over random
+documents, random windows (empty, point, inclusive and exclusive edges, full span, disjoint)
+and random deletions.</li>
+<li>Run over each kind of segment:
+<ul>
+<li>flush;</li>
+<li>persisted-and-promoted;</li>
+<li>streaming-merged;</li>
+<li>external-received;</li>
+<li>a segment written without coarse terms, built through the internal encoder by emitting only
+shift-0 terms. This must take the fallback path and still match.</li>
+</ul>
+</li>
+<li>A disjoint segment&rsquo;s reader is never asked to visit a document: a test hook counts
+<code>VisitDocument</code> calls.</li>
+<li><code>MaxCandidates</code> is checked after intersection, and a time-narrowed query that used to fail
+now passes.</li>
+</ul>
+<p><strong>Integration:</strong> the existing stream, measure and trace standalone and distributed suites, plus
+the stream element-index golden cases, all unchanged. Per the repository rule, the tests must
+not reference the retired legacy library.</p>
+<h3 id="72-benchmarks">7.2 Benchmarks</h3>
+<p>The benchmarks are short <code>go test -bench</code> runs pinned to 4 CPUs, reporting wall time, process
+CPU (rusage) per operation, B/op and allocs/op. No long soak is part of this design.</p>
+<p>The fixture extends <code>banyand/stream</code>&rsquo;s index-order benchmark (500k documents over a day-scale
+segment, 100 series):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Axis</th>
+          <th>Values</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Window, as a share of the segment&rsquo;s span</td>
+          <td>0.1%, 1%, 10%, 100%</td>
+      </tr>
+      <tr>
+          <td>Query</td>
+          <td>filter (<code>EQ</code> on an indexed tag, per series) · index sort <code>LIMIT 20</code> · series point lookup</td>
+      </tr>
+      <tr>
+          <td>Segment state</td>
+          <td>flushed only · after a full merge</td>
+      </tr>
+      <tr>
+          <td>Build</td>
+          <td><code>main</code> · this design</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Gates:</strong></p>
+<ul>
+<li><strong>G1/G2:</strong> at a 1% window, filter and sort CPU per operation drop by at least 5×, and
+allocated bytes drop by a similar factor.</li>
+<li><strong>No regression:</strong> at a 100% window, and for the point lookup, CPU and B/op stay within ±5%
+of <code>main</code>.</li>
+<li><strong>Merged state:</strong> after a merge, the 1% window shows the same gain as before it. This proves
+the fix in §4.1.</li>
+<li><code>trieMinCandidates</code> is set at the crossover where the point lookup stops regressing.</li>
+</ul>
+<hr>
+<h2 id="8-rollout-and-compatibility">8. Rollout and compatibility</h2>
+<ul>
+<li><strong>On-disk format:</strong> unchanged. Merged segments start filling two footer slots that flush
+segments already fill. Manifests are unchanged in shape.</li>
+<li><strong>Mixed or rolled-back binaries:</strong> an older binary ignores the bounds for queries and keeps
+checking per document. A newer binary treats older merged segments as unknown-bounds. Both
+return correct results.</li>
+<li><strong>No flag:</strong> the optimisation is exact. The fallback path and the
+<code>native_time_segments_total{class=&quot;overlap_fallback&quot;}</code> counter cover segments that cannot take
+it.</li>
+<li><strong>Delivery:</strong> one PR with three commits: (1) merge bounds plus its tests; (2) range split,
+<code>trieUsable</code> and <code>trieCandidates</code>, plus their unit tests; (3) entry-point integration, metrics
+and benchmarks.</li>
+</ul>
+<hr>
+<h2 id="9-follow-ups-out-of-scope">9. Follow-ups, out of scope</h2>
+<ol>
+<li><strong>Index sort that stops early.</strong> Walk the sort field&rsquo;s dictionary in sort order, intersect
+each term&rsquo;s posting with the (now time-narrowed) candidates, and stop after N hits. Combined
+with this design, an index-ordered <code>LIMIT N</code> over a short window becomes a short posting walk
+instead of a candidate scan. Needs its own benchmark against the vectorized block sort.</li>
+<li><strong>Vectorized sort-then-fetch for stream.</strong> Order on the sort key plus row references, then
+decode the projection for only the top N. It fixes the <code>LIMIT 20</code> query that fails today with
+<code>vectorized query memory budget exceeded</code> on wide rows.</li>
+<li><strong>Faster projection.</strong> With time handled by the candidate bitmap, contained and overlap-trie
+projection still decode <code>_timestamp</code> for <code>QueryHit.Timestamp</code>. Reading it from the
+<code>_timestamp</code> doc value instead of the stored document would avoid the stored walk for callers
+that need only identifier, series and timestamp.</li>
+</ol>
+<h2 id="10-open-questions">10. Open questions</h2>
+<ol>
+<li>Should <code>trieMinCandidates</code> instead compare candidates against the segment&rsquo;s document count in
+range (a selectivity ratio), rather than an absolute count? Decide from the §7.2 data.</li>
+<li>Do any production segments predate the 0..60/step-4 trie, i.e. legacy-written element indexes
+never migrated? The <code>overlap_fallback</code> counter answers this in the field; no code depends on
+the answer.</li>
+</ol>
+
+</div>
+
+            </main>
+          <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
+            
+
+
+
+
+<div class="td-page-meta ml-2 pb-1 pt-2 mb-0">
+
+
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+
+
+
+<div class="td-toc-label">On this page</div>
+<nav id="TableOfContents">
+  <ul>
+    <li><a href="#time-range-pruning-in-the-native-inverted-index">Time-Range Pruning in the Native Inverted Index</a>
+      <ul>
+        <li><a href="#1-problem">1. Problem</a>
+          <ul>
+            <li><a href="#11-what-every-query-does-today">1.1 What every query does today</a></li>
+            <li><a href="#12-why-it-matters">1.2 Why it matters</a></li>
+            <li><a href="#13-data-the-index-already-has">1.3 Data the index already has</a></li>
+            <li><a href="#14-defect-merged-segments-lose-their-bounds">1.4 Defect: merged segments lose their bounds</a></li>
+          </ul>
+        </li>
+        <li><a href="#2-goals-and-non-goals">2. Goals and non-goals</a></li>
+        <li><a href="#3-design-overview">3. Design overview</a></li>
+        <li><a href="#4-detailed-design">4. Detailed design</a>
+          <ul>
+            <li><a href="#41-exact-time-bounds-for-merged-segments">4.1 Exact time bounds for merged segments</a></li>
+            <li><a href="#42-classifying-segments">4.2 Classifying segments</a></li>
+            <li><a href="#43-turning-a-range-into-trie-candidates">4.3 Turning a range into trie candidates</a></li>
+            <li><a href="#44-checking-that-a-segment-has-the-trie">4.4 Checking that a segment has the trie</a></li>
+            <li><a href="#45-integration-per-entry-point">4.5 Integration per entry point</a></li>
+            <li><a href="#46-when-to-build-the-trie-bitmap">4.6 When to build the trie bitmap</a></li>
+          </ul>
+        </li>
+        <li><a href="#5-correctness-argument">5. Correctness argument</a></li>
+        <li><a href="#6-observability">6. Observability</a></li>
+        <li><a href="#7-validation">7. Validation</a>
+          <ul>
+            <li><a href="#71-tests">7.1 Tests</a></li>
+            <li><a href="#72-benchmarks">7.2 Benchmarks</a></li>
+          </ul>
+        </li>
+        <li><a href="#8-rollout-and-compatibility">8. Rollout and compatibility</a></li>
+        <li><a href="#9-follow-ups-out-of-scope">9. Follow-ups, out of scope</a></li>
+        <li><a href="#10-open-questions">10. Open questions</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+
+
+
+
+<script>
+  $(function () {
+    var $toc = $("#TableOfContents");
+    if (!$toc || !$toc.length) {
+      return;
+    }
+    var top = $toc.offset().top;
+    $(window).on("scroll", debounce(setTop, 100))
+    $(window).on("scroll", debounce(addActive, 30))
+
+    function addActive() {
+      var scrollValue = $(window).scrollTop();
+      var topEle = null;
+      $.each($('main h1, main h2, main h3'), function (index, item) {
+        if ($(item).offset().top - 70 > scrollValue) {
+          return
+        }
+        if (!topEle) {
+          topEle = item
+        } else if ($(item).offset().top >= $(topEle).offset().top) {
+          topEle = item
+        }
+        if (topEle) {
+          var id = $(item).attr('id');
+          $toc.find('a').removeClass("active").end().find('a[href="' + '#' + id + '"]').addClass("active")
+        }
+      })
+    }
+
+    function setTop() {
+      var scrollValue = $(window).scrollTop();
+      if (scrollValue >= top - 70) {
+        $toc.addClass('fixed')
+      } else {
+        $toc.removeClass('fixed')
+      }
+    }
+
+    function debounce(fn, wait) {
+      var timeout = null;
+      return function () {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fn.apply(this, arguments);
+        }, wait);
+      };
+    }
+  })
+</script>
+
+          </div>
+
+        </div>
+      </div>
+
+      
+<footer class="py-5 sky-row">
+  <div class="container-fluid text-center">
+    <div class="">
+        
+        
+        
+<ul class="list-inline mb-0">
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Twitter" aria-label="Twitter">
+    <a class="text-color" target="_blank" rel="noopener" href="https://twitter.com/asfskywalking"><i class="iconfont icon-twitter"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Slack" aria-label="Slack">
+    <a class="text-color" target="_blank" rel="noopener" href="mailto:dev@skywalking.apache.org?subject=Request%20to%20join%20SkyWalking%20Slack"><i class="iconfont icon-slack"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Mailing list" aria-label="Mailing list">
+    <a class="text-color" target="_blank" rel="noopener" href="https://lists.apache.org/list.html?dev@skywalking.apache.org"><i class="iconfont icon-email"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="GitHub" aria-label="GitHub">
+    <a class="text-color" target="_blank" rel="noopener" href="https://github.com/apache/skywalking"><i class="iconfont icon-github"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="B站" aria-label="B站">
+    <a class="text-color" target="_blank" rel="noopener" href="https://space.bilibili.com/390683219">B站</a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="掘金" aria-label="掘金">
+    <a class="text-color" target="_blank" rel="noopener" href="https://juejin.cn/user/13673577331607">掘金</a>
+  </li>
+  
+</ul>
+
+        
+        
+    </div>
+    <p class="footer-contribute">
+      <a id="contribute" href="https://github.com/apache/skywalking-website" target="_blank" rel="noopener">Help improve this website <span aria-hidden="true">↗</span></a>
+    </p>
+    <div class="">
+
+        <small class="text-color">&copy; 2017 - 2026 The Apache Software Foundation All Rights Reserved</small>
+        
+	
+    </div>
+    <div class="">
+      <small class="text-color mt-4">Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</small>
+    </div>
+  </div>
+</footer>
+
+
+    </div>
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<div id="popup">
+    <div class="mask">
+        <img src=""/>
+    </div>
+</div>
+
+    
+
+
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+<div class="sidebar-mask" aria-hidden="true"></div>
+<div class="sidebar" id="site-navigation-drawer" role="dialog" aria-modal="true" aria-label="Navigation" aria-hidden="true" tabindex="-1">
+  <div class="sidebar-header">
+    <span>Menu</span>
+    <button type="button" class="sidebar-close" aria-label="Close navigation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <nav class="nav-links" aria-label="Site pages">
+    <ul class="sidebar-primary">
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/">Home</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link active" href="/docs" aria-current="page">Projects</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/blog">Blogs</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/events/">Release Posts</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/events/calendar/">Event Calendar</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/users">Users</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/team">Team</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/zh/">中文博客</a></li>
+      
+      
+    </ul>
+    <ul class="sidebar-secondary">
+      <li><a class="nav-link" href="/downloads/">Downloads</a></li>
+      
+      <li><a class="nav-link" href="/get-started/">Get started</a></li>
+      
+    </ul>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <details class="sidebar-resources">
+      <summary><span>Apache</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></summary>
+      <ul class="sidebar-resource-links">
+        
+        <li><a class="nav-link" href="http://www.apache.org/" target="_blank" rel="noopener noreferrer"><span>Apache Software Foundation</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://github.com/apache/skywalking/issues" target="_blank" rel="noopener noreferrer"><span>GitHub Issue Tracker</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://github.com/apache/skywalking/discussions" target="_blank" rel="noopener noreferrer"><span>Discussion</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank" rel="noopener noreferrer"><span>Dev Mailing List</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home" target="_blank" rel="noopener noreferrer"><span>WIKI</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/licenses/" target="_blank" rel="noopener noreferrer"><span>License</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/events/current-event" target="_blank" rel="noopener noreferrer"><span>Apache Events</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/security/" target="_blank" rel="noopener noreferrer"><span>Security</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noopener noreferrer"><span>Sponsor and Donate</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/foundation/thanks.html" target="_blank" rel="noopener noreferrer"><span>Thanks</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://apache.org/foundation/policies/privacy.html" target="_blank" rel="noopener noreferrer"><span>Privacy</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+      </ul>
+    </details>
+    
+    
+  </nav>
+</div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+<script src="/js/main.min.a351a9c3ee226044b9050a859fb2f5a6019a548cfe22e3ca281fb08443c28976.js" integrity="sha256-o1Gpw&#43;4iYES5BQqFn7L1pgGaVIz&#43;IuPKKB&#43;whEPCiXY=" crossorigin="anonymous"></script>
+
+
+<script src="/js/highlight.min.js"></script>
+<script src="/js/mermaid.min.js"></script>
+<script>
+    window.onload = () => mermaid.init(undefined, ".language-mermaid");
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('pre code.language-json5').forEach((block) => {
+      if (block.classList.contains('language-json5')) {
+        try {
+          hljs.registerLanguage('json5', function(hljs) {
+            return hljs.getLanguage('json');
+          });
+          hljs.highlightElement(block);
+        } catch (error) {
+          console.error("Error parsing JSON5:", error);
+        }
+      }
+    });
+  });
+</script>
+
+
+<script defer
+src="/js/kapa-widget.bundle.js"
+data-website-id="8a08392b-9c4d-4816-8bc4-f93e0ecdd2a7"
+data-project-name="SkyWalking"
+data-project-color="#2B74B8"
+data-button-text="Ask AI"
+data-search-mode-enabled="true"
+data-search-mode-default="false"
+data-modal-override-open-selector-search=".sw-kapa-search"
+data-modal-open-on-command-k="true"
+data-modal-command-k-search-mode-default="true"
+data-modal-z-index="10000"
+data-modal-disclaimer="The AI supports multiple languages, but it may not be accessible in China, a proxy is required."
+data-project-logo="/images/widget-logo.jpg"
+data-modal-example-questions="What is Apache SkyWalking?,How to deploy SkyWalking?,How to inject agents non-intrusively?,How to setup trace sampling?"
+data-button-position-right="20px"
+data-button-position-bottom="200px"
+data-consent-required="true"  
+data-user-analytics-cookie-enabled="true"  
+data-consent-screen-title="Help us improve our AI assistant"  
+data-consent-screen-disclaimer="By clicking 'Allow tracking', you consent to anonymous user tracking which helps us improve our service. We don't collect any personally identifiable information."  
+data-consent-screen-accept-button-text="Allow tracking"  
+data-consent-screen-reject-button-text="No, thanks"
+></script>
+<script>
+  (function () {
+    var SEL = 'details.topic-filter';
+
+    function closeAll(except) {
+      document.querySelectorAll(SEL).forEach(function (d) {
+        if (d !== except && d.open) { d.open = false; }
+      });
+    }
+
+    
+    
+    document.addEventListener('click', function (e) {
+      var target = e.target instanceof Element ? e.target.closest(SEL) : null;
+      closeAll(target);
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'Esc') { closeAll(null); }
+    });
+  })();
+</script>
+
+
+    <script>
+      
+      document.querySelectorAll('.project-doc .td-content .highlight').forEach(function (block) {
+        if (block.querySelector('.sw-code-bar')) return;
+        var codeEl = block.querySelector('code');
+        var lang = '';
+        if (codeEl) {
+          var m = (codeEl.className || '').match(/language-([\w+-]+)/);
+          if (m) lang = m[1];
+          if (!lang && codeEl.getAttribute('data-lang')) lang = codeEl.getAttribute('data-lang');
+        }
+        var bar = document.createElement('div');
+        bar.className = 'sw-code-bar';
+        bar.innerHTML = '<span class="lang">' + (lang || 'code') + '</span><button class="copy" type="button">Copy</button>';
+        block.insertBefore(bar, block.firstChild);
+        bar.querySelector('.copy').addEventListener('click', function () {
+          var btn = this;
+          var text = (block.querySelector('pre') || {}).innerText || '';
+          navigator.clipboard && navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      });
+    </script>
+  </body>
+  <script>
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val().toLowerCase();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
+    })
+  </script>
+</html>

@@ -33,7 +33,7 @@ It reads the derived index, not the payloads. Structure resolution needs identif
   <meta itemprop="name" content="Conversation Assembly">
   <meta itemprop="description" content="Conversation Assembly Assembly turns landed records into the structure defined by the Unified Conversation Model, and appends the result to an append-only chain of immutable rounds.
 It reads the derived index, not the payloads. Structure resolution needs identifiers, not content: removing duplicate records needs record ids, grouping a provider call needs message ids, joining a tool needs tool-use ids, joining a spawn needs agent and run ids. Message text is read only when a conversation is rendered, and only for the records that appear in it.">
-  <meta itemprop="wordCount" content="3450">
+  <meta itemprop="wordCount" content="3469">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Conversation Assembly">
   <meta name="twitter:description" content="Conversation Assembly Assembly turns landed records into the structure defined by the Unified Conversation Model, and appends the result to an append-only chain of immutable rounds.
@@ -1237,6 +1237,14 @@ It reads the derived index, not the payloads. Structure resolution needs identif
 
     <li>
         
+            <a href="/docs/skywalking-ai-sessionizer/next/en/setup/kiro">Kiro</a>
+        
+    </li>
+
+    
+
+    <li>
+        
             <a href="/docs/skywalking-ai-sessionizer/next/en/setup/claude-code-plugin">Claude Code Plugin</a>
         
     </li>
@@ -1401,6 +1409,22 @@ It reads the derived index, not the payloads. Structure resolution needs identif
 
     
 
+    <li>
+        
+            <a href="/docs/skywalking-ai-sessionizer/next/en/adapters/kiro">Kiro</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-ai-sessionizer/next/en/adapters/kiro-glossary">Kiro Glossary</a>
+        
+    </li>
+
+    
+
 </ul>
 
         
@@ -1530,7 +1554,7 @@ It reads the derived index, not the payloads. Structure resolution needs identif
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 8104ada</div>
+                  <div class="commit-id">Commit Id: aa67971</div>
                 
 
 
@@ -1629,7 +1653,7 @@ gives the index size on a later sample.</p>
       </tr>
       <tr>
           <td>3. Group provider calls</td>
-          <td>by message id, in line order</td>
+          <td>by message id, in line order; output that names no call is grouped into none</td>
       </tr>
       <tr>
           <td>4. Join tools</td>
@@ -1648,12 +1672,12 @@ gives the index size on a later sample.</p>
           <td>the conversation a person reads</td>
       </tr>
       <tr>
-          <td>8. Propose segments</td>
-          <td>activity windows, and whether each could be committed</td>
+          <td>8. Cut segments</td>
+          <td>activity windows</td>
       </tr>
   </tbody>
 </table>
-<p>Seven rules in here are the opposite of the obvious choice, and each is the opposite because a
+<p>Eight rules in here are the opposite of the obvious choice, and each is the opposite because a
 measurement said so.</p>
 <p><strong>A record type is not what a record is.</strong> Every tool result in the corpus sits on a record whose
 type is <code>user</code>. Only a small fraction of <code>user</code> records are things a person said. Classification
@@ -1675,6 +1699,10 @@ again.</p>
 <p><strong>Group a provider call by message id, in line order.</strong> Never by walking the parent pointer forward,
 which drops a tool use on nearly one call in five; and never by request id, because a record the
 client fabricated can carry a real call&rsquo;s request id.</p>
+<p><strong>Output that names no call is grouped into none.</strong> Kiro&rsquo;s V3 engine lists the request ids of a
+turn and ties no record to one of them, so no record names its call. Grouping such output by turn
+or by record would draw call boundaries the runtime never recorded. So no <code>llm.call</code> is written,
+and the text, reasoning and tool uses are steps of the run that holds them.</p>
 <p><strong>Take usage from the last fragment in line order.</strong> Not from the fragment with a stop reason — a
 parent lineage stamps the same stop reason on every fragment — and never by adding fragments up,
 which multiplies the real number by the fragment count.</p>
@@ -1702,21 +1730,24 @@ stream is. The main stream&rsquo;s rule cannot stand in for it, because that rul
 run states, and in the corpus exactly one of 221,592 child records states a trigger. Applied to a
 child, it would start a new Talk on every run.</p>
 <h3 id="segments">Segments</h3>
-<p>Stage 8 proposes segments. It never commits one.</p>
+<p>Stage 8 cuts activity windows. A window says where the work happened. It says nothing about whether
+the work is finished: a round carries no clock, so only a reader, who knows the time, can tell
+whether the last window is still going.</p>
 <p>Only the main stream is cut. Its Talks are taken in order of their first record time. A new window
 opens where the gap between one Talk&rsquo;s last record and the next Talk&rsquo;s first record is longer than
 the idle gap. Only records that resolve to a run count toward a Talk&rsquo;s time range. A window&rsquo;s id
 comes from where it opens, the landed position of its first Talk, and not from its place in the
-list. So late evidence that adds an earlier window cannot renumber a later one. The last window is
-<code>open</code>, and every earlier one is a <code>candidate</code>. A child stream&rsquo;s Talk joins the window whose time
-range holds its first record, as <code>strong_inference</code>, because delegated work belongs to the window
-of the Talk that asked for it.</p>
+list. So late evidence that adds an earlier window cannot renumber a later one. A child stream&rsquo;s
+Talk joins the window whose time range holds its first record, as <code>strong_inference</code>, because
+delegated work belongs to the window of the Talk that asked for it.</p>
 <p><strong>A negative gap is no gap.</strong> Record times can step backward. In the corpus, 0.315% of consecutive
 records step back, by up to 4.06 hours. Provider-error records are the main cause: their time is
 when the failed request began, not when the record was written. So a negative difference between
 two Talks is treated as no gap, never as a large one.</p>
-<p><strong>The idle gap is 10 minutes, and a gap only proposes.</strong> A long gap often falls inside a turn rather
-than between two, so it cannot decide on its own. In the corpus:</p>
+<p><strong>The idle gap is 10 minutes, and it is measured between Talks.</strong> A long quiet period between two
+records often falls inside a Talk rather than between two, so a window is never cut there: stage 8
+compares only one Talk&rsquo;s last record with the next Talk&rsquo;s first. Among the gaps between consecutive
+records in the corpus:</p>
 <table>
   <thead>
       <tr>
@@ -1747,56 +1778,18 @@ than between two, so it cannot decide on its own. In the corpus:</p>
       </tr>
   </tbody>
 </table>
-<p>The Talk column is the one that matters. A window cut inside a Talk splits one interaction between
-two windows. Whether provider-error records count on this timeline moves the run column by five
-percentage points. In asz such a record counts only when its containment parents reach a run,
-because only those records set a Talk&rsquo;s time range.</p>
-<p>Twenty minutes would propose 57% fewer candidates. The default stays at 10 minutes because the gates
-below decide what could be committed, and a shorter gap only gives them more candidates to judge.
-How often the gates stop a bad candidate has not been measured.</p>
+<p>The Talk column is why the cut is made between Talks: cut on the gap between records, about two
+cuts in five would fall inside one interaction. Whether provider-error records count on this timeline
+moves the run column by five percentage points. In asz such a record counts only when its
+containment parents reach a run, because only those records set a Talk&rsquo;s time range. A gap of
+twenty minutes would find 57% fewer gaps that long.</p>
 <p>The gap is fixed in the build. No configuration key and no command flag changes it. It is part of
-the policy every round header carries, <code>v1+idle=10m0s</code>, so windows proposed under one gap never
-fold together with windows proposed under another. <a href="../../formats/session-flow#header">Session Flow</a>
-says how a chain refuses a change of policy.</p>
-<p><strong>Four gates decide whether a window could be committed.</strong></p>
-<table>
-  <thead>
-      <tr>
-          <th>Gate</th>
-          <th>Passes when</th>
-      </tr>
-  </thead>
-  <tbody>
-      <tr>
-          <td><code>activity_boundary</code></td>
-          <td>the window is not the last one</td>
-      </tr>
-      <tr>
-          <td><code>no_crossing_open_operation</code></td>
-          <td>every tool use whose request time falls inside the window has exactly one result, also timed inside the window, and the session holds no open <code>child_stream</code> or <code>notified_child</code> entry. The second test covers the whole session, not the window.</td>
-      </tr>
-      <tr>
-          <td><code>lateness_watermark</code></td>
-          <td>the window is not the last one, and the main stream&rsquo;s last record is more than one idle gap after the window ends</td>
-      </tr>
-      <tr>
-          <td><code>conversation_identity</code></td>
-          <td>the conversation id is not empty. Assembly refuses to run without one, so this gate always passes.</td>
-      </tr>
-  </tbody>
-</table>
-<p>A segment node carries <code>state</code>, <code>talks</code>, <code>gates_unmet</code> and <code>committable</code>. <code>gates_unmet</code> lists the
-gates that fail, and <code>committable</code> is true when none fail. <a href="../../formats/asz-view">asz.view</a> shows
-the same windows to a reader.</p>
-<p><code>no_crossing_open_operation</code> is the gate that does real work. It does not exist for a request left
-with no result at the end of a file. In the corpus that is 0 of 25,892 tool requests on the main
-stream, because the runtime writes a result even for a failure. It exists for a result that arrives
-after the quiet period, which in the corpus happens on 85 of the 697 gaps longer than 10 minutes,
-12.2%. Committing that window would freeze the request in one window while its result lands in the
-next.</p>
-<p><strong>Nothing commits a segment.</strong> Assembly proposes windows and reports <code>committable</code>, and no command
-acts on it. The <a href="../unified-conversation-model">model</a> calls a segment the commit unit, but the
-commit step is not implemented.</p>
+the policy every round header carries, <code>v1+idle=10m0s</code>, so windows cut under one gap never fold
+together with windows cut under another. That is why it stays at 10 minutes:
+<a href="../../formats/session-flow#header">Session Flow</a> says how a chain refuses a change of policy.</p>
+<p>A segment node carries no attributes. Its Talks are its <code>in_segment</code> relations, and its time range
+is theirs. <a href="../../formats/asz-view">asz.view</a> shows each window to a reader with the count of its
+Talks and its time range.</p>
 <h2 id="what-comes-out">What comes out</h2>
 <p>The containment tree carries direct ownership only. Every node has at most one parent.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>session
@@ -1807,6 +1800,7 @@ commit step is not implemented.</p>
 </span></span><span style="display:flex;"><span>             ├ llm.call
 </span></span><span style="display:flex;"><span>             │  ├ message.assistant · thinking
 </span></span><span style="display:flex;"><span>             │  └ tool · agent.call
+</span></span><span style="display:flex;"><span>             ├ message.assistant · thinking · tool · agent.call, where no call is named
 </span></span><span style="display:flex;"><span>             ├ message.external · context.injection
 </span></span><span style="display:flex;"><span>             ├ agent.launch_ack
 </span></span><span style="display:flex;"><span>             └ runtime.notification
@@ -1871,6 +1865,12 @@ in every round. Because the whole session is assembled each time, duplicate remo
 first copy. A repeated record therefore cannot become a second node in a later round. A round over
 the byte budget is assembled again over a narrower window, as
 <a href="../../setup/configuration#parse"><code>max_round_bytes</code></a> describes.</p>
+<p><strong>An upgrade&rsquo;s revisions go first, cut by their frames.</strong> A newer parser can change what it writes
+for every node, and a round cannot narrow below one landed file. When the round of one landed file
+is still over the budget and the chain changes even with no new evidence, those changes go first, in
+rounds of their own over no new file. Each holds as many frames as fit the budget, and at least one.
+The round of the new evidence follows. On a 17 MB chain, the revision of 35,434 nodes that came with
+dropping repeated attributes was one round of 12.5 MB, and is six rounds of at most 2 MiB this way.</p>
 <p><strong>The watermark is fixed before assembly, and assembly reads nothing past it.</strong> Deciding it
 afterwards would let a round hold nodes drawn from evidence that its own header and input digest do
 not cover. A collector writing at the same time makes that likely. A parse also refuses to run when
@@ -1888,11 +1888,12 @@ this in both formats, on every node&rsquo;s kind, parent and attributes and on t
 It holds under any round budget, because the budget changes where the chain is cut, never what it
 says. A chain test builds one session as a single round and again under a one-byte budget, one round
 per landed file, and the two folds hold the same entities. The rule does not say that the fold of
-round N+1 extends the fold of round N. Later evidence replaces entities that earlier rounds wrote.</p>
-<p><strong>Rounds and segments are separate.</strong> The round is the unit of appending. The segment is a proposed
-commit window. A segment is a node like any other, so when a later Talk turns the open window into a
-candidate, that change is an ordinary node revision in whatever round the parse writes. There is no
-separate mechanism for it, and nothing freezes a segment today, as <a href="#segments">Segments</a> says.</p>
+round N+1 extends the fold of round N. Later evidence replaces entities that earlier rounds wrote.
+It holds once the chain has reached the index: between the rounds of an upgrade&rsquo;s revisions, which
+are cut by their frames, the fold holds part of the revision, and the next rounds write the rest.</p>
+<p><strong>Rounds and segments are separate.</strong> The round is the unit of appending. A segment is an activity
+window. When a later Talk joins a window, the round the parse writes adds that Talk&rsquo;s <code>in_segment</code>
+relation, and the segment node itself does not change. There is no separate mechanism for it.</p>
 <p>The page that <code>asz view</code> serves folds the same chain in the same way, every round in order.
 <a href="../../formats/asz-view">asz.view</a> says what it does with a broken chain, and when it folds again.
 A fold as of an earlier round, one entity&rsquo;s history across rounds, and a fold that takes rounds as
@@ -1954,8 +1955,7 @@ prints the number, and only for tool calls and child launches.</p>
 </table>
 <p>Every entry is written <code>open</code>, and it resolves when the missing evidence lands. <code>child_stream</code> and
 <code>notified_child</code> are routine in a live session, because a child can be announced before its stream
-lands. While either is open, no segment is committable. A child in a batch that never reports a
-result is normal, and it is not recorded.</p>
+lands. A child in a batch that never reports a result is normal, and it is not recorded.</p>
 <p>The assembler makes one change of state. An open entry it no longer produces is superseded as
 <code>resolved</code>, and <a href="../../formats/session-flow#the-fold">the fold</a> keeps it. The scenario
 <code>unfinished-tool</code> checks a <code>tool_result</code> going from open to resolved. The format also defines
@@ -2118,6 +2118,14 @@ values and not a counter.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
 
 
 
