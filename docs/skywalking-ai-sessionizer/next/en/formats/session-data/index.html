@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Session Data">
   <meta itemprop="description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
-  <meta itemprop="wordCount" content="5750">
+  <meta itemprop="wordCount" content="6990">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Data">
   <meta name="twitter:description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
@@ -1551,7 +1551,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: aa67971</div>
+                  <div class="commit-id">Commit Id: 71150c3</div>
                 
 
 
@@ -2052,6 +2052,20 @@ several storage stages has to read the earlier files from whichever stage holds 
 reads it back and rebuilds the body. A body that does not come back whole, or is not one JSON object
 in valid UTF-8, lands whole in one <code>unknown</code> part, whose text says why it was not cut. <code>asz verify</code> rebuilds every landed
 body and compares it with <code>sha256</code>, and reports a reference to something the session does not hold.</p>
+<p>A record whose new pieces are larger than the collector&rsquo;s <code>max_delta_bytes</code> has its largest pieces
+taken out until it fits, as <a href="#too-large-to-land">Too large to land</a> describes for any record, and
+never its manifest. This is the first request after a person pasted a screenshot. A piece taken out
+keeps its place, so every segment still names it, and its <code>sha256</code> is the piece&rsquo;s digest, so a later
+body that holds the same piece names it as any earlier piece. A body made of short strings keeps
+nearly all of itself in the manifest&rsquo;s literals, so when the record is still too large with every
+piece taken out, the body lands whole in one <code>unknown</code> part, and that part is taken out.</p>
+<p>A body with a piece taken out cannot be rebuilt from the root: <code>Session.Body</code> returns <code>ErrTooLarge</code>,
+and <code>Session.BodyFrom</code> rebuilds it from another copy of the body, such as the file the runtime wrote.
+A reader registers a piece taken out by its <code>sha256</code>, as any piece, so a later body that names it is
+read, and one that names only other pieces still rebuilds. The adapter&rsquo;s check before landing
+rebuilds the record with the pieces it took out. No body copies the front of a body that cannot be
+rebuilt. <code>asz verify</code> counts these bodies apart from damage, and still holds the record&rsquo;s <code>bytes</code>
+and <code>sha</code> to its manifest.</p>
 <p>On two captures of Claude Code 2.1.260, the landed <code>provider_body</code> files were 25.5% and 21.6% of the
 bytes Claude Code wrote, and all 42 bodies rebuilt exactly.</p>
 <h2 id="closing-line">Closing line</h2>
@@ -2109,8 +2123,8 @@ reads every landed file this way.</p>
       </tr>
   </tbody>
 </table>
-<p>In a part, <code>k</code>, <code>text</code>, <code>id</code>, <code>name</code>, <code>of</code>, <code>server</code>, <code>server_tool</code>, <code>media</code>, <code>encoding</code> and
-<code>state</code> are strings, <code>bytes</code> is an integer, <code>failed</code> is a boolean, and <code>data</code> is any JSON value.</p>
+<p>In a part, <code>k</code>, <code>text</code>, <code>id</code>, <code>name</code>, <code>of</code>, <code>server</code>, <code>server_tool</code>, <code>media</code>, <code>encoding</code>, <code>state</code>
+and <code>sha256</code> are strings, <code>bytes</code> is an integer, <code>failed</code> is a boolean, and <code>data</code> is any JSON value.</p>
 <p><code>server</code> and <code>server_tool</code> say which MCP server a call is addressed to and which of its tools. An
 adapter sets them only where its runtime&rsquo;s name for the call splits exactly. Claude Code names such a
 call <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>, and the split is made only when exactly one <code>__</code> follows <code>mcp__</code>,
@@ -2119,8 +2133,37 @@ as in <code>foo___bar</code>, could split two ways, so it is left whole. The ser
 form of the configured name, so &ldquo;claude.ai Claude Docs&rdquo; is <code>claude_ai_Claude_Docs</code>. The name the
 server was configured with is in the call&rsquo;s execution record, when there is one.</p>
 <p>Every part carries <code>state</code> and <code>bytes</code>. <code>state</code> is one of <code>available</code>, <code>truncated</code>, <code>redacted</code>,
-<code>omitted</code> or <code>unavailable</code>, and <code>bytes</code> is the size of the original even when the part holds less.
-A reader is always told how much of the original it has.</p>
+<code>omitted</code>, <code>unavailable</code> or <code>too_large</code>, or <code>removed</code> in a <a href="#skeletons">skeleton</a>, and <code>bytes</code> is
+the size of the original even when the part holds less. A reader is always told how much of the
+original it has.</p>
+<h3 id="too-large-to-land">Too large to land</h3>
+<p>A landed file travels whole, so the collector&rsquo;s <code>max_delta_bytes</code> is the most a receiver has to store
+at once. A collector cuts a file by what its records take once written, not by the bytes they were
+read from: a record carries an envelope its source line does not, and 4 KiB of short source lines
+measured 19 KB of records. One record cannot be cut: a pasted screenshot measured 4.6 MB in one
+transcript line. Such a record lands alone in a file of its own, and its largest payloads are taken
+out, one at a time, until the file fits.</p>
+<p>A part taken out keeps its place, its kind and every identifier: <code>id</code>, <code>name</code>, <code>of</code>, <code>server</code>,
+<code>server_tool</code>, <code>failed</code> and <code>media</code>. Its <code>data</code> and <code>encoding</code> go first, and then its <code>text</code>, except
+an <code>unknown</code> part&rsquo;s, which is the reason its bytes were not described rather than content. A part
+with text and data, such as a result with the runtime&rsquo;s structured copy of it, so keeps its readable
+text while it can: its <code>state</code> is <code>truncated</code>. A part with nothing left says <code>too_large</code>. Its
+<code>bytes</code> is the size of the original, and its <code>sha256</code> is the SHA-256 of what was taken out first:
+an <code>unknown</code> part&rsquo;s bytes, other data compacted as the writer lands it, or the text of a part with
+no data. A reader still sees the step, and can match the payload against another copy of it.</p>
+<p>A <code>changes/1</code> record and an <code>execution/1</code> record are evidence a step joins to by its tool call, so
+neither is ever taken out whole: a reader that found nothing would read that the call changed no file
+or ran nowhere. A change record is made smaller in its own format instead. Its file with the largest
+hunks loses them and says its <code>diff</code> is <code>too_large</code>, as a diff too large to compute says, and its
+additions and deletions stay. This goes on, file by file, until the record fits. When no file has
+hunks left, its files, overlaps and gaps go, and it keeps its identity, its tool, its window and
+<code>changed_files</code>. Its part says <code>truncated</code>, with the original&rsquo;s <code>bytes</code> and <code>sha256</code>, and the record
+still joins its step. An execution record keeps sizes and digests only, never what was sent or
+returned, so it is a few hundred bytes and is left as it is.</p>
+<p>Of two payloads of the same size, the one in the earlier part goes first, so the same record always
+loses the same parts. No other part carries <code>sha256</code>. A record that is still too large with every
+payload taken out lands as it is: what is left is its identifiers, its label and the list of its
+parts. <code>asz repack</code> carries records as they landed, and takes nothing out.</p>
 <h3 id="what-data-holds">What data holds</h3>
 <p><code>data</code> is one JSON value. What it holds depends on the part:</p>
 <ul>
@@ -2162,7 +2205,8 @@ The measured corpus is 62 Claude Code sessions: 3,032 files and 1,100.1 MB of so
 tool result in it was 1.1 MB. Over its 28 sessions larger than 1 MB, the share of a session that is
 tool output ran from 17.3% to 83.5%, with a median of 35.1%. A rule tuned to the median is wrong by
 a factor of two at both ends. So every part states its own size and state, and a reader decides.
-No built-in adapter writes <code>truncated</code> or <code>omitted</code>, so no part they write is clipped. Clipping is
+No built-in adapter writes <code>omitted</code>, and a part one writes as <code>truncated</code> is one made smaller to fit
+the budget, so no part they write is clipped otherwise. Clipping is
 left to a reader, such as the <a href="../asz-view#a-node-in-talks">asz.view</a> document, which clips a
 node&rsquo;s text and gives the full size beside it. A part is still not always all the runtime gave.
 The Claude Code dialect leaves some content out with no <code>dropped</code> entry. Its
@@ -2285,6 +2329,59 @@ Claude Code deletes its own transcripts, and a storage root outlives them (see
 <a href="../storage-root#size">Storage Root</a>). An <code>unknown</code> part can be interpreted again from its original
 bytes in the store. A part that keeps the source&rsquo;s JSON can also be interpreted again, subject to
 the whitespace and older-file limits in <a href="#what-data-holds">What data holds</a>.</p>
+<h2 id="skeletons">Skeletons</h2>
+<p>When <code>storage.retention</code> removes a landed file, a skeleton takes its place: the same name with the
+extension <code>.sk</code>, in the same directory, written once and read-only. A skeleton is Session Data
+compressed with gzip, and it is local: it is never sent. It keeps what a conversation&rsquo;s structure is
+built from and none of the content, so the index rebuilt from it is the index rebuilt from the
+landed file. <a href="../storage-root#retention">Retention</a> says when a file is removed.</p>
+<ul>
+<li>
+<p><strong>The header</strong>, whole, with one more key, <code>removed</code>:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#1f2328">{</span><span style="color:#0550ae">&#34;digest&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;9f2c…&#34;</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;size&#34;</span><span style="color:#1f2328">:</span><span style="color:#0550ae">204811</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;records&#34;</span><span style="color:#1f2328">:</span><span style="color:#0550ae">118</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;at&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;2026-10-13T10:00:00Z&#34;</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;generation&#34;</span><span style="color:#1f2328">:</span><span style="color:#0550ae">1</span><span style="color:#1f2328">,</span>
+</span></span><span style="display:flex;"><span> <span style="color:#0550ae">&#34;receiver&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;accepted&#34;</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;owner&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;grpc:%2F%2Foap:11800||me@laptop&#34;</span><span style="color:#1f2328">}</span>
+</span></span></code></pre></div><p><code>digest</code>, <code>size</code> and <code>records</code> describe the landed file: the SHA-256 of its whole bytes, which a
+round&rsquo;s input digest binds, its size in bytes and its number of records. <code>at</code> is when it was
+removed, and <code>generation</code> which removal of the session removed it, counting from 1. <code>receiver</code>
+says what the receiver confirmed of it: <code>accepted</code>, <code>rejected</code> when it took the file and rejected
+some of its records, or <code>unconfirmed</code> when no answer confirmed it. <code>owner</code> is the owner its
+session is sent under, as <code>push.state</code> records it.</p>
+</li>
+<li>
+<p><strong>Every record, in order</strong>, with <code>ord</code>, <code>off</code>, <code>bytes</code>, <code>id</code>, <code>parent</code>, <code>call</code>, <code>run</code>,
+<code>continues</code>, <code>tool</code>, <code>child</code>, <code>batch</code>, <code>label</code>, <code>started_by</code>, <code>from</code>, <code>time</code>, <code>trigger</code>,
+<code>flags</code>, <code>usage</code>, <code>model</code> and <code>dropped</code>. A provider body keeps <code>sha</code> too; any other record
+drops it.</p>
+</li>
+<li>
+<p><strong>Every part, in its place</strong>, because a part&rsquo;s position is its block number. Each keeps <code>k</code>,
+<code>bytes</code>, <code>failed</code> and <code>sha256</code>, and its <code>state</code> is <code>removed</code>, or <code>too_large</code> for a part that
+was too large to land, which held nothing to remove. A <code>call</code> keeps <code>id</code>, <code>name</code>,
+<code>server</code> and <code>server_tool</code>, and a <code>result</code> keeps <code>of</code>. <code>text</code>, <code>data</code>, <code>media</code> and <code>encoding</code>
+go, with three exceptions, each made only when the data decoded:</p>
+<ul>
+<li>A <code>changes/1</code> record, in any data part, keeps <code>schema</code>, <code>id</code>, <code>captured_by</code>, <code>tool</code>,
+<code>tool_name</code>, <code>time</code>, <code>basis</code>, <code>root</code>, <code>coverage</code> and <code>changed_files</code>, and for each file in
+<code>changes</code> its <code>path</code>, <code>operation</code>, <code>before</code>, <code>after</code>, <code>attribution</code>, <code>additions</code> and
+<code>deletions</code>: what the page groups and counts the files by. <code>hunks</code>, <code>windows</code>, <code>policy</code>,
+<code>window</code>, <code>outcome</code>, <code>gaps</code> and <code>overlaps</code> go, and a <code>diff</code> that was <code>available</code> says
+<code>unavailable</code>, since its lines are not kept.</li>
+<li>An <a href="#execution-records">execution record</a> keeps <code>schema</code>, <code>id</code>, <code>tool</code>, <code>time</code> and <code>outcome</code>:
+its own identity, the step it joins to, its place in time and how the call ended.</li>
+<li>A provider body keeps its manifest without the literal strings, which are text of the body:
+each segment loses its <code>lit</code> and keeps the rest, in order, and a segment left empty goes. So
+every <code>part</code>, <code>piece</code> and <code>copy</code> stays, a reader holding the skeleton checks it as it checked
+the body and accepts it or not as before, and a manifest with no <code>segments</code> keeps none. Each
+other data part keeps the SHA-256 of its data in <code>sha256</code>, which is the piece&rsquo;s identity, or the
+one it had when it was too large to land.</li>
+</ul>
+</li>
+<li>
+<p><strong>Its own closing line</strong>, with its own record count and digest.</p>
+</li>
+</ul>
+<p>A reader opens a <code>.sk</code> through gzip and reads it as any other Session Data. While a removal is in
+progress, a landed file and its skeleton can both be there; read the landed file.</p>
 <h2 id="producing-session-data">Producing Session Data</h2>
 <p>There is no Go interface to implement. An adapter is whatever lands Session Data in a storage root.
 Nothing above it reads a runtime field, so another runtime needs no code on the assembling side
@@ -2358,11 +2455,13 @@ dialect: what its runtime calls each name the model uses. <code>cmd/asz</code> g
         <li><a href="#closing-line">Closing line</a></li>
         <li><a href="#parts">Parts</a>
           <ul>
+            <li><a href="#too-large-to-land">Too large to land</a></li>
             <li><a href="#what-data-holds">What data holds</a></li>
           </ul>
         </li>
         <li><a href="#execution-records">Execution records</a></li>
         <li><a href="#dropped">Dropped</a></li>
+        <li><a href="#skeletons">Skeletons</a></li>
         <li><a href="#producing-session-data">Producing Session Data</a></li>
       </ul>
     </li>
@@ -2477,6 +2576,10 @@ dialect: what its runtime calls each name the model uses. <code>cmd/asz</code> g
 
     </div>
     
+
+
+
+
 
 
 

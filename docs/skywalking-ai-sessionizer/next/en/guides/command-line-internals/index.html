@@ -33,7 +33,7 @@ sources Discovers sessions under the source root and counts their files without 
   <meta itemprop="name" content="Command Line Internals">
   <meta itemprop="description" content="Command Line Internals The details behind Command Line: what each report counts, how the page reads a storage root, how verify proves a stream whole, and how a scenario root behaves.
 sources Discovers sessions under the source root and counts their files without landing anything. The first line names the source root it resolved. Sessions removed by the include and exclude filters are counted on the filtered line. Then comes one row per session: directories, execution streams, child-agent sidecars, workflow journals and manifests. A line with the total of sessions and streams follows the table.">
-  <meta itemprop="wordCount" content="3938">
+  <meta itemprop="wordCount" content="4537">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Command Line Internals">
   <meta name="twitter:description" content="Command Line Internals The details behind Command Line: what each report counts, how the page reads a storage root, how verify proves a stream whole, and how a scenario root behaves.
@@ -1554,7 +1554,7 @@ sources Discovers sessions under the source root and counts their files without 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: aa67971</div>
+                  <div class="commit-id">Commit Id: 71150c3</div>
                 
 
 
@@ -1638,7 +1638,13 @@ response names no session, so it is counted only. See
 </ol>
 <p>The order matters. The push runs last so a pass sends the rounds it has just written, rather than
 leaving them for the next one.</p>
-<p>In watch mode, the default, it repeats every <code>interval</code>; with <code>-once</code> or <code>mode: once</code> it makes one
+<p>With <code>storage.retention</code> set, a pass then removes the landed files of every conversation that was
+sent and has been idle for longer, leaving a skeleton in each one&rsquo;s place. Before it lands
+anything, every pass finishes a removal an earlier one left in progress, whatever the setting says
+now. A scenario root keeps its own removal, and retention never runs there. See
+<a href="../../formats/storage-root#retention">Retention</a>. The startup lines say the retention:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>retention: a sent conversation idle for 72h0m0s loses its landed files; a skeleton keeps its structure, and the receiver its text
+</span></span></code></pre></div><p>In watch mode, the default, it repeats every <code>interval</code>; with <code>-once</code> or <code>mode: once</code> it makes one
 pass and exits. Every enabled local adapter is read in the same pass, so one watching source never
 keeps another from running. When the <code>langsmith-ingest</code> adapter is enabled, its receiver listens
 beside the pipeline for as long as the process runs.</p>
@@ -1689,6 +1695,10 @@ beside the pipeline for as long as the process runs.</p>
           <td>scenario sessions removed, absent when 0. See <a href="#a-scenario-root">A scenario root</a>.</td>
       </tr>
       <tr>
+          <td><code>retention</code></td>
+          <td>landed files <code>storage.retention</code> removed, absent when 0. See <a href="../../formats/storage-root#retention">Retention</a>.</td>
+      </tr>
+      <tr>
           <td><code>errors</code></td>
           <td>listed on standard error after the line</td>
       </tr>
@@ -1699,6 +1709,13 @@ a lock is doing the same work. A scenario root is the exception, below. A sessio
 held is parsed on a later pass. A single pass has no later pass, so there that session is listed
 as an error. So is an export state that another process still holds after two minutes of waiting,
 because then nothing was sent.</p>
+<p>Each pass holds the root lock, <code>_root/.lock</code>, from the first step to the last, so two commands
+never write the same root at once. <code>asz parse</code>, <code>asz push</code> and <code>asz repack</code> hold it for their run,
+and <code>asz scenario build</code> for each session it builds. The LangSmith receiver is the one writer
+outside a pass. It only adds requests to <code>_langsmith/</code>, and a pass takes them under that
+directory&rsquo;s own lock.
+When another command holds it, a watching pipeline prints <code>waiting  : another command holds &lt;root&gt;/_root/.lock; this pass does nothing until it is released</code> once and skips the pass. A single
+pass waits up to two minutes for it, then exits non-zero with nothing done.</p>
 <p>Anything else the pass could not do is listed on standard error under the line, one <code>error:</code> line
 each: a session that failed to parse, a request the receiver refused. A watching collector goes on
 to the next pass. A single pass exits non-zero, so an unattended backfill can be read by its exit
@@ -1759,9 +1776,15 @@ status instead of the log.</p>
 exceeds the configured <code>max_delta_bytes</code>, then assembles <code>DEST</code>&rsquo;s chains. Every record keeps its
 bytes and its order; the cursors come along so collection can continue into <code>DEST</code>; the index and
 the chains are rebuilt there, because a round addresses records by file and line and the old
-references name positions that no longer exist. <code>DEST</code> must be a new or empty directory. A populated
-destination is refused before any session is written, because its chains bind to the original
-landed files. If a repack is interrupted, retry into another empty directory. One row per session:</p>
+references name positions that no longer exist. <code>DEST</code> must be a new or empty directory outside
+the storage root. A populated destination is refused before any session is written, because its
+chains bind to the original landed files. One inside the root is refused too, because every
+command would read it as a session of the root. If a repack is interrupted, retry into another
+empty directory. The repack holds the root lock of the root it reads, and waits for a pass that
+holds it. It holds <code>DEST</code>&rsquo;s lock too, without waiting, and checks <code>DEST</code> again under it: a command
+that holds a new or empty root is writing into it. A session retention removed files of is
+refused before anything is written, and so is one with a removal in progress: a skeleton keeps no
+records to re-cut. One row per session:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>SESSION                               FILES IN  FILES OUT  RECORDS  BYTES
 </span></span><span style="display:flex;"><span>0438c73b-2367-4ed5-9de3-13ef9a17ed01  305       312        21119    42.1MB
 </span></span></code></pre></div><p>This is how an existing root is brought under a new budget after <code>max_delta_bytes</code> changes, and
@@ -1928,6 +1951,12 @@ encoded, and <code>paused</code> is how long the pass waited for budget under
 <code>export.otlp.max_bytes_per_minute</code>. A pass with errors exits non-zero; the files whose requests
 failed are not recorded as sent and go again on the next pass. See
 <a href="../../setup/export-otlp">Export over OpenTelemetry</a>.</p>
+<p>A session goes to the endpoint, the configured service name and the instance it was first sent
+under. After one of them changes, a session sent before is held: nothing more of it is sent, and
+the pass says so on standard error and exits non-zero. <code>asz collect</code> lists the same words as an <code>error:</code> line on every
+pass:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>  held: session 3189c1f0-9ec4-4bd2-88dc-8eda88ac6db3 was sent to grpc:%2F%2F10.0.0.1:11800|Claude%20Code|me@laptop and this pass sends to grpc:%2F%2F10.0.0.2:11800|Claude%20Code|me@laptop; its later files wait, since a receiver holds a session whole. Set the endpoint, service and instance back to send them
+</span></span></code></pre></div><p><a href="../../formats/otlp#one-owner-per-session">One owner per session</a> says why.</p>
 <h2 id="verify">verify</h2>
 <p>Checks every landed file against its digest and every round against its commit digest, for one
 session or all of them, and binds every round to the landed files it consumed: a round whose file
@@ -1937,6 +1966,11 @@ it exits non-zero when anything is wrong.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>checked 44 session(s), 5867 stream(s), 359292 records
 </span></span><span style="display:flex;"><span>checked 44 conversation chain(s), 44 round(s)
 </span></span><span style="display:flex;"><span>all landed data is contiguous and matches its digests
+</span></span></code></pre></div><p>A file retention removed is not verified: only its skeleton is there. The checks go on through the
+skeleton, which keeps every record&rsquo;s line, byte and size, and a round is bound to the digest the
+file had, which the skeleton recorded. Removed files are counted on a line of their own, by what
+the receiver confirmed of them:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>12 file(s) were removed by retention and are not verified: the receiver accepted 11, accepted 0 with rejected records, and confirmed nothing of 1
 </span></span></code></pre></div><p>Contiguous means that, in every stream, the landed records continue the source&rsquo;s line numbers and
 byte offsets with no gap. Each record carries the line it came from, <code>ord</code>, the byte it started at,
 <code>off</code>, and its size, <code>bytes</code>. The first record must be line 1 and must start at byte 0. Each next
@@ -1971,6 +2005,12 @@ one that was edited or cut short. Such a file ends the check with an error that 
 <code>N record(s) landed more than once by an interrupted pass; assembly removes them</code>. A file lands
 before its cursor is committed, so an interrupted pass repeats data rather than losing it.
 <a href="../../formats/storage-root#landed-files">Storage Root</a> explains the order.</p>
+<p>A part whose payload was <a href="../../formats/session-data#too-large-to-land">too large to land</a> is
+counted the same way, with the provider bodies that cannot be rebuilt because of it: verify prints
+<code>N part(s) were too large to land and hold their size and digest only; M provider body(ies) cannot be rebuilt for it</code>. The collector left the payload out on purpose, so the file fits its budget. A
+body that holds or refers to such a piece is not damage: its references are still checked, and its
+record&rsquo;s <code>bytes</code> and <code>sha</code> are still held to its manifest. Only the comparison of its rebuilt bytes
+with its digest cannot be made.</p>
 
 </div>
 
@@ -2128,6 +2168,10 @@ before its cursor is committed, so an interrupted pass repeats data rather than 
 
     </div>
     
+
+
+
+
 
 
 

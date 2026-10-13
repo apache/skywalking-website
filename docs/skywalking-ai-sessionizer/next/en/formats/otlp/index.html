@@ -25,19 +25,19 @@
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="OTLP Records">
   <meta property="og:description" content="OTLP Records What Export over OpenTelemetry sends, for anyone building or checking a receiver: how files become log records, how they travel, the attributes every record carries, and how the metrics are derived.
-One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names.">
+One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names. A skeleton, which takes a landed file’s place when retention removes it, is never sent: the receiver has the file it replaced, or the file was removed before it was sent.">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="docs">
 
   <meta itemprop="name" content="OTLP Records">
   <meta itemprop="description" content="OTLP Records What Export over OpenTelemetry sends, for anyone building or checking a receiver: how files become log records, how they travel, the attributes every record carries, and how the metrics are derived.
-One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names.">
-  <meta itemprop="wordCount" content="3223">
+One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names. A skeleton, which takes a landed file’s place when retention removes it, is never sent: the receiver has the file it replaced, or the file was removed before it was sent.">
+  <meta itemprop="wordCount" content="3567">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="OTLP Records">
   <meta name="twitter:description" content="OTLP Records What Export over OpenTelemetry sends, for anyone building or checking a receiver: how files become log records, how they travel, the attributes every record carries, and how the metrics are derived.
-One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names.">
+One log record per file A file is sent whole: one log record whose body is the file’s bytes, unchanged. A receiver stores it as it was landed, checks its digest at once, and has nothing to put back together. Every {seq, row, block} reference in a round still means what it meant, because a row is a line of the body it names. A skeleton, which takes a landed file’s place when retention removes it, is never sent: the receiver has the file it replaced, or the file was removed before it was sent.">
 
 
 
@@ -1554,7 +1554,7 @@ One log record per file A file is sent whole: one log record whose body is the f
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: aa67971</div>
+                  <div class="commit-id">Commit Id: 71150c3</div>
                 
 
 
@@ -1618,7 +1618,9 @@ how the metrics are derived.</p>
 <p>A file is sent whole: one log record whose body is the file&rsquo;s bytes, unchanged. A receiver
 stores it as it was landed, checks its digest at once, and has nothing to put back together.
 Every <code>{seq, row, block}</code> reference in a round still means what it meant, because a row is a
-line of the body it names.</p>
+line of the body it names. A <a href="../session-data#skeletons">skeleton</a>, which takes a landed file&rsquo;s
+place when retention removes it, is never sent: the receiver has the file it replaced, or the file
+was removed before it was sent.</p>
 <p>This is the second design. The first sent one record per line, and it was measured on one
 conversation of 306 files: 39,683 records, attributes 16% on top of the body even after
 trimming, and a receiver that had to track which lines had arrived before it could verify
@@ -1630,14 +1632,35 @@ carrying it succeeded, so a failed request leaves it for the next pass.</p>
 <p><code>push.state</code> also names the receivers the files went to, with one <code>endpoint</code> line each:
 <code>grpc://host:port</code>, <code>grpcs://host:port</code> with <code>tls: true</code>, or the HTTP base URL. A <code>rejected</code> line
 names each file of a request a receiver took while it rejected some of its records, as
-<a href="#transport">Transport</a> describes. Every save writes all three kinds, so neither new line is lost
-at the next request. An older asz passes over both, and drops them when it saves the file.</p>
+<a href="#transport">Transport</a> describes. An <code>owner</code> line names the owner each session is sent under, as
+<a href="#one-owner-per-session">One owner per session</a> describes. Every save writes every kind, so no
+line is lost at the next request. An older asz passes over the newer kinds, and drops them when it
+saves the file.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>schema 1
 </span></span><span style="display:flex;"><span>updated_at 2026-09-11T10:00:00Z
 </span></span><span style="display:flex;"><span>endpoint grpc://127.0.0.1:11800
+</span></span><span style="display:flex;"><span>owner &lt;session-id&gt; grpc:%2F%2F127.0.0.1:11800|Claude%20Code|me@laptop
 </span></span><span style="display:flex;"><span>pushed &lt;session-id&gt;/streams/main/transcript-20260911T095959.000000000Z-000001.sd 9f2c…
 </span></span><span style="display:flex;"><span>rejected &lt;session-id&gt;/streams/main/transcript-20260911T095959.000000000Z-000001.sd
-</span></span></code></pre></div><p>Removing a <a href="../../guides/scenario#removal-a-session-goes-once-it-is-sent">scenario session</a>
+</span></span></code></pre></div><h3 id="one-owner-per-session">One owner per session</h3>
+<p>A receiver holds a session whole, so a session goes to one owner: the endpoint, the configured
+service name and the <code>service.instance.id</code> it was first sent under, each percent-encoded and joined
+by <code>|</code>. The service name is the one <code>export.otlp.service_name</code> sets, and it is empty when asz names
+each session&rsquo;s service after its runtime. It is never the name a session resolves to. That name
+depends on reading the session&rsquo;s files, and a person could not set it back.</p>
+<p>The owner is recorded in <code>push.state</code>, and the file is saved, before the first request that carries
+anything of the session goes out: a landed file, a round whose header names the session, or a
+metrics request derived from it. A request whose answer never came, after a crash or a lost
+connection, still leaves the session with its owner. When that save fails, nothing of the session
+is sent. A session with an owner was sent, or tried to be, answered or not.</p>
+<p>A pass that would send a session under another owner, after the endpoint, the service name or the
+instance changed, holds the session. None of its files, rounds or metrics are sent, and none is
+recorded as sent. Every pass says which session waits and for which owner, and <code>asz push</code> then
+exits non-zero. Setting the three back sends what waited.</p>
+<p>A removed <a href="../../guides/scenario#removal-a-session-goes-once-it-is-sent">scenario session</a> loses
+its owner line once nothing of it is left: not its directory, not its conversation&rsquo;s directory, and
+no line for any of its files.</p>
+<p>Removing a <a href="../../guides/scenario#removal-a-session-goes-once-it-is-sent">scenario session</a>
 depends on these lines. A session goes only when <code>push.state</code> names exactly one receiver, the one
 the pipeline sends to, and no file of the session has a <code>rejected</code> line. A <code>push.state</code> that lists
 files and names no receiver was written before these lines existed, or saved by an older asz. It
@@ -1794,8 +1817,10 @@ also carries the time it was observed.</p>
 the two tables above, in both formats, so a change to the wire that this page does not describe
 fails the build. See <a href="../../guides/scenario">Scenarios</a>.</p>
 <h2 id="metrics">Metrics</h2>
-<p>asz derives these metrics from the landed files when <code>metrics.enabled</code> is on, and <code>asz push</code> sends
-them when <code>export.otlp.metrics</code> is on. Both are on by default. The metrics are asz&rsquo;s own family,
+<p>asz derives these metrics from the landed files when <code>metrics.enabled</code> is on and they will be sent,
+which is when <code>export.otlp.endpoint</code> is set and <code>export.otlp.metrics</code> is on, and <code>asz push</code> sends
+them. <code>metrics.enabled</code> and <code>export.otlp.metrics</code> are on by default. A root that sends nothing
+derives nothing, since each request waits in the spool until it is sent. The metrics are asz&rsquo;s own family,
 named for any agent rather than for one runtime:</p>
 <table>
   <thead>
@@ -1986,9 +2011,10 @@ than the interval is honored.</p>
 request under the 10 MiB the OAP&rsquo;s HTTP server accepts. A file larger than that is sent alone, in
 a request of its own. A landed file is cut at
 <code>max_delta_bytes</code>, 2 MiB by default, and a round is cut at <code>parse.max_round_bytes</code>, also
-2 MiB, so a request normally carries several files. The exception on both sides is a single
-unit larger than the budget: a source record is landed whole, and a round covering one landed
-file is published whole. The largest source record in the measured corpus is 4.5 MB.</p>
+2 MiB, so a request normally carries several files. A source record larger than the budget lands
+alone, with its largest payloads omitted until the file fits: the largest source record in the
+measured corpus is a 4.6 MB pasted screenshot. The exception is a round covering one landed file,
+which is published whole.</p>
 <p>The receiver&rsquo;s limit must cover the largest single request. The OAP accepts 50 MB over gRPC and
 10 MiB over HTTP by default. An OpenTelemetry Collector accepts 4 MiB over gRPC and 20 MiB over
 HTTP unless its receiver is configured otherwise, so its gRPC receiver needs
@@ -2027,7 +2053,11 @@ HTTP unless its receiver is configured otherwise, so its gRPC receiver needs
   <ul>
     <li><a href="#otlp-records">OTLP Records</a>
       <ul>
-        <li><a href="#one-log-record-per-file">One log record per file</a></li>
+        <li><a href="#one-log-record-per-file">One log record per file</a>
+          <ul>
+            <li><a href="#one-owner-per-session">One owner per session</a></li>
+          </ul>
+        </li>
         <li><a href="#transport">Transport</a></li>
         <li><a href="#what-every-record-carries">What every record carries</a></li>
         <li><a href="#metrics">Metrics</a>
@@ -2152,6 +2182,10 @@ HTTP unless its receiver is configured otherwise, so its gRPC receiver needs
 
     </div>
     
+
+
+
+
 
 
 
