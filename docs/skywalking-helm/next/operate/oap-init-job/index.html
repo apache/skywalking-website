@@ -35,7 +35,7 @@ Workload JAVA_OPTS Behaviour *-oap-init-* Job &lt;oap.javaOpts&gt; -Dmode=init C
   <meta itemprop="description" content="The OAP Init Job The chart creates the storage schema with a one-shot *-oap-init-* Job, and the main OAP Deployment refuses to serve until that Job has finished. This page explains that handshake, why the Job is deliberately not a Helm hook, and how to watch, rerun, or clean it up.
 The handshake Two OAP containers from the same image, started with different modes:
 Workload JAVA_OPTS Behaviour *-oap-init-* Job &lt;oap.javaOpts&gt; -Dmode=init Creates the storage schema (Elasticsearch indices / SQL tables / BanyanDB groups), then exits. restartPolicy: Never. *-oap Deployment -Dmode=no-init &lt;oap.javaOpts&gt; Never touches the schema. Blocks with port 12800 closed until the schema exists, so the pod is not Ready. Order of events on helm install:">
-  <meta itemprop="wordCount" content="1144">
+  <meta itemprop="wordCount" content="1510">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="The OAP Init Job">
   <meta name="twitter:description" content="The OAP Init Job The chart creates the storage schema with a one-shot *-oap-init-* Job, and the main OAP Deployment refuses to serve until that Job has finished. This page explains that handshake, why the Job is deliberately not a Helm hook, and how to watch, rerun, or clean it up.
@@ -1575,7 +1575,7 @@ Workload JAVA_OPTS Behaviour *-oap-init-* Job &lt;oap.javaOpts&gt; -Dmode=init C
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 62c64a8</div>
+                  <div class="commit-id">Commit Id: d6d0344</div>
                 
 
 
@@ -1654,9 +1654,14 @@ Ready — add <code>--wait-for-jobs</code> alongside <code>--wait</code>:</p>
 </span></span></code></pre></div><h2 id="the-value-hashed-job-name">The value-hashed Job name</h2>
 <p>A Job&rsquo;s <code>spec.template</code> is immutable. With a stable name, any <code>helm upgrade</code> that changes the pod
 template (a new image tag, a new env var) would fail with <code>field is immutable</code>. So the name carries
-a short hash of the rendered values:</p>
-<pre tabindex="0"><code class="language-gotemplate" data-lang="gotemplate">{{ printf &#34;%s-init-%s&#34; (include &#34;skywalking.oap.fullname&#34; . | trunc 40 | trimSuffix &#34;-&#34;)
-                       (.Values | toYaml | sha256sum | trunc 8) }}
+a short hash of the rendered values, without <code>labelStyle</code>, plus the label style for a release
+installed with 5.1.0 or later:</p>
+<pre tabindex="0"><code class="language-gotemplate" data-lang="gotemplate">{{- $hashed := omit .Values &#34;labelStyle&#34; }}
+{{- if eq (include &#34;skywalking.labelStyle&#34; .) &#34;modern&#34; }}
+{{- $_ := set $hashed &#34;_labelStyle&#34; &#34;modern&#34; }}
+{{- end }}
+{{ printf &#34;%s-init-%s&#34; (include &#34;skywalking.oap.fullname&#34; . | trunc 40 | trimSuffix &#34;-&#34;)
+                       ($hashed | toYaml | sha256sum | trunc 8) }}
 </code></pre><p>For a release named <code>skywalking</code> that renders to, for example:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>skywalking-skywalking-helm-oap-init-39aeb14b
 </span></span></code></pre></div><p>Consequences worth knowing:</p>
@@ -1664,7 +1669,18 @@ a short hash of the rendered values:</p>
 <li>Any value change produces a new Job name, so <code>helm upgrade</code> creates a fresh Job and re-runs init;
 Helm prunes the previous one because it is no longer in the manifest.</li>
 <li>The hash covers the <strong>whole</strong> values tree, including subchart values — an unrelated change
-(a UI setting, a BanyanDB replica count) also re-runs init.</li>
+(a UI setting, a BanyanDB replica count) also re-runs init. A new chart version whose default
+values differ, its own or a subchart&rsquo;s, re-runs init on the upgrade too.</li>
+<li><code>labelStyle</code> is left out of the hash: it only overrides how the release&rsquo;s label style is found,
+so setting or removing it does not re-run init. The style itself is hashed for a release installed
+with 5.1.0 or later, because the Job&rsquo;s pod labels follow it: moving an older release to the new
+labels renames the Job and runs init once more instead of failing. A release installed before
+5.1.0 hashes exactly what 5.0.0 hashed.</li>
+<li>The chart itself must never change the Job&rsquo;s pod template, labels included, without a values
+change that renames the Job: with an unchanged name, Helm patches the existing Job and the
+upgrade fails with <code>field is immutable</code>. That is why a release installed before 5.1.0 keeps exactly
+the pod labels 5.0.0 rendered, with the recommended labels only on the Job&rsquo;s own metadata. The
+upgrade E2E cell checks this.</li>
 <li>The OAP name is truncated to 40 characters before the suffix, so the Job name stays inside the
 63-character DNS limit.</li>
 </ul>
@@ -1747,9 +1763,12 @@ The liveness and readiness probes default to the same TCP check on <code>12800</
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#6639ba">export</span> <span style="color:#953800">NS</span><span style="color:#0550ae">=</span>skywalking
 </span></span><span style="display:flex;"><span><span style="color:#6639ba">export</span> <span style="color:#953800">RELEASE</span><span style="color:#0550ae">=</span>skywalking
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#57606a"># The chart renders exactly one Job, whatever the storage type</span>
-</span></span><span style="display:flex;"><span>kubectl get <span style="color:#6639ba">jobs</span> -n <span style="color:#0a3069">&#34;</span><span style="color:#953800">$NS</span><span style="color:#0a3069">&#34;</span> -l <span style="color:#953800">release</span><span style="color:#0550ae">=</span><span style="color:#0a3069">&#34;</span><span style="color:#953800">$RELEASE</span><span style="color:#0a3069">&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#953800">JOB</span><span style="color:#0550ae">=</span><span style="color:#cf222e">$(</span>kubectl get <span style="color:#6639ba">jobs</span> -n <span style="color:#0a3069">&#34;</span><span style="color:#953800">$NS</span><span style="color:#0a3069">&#34;</span> -l <span style="color:#953800">release</span><span style="color:#0550ae">=</span><span style="color:#0a3069">&#34;</span><span style="color:#953800">$RELEASE</span><span style="color:#0a3069">&#34;</span> -o <span style="color:#953800">jsonpath</span><span style="color:#0550ae">=</span><span style="color:#0a3069">&#39;{.items[0].metadata.name}&#39;</span><span style="color:#cf222e">)</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># The chart renders exactly one Job per release, whatever the storage type. Read its name from the</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># release&#39;s rendered manifest, which is right for any chart version and either label style. With</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># `helm template | kubectl apply`, pipe your rendered output into the same awk instead: `kubectl</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># apply` never prunes a Job that a values change replaced, so the namespace may hold older ones.</span>
+</span></span><span style="display:flex;"><span><span style="color:#953800">JOB</span><span style="color:#0550ae">=</span><span style="color:#cf222e">$(</span>helm get manifest <span style="color:#0a3069">&#34;</span><span style="color:#953800">$RELEASE</span><span style="color:#0a3069">&#34;</span> -n <span style="color:#0a3069">&#34;</span><span style="color:#953800">$NS</span><span style="color:#0a3069">&#34;</span> <span style="color:#1f2328">|</span> awk <span style="color:#0a3069">&#39;/^kind: Job$/ {j=1} j &amp;&amp; /^  name:/ {gsub(/&#34;/, &#34;&#34;, $2); print $2; exit}&#39;</span><span style="color:#cf222e">)</span>
+</span></span><span style="display:flex;"><span>kubectl get job -n <span style="color:#0a3069">&#34;</span><span style="color:#953800">$NS</span><span style="color:#0a3069">&#34;</span> <span style="color:#0a3069">&#34;</span><span style="color:#953800">$JOB</span><span style="color:#0a3069">&#34;</span>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#57606a"># Logs (while running, and after completion until the TTL removes it)</span>
 </span></span><span style="display:flex;"><span>kubectl logs -n <span style="color:#0a3069">&#34;</span><span style="color:#953800">$NS</span><span style="color:#0a3069">&#34;</span> <span style="color:#0a3069">&#34;job/</span><span style="color:#953800">$JOB</span><span style="color:#0a3069">&#34;</span> --tail<span style="color:#0550ae">=</span><span style="color:#0550ae">200</span>
@@ -1786,9 +1805,14 @@ The liveness and readiness probes default to the same TCP check on <code>12800</
 <h2 id="forcing-a-rerun">Forcing a rerun</h2>
 <p>Every <code>helm upgrade</code> with a changed value already reruns init. To rerun it without changing any
 value, delete the Job and upgrade — Helm recreates the now-missing resource:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>kubectl delete job -n skywalking -l <span style="color:#953800">release</span><span style="color:#0550ae">=</span>skywalking
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#57606a"># The release&#39;s current init Job, read from its rendered manifest: right for any chart version and</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># either label style. With `helm template | kubectl apply`, pipe your rendered output into the same</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># awk instead; `kubectl apply` never prunes a Job that a values change replaced.</span>
+</span></span><span style="display:flex;"><span>kubectl delete job -n skywalking <span style="color:#0a3069">&#34;</span><span style="color:#cf222e">$(</span>helm get manifest skywalking -n skywalking <span style="color:#1f2328">|</span> awk <span style="color:#0a3069">&#39;/^kind: Job$/ {j=1} j &amp;&amp; /^  name:/ {gsub(/&#34;/, &#34;&#34;, $2); print $2; exit}&#39;</span><span style="color:#cf222e">)</span><span style="color:#0a3069">&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># Keep the chart version the release already runs (see `helm list -n skywalking`): an older</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># version would also roll back the release&#39;s labels and selectors.</span>
 </span></span><span style="display:flex;"><span>helm upgrade skywalking oci://docker.io/apache/skywalking-helm <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  --version 5.0.0 -n skywalking --reuse-values
+</span></span></span><span style="display:flex;"><span>  --version &lt;current chart version&gt; -n skywalking --reuse-values
 </span></span></code></pre></div><h2 id="see-also">See also</h2>
 <ul>
 <li><a href="../oap-configuration">Configure OAP</a> — the <code>oap.env</code>, <code>oap.javaOpts</code> and config-override values the Job inherits</li>
@@ -1956,6 +1980,16 @@ value, delete the Job and upgrade — Helm recreates the now-missing resource:</
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
 
 
 

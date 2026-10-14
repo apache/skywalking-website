@@ -33,7 +33,7 @@ How OAP replicas find each other The chart runs OAP in Kubernetes cluster mode. 
   <meta itemprop="name" content="Scaling and the OAP Cluster">
   <meta itemprop="description" content="Scaling and the OAP Cluster How this chart forms an OAP cluster on Kubernetes, which values control replica count, pod spreading and sizing, and why the UI must stay at a single replica.
 How OAP replicas find each other The chart runs OAP in Kubernetes cluster mode. SW_CLUSTER is hardwired to kubernetes in chart/skywalking/templates/oap-deployment.yaml — the chart exposes no dedicated value for switching to standalone, zookeeper, etcd, etc. Four environment variables drive it, all rendered by the chart:">
-  <meta itemprop="wordCount" content="1273">
+  <meta itemprop="wordCount" content="1315">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Scaling and the OAP Cluster">
   <meta name="twitter:description" content="Scaling and the OAP Cluster How this chart forms an OAP cluster on Kubernetes, which values control replica count, pod spreading and sizing, and why the UI must stay at a single replica.
@@ -1572,7 +1572,7 @@ How OAP replicas find each other The chart runs OAP in Kubernetes cluster mode. 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 62c64a8</div>
+                  <div class="commit-id">Commit Id: d6d0344</div>
                 
 
 
@@ -1618,7 +1618,7 @@ rendered by the chart:</p>
       <tr>
           <td><code>SW_CLUSTER_K8S_LABEL</code></td>
           <td><code>skywalking.oap.labels</code> helper</td>
-          <td><code>app=skywalking,release=skywalking,component=oap</code></td>
+          <td><code>app.kubernetes.io/name=skywalking-helm,app.kubernetes.io/instance=skywalking,app.kubernetes.io/component=oap</code></td>
       </tr>
       <tr>
           <td><code>SKYWALKING_COLLECTOR_UID</code></td>
@@ -1628,14 +1628,16 @@ rendered by the chart:</p>
   </tbody>
 </table>
 <p>The label selector is built from the release name and <code>oap.name</code>, and it matches exactly the labels
-the OAP Deployment puts on its pods. Each OAP pod watches pods in its own namespace carrying those
+the OAP Deployment puts on its pods. A release installed before 5.1.0 keeps the old form,
+<code>app=skywalking,release=skywalking,component=oap</code>; see
+<a href="../../upgrade/upgrading#labels-and-selectors">Upgrade</a>. Each OAP pod watches pods in its own namespace carrying those
 labels, treats every Ready peer as a cluster member at <em>pod IP + the core gRPC port</em>, and uses
 <code>SKYWALKING_COLLECTOR_UID</code> to recognise which of those pods is itself.</p>
 <p>Two consequences worth knowing:</p>
 <ul>
 <li><strong>Cluster membership is namespace-scoped.</strong> Two releases in different namespaces never join each
-other. Two releases in the <em>same</em> namespace do not join either, because <code>release=</code> is part of the
-selector.</li>
+other. Two releases in the <em>same</em> namespace do not join either, because the release name
+(<code>app.kubernetes.io/instance</code>, or <code>release</code> on an older release) is part of the selector.</li>
 <li><strong>The peer port is OAP&rsquo;s configured core gRPC port, not <code>oap.ports.grpc</code>.</strong> <code>oap.ports.grpc</code>
 only declares the container port and the Service port; the chart does not set <code>SW_CORE_GRPC_PORT</code>.
 If you change <code>oap.ports.grpc</code> away from <code>11800</code>, set the matching backend property too:</li>
@@ -1689,9 +1691,9 @@ namespaced <code>pods</code> read permission yourself, or OAP starts and never d
 </span></span></span><span style="display:flex;"><span>  --set banyandb.image.tag<span style="color:#0550ae">=</span>0.11.0 <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  --set oap.replicas<span style="color:#0550ae">=</span><span style="color:#0550ae">3</span>
 </span></span></code></pre></div><p>or afterwards:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#57606a"># the Deployment carries the same labels the cluster selector uses</span>
-</span></span><span style="display:flex;"><span>kubectl scale deployment -n &lt;namespace&gt; <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  -l <span style="color:#953800">app</span><span style="color:#0550ae">=</span>&lt;release&gt;,release<span style="color:#0550ae">=</span>&lt;release&gt;,component<span style="color:#0550ae">=</span>oap --replicas<span style="color:#0550ae">=</span><span style="color:#0550ae">3</span>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#57606a"># The OAP Deployment is &lt;fullname&gt;-oap: &lt;release&gt;-skywalking-helm-oap by default,</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># &lt;fullnameOverride&gt;-oap when that is set. `kubectl get deployment -n &lt;namespace&gt;` lists it.</span>
+</span></span><span style="display:flex;"><span>kubectl scale deployment -n &lt;namespace&gt; &lt;release&gt;-skywalking-helm-oap --replicas<span style="color:#0550ae">=</span><span style="color:#0550ae">3</span>
 </span></span></code></pre></div><p>(A <code>kubectl scale</code> is transient — the next <code>helm upgrade</code> resets it to <code>oap.replicas</code>.)</p>
 <p>Notes:</p>
 <ul>
@@ -1720,9 +1722,9 @@ need them.</li>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#0550ae">topologyKey</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>kubernetes.io/hostname<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#0550ae">labelSelector</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">          </span><span style="color:#0550ae">matchLabels</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking&#34;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">release</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking&#34;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">component</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;oap&#34;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app.kubernetes.io/name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking-helm&#34;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app.kubernetes.io/instance</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking&#34;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app.kubernetes.io/component</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;oap&#34;</span><span style="color:#fff">
 </span></span></span></code></pre></div><p><code>hard</code> renders a requirement:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">affinity</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">podAntiAffinity</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -1730,10 +1732,11 @@ need them.</li>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span>- <span style="color:#0550ae">topologyKey</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;kubernetes.io/hostname&#34;</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">        </span><span style="color:#0550ae">labelSelector</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">          </span><span style="color:#0550ae">matchLabels</span><span style="color:#1f2328">:</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking&#34;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">release</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking&#34;</span><span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">component</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;oap&#34;</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>With <code>hard</code>, at most one OAP pod runs per node — so <code>oap.replicas</code> greater than the number of
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app.kubernetes.io/name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking-helm&#34;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app.kubernetes.io/instance</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;skywalking&#34;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">            </span><span style="color:#0550ae">app.kubernetes.io/component</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;oap&#34;</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>A release installed before 5.1.0 renders <code>app</code>, <code>release</code> and <code>component</code> there instead.</p>
+<p>With <code>hard</code>, at most one OAP pod runs per node — so <code>oap.replicas</code> greater than the number of
 schedulable nodes leaves the surplus pods <code>Pending</code> forever. Any other value (including <code>&quot;&quot;</code>) renders
 no <code>podAntiAffinity</code> at all; the <code>if</code>/<code>else if</code> chain matches only these two strings.</p>
 <p>The remaining scheduling knobs are passed through verbatim:</p>
@@ -1980,6 +1983,16 @@ restarting</li>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
 
 
 
