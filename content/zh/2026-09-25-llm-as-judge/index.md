@@ -178,7 +178,7 @@ tasks:
 
 ### 3. 接收 GenAI Trace
 
-启动 OAP 并接收 GenAI Trace。GenAI 可观测性接入方式请参考[GenAI 可观测性接入指南](../2026-04-05-virtual-genai-monitoring/)。请确认采集链路包含 `gen_ai.input.messages` 和 `gen_ai.output.messages`；否则 Span 不会进入评估队列。
+启动 OAP 并接收 GenAI Trace。GenAI 可观测性接入方式请参考[GenAI 可观测性接入指南](../2026-04-05-virtual-genai-monitoring/index.md)。请确认采集链路包含 `gen_ai.input.messages` 和 `gen_ai.output.messages`；否则 Span 不会进入评估队列。
 
 ### 4. 查看评估记录
 

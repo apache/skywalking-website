@@ -151,7 +151,7 @@ Every task result contains `value` and `reason`. SCORE metrics are stored in PPM
 
 ### 3. Receive GenAI traces
 
-Start OAP and send GenAI traces to SkyWalking. See the [GenAI observability guide](https://skywalking.apache.org/zh/2026-04-05-virtual-genai-monitoring/) for instrumentation details. Make sure the ingestion path exports `gen_ai.input.messages` and `gen_ai.output.messages`; otherwise the span will not enter the evaluation queue.
+Start OAP and send GenAI traces to SkyWalking. See the [GenAI observability guide](../2026-04-05-virtual-genai-monitoring/index.md) for instrumentation details. Make sure the ingestion path exports `gen_ai.input.messages` and `gen_ai.output.messages`; otherwise the span will not enter the evaluation queue.
 
 ### 4. View evaluation records
 
