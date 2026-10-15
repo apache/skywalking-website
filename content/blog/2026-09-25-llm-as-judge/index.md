@@ -2,7 +2,7 @@
 title: "How Good Are LLM Answers? Bringing Model Quality into SkyWalking Observability"
 author: "peachisai"
 date: 2026-09-25
-description: "Learn how SkyWalking 10.5.0 uses LLM-as-Judge to evaluate GenAI span input and output messages asynchronously and connect the results to evaluation records, metrics, and traces."
+description: "Learn how the upcoming SkyWalking 11.1.0 release uses LLM-as-Judge to evaluate GenAI span input and output messages asynchronously and connect the results to evaluation records, metrics, and traces."
 tags:
   - LLM as judge
   - AI evaluation
@@ -13,7 +13,7 @@ tags:
 
 Traditional observability focuses on service error rates and latency. These signals do not tell us whether an LLM response is grounded in its context, relevant to the question, or complete. A knowledge-base assistant may return a well-formatted and confident answer without evidence. The trace can still be successful while users consider the answer unreliable. In an AI gateway or agent, model versions, provider health, and routing policies can also change and affect response quality.
 
-SkyWalking already provides OpenTelemetry-based GenAI observability for request volume, success rate, latency, tokens, and estimated cost. SkyWalking 10.5.0 adds LLM-as-Judge on top of this foundation. For sampled GenAI spans, it sends the input and output messages to an OpenAI-compatible judge model, produces configurable evaluation results, and associates them with an evaluation record and the source trace. SCORE tasks also produce a metric for the Virtual GenAI Dashboard and alarms.
+SkyWalking already provides OpenTelemetry-based GenAI observability for request volume, success rate, latency, tokens, and estimated cost. The upcoming SkyWalking 11.1.0 release adds LLM-as-Judge on top of this foundation. For sampled GenAI spans, it sends the input and output messages to an OpenAI-compatible judge model, produces configurable evaluation results, and associates them with an evaluation record and the source trace. SCORE tasks also produce a metric for the Virtual GenAI Dashboard and alarms.
 
 ## Why use LLM-as-Judge with SkyWalking?
 
@@ -40,6 +40,8 @@ GenAI span (with non-empty input/output messages)
 Evaluation runs asynchronously after trace processing and does not synchronously block trace ingestion. The module only processes GenAI spans that contain both non-empty `gen_ai.input.messages` and `gen_ai.output.messages`; spans missing either attribute are skipped.
 
 ## Usage
+
+This guide targets SkyWalking 11.1.0. Until that version is released, use an `11.1.0-SNAPSHOT` development build.
 
 ### 1. Enable the module
 
@@ -151,7 +153,7 @@ Every task result contains `value` and `reason`. SCORE metrics are stored in PPM
 
 ### 3. Receive GenAI traces
 
-Start OAP and send GenAI traces to SkyWalking. See the [GenAI observability guide](../2026-04-05-virtual-genai-monitoring/index.md) for instrumentation details. Make sure the ingestion path exports `gen_ai.input.messages` and `gen_ai.output.messages`; otherwise the span will not enter the evaluation queue.
+Start OAP and send GenAI traces to SkyWalking. See the [GenAI observability guide](../2026-04-05-virtual-genai-monitoring/) for instrumentation details. Make sure the ingestion path exports `gen_ai.input.messages` and `gen_ai.output.messages`; otherwise the span will not enter the evaluation queue.
 
 ### 4. View evaluation records
 

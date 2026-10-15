@@ -2,7 +2,7 @@
 title: "LLM 回答得好不好？用 SkyWalking 把模型质量数据融入可观测性平台"
 author: "peachisai"
 date: 2026-09-25
-description: "介绍 SkyWalking 10.5.0 的 LLM-as-Judge 功能：读取 GenAI Span 的输入和输出消息，异步评估真实请求，并将结果写入评估记录、指标和 Trace。"
+description: "介绍即将在 SkyWalking 11.1.0 中发布的 LLM-as-Judge 功能：读取 GenAI Span 的输入和输出消息，异步评估真实请求，并将结果写入评估记录、指标和 Trace。"
 tags:
   - LLM as judge
   - AI evaluation
@@ -13,7 +13,7 @@ tags:
 
 传统可观测性通常关注服务接口的错误率和延迟，但这些指标无法说明 LLM 的回答是否忠实于上下文、切中问题或完成了任务。知识库问答可能返回格式完整、语气肯定，却没有依据的答案；请求在 Trace 中显示成功，业务用户仍然会觉得 AI“不靠谱”。在 AI 中转或代理场景中，模型版本、供应商状态和路由策略也可能变化，导致回答质量下降。
 
-SkyWalking 已经支持基于 OpenTelemetry 的 GenAI 可观测性，可以观察调用量、成功率、延迟、Token 和预估成本等数据。SkyWalking 10.5.0 在此基础上增加了 LLM-as-Judge：对采样到的 GenAI Span 输入/输出消息调用一个 OpenAI-compatible Judge 模型，生成可配置的质量评估结果，并将结果关联到评估记录和原始 Trace。SCORE 类型的任务还会生成指标，供 Virtual GenAI Dashboard 和告警使用。
+SkyWalking 已经支持基于 OpenTelemetry 的 GenAI 可观测性，可以观察调用量、成功率、延迟、Token 和预估成本等数据。即将发布的 SkyWalking 11.1.0 在此基础上增加了 LLM-as-Judge：对采样到的 GenAI Span 输入/输出消息调用一个 OpenAI-compatible Judge 模型，生成可配置的质量评估结果，并将结果关联到评估记录和原始 Trace。SCORE 类型的任务还会生成指标，供 Virtual GenAI Dashboard 和告警使用。
 
 ## 为什么需要接入 SkyWalking 的 LLM-as-Judge 功能
 
@@ -42,6 +42,8 @@ SkyWalking 已经支持基于 OpenTelemetry 的 GenAI 可观测性，可以观�
 评估在 Trace 处理之后异步执行，不会同步阻塞 Trace 接收。模块只处理同时包含非空 `gen_ai.input.messages` 和 `gen_ai.output.messages` 的 GenAI Span；缺少任一属性的 Span 会被跳过。
 
 ## 使用文档
+
+本文面向 SkyWalking 11.1.0。在该版本正式发布前，请使用 `11.1.0-SNAPSHOT` 开发版本。
 
 ### 1. 开启模块
 
@@ -178,7 +180,7 @@ tasks:
 
 ### 3. 接收 GenAI Trace
 
-启动 OAP 并接收 GenAI Trace。GenAI 可观测性接入方式请参考[GenAI 可观测性接入指南](../2026-04-05-virtual-genai-monitoring/index.md)。请确认采集链路包含 `gen_ai.input.messages` 和 `gen_ai.output.messages`；否则 Span 不会进入评估队列。
+启动 OAP 并接收 GenAI Trace。GenAI 可观测性接入方式请参考[GenAI 可观测性接入指南](../2026-04-05-virtual-genai-monitoring/)。请确认采集链路包含 `gen_ai.input.messages` 和 `gen_ai.output.messages`；否则 Span 不会进入评估队列。
 
 ### 4. 查看评估记录
 
