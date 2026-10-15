@@ -35,7 +35,7 @@ SkyWalking is the first open-source project that introduced an ALS-based solutio
   <meta itemprop="description" content="Observe Service Mesh through ALS Envoy Access Log Service (ALS) provides full logs on routed RPC, including HTTP and TCP.
 Background The solution was initialized and first implemented by Sheng Wu, Hongtao Gao, Lizan Zhou, and Dhi Aurrahman on May 17, 2019, and was presented at KubeCon China 2019. Here is a video recording of the presentation.
 SkyWalking is the first open-source project that introduced an ALS-based solution to the world. This solution provides a new take on observability with a lightweight payload on the service mesh.">
-  <meta itemprop="wordCount" content="631">
+  <meta itemprop="wordCount" content="1207">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Observe Service Mesh through ALS">
   <meta name="twitter:description" content="Observe Service Mesh through ALS Envoy Access Log Service (ALS) provides full logs on routed RPC, including HTTP and TCP.
@@ -3856,7 +3856,7 @@ SkyWalking is the first open-source project that introduced an ALS-based solutio
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 7f6a353</div>
+                  <div class="commit-id">Commit Id: d13cf73</div>
                 
 
 
@@ -3994,7 +3994,74 @@ analyzers to analyze the access logs. When multiple analyzers are specified, it 
 SkyWalking loops over the analyzers and use them to analyze the logs. Once there is an analyzer that is able to produce a
 result, it stops the loop.</p>
 <h3 id="k8s-mesh"><code>k8s-mesh</code></h3>
-<p><code>k8s-mesh</code> uses the metadata from Kubernetes clusters, hence in this analyzer, OAP needs access roles to <code>Pod</code>, <code>Service</code>, and <code>Endpoints</code>.</p>
+<p><code>k8s-mesh</code> uses the metadata from Kubernetes clusters, hence in this analyzer, OAP needs access roles to <code>Pod</code>, <code>Service</code>, <code>Endpoints</code> and <code>Node</code>,
+and to Istio <code>ServiceEntry</code> when Istio is installed.</p>
+<h4 id="how-the-kubernetes-metadata-is-read-and-cached">How the Kubernetes metadata is read and cached</h4>
+<p>The metadata is read from the Kubernetes API server in the background, so analyzing an access log never waits for it.
+Two reader lanes run one read at a time each: one for the first reads MAL waits for (see <code>retagByK8sMeta</code> in
+<a href="../../../concepts-and-designs/mal#retagbyk8smeta">MAL</a>), and one for every other read, including all reads again. A key,
+such as an IP, has one pending read at most, shared by its lookups in either lane. The HTTP and TCP access log analyzers
+share their lookups. An IP seen for the first time is analyzed as unknown while it is read, and the access logs after the
+read are analyzed with what it found.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Read result</th>
+          <th>The lookup gets</th>
+          <th>Read again from the API server</th>
+          <th>Dropped</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Data found</td>
+          <td>the data</td>
+          <td>in the background, on the first use <code>k8sMetadataRefreshPeriod</code> (3 minutes) after it was written</td>
+          <td><code>k8sMetadataCacheTime</code> (21 minutes) after it was last written</td>
+      </tr>
+      <tr>
+          <td>Nothing found, such as for an IP outside the cluster</td>
+          <td>unknown</td>
+          <td>on the first use <code>k8sMetadataNotFoundRetryPeriod</code> (1 minute) after it was written</td>
+          <td>the same</td>
+      </tr>
+      <tr>
+          <td>A failed read, such as for a 403, a 5xx or the API server not answering</td>
+          <td>unknown</td>
+          <td>on the first use <code>k8sMetadataRefreshPeriod</code> (3 minutes) after it failed</td>
+          <td>the same</td>
+      </tr>
+      <tr>
+          <td>Not queued, as the lane&rsquo;s queue is full</td>
+          <td>unknown</td>
+          <td>on the next lookup</td>
+          <td>not cached</td>
+      </tr>
+  </tbody>
+</table>
+<ul>
+<li>A read again that returns data, the same or not, writes it again. A read again of data that finds nothing or fails does
+not: the data is kept, read again on the first use <code>k8sMetadataRefreshPeriod</code> later, and dropped
+<code>k8sMetadataCacheTime</code> after it was last written, unless a read again finds data. A read again of an entry without
+data writes what it finds, or that it failed.</li>
+<li>The lists the reads match against, of all endpoints, services, nodes and ServiceEntries, are read again once three
+minutes old. A pod not in the endpoints read may be newer than them, so they are read again for it when they are older
+than <code>k8sMetadataNotFoundRetryPeriod</code>. A list read that fails keeps the list read before; with none, the failure is
+kept, so the reads needing the list fail without reading it. A resource the API server does not serve, such as
+ServiceEntries without Istio, is an empty list. After a failure or such a 404, the list is not read again for three
+minutes, even for a pod not in it. Without the nodes, such as without the permission to
+list them, no IP is taken for a node&rsquo;s.</li>
+<li>Lookup reads are sent without the Kubernetes client&rsquo;s retries, so a failing read holds the reads queued behind it for
+a single attempt, up to the client&rsquo;s timeouts, instead of through the client&rsquo;s retries and backoff.</li>
+</ul>
+<p>All are set in <code>core.default</code>: <code>k8sMetadataRefreshPeriod</code> (<code>SW_CORE_K8S_METADATA_REFRESH_PERIOD</code>) and
+<code>k8sMetadataNotFoundRetryPeriod</code> (<code>SW_CORE_K8S_METADATA_NOT_FOUND_RETRY_PERIOD</code>) in minutes; <code>k8sMetadataCacheTime</code>
+(<code>SW_CORE_K8S_METADATA_CACHE_TIME</code>) per cache, as <code>als=&lt;minutes&gt;,mal=&lt;minutes&gt;</code>, <code>als</code> for these lookups and <code>mal</code> for
+MAL and the eBPF access log; and <code>k8sMetadataReadQueueSize</code> (<code>SW_CORE_K8S_METADATA_READ_QUEUE_SIZE</code>, no limit by
+default), the most reads waiting at once per lane, as <code>als=&lt;size&gt;,mal=&lt;size&gt;</code>, whose refused reads are summarized at WARN.</p>
+<p>A failed read, such as for a missing permission, is logged as one ERROR line naming the failing reads a minute after the
+first failure, then every five minutes while it lasts; a resource the API server does not serve is not logged.
+ServiceEntry hostnames that fail to resolve are summarized the same way at WARN.</p>
 <p>The <a href="https://skywalking.apache.org/blog/2020-12-03-obs-service-mesh-with-sw-and-als/">blog</a> illustrates the details of how it works and a step-by-step tutorial to apply it to the <code>bookinfo</code> application.</p>
 <h3 id="mx-mesh"><code>mx-mesh</code></h3>
 <p><code>mx-mesh</code> uses the Envoy metadata exchange mechanism to get the service name, etc.
@@ -4005,7 +4072,7 @@ or if you&rsquo;re using Istio 1.7+ and installing it with profile <code>demo</c
 <p><code>persistence</code> analyzer adapts the Envoy access log format to
 SkyWalking&rsquo;s <a href="https://github.com/apache/skywalking-data-collect-protocol/blob/master/logging/Logging.proto">native log format</a>, and forwards the formatted logs to <a href="../../../concepts-and-designs/lal">LAL</a>, where you can configure persistent
 conditions, such as <code>sampler</code>, only persist error logs, etc. SkyWalking provides a default configuration
-file <a href="https://github.com/apache/skywalking/tree/7f6a353a8bd3f0c55d0a9a068f1e36a33457ceb4/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml"><code>envoy-als.yaml</code></a> that you can
+file <a href="https://github.com/apache/skywalking/tree/d13cf739968e22a6030dc8ec60e431299e45093c/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml"><code>envoy-als.yaml</code></a> that you can
 adjust as per your needs. Please make sure to activate this rule via adding the rule name <code>envoy-als</code>
 into config item <code>log-analyzer/default/lalFiles</code> (or environment variable <code>SW_LOG_LAL_FILES</code>,
 e.g. <code>SW_LOG_LAL_FILES=envoy-als</code>).</p>
