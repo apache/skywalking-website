@@ -1,4 +1,4 @@
----
+﻿---
 title: "How Good Are LLM Answers? Bringing Model Quality into SkyWalking Observability"
 author: "peachisai"
 date: 2026-09-25
@@ -174,3 +174,4 @@ Click the Trace link in the upper-right corner to open the source trace and insp
 ![model-dashboard.png](model-dashboard.png)
 
 The Virtual GenAI Dashboard provides the `gen_ai_model_evaluation_score_ppm` metric. View SCORE trends by service instance, model, and task, and create alarms from the metric. Also monitor `ai_evaluation_dropped_count` and `ai_evaluation_error_count` so evaluation throughput problems are not mistaken for model quality regressions.
+
