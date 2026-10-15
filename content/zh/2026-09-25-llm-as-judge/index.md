@@ -1,7 +1,7 @@
 ﻿---
 title: "LLM 回答得好不好？用 SkyWalking 把模型质量数据融入可观测性平台"
 author: "peachisai"
-date: 2026-09-25
+date: 2026-10-15
 description: "介绍即将在 SkyWalking 11.1.0 中发布的 LLM-as-Judge 功能：读取 GenAI Span 的输入和输出消息，异步评估真实请求，并将结果写入评估记录、指标和 Trace。"
 tags:
   - LLM as judge

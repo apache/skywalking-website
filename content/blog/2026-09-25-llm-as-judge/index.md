@@ -1,7 +1,7 @@
 ﻿---
 title: "How Good Are LLM Answers? Bringing Model Quality into SkyWalking Observability"
 author: "peachisai"
-date: 2026-09-25
+date: 2026-10-15
 description: "Learn how the upcoming SkyWalking 11.1.0 release uses LLM-as-Judge to evaluate GenAI span input and output messages asynchronously and connect the results to evaluation records, metrics, and traces."
 tags:
   - LLM as judge
