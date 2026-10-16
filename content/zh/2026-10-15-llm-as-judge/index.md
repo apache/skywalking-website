@@ -11,7 +11,7 @@ tags:
 
 ## 介绍
 
-传统可观测性关注服务的错误率和延迟，但这些指标说明不了 LLM 的回答有没有上下文依据、是否切题、是否完整。知识库助手可能给出格式规范、语气笃定却没有依据的答案：Trace 显示请求成功，用户却觉得答案靠不住。在 AI 网关和探针中，模型版本、模型服务商的运行状态和路由策略也会变化，进而影响回答质量。
+传统可观测性关注服务的错误率和延迟，但这些指标说明不了 LLM 的回答有没有上下文依据、是否切题、是否完整。知识库助手可能给出格式规范、语气笃定却没有依据的答案：Trace 显示请求成功，用户却觉得答案靠不住。在 AI 网关或智能体中，模型版本、模型服务商的运行状态和路由策略也会变化，进而影响回答质量。
 
 SkyWalking 已经基于 OpenTelemetry 提供 GenAI 可观测性，可以查看调用量、成功率、延迟、Token 用量和预估费用。即将发布的 SkyWalking 11.1.0 在此基础上加入了 LLM-as-Judge。OAP 从采样到的 GenAI Span 中取出输入和输出消息，发给一个 OpenAI-compatible 的 Judge 模型。Judge 按配置的任务评估回答质量，OAP 把结果存为评估记录，并关联到原始 Trace。`SCORE` 类型的任务还会生成指标，供 Virtual GenAI Dashboard 和告警使用。
 
@@ -178,6 +178,8 @@ export SW_PLUGIN_SPRINGAI_COLLECT_OUTPUT_MESSAGES=true
 
 通过 OTLP 或 Zipkin 接入时，请确认采集端会导出 `gen_ai.input.messages` 和 `gen_ai.output.messages`。缺少任一属性的 Span 不会进入评估队列。
 
+通过 OTLP 接入时，OAP 11.1.0 默认原生存储 Span（`otlpTraceStorage: otlp`），并直接评估这些 Span，无需转换为 Zipkin 格式。
+
 ### 4. 查看评估记录
 
 ![Horizon UI 中 Virtual GenAI 的评估记录页面](evaluation-record-list.png)
@@ -190,7 +192,9 @@ export SW_PLUGIN_SPRINGAI_COLLECT_OUTPUT_MESSAGES=true
 
 ![评估记录详情，右上角是 trace 链接](record-detail.png)
 
-有 `traces:read` 权限时，点击右上角的 **trace** 链接，即可打开原始 Trace，查看采集到的 Agent 交互、LLM 调用和外部工具调用。来自 SkyWalking 原生 Trace 的记录（如下图）可以直接打开。来自 OTLP Trace 的记录会通过 Zipkin Trace 视图打开，只有 OAP 把 OTLP Span 转成 Zipkin 格式时才能找到：需要设置 `SW_OTEL_TRACE_STORAGE=zipkin`，并开启 `receiver-zipkin` 和 `query-zipkin`。OAP 11.1.0 默认按原生格式存储 OTLP Span。
+对于来自 SkyWalking 原生 Trace 的记录（如下图），有 `traces:read` 权限的用户可以点击右上角的 **trace** 链接，打开原始 Trace，查看采集到的 Agent 交互、LLM 调用和外部工具调用。
+
+Horizon UI 的 `main` 分支目前还不支持从 OTLP 评估记录跳转到原生存储的原始 Trace。这项 UI 限制不影响评估记录的生成和查询。
 
 ![本次评估对应的 GenAI Span 及其原始 Trace](jump-to-trace.png)
 

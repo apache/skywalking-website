@@ -178,6 +178,8 @@ export SW_PLUGIN_SPRINGAI_COLLECT_OUTPUT_MESSAGES=true
 
 For OTLP and Zipkin ingestion, make sure the instrumentation exports `gen_ai.input.messages` and `gen_ai.output.messages`. A span missing either attribute does not enter the evaluation queue.
 
+For OTLP ingestion, OAP 11.1.0 stores spans natively by default (`otlpTraceStorage: otlp`) and evaluates those spans directly, without converting them into Zipkin form.
+
 ### 4. View evaluation records
 
 ![Evaluation records page of Virtual GenAI in Horizon UI](evaluation-record-list.png)
@@ -190,7 +192,9 @@ Click a record to view its details:
 
 ![Evaluation record details with the trace link in the upper-right corner](record-detail.png)
 
-With the `traces:read` permission, click the **trace** link in the upper-right corner to open the source trace and inspect the recorded agent interactions, LLM calls, and external tool calls. A record from a SkyWalking native trace, like the one below, opens directly. A record from an OTLP trace opens through the Zipkin trace view, which finds the trace only when OAP converts OTLP spans into Zipkin form: set `SW_OTEL_TRACE_STORAGE=zipkin` and enable `receiver-zipkin` and `query-zipkin`. OAP 11.1.0 stores OTLP spans natively by default.
+For a record from a SkyWalking native trace, like the one below, users with the `traces:read` permission can click the **trace** link in the upper-right corner to open the source trace and inspect the recorded agent interactions, LLM calls, and external tool calls.
+
+Horizon UI `main` does not yet support following an OTLP evaluation record to its natively stored source trace. This UI limitation does not prevent evaluation records from being generated or queried.
 
 ![Source trace of the evaluated GenAI span](jump-to-trace.png)
 
