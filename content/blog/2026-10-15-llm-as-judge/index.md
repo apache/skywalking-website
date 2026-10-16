@@ -194,9 +194,9 @@ Click a record to view its details:
 
 For a record from a SkyWalking native trace, like the one below, users with the `traces:read` permission can click the **trace** link in the upper-right corner to open the source trace and inspect the recorded agent interactions, LLM calls, and external tool calls.
 
-Horizon UI `main` does not yet support following an OTLP evaluation record to its natively stored source trace. This UI limitation does not prevent evaluation records from being generated or queried.
-
 ![Source trace of the evaluated GenAI span](jump-to-trace.png)
+
+Horizon UI `main` does not yet support following an OTLP evaluation record to its natively stored source trace. This UI limitation does not prevent evaluation records from being generated or queried.
 
 ### 6. View quality metrics in the Dashboard
 
