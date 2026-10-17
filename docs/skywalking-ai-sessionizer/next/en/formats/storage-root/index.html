@@ -33,7 +33,7 @@
   <meta itemprop="name" content="Storage Root">
   <meta itemprop="description" content="Storage Root The storage root is a directory. Everything the project keeps is under it, in two halves: what was collected, one directory per session, and what was assembled, one directory per conversation. Beside them sit the metrics spool and the export state, which belong to the root rather than to a session.
 &lt;root&gt;/ &lt;session-id&gt;/ session.state next_seq, liveness (always unknown), last scan .lock one collector per session removing.json a removal in progress, see Retention removal.state the generation of the last removal that deleted files provider/ the bytes of removed chain tips and pieces, see Retention metrics/ immutable decisions of local metric derivation 000001.json exact request and accounting for landed file 1 streams/ main/ transcript.cursor how far the source has been read transcript-&lt;collected-at&gt;-&lt;seq&gt;.sd transcript-&lt;collected-at&gt;-&lt;seq&gt;.sk the skeleton of a landed file retention removed changes.cursor the plugin&#39;s change records for the stream, when changes-&lt;collected-at&gt;-&lt;seq&gt;.sd the asz Claude Code plugin is installed execution.cursor the plugin&#39;s execution records for the stream: which execution-&lt;collected-at&gt;-&lt;seq&gt;.sd MCP server each call went to, and how it ended &lt;agent-id&gt;/ one directory per child agent transcript.cursor transcript-&lt;collected-at&gt;-&lt;seq&gt;.sd meta.cursor meta-&lt;collected-at&gt;-&lt;seq&gt;.sd runs/ &lt;run-id&gt;/ one directory per workflow run journal.cursor · journal-…sd manifest.cursor · manifest-…sd script.cursor · script-…sd provider_body/ the bodies the runtime exchanged with its model provider_body-&lt;collected-at&gt;-&lt;seq&gt;.sd provider, when claude-code-provider collects them index/ entries.bin the derived index index.state how far the index reaches _conversations/ &lt;conversation-id&gt;/ conversation.state the head pointer, outside every digest .lock one parser per chain rounds/ r000001-&lt;digest&gt;.sf r000002-&lt;digest&gt;.sf _provider/ when claude-code-provider runs seen.state which body files landed, in which session, and which wait .lock one provider collector per root _metrics/ the metrics spool, when metrics are on and sent .lock one derivation per root metrics.state what the derivation has counted metrics-&lt;session-id&gt;-&lt;seq&gt;-local.pb the points derived from the session&#39;s landed file &lt;seq&gt; push.state what has been sent: each file&#39;s digest, the receivers, the owner of each session, and the files a receiver rejected records of _root/ .lock one writing command per root, for one pass _export/ .lock one pusher per root _scenario/ only in a root a claude-code scenario build wrote .lock one pipeline per scenario root _removed/ what a removal of a scenario session is deleting &lt;session-id&gt;/ the session directory, moved here whole &lt;session-id&gt;.chain/ its conversation&#39;s directory, moved here whole Child streams are flat siblings of main, keyed by agent id. Provider bodies sit under the session, not under a stream, because a body names no stream; the view joins each to its call. The storage path deliberately does not mirror the source tree: a path must not encode a relationship the pipeline is supposed to derive. OTLP Records says how the metrics spool fills and what push.state records. _scenario/ and _removed/ exist only in a root a scenario build wrote. Retention says what they are for.">
-  <meta itemprop="wordCount" content="7217">
+  <meta itemprop="wordCount" content="7307">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Storage Root">
   <meta name="twitter:description" content="Storage Root The storage root is a directory. Everything the project keeps is under it, in two halves: what was collected, one directory per session, and what was assembled, one directory per conversation. Beside them sit the metrics spool and the export state, which belong to the root rather than to a session.
@@ -1554,7 +1554,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: eb30aba</div>
+                  <div class="commit-id">Commit Id: c001d1f</div>
                 
 
 
@@ -2031,26 +2031,29 @@ The store had also outlived its source: it held 48 sessions where the source dir
 44.</p>
 <h2 id="retention">Retention</h2>
 <h3 id="storageretention">storage.retention</h3>
-<p><code>storage.retention</code> removes the landed files of a conversation that has been idle for longer than
-it, by asz&rsquo;s clock: nothing new has landed in any of its streams since. It is <code>-1</code> by default, which
-keeps everything. A pipeline, <code>asz collect</code> or <code>asz server</code>, removes at the end of a pass, after the
-send. A session&rsquo;s files go together, every landed file of it through its newest, never some of
-them. A session keeps them while any of these holds:</p>
+<p><code>storage.retention</code> says how long an idle conversation keeps what in the root. A conversation is
+idle for as long as nothing new has landed in any of its streams, by asz&rsquo;s clock: the time is read
+from the header of its newest landed file. Whether it was sent, and whether an endpoint is set, does
+not change that. Each setting is <code>-1</code>, off, by default, and only off keeps everything.</p>
+<p><code>storage.retention.metadata_only_after</code> keeps only the metadata of a conversation idle for longer
+than it, to save disk: it removes the landed files and keeps a skeleton of each. A pipeline, <code>asz collect</code> or <code>asz server</code>, removes at the end of a pass, after the send. A session&rsquo;s files go
+together, every landed file of it through its newest, never some of them. A session keeps them
+while any of these holds:</p>
 <ul>
-<li>Nothing of it was ever sent, or tried to be: <code>push.state</code> names no owner for it.</li>
 <li>Something landed for it within the retention.</li>
 <li>Its head round does not reach its newest landed file, or its parse failed this pass.</li>
 <li>With metrics derived, a landed file of it is not derived yet.</li>
 </ul>
-<p>Sending is not waited for. A receiver that is down for longer than the retention misses the files
-removed meanwhile, and asz does not send them again. A scenario root keeps its own removal, below,
-and retention never runs over it.</p>
+<p>Sending is neither waited for nor needed. A receiver that is down for longer than the retention
+misses the files removed meanwhile, and asz does not send them again. The content of a conversation
+never sent is gone everywhere once its files are removed, and its skeletons say that no receiver
+confirmed them. A scenario root keeps its own removal, below, and retention never runs over it.</p>
 <p>Each removed file is replaced by its skeleton, <code>&lt;name&gt;.sk</code> in the same directory, written once and
 read-only. A <a href="../session-data#skeletons">skeleton</a> keeps every record and every part in its place,
 with every field the index is built from, and none of the content: text, data and media go. The
 index rebuilt from a skeleton is the index rebuilt from its file, so a conversation that becomes
 active again continues the same chain, with the same rounds, as if nothing was removed. Its text
-is kept only by the receiver it was sent to. A skeleton is never sent. Measured on 2026-10-13 on
+is kept only by a receiver that accepted it. A skeleton is never sent. Measured on 2026-10-13 on
 one machine&rsquo;s root, 7,235 landed files of 847.5 MB had skeletons of 29.6 MB, 3.5% of them: 3.5%
 for transcripts, under 5% for workflow files, and 77% for child agents&rsquo; sidecars, which are mostly
 identifiers. Its 16 provider body files of 133 KB had skeletons of 13.6 KB, 10% of them, 0.7 KB of
@@ -2158,10 +2161,12 @@ for each missing file in each round. A node that stood on a missing record has n
 content state. With no rounds there is no document. <code>asz conversation</code> refuses the conversation
 with a <code>no rounds</code> error, and so does the request for the document behind the page.</p>
 <h3 id="a-scenario-root">A scenario root</h3>
-<p>asz removes a collected session on its own in one case only: a session a <code>claude-code</code> scenario
-build wrote. <a href="../../guides/scenario#removal-a-session-goes-once-it-is-sent">Scenarios</a> describes
-the policy. A real Claude Code session is never removed. Only the build writes the marker a removal
-needs, and the product configuration has no removal setting.</p>
+<p>asz removes a collected session whole on its own in one case only: a session a <code>claude-code</code>
+scenario build wrote. <a href="../../guides/scenario#removal-a-session-goes-once-it-is-sent">Scenarios</a>
+describes the policy. A real session is never removed whole. Only the build writes the marker a
+whole removal needs. <a href="#retention">Retention</a>, when it is set, removes the landed content of an idle
+conversation, and keeps its structure, in any root but one with <code>_scenario/</code>: an sd build&rsquo;s
+included.</p>
 <p>The build writes one marker for each session, <code>DIR/_source/.asz-scenario/&lt;session-id&gt;.json</code>, and a
 pipeline reads it under the <code>source_root</code> of <code>claude-code-local</code>. The build writes it after every
 other file of the session, so the marker proves the build finished writing the session. It names
