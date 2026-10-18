@@ -33,7 +33,7 @@ sources Discovers sessions under the source root and counts their files without 
   <meta itemprop="name" content="Command Line Internals">
   <meta itemprop="description" content="Command Line Internals The details behind Command Line: what each report counts, how the page reads a storage root, how verify proves a stream whole, and how a scenario root behaves.
 sources Discovers sessions under the source root and counts their files without landing anything. The first line names the source root it resolved. Sessions removed by the include and exclude filters are counted on the filtered line. Then comes one row per session: directories, execution streams, child-agent sidecars, workflow journals and manifests. A line with the total of sessions and streams follows the table.">
-  <meta itemprop="wordCount" content="4735">
+  <meta itemprop="wordCount" content="5024">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Command Line Internals">
   <meta name="twitter:description" content="Command Line Internals The details behind Command Line: what each report counts, how the page reads a storage root, how verify proves a stream whole, and how a scenario root behaves.
@@ -1554,7 +1554,7 @@ sources Discovers sessions under the source root and counts their files without 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c001d1f</div>
+                  <div class="commit-id">Commit Id: f6e3274</div>
                 
 
 
@@ -1640,12 +1640,29 @@ response names no session, so it is counted only. See
 leaving them for the next one.</p>
 <p>With <code>storage.retention.metadata_only_after</code> set, a pass then keeps only the metadata of every
 conversation idle for longer, sent or not: it removes the landed files and leaves a skeleton in
-each one&rsquo;s place. Before it lands anything, every pass finishes a removal an earlier one left in
-progress, whatever the setting says now. A scenario root keeps its own removal, and retention never
-runs there. See <a href="../../formats/storage-root#retention">Retention</a>. The startup lines say the
+each one&rsquo;s place. With <code>storage.retention.retire_after</code> set, a pass first retires every
+conversation idle for longer: everything of it is removed, and it is never collected again. Before
+it lands anything, every pass finishes a removal or a retirement an earlier one left in progress,
+whatever the settings say now. A scenario root keeps its own removal, and retention never runs
+there. See <a href="../../formats/storage-root#retention">Retention</a>. The startup lines say the
 retention:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>retention: a conversation idle for 72h0m0s keeps only its metadata; its content is removed, and only a receiver that accepted it still has it
-</span></span></code></pre></div><p>When metrics are turned on after a conversation kept only its metadata, the skeletons give its
+</span></span><span style="display:flex;"><span>retention: a conversation idle for 2160h0m0s is retired: everything of it is removed, and it is never collected again, even when its runtime resumes it
+</span></span><span style="display:flex;"><span>warning  : Kiro keeps a session until it is deleted; storage.retention.retire_after is 90 days. A session resumed after it is retired is not collected.
+</span></span></code></pre></div><p>When both durations are the same, a conversation is retired without first keeping only its metadata.
+Only the second retention line is said. <code>asz parse</code> and <code>asz push</code> finish a retirement left in
+progress before they do anything else.</p>
+<p>With <code>retire_after</code> set, <code>warning  :</code> lines follow the retention lines.
+The Kiro line above appears when <code>kiro-local</code> is enabled.
+For <code>claude-code-local</code>, asz reports what it could inspect in Claude Code&rsquo;s settings.
+It says that effective retention was not determined. It also warns when <code>retire_after</code> is shorter
+than the inspected <code>cleanupPeriodDays</code> or the reported default of 30 days.
+The inspected value does not establish Claude Code&rsquo;s effective retention.
+See <a href="../../formats/storage-root#retirement">Retirement</a> for the inspection&rsquo;s limits.
+<code>asz sources</code> prints the same lines for each runtime. The list page shows a retention warning in
+its refresh status and the full text in its title. The first pass writes the lines to standard
+error once per process. With <code>retire_after</code> off, none of these lines is shown.</p>
+<p>When metrics are turned on after a conversation kept only its metadata, the skeletons give its
 tokens, and not whether an execution was a call to an MCP server. The first pass of a process says,
 for each session, how many distinct execution observations its skeletons keep that no pass counted.
 The count does not say how many of them were MCP calls:</p>
@@ -1703,6 +1720,10 @@ beside the pipeline for as long as the process runs.</p>
       <tr>
           <td><code>retention</code></td>
           <td>landed files <code>storage.retention.metadata_only_after</code> removed, absent when 0. See <a href="../../formats/storage-root#retention">Retention</a>.</td>
+      </tr>
+      <tr>
+          <td><code>retired</code></td>
+          <td>conversations <code>storage.retention.retire_after</code> retired, absent when 0. See <a href="../../formats/storage-root#retirement">Retirement</a>.</td>
       </tr>
       <tr>
           <td><code>errors</code></td>
@@ -1943,15 +1964,19 @@ last record. <code>asz collect</code> and <code>asz server</code> remove a marke
 is sent, as <a href="../scenario#removal-a-session-goes-once-it-is-sent">Removal</a> describes. The
 build prints the policy after <code>config</code>, and a feed prints it in its header:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>remove   : 24h after its last record, once sent
-</span></span></code></pre></div><p><code>--remove</code> with <code>--format sd</code> is refused, because an sd build writes no source and its sessions are
-never removed whole. Retention, when it is set, still applies to its root. <code>check</code> refuses <code>--remove</code>, and <code>build</code> refuses zero, a negative duration and
+</span></span></code></pre></div><p><code>--remove</code> with <code>--format sd</code> is refused, because an sd build writes no source and a scenario&rsquo;s
+removal never removes its sessions. Retention, when it is set, still applies to its root, as to a
+real one, and retirement removes a session there whole. A build of a session retired in its root is
+refused. <code>check</code> refuses <code>--remove</code>, and <code>build</code> refuses zero, a negative duration and
 anything it cannot read. Each refusal exits with status 2 and writes nothing.</p>
 <h2 id="push">push</h2>
 <p>Sends every landed file and every round not yet sent to the OpenTelemetry logs receiver at
 <code>export.otlp.endpoint</code>, one log record per file, then exits. One pass is all it does: a root that
 keeps growing is sent by <code>asz collect</code>, which pushes at the end of every period. This command is
 for a root that is already there, such as one copied from another machine or brought under a new
-budget by <code>asz repack</code>. It never removes anything, even over a <a href="#a-scenario-root">scenario root</a>.
+budget by <code>asz repack</code>. It starts no removal and no retirement, even over a <a href="#a-scenario-root">scenario
+root</a>. It finishes a retirement a pass left unfinished, as every command that
+writes to a root does first.
 One line for the pass:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>[10:12:03] files=306 metrics=41 bytes=47.9MB wire=48.0MB requests=46 paused=0s rejected=0 errors=0 (1.1s)
 </span></span></code></pre></div><p><code>metrics</code> counts the spooled metrics requests sent, <code>wire</code> is what went out, the requests as
