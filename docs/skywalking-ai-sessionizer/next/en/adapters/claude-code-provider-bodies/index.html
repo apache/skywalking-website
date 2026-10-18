@@ -33,7 +33,7 @@ Claude Code can write every request it sends to its model provider, and every re
   <meta itemprop="name" content="Claude Code Provider Bodies Internals">
   <meta itemprop="description" content="Claude Code Provider Bodies Internals What the files Claude Code Provider Bodies collects hold, and how asz lands and joins them.
 Claude Code can write every request it sends to its model provider, and every response it gets back, to a directory. A request holds what no transcript records: the system prompt, the tool schemas, the reminder blocks injected into the first message, the role:&#34;system&#34; messages placed between the others, the cache markers, the betas and the thinking settings. The claude-code-provider adapter collects those files, finds the session of each, and lands them beside the session’s transcripts. The view joins each body to the call it belongs to.">
-  <meta itemprop="wordCount" content="1202">
+  <meta itemprop="wordCount" content="1462">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Claude Code Provider Bodies Internals">
   <meta name="twitter:description" content="Claude Code Provider Bodies Internals What the files Claude Code Provider Bodies collects hold, and how asz lands and joins them.
@@ -1554,7 +1554,7 @@ Claude Code can write every request it sends to its model provider, and every re
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f6e3274</div>
+                  <div class="commit-id">Commit Id: b5a56e3</div>
                 
 
 
@@ -1661,8 +1661,9 @@ write, with no temporary file and no rename, and it never deletes one.</p>
 files and memory index, the schemas of every MCP tool, and the environment block with paths and
 the operating system. asz lands and sends the bodies as they are, and redacts nothing.</p>
 <p><strong>How large.</strong> In a capture with the full tool list, a main request was 121 to 196 KB, of which the
-tool schemas were 74 KB and the system prompt 10 KB, and a subagent&rsquo;s request 33 to 58 KB. Every
-call sends its chain&rsquo;s whole message list again. So most of a body is bytes the session already has.</p>
+tool schemas were 74 KB and the system prompt 10 KB, and a subagent&rsquo;s request 33 to 58 KB. In
+2.1.260 every call sends its chain&rsquo;s whole message list again; in 2.1.302 a request that starts a
+thread does, below. So most of a body is bytes the session already has.</p>
 <p>Earlier messages come back with the same text, but not always spelled the same way. Two things move
 as the list grows. The cache marker, <code>cache_control</code>, moves to the newest message. And a message of
 one text block is sent as a list of blocks while it is the newest, and as a plain string once the
@@ -1672,6 +1673,27 @@ written reports a history that merely grew as one that was rewritten.</p>
 <p>A compaction is the case that really does rewrite the list. It replaces the context with a summary
 and starts the list again, so the list is shorter as well as different, and the conversation records
 it as an <code>epoch.boundary</code> step with the summary beside it.</p>
+<p><strong>Threads.</strong> In 2.1.302 a request names a thread the provider keeps. Measured on one session of
+<code>claude -p</code>, nine turns each a new process resuming it, 14 requests:</p>
+<ul>
+<li>A process&rsquo;s first request carries <code>&quot;thread&quot;:{&quot;type&quot;:&quot;create&quot;}</code> and holds the whole message list:
+2, 8, 11, 17, 20, 26, 5 and 8 messages over the main stream&rsquo;s processes.</li>
+<li>Every later request of the process carries <code>&quot;thread&quot;:{&quot;type&quot;:&quot;continue&quot;,&quot;previous_message_id&quot;:…}</code>,
+the message id of the response before it, and holds only what is new: here the tool result and a
+<code>system</code>-role message, 2 each. It carries no tools, and of <code>system</code> only the billing header. The
+provider holds the rest.</li>
+<li>A resumed session&rsquo;s first request starts a new thread with the whole list again. A subagent has a
+thread of its own. The compaction request carries no thread.</li>
+<li>With each continue request&rsquo;s history built from the call it names, that call&rsquo;s reply and its own
+messages, every call&rsquo;s history was the history before it with the reply next, through six resumes,
+until the compaction. The two spellings above still apply: without the first, 6 of those 10
+comparisons fail, and without the second, 4.</li>
+<li>The billing header in <code>system</code> differs on every request, since it names the request before, the
+prompt and the turn; every other system block is sent the same each time.</li>
+</ul>
+<p>A redacted copy of this session is <code>internal/adapters/claudecodeprovider/testdata/threads</code>, and a
+test lands it through both adapters. <a href="../../formats/session-data#history">Session Data</a> gives what
+a manifest records of the thread and of each message.</p>
 <h2 id="what-the-adapter-lands">What the adapter lands</h2>
 <p><strong>A session for each body.</strong> A request names its session; a session id that is not in Claude Code&rsquo;s
 own form is not taken, since it names a directory. A response is claimed by a later request that
@@ -1714,8 +1736,8 @@ calls had their request and their response joined, the subagent&rsquo;s included
 prompt, were left unjoined.</p>
 <h2 id="not-measured">Not measured</h2>
 <p>Subagents or workflow agents running at the same time, server-side clearing of old tool results,
-the <code>thread</code> field that sends only a tail of the messages, retries, a long session, <code>--resume</code> and
-<code>--fork-session</code>, Bedrock, Vertex and gateways, and Windows.</p>
+an interactive session, a thread continued from a message other than the last response, retries, a
+long session, <code>--fork-session</code>, Bedrock, Vertex and gateways, and Windows.</p>
 
 </div>
 

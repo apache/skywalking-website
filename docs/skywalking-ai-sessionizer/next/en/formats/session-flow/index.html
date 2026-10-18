@@ -35,7 +35,7 @@ There is one kind of .sf file, a round; on the wire and in a receiver it is roun
   <meta itemprop="description" content="Session Flow Session Flow is the conversation structure: the talks, streams, runs, steps and relations that assembly builds from landed records. It is published as an append-only chain of immutable rounds. A round file has the extension .sf, and the conversation is the fold of every round. There is no other state.
 The format is public. Package pkg/sessionflow defines it, and a consumer reads it. The schema is sf/1.
 There is one kind of .sf file, a round; on the wire and in a receiver it is round.">
-  <meta itemprop="wordCount" content="2579">
+  <meta itemprop="wordCount" content="3405">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Flow">
   <meta name="twitter:description" content="Session Flow Session Flow is the conversation structure: the talks, streams, runs, steps and relations that assembly builds from landed records. It is published as an append-only chain of immutable rounds. A round file has the extension .sf, and the conversation is the fold of every round. There is no other state.
@@ -1557,7 +1557,7 @@ There is one kind of .sf file, a round; on the wire and in a receiver it is roun
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f6e3274</div>
+                  <div class="commit-id">Commit Id: b5a56e3</div>
                 
 
 
@@ -1850,6 +1850,10 @@ These are the prefixes asz writes:</p>
           <td><code>summary/&lt;seq&gt;/&lt;row&gt;</code></td>
       </tr>
       <tr>
+          <td><code>history.change</code></td>
+          <td><code>history/&lt;provider call id&gt;</code>: the same key as the call whose history changed, <code>call/&lt;provider call id&gt;</code>, so a reader finds the call from the card</td>
+      </tr>
+      <tr>
           <td><code>error.api</code></td>
           <td><code>error/&lt;seq&gt;/&lt;row&gt;</code></td>
       </tr>
@@ -1890,6 +1894,120 @@ the same way.</p>
 <p>The <code>session</code> node states <code>provider_bodies_landed</code>, how many bodies the session holds as of that
 round, joined or not, so a reader can say what was captured without opening a landed file. It is a
 count, named apart from the list a call carries so that one name never means two things.</p>
+<h4 id="where-a-calls-history-changed">Where a call&rsquo;s history changed</h4>
+<p>A call&rsquo;s history is the message list its request records, as the request body&rsquo;s manifest writes it
+(<a href="../session-data#history">Session Data, History</a>). A request that continues a provider thread
+holds only what follows the message it names: its history is that message&rsquo;s call&rsquo;s history, then
+that call&rsquo;s reply, then its own messages. The call it names must be in its stream, of its form, and
+have a reply. A history is built through at most 65,536 calls and holds at most 65,536 entries.</p>
+<p>Each call is compared with its predecessor: the nearest earlier call of its stream and epoch,
+skipping only an <code>internal_call</code>. A call of unknown class, or with no request or no list, is never
+skipped, since skipping a turn would compare a call with the one before it and show a change that
+did not happen. Calls are ordered by their first fragment&rsquo;s landed position, as the body join
+orders them. Every call whose request carries <code>history_form</code> has <code>history</code> in its <code>attrs</code>, the
+first row of this table that applies:</p>
+<table>
+  <thead>
+      <tr>
+          <th><code>history</code></th>
+          <th>when</th>
+          <th><code>history_reason</code></th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>not_compared</code></td>
+          <td>the call is in an <code>auxiliary</code> stream, or is an <code>internal_call</code></td>
+          <td><code>auxiliary_stream</code>, <code>internal_call</code></td>
+      </tr>
+      <tr>
+          <td><code>unavailable</code></td>
+          <td>the call&rsquo;s class is unknown</td>
+          <td><code>class_unknown</code></td>
+      </tr>
+      <tr>
+          <td><code>unavailable</code></td>
+          <td>its own history cannot be built</td>
+          <td><code>messages:&lt;reason&gt;</code>, <code>thread_unresolved</code>, <code>thread_reply:&lt;reason&gt;</code></td>
+      </tr>
+      <tr>
+          <td><code>first</code></td>
+          <td>no call comes before it in its stream and epoch</td>
+          <td></td>
+      </tr>
+      <tr>
+          <td><code>unavailable</code></td>
+          <td>the predecessor has no request, or none written with <code>history_form</code>, or is of unknown class, or another form, or a history that cannot be built</td>
+          <td><code>earlier_no_request</code>, <code>earlier_messages:&lt;reason&gt;</code>, <code>earlier_class_unknown</code>, <code>form_mismatch</code>, <code>earlier_&lt;reason&gt;</code></td>
+      </tr>
+      <tr>
+          <td><code>kept</code></td>
+          <td>the predecessor&rsquo;s history is an ordered prefix of the call&rsquo;s</td>
+          <td></td>
+      </tr>
+      <tr>
+          <td><code>changed</code></td>
+          <td>it is not</td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<p>Two entries are equal when both have an id or neither does, the ids are equal where they are, and
+the digests are equal. Beside <code>history</code>:</p>
+<ul>
+<li><code>history_messages</code>: how many entries the call&rsquo;s history holds, whenever it can be built, so a
+page can say how many messages a continue request did not send.</li>
+<li><code>history_from</code>: on <code>kept</code> and <code>changed</code>, the predecessor&rsquo;s node id.</li>
+<li><code>history_reply</code>, and <code>history_reply_reason</code> when it is <code>unavailable</code>: what became of the
+predecessor&rsquo;s reply. <code>unavailable</code> with <code>no_reply</code> when the predecessor&rsquo;s response names none,
+and with <code>form_mismatch</code> when its form is not the requests&rsquo;. On <code>kept</code> it is looked for after the
+predecessor&rsquo;s history, where no entry is one of the predecessor&rsquo;s: <code>back</code> when an entry there is
+equal to it, <code>back_changed</code> when one carries its id, else <code>not_found</code>; a request that continues
+the predecessor&rsquo;s own reply is <code>back</code> by construction. On <code>changed</code> the reply is <code>unavailable</code>
+with <code>ambiguous</code> when it is equal to an entry of the predecessor&rsquo;s history or shares its id with
+one, and is otherwise looked for in the whole history.</li>
+<li><code>system_changed</code>, between two Claude Code calls: <code>yes</code>, <code>no</code>, or <code>unavailable</code>. A request that
+creates a thread or carries none has its own system prompt; a continue request has the thread&rsquo;s,
+unless it carries a system block other than the billing header, which makes it, and every call
+continuing from it, unknown. <code>unavailable</code> when either call&rsquo;s is.</li>
+</ul>
+<p>A <code>changed</code> call has a <code>history.change</code> node beside it, under the same parent. It stands at the
+call&rsquo;s first fragment, its <code>refs</code> are the two requests&rsquo; records, and it carries no content. It sorts
+just before the call: among nodes at one position, a <code>history.change</code> node is ordered by the call
+it names, and before it. Its <code>attrs</code>:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Key</th>
+          <th>Value</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>from_call</code>, <code>to_call</code></td>
+          <td>the predecessor and the call</td>
+      </tr>
+      <tr>
+          <td><code>kept</code>, <code>changed</code>, <code>dropped</code>, <code>added</code></td>
+          <td>counts by multiset, so repeated messages need no unique ids: for each distinct entry the smaller of its numbers of occurrences in the two histories is <code>kept</code>; of what is left, for each id the smaller of its numbers of occurrences on the two sides is <code>changed</code>; the rest of the predecessor&rsquo;s is <code>dropped</code>, and of the call&rsquo;s <code>added</code>. A runtime that sends no message id never reports <code>changed</code>: an edited message is one dropped and one added</td>
+      </tr>
+      <tr>
+          <td><code>order_changed</code>, <code>order_changed_reason</code></td>
+          <td><code>yes</code> when the messages kept or changed are no longer in their earlier order, else <code>no</code>. An entry&rsquo;s identity is its id, else its digest; with no id repeated on a side, the order changed exactly when the longest common subsequence of the two identity sequences is shorter than <code>kept</code> and <code>changed</code> together. <code>unavailable</code> with <code>repeated_id</code> when an id occurs twice on a side, and with <code>too_large</code> past 4,194,304 pairs of equal identities</td>
+      </tr>
+      <tr>
+          <td><code>reply</code>, <code>reply_reason</code>, <code>system_changed</code></td>
+          <td>as on the call</td>
+      </tr>
+      <tr>
+          <td><code>cause</code></td>
+          <td><code>unavailable</code>. A changed history names no cause: a context reset is an explicit <code>epoch.boundary</code>, and a changed history is not one. The calls stay in their epoch</td>
+      </tr>
+  </tbody>
+</table>
+<p>All of it is derived from the index, carries no wall-clock time, and is assembled again each round,
+so a body or a response that lands later revises the call and its card, and a card whose pair is no
+longer <code>changed</code> is tombstoned.</p>
 <p>A reference into the landed data is a landed sequence, a row, and optionally a content block. That
 is the whole address. A reader takes both the content and the time from the <code>.sd</code> record it names.
 The record&rsquo;s <code>time</code> field is when the runtime says it happened. The page that <code>asz view</code> serves
