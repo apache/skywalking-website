@@ -35,7 +35,7 @@ These are several ways to install:">
   <meta itemprop="description" content="bydbctl bydbctl is the command line tool for interacting with BanyanDB. It is a powerful tool that can be used to create, update, read, and delete schemas. It can also be used to query data stored in streams, measures, traces, and properties.
 bydbctl agent opens an interactive BYDBQL agent TUI. It helps users generate, edit, validate, approve, and execute BYDBQL queries. See BYDBQL Agent TUI for details.
 These are several ways to install:">
-  <meta itemprop="wordCount" content="169">
+  <meta itemprop="wordCount" content="1807">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="bydbctl">
   <meta name="twitter:description" content="bydbctl bydbctl is the command line tool for interacting with BanyanDB. It is a powerful tool that can be used to create, update, read, and delete schemas. It can also be used to query data stored in streams, measures, traces, and properties.
@@ -2081,7 +2081,7 @@ These are several ways to install:">
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 6966636</div>
+                  <div class="commit-id">Commit Id: ccc700e</div>
                 
 
 
@@ -2151,8 +2151,195 @@ schemas. It can also be used to query data stored in streams, measures, traces, 
 <h2 id="http-client">HTTP client</h2>
 <p>Users could select any HTTP client to access the HTTP based endpoints. The default address is <code>localhost:17913/api</code></p>
 <h2 id="tls">TLS</h2>
-<p>TLS is supported by <code>bydbctl</code>. <code>--tls=true</code> and <code>--cert &lt;cert_file&gt;</code> are the flags to enable TLS and specify the certificate file. If you want to
+<p>TLS is supported by <code>bydbctl</code>. <code>--enable-tls</code> and <code>--cert &lt;cert_file&gt;</code> are the flags to enable TLS and specify the certificate file. If you want to
 ignore the certificate verification, use <code>--insecure=true</code>.</p>
+<h2 id="data-export">Data export</h2>
+<p><code>bydbctl data export</code> and <code>bydbctl data release-session</code> talk to a liaison <strong>gRPC</strong> endpoint, not to the HTTP <code>--addr</code>: <code>--nodes</code> takes
+one or more liaison addresses and every address must include the liaison gRPC port (<code>host:17912</code> by default; no port is appended for you).
+The addresses are tried in order: a liaison that cannot be reached, or that has not discovered any data node yet, is skipped and the
+next one is tried; a reachable endpoint that is not a liaison is an error, and a liaison that refuses the credentials
+(<code>Unauthenticated</code>/<code>PermissionDenied</code>) stops the command with exit <code>2</code> without trying the others. A server without data export
+(older than 0.12) is also exit <code>2</code>. Explicit flags override <code>plan.yaml</code>, which overrides <code>BYDBCTL_*</code> environment variables
+(<code>BYDBCTL_NODES</code> is comma separated). The data commands neither read nor create <code>$HOME/.bydbctl.yaml</code>: everything they need comes
+from flags, <code>plan.yaml</code> or the environment. TLS settings are the exception: an explicit flag wins over <code>connection.nodesTLS</code> in
+<code>plan.yaml</code>, and there is no environment level for them. The root <code>-a/--addr</code>, <code>-g/--group</code> and <code>--config</code> flags do not apply and
+are rejected when given explicitly; a group set through the environment is ignored.</p>
+<h3 id="dry-run">Dry run</h3>
+<p><code>bydbctl data export --dry-run</code> inventories what an export would carry, without creating snapshots or writing any file. It lists every
+<code>(node, catalog, group)</code> with its segments, distinct shards, parts, estimated rows and sizes:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --dry-run --nodes liaison-1:17912 --selector <span style="color:#0a3069">&#39;catalog=stream,groups=sw_record&#39;</span> --selector <span style="color:#0a3069">&#39;catalog=measure,groups=sw_metricsMinute;sw_metricsHour&#39;</span>
+</span></span><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --dry-run --plan plan.yaml -o json
+</span></span></code></pre></div><p>The whole command runs under a 10-minute deadline (<code>release-session</code>: 3 minutes).</p>
+<p>Flags of <code>data export</code>:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Flag</th>
+          <th>Default</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--nodes</code></td>
+          <td><code>connection.nodes</code> in <code>plan.yaml</code>, else <code>BYDBCTL_NODES</code></td>
+          <td>liaison gRPC addresses, tried in order</td>
+      </tr>
+      <tr>
+          <td><code>--plan</code></td>
+          <td></td>
+          <td><code>plan.yaml</code> describing connection, scope and parallelism</td>
+      </tr>
+      <tr>
+          <td><code>--selector</code></td>
+          <td><code>export.selectors</code> in <code>plan.yaml</code></td>
+          <td>scope, repeatable: <code>catalog=&lt;stream|measure|trace|property&gt;[,groups=&lt;g1&gt;;&lt;g2&gt;]</code>; an empty scope means every group. Separators are <code>,</code>, <code>;</code> and <code>=</code> only</td>
+      </tr>
+      <tr>
+          <td><code>--dry-run</code></td>
+          <td><code>false</code></td>
+          <td>inventory only; the only mode implemented so far (without it the command answers &ldquo;not implemented yet&rdquo;, exit <code>1</code>). The real-export flags <code>--format</code>, <code>--include-schema</code>, <code>--output</code> and <code>--preempt</code> arrive with the transfer itself</td>
+      </tr>
+      <tr>
+          <td><code>-o</code>, <code>--output-format</code></td>
+          <td><code>table</code></td>
+          <td>dry-run rendering: <code>table</code>, <code>yaml</code> or <code>json</code> (stdout; progress and warnings go to stderr)</td>
+      </tr>
+      <tr>
+          <td><code>--strict-coverage</code></td>
+          <td><code>false</code></td>
+          <td>a data node that returned no inventory is an error (exit <code>2</code>, after the report is printed) instead of a warning</td>
+      </tr>
+      <tr>
+          <td><code>--parallelism</code></td>
+          <td><code>export.parallelism</code> in <code>plan.yaml</code>, else <code>BYDBCTL_PARALLELISM</code>, else <code>max</code></td>
+          <td>number of data nodes exported concurrently: <code>max</code> or an integer &gt;= 1, clamped by the node count. A dry run only reports the effective value on stderr</td>
+      </tr>
+      <tr>
+          <td><code>--enable-tls</code>, <code>--insecure</code>, <code>--cert</code></td>
+          <td><code>connection.nodesTLS</code> in <code>plan.yaml</code></td>
+          <td>TLS towards the liaison; each flag given explicitly wins over the file</td>
+      </tr>
+      <tr>
+          <td><code>--logging-level</code>, <code>--logging-env</code></td>
+          <td><code>info</code>, <code>prod</code></td>
+          <td>client-side logging</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>plan.yaml</code> accepts only the keys below; any other key is rejected so a typo never falls back to a default silently. Its selectors
+get the same checks as <code>--selector</code> (a group name must not be empty or repeated), and <code>--selector</code> replaces them entirely:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">connection</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">nodes</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">[</span><span style="color:#0a3069">&#34;liaison-1:17912&#34;</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;liaison-2:17912&#34;</span><span style="color:#1f2328">]</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">nodesTLS</span><span style="color:#1f2328">:</span><span style="color:#fff">          </span><span style="color:#57606a"># optional</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">enable</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">insecure</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">false</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">cert</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>/path/to/ca.crt<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">export</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">parallelism</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>max  <span style="color:#fff"> </span><span style="color:#57606a"># or an integer &gt;= 1</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">selectors</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span>- <span style="color:#0550ae">catalog</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>stream<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span><span style="color:#0550ae">groups</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">[</span>sw_record]<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span>- <span style="color:#0550ae">catalog: trace  # no groups</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>every trace group<span style="color:#fff">
+</span></span></span></code></pre></div><h4 id="reading-the-report">Reading the report</h4>
+<p>The table output starts with summary lines, then one row per <code>(node, catalog, group)</code>, then the <code>SNAPSHOT</code> line:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Line / column</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>NODES</code></td>
+          <td>the data nodes the liaison planned and whether all of them answered. A node listed as giving no inventory is a coverage gap: its data would not be exported</td>
+      </tr>
+      <tr>
+          <td><code>MULTI-SRC</code></td>
+          <td>units held by more than one node (replicated shards), keyed <code>catalog/group/stage/segment/shard-N</code>. Each source shows its node, rows and time range. All sources are exported and the importer decides which one to use. Property groups are not listed, nor are index-mode measure segments: they have no shard id, so the dry run cannot tell replicas from different shards</td>
+      </tr>
+      <tr>
+          <td><code>NODE</code>, <code>CATALOG</code>, <code>GROUP</code></td>
+          <td>the row&rsquo;s key</td>
+      </tr>
+      <tr>
+          <td><code>STAGE</code></td>
+          <td>the lifecycle stage the node resolves for the group from its labels; <code>hot</code> is the default tier (no stages declared, no node labels, or no matching stage). Property groups resolve it the same way</td>
+      </tr>
+      <tr>
+          <td><code>SEGMENTS</code></td>
+          <td>segments of the group on that node, including segments whose shards have not flushed anything yet</td>
+      </tr>
+      <tr>
+          <td><code>SHARDS</code></td>
+          <td>distinct shard ids across those segments (not a sum per segment)</td>
+      </tr>
+      <tr>
+          <td><code>PARTS</code></td>
+          <td>flushed parts across all segments and shards</td>
+      </tr>
+      <tr>
+          <td><code>EST-ROWS</code></td>
+          <td>the sum of the parts&rsquo; row counts. For an index-mode measure it is the document count of the segment series index, an upper bound because it also holds the series of the group&rsquo;s regular measures. For property it counts every stored revision, tombstones included</td>
+      </tr>
+      <tr>
+          <td><code>EST-SIZE(comp/raw)</code></td>
+          <td>compressed on-disk bytes / uncompressed bytes. comp includes the per-shard and segment-level indexes; raw includes the per-shard indexes, and the segment-level index only for an index-mode measure (where it holds the rows; otherwise it is rebuilt from the parts). For trace, raw counts the span payload only (tags excluded), so it can be smaller than comp; comp is a lower bound. Property stores one form, so both are equal</td>
+      </tr>
+      <tr>
+          <td><code>TIME-RANGE</code></td>
+          <td>earliest ~ latest timestamp of the parts, UTC, as <code>MM-DD</code> (with the year when the bounds fall in different years); <code>-</code> when unknown</td>
+      </tr>
+      <tr>
+          <td><code>SNAPSHOT</code></td>
+          <td>each data node pins its own snapshot during a real export; the line names how much the largest node needs (its compressed subtotal) so you can check <code>df</code> there first</td>
+      </tr>
+  </tbody>
+</table>
+<p>On stderr the command also prints the effective parallelism and <code>WARN</code> lines for a node that reports a stage the group schema does not
+declare (or a group the schema no longer has): that node holds data the current lifecycle configuration does not describe.</p>
+<p>A dry run reads the live directories, so its numbers are estimates: rows still in a memtable are not counted, and parts that are being
+merged or not yet published may be counted twice (the merge inputs and the output) until the merge completes.</p>
+<p>A data node the liaison reported unreachable (stopped, evicted from its connection pool, silent for longer than the liaison&rsquo;s idle
+timeout, not holding the export session, or running a version older than 0.12 without <code>ExportService</code>) is reported in the <code>NODES</code> line
+and as a warning; <code>--strict-coverage</code> turns it into exit code <code>2</code>. A node removed from the registry entirely is not counted. Exit codes:
+<code>1</code> usage error, <code>2</code> preflight rejection (nothing was written anywhere) or, with <code>--strict-coverage</code>, a coverage gap (the report is still
+printed), <code>3</code> failure at run time.</p>
+<h3 id="sessions">Sessions</h3>
+<p>A real export pins one snapshot per data node for the duration of the run, identified by a session id announced in the first <code>Plan</code>
+frame. The snapshot contains the data that was flushed to disk when the session was created; rows still in memory at that moment are
+not part of it. Each data node holds at most one export session, and one session id covers the whole cluster: a data node refuses to
+create a new one while <strong>any</strong> other session exists on it, whatever that session&rsquo;s lease says. A session is held until it is released, taken over with <code>preempt</code>, or expires five
+days after its last heartbeat (<code>Sessions(ACTION_HEARTBEAT)</code>, every 5 minutes) and is swept by the node (the sweeper runs every minute).
+On a data node the snapshots live in <code>&lt;catalog&gt;/export-snapshots/&lt;session-id&gt;</code> (<code>--&lt;catalog&gt;-export-snapshot-path</code>), apart from the
+backup snapshots. For stream, measure and trace that path must be on the data path&rsquo;s filesystem, because their snapshots are made of hard
+links; a property snapshot is a full copy of the property index and needs as much free space as the property data. The server refuses to
+start when it equals or sits inside a catalog&rsquo;s backup snapshot directory (<code>&lt;root-path&gt;/&lt;catalog&gt;/snapshots</code>), equals, contains or sits
+inside any catalog&rsquo;s data path, or overlaps another catalog&rsquo;s export snapshot path. A pinned snapshot keeps the parts it links alive on disk even after retention removes them from the data
+directory, and the disk monitor&rsquo;s forced retention cleanup cannot reclaim that space: release a session you no longer need before the
+disk comes under pressure.</p>
+<p>The server side of this protocol is complete; the client side that creates a session, renders the occupant it was refused by and keeps
+the heartbeat (<code>--preempt</code> included) ships with the real export. Until then <code>bydbctl</code> drives one session action only, the release:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl data release-session --id &lt;session-id&gt; --nodes liaison-1:17912
+</span></span></code></pre></div><p><code>release-session</code> drops the session snapshot on every data node and prints <code>export session &lt;id&gt; released</code>. A node that does not
+hold the session has nothing to delete and is listed on stderr (<code>export session &lt;id&gt; was not held on [...]</code>); when no data node holds
+it, the command fails with <code>export session &lt;id&gt; is not held on any data node</code> and exits <code>2</code>. <code>--id</code> is validated locally (32 lowercase hex characters, exit <code>1</code> otherwise) and the command takes no positional
+arguments. When some nodes fail to release, the command prints one line per failed node with its reason (unreachable, removal failed,
+or a data node without <code>ExportService</code>), then <code>export session &lt;id&gt; released except on [...]</code> — or <code>export session &lt;id&gt; could not be released on [...]</code> when no node released it — and exits <code>3</code>; retry later, the sweeper reclaims an expired session on its own after its lease
+runs out. Its flags are <code>--id</code> (required), <code>--nodes</code>, <code>--plan</code>, <code>--enable-tls</code>, <code>--insecure</code>, <code>--cert</code>, <code>--logging-level</code> and
+<code>--logging-env</code>, with the same precedence as <code>data export</code>.</p>
+<h3 id="permissions">Permissions</h3>
+<p>With RBAC enabled the data commands need:</p>
+<ul>
+<li><code>data export</code>: <code>cluster:read</code> (preflight: current node and cluster state), <code>schema:read</code> on the selected groups (group listing and
+selector validation) and <code>cluster:admin</code> (<code>ExportService.Plan</code>).</li>
+<li><code>data release-session</code>: <code>cluster:read</code> (preflight) and <code>cluster:admin</code> (<code>ExportService.Sessions</code>).</li>
+</ul>
+<p>Pass <code>-u/-p</code> or <code>BYDBCTL_USERNAME</code>/<code>BYDBCTL_PASSWORD</code>, and enable TLS (<code>--enable-tls</code>, or <code>connection.nodesTLS</code> in <code>plan.yaml</code>) so the
+credentials are not sent in clear text. The liaison forwards these calls to the data nodes over the internal cluster port, which carries
+no authentication of its own and must stay unreachable from outside the cluster. An end-to-end example with one hot and one warm data
+node behind a liaison lives in <code>test/e2e-v2/cases/transfer/dry-run/</code>.</p>
 
 </div>
 
@@ -2189,6 +2376,13 @@ ignore the certificate verification, use <code>--insecure=true</code>.</p>
       <ul>
         <li><a href="#http-client">HTTP client</a></li>
         <li><a href="#tls">TLS</a></li>
+        <li><a href="#data-export">Data export</a>
+          <ul>
+            <li><a href="#dry-run">Dry run</a></li>
+            <li><a href="#sessions">Sessions</a></li>
+            <li><a href="#permissions">Permissions</a></li>
+          </ul>
+        </li>
       </ul>
     </li>
   </ul>

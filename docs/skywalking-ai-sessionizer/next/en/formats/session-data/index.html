@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Session Data">
   <meta itemprop="description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
-  <meta itemprop="wordCount" content="8205">
+  <meta itemprop="wordCount" content="8692">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Data">
   <meta name="twitter:description" content="Session Data Session Data is what was actually in a conversation, in one shape regardless of which agent produced it. A landed file has the extension .sd. Its first line is a header carrying everything constant for the file, and its last line closes the file with a digest. Every line between them is one source record, converted, with its content broken into parts named for what they are: a message, a thought, a call, its result.">
@@ -1551,7 +1551,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b5a56e3</div>
+                  <div class="commit-id">Commit Id: 928b67a</div>
                 
 
 
@@ -1650,11 +1650,11 @@ stops at the first longer line.</p>
       </tr>
       <tr>
           <td><code>seq</code></td>
-          <td>the landed sequence number, monotonic per session</td>
+          <td>the landed sequence number, monotonic per session, in the order files landed</td>
       </tr>
       <tr>
           <td><code>at</code></td>
-          <td>when the file was collected</td>
+          <td>when the file was collected. A file <code>asz repack</code> cut says when the newest file its records came from was collected</td>
       </tr>
       <tr>
           <td><code>kind</code></td>
@@ -1670,7 +1670,7 @@ stops at the first longer line.</p>
       </tr>
       <tr>
           <td><code>src</code></td>
-          <td>the source, relative to the adapter&rsquo;s source root, with forward slashes on every platform</td>
+          <td>the source, relative to the adapter&rsquo;s source root, with forward slashes on every platform. In the <code>changes</code> and <code>execution</code> kinds, a source other than the first at its path, a later file the plugin wrote there or the same path under a second recorder root, is the path, <code>#</code>, and the first 12 hexadecimal characters of the SHA-256 of the file&rsquo;s first line, so each source has a <code>src</code> of its own</td>
       </tr>
       <tr>
           <td><code>session</code>, <code>stream</code>, <code>batch</code></td>
@@ -1692,7 +1692,8 @@ session under its id and puts every child stream flat under <code>streams/</code
 project directory a source file sits in, and the workflow directory a child&rsquo;s transcript sits in.
 <code>src</code> is the only place both survive. It uses forward slashes on every platform, so a root reads
 the same on the machine that collected it and on any other. With a record&rsquo;s <code>off</code> and <code>sha</code>, it
-lets a reader check the record against its source for as long as the source exists.</p>
+lets a reader check the record against its source for as long as the source exists. A <code>src</code> with
+the mark described above names its file by the part before its last <code>#</code>.</p>
 <h2 id="file-kinds">File kinds</h2>
 <p>One <code>.sd</code> file holds one cut of one source. The header&rsquo;s <code>kind</code> says which, and the records of
 each kind carry a characteristic set of fields. A <code>provider_body</code> file is the exception: its source
@@ -1843,7 +1844,9 @@ document at <code>ord</code> 1 and <code>off</code> 0, so for it <code>asz verif
 files of one kind, <code>ord</code> must run 1, 2, 3 with no gap, starting at 1. The first record must start
 at byte 0, and each record after it at the byte after the previous record&rsquo;s line ends. Where the
 stream has an append cursor, the records must reach the line and the byte the cursor names (see
-<a href="../storage-root#append-cursors">Append cursors</a>). A skipped line, or a lost file of a source that
+<a href="../storage-root#append-cursors">Append cursors</a>). In the <code>changes</code> and <code>execution</code> kinds, a stream
+can hold more than one source, each numbering its lines from 1, so these checks apply to the files
+of each <code>src</code> apart, and each <code>src</code> is held to the cursor whose <code>source</code> names it. A skipped line, or a lost file of a source that
 is a stream of lines, would otherwise show only as a shorter conversation. The Claude Code
 adapter&rsquo;s <code>agent_meta</code>, <code>workflow_manifest</code> and <code>workflow_script</code> files are each one document with
 a snapshot cursor, so a lost one is found only by the round chain (see
@@ -1963,6 +1966,21 @@ left, and its <code>bytes</code> and <code>sha256</code> are kept (see <a href="
 which leaves out a field the format does not name, and says <code>truncated</code>. Real lines come nowhere
 near it. Measured over 423,944 lines of 94 real conversations, the deepest held 16, a model request
 carrying a tool&rsquo;s JSON Schema in its data.</p>
+<p>Every landed line is valid UTF-8. JSON sent between systems must be, a reader may refuse a line
+that is not, and a protocol buffer string must be too, so a file holding such a byte could never be
+sent over <a href="../otlp">OTLP</a>. A JSON decoder can accept a byte that is not valid UTF-8 inside a
+string, so source JSON can bring one, such as a write cut short in the middle of a character. A
+string the writer encodes itself, such as <code>text</code> or <code>label</code>, holds U+FFFD in its place. A part&rsquo;s
+data that holds such a byte is taken out, whatever its size. The part keeps its place, its kind and
+its identifiers, its <code>state</code> is <code>omitted</code>, or <code>truncated</code> while its text is left, and its <code>bytes</code>
+and <code>sha256</code> are those of the source JSON it held, as for a payload
+<a href="#too-large-to-land">too large to land</a>. A <code>changes/1</code> or <code>execution/1</code> record is written again in
+its own format, with U+FFFD in place of the byte, and says <code>truncated</code>. Data that is also nested
+too deep is taken out as such data is, above, and says <code>too_large</code>. In every case the record&rsquo;s
+<a href="#dropped"><code>dropped</code></a> gains one entry for the part, so a reader knows the byte was there: <code>what</code>
+is <code>the data of part N</code>, with N its block, <code>bytes</code> the size of the JSON taken out, and <code>why</code> is
+<code>it holds a byte that is not valid UTF-8, which no landed line may hold</code>. An
+<code>unknown</code> part keeps such bytes whole, in base64, as <a href="#parts">Parts</a> describes.</p>
 <p>A <code>time</code> is written as RFC 3339: a four-digit year, the letter <code>T</code>, the time of day to the
 second with a fraction of up to nine digits or none, and <code>Z</code> or an offset such as <code>+08:00</code>. Times
 compare as the instants they name, never as text. As text, <code>2026-01-01T12:00:00.11Z</code> sorts before
@@ -2239,11 +2257,12 @@ the size of the original even when the part holds less. A reader is always told 
 original it has.</p>
 <h3 id="too-large-to-land">Too large to land</h3>
 <p>A landed file travels whole, so the collector&rsquo;s <code>max_delta_bytes</code> is the most a receiver has to store
-at once. A collector cuts a file by what its records take once written, not by the bytes they were
-read from: a record carries an envelope its source line does not, and 4 KiB of short source lines
-measured 19 KB of records. One record cannot be cut: a pasted screenshot measured 4.6 MB in one
-transcript line. Such a record lands alone in a file of its own, and its largest payloads are taken
-out, one at a time, until the file fits.</p>
+at once, with the one exception at the end of this section. A collector cuts a file by what its
+records take once written, not by the bytes they were read from: a record carries an envelope its
+source line does not, and 4 KiB of short source lines measured 19 KB of records. One record cannot
+be cut: a pasted screenshot measured 4.6 MB in one transcript line. Such a record lands alone in a
+file of its own, and its largest payloads are taken out, one at a time, until the file fits or
+nothing is left to take out.</p>
 <p>A part taken out keeps its place, its kind and every identifier: <code>id</code>, <code>name</code>, <code>of</code>, <code>server</code>,
 <code>server_tool</code>, <code>failed</code> and <code>media</code>. Its <code>data</code> and <code>encoding</code> go first, and then its <code>text</code>, except
 an <code>unknown</code> part&rsquo;s, which is the reason its bytes were not described rather than content. A part
@@ -2264,7 +2283,9 @@ returned, so it is a few hundred bytes and is left as it is.</p>
 <p>Of two payloads of the same size, the one in the earlier part goes first, so the same record always
 loses the same parts. No other part carries <code>sha256</code>. A record that is still too large with every
 payload taken out lands as it is: what is left is its identifiers, its label and the list of its
-parts. <code>asz repack</code> carries records as they landed, and takes nothing out.</p>
+parts. Its file is then larger than <code>max_delta_bytes</code>: a record with a label of 10,000 bytes landed
+as a file of 10,434 bytes under a budget of 4 KiB. <code>asz repack</code> carries records as they landed, and
+takes nothing out.</p>
 <h3 id="what-data-holds">What data holds</h3>
 <p><code>data</code> is one JSON value. What it holds depends on the part:</p>
 <ul>
@@ -2272,7 +2293,9 @@ parts. <code>asz repack</code> carries records as they landed, and takes nothing
 not text, an attachment with no prose, or a record or document with no message. A journal line,
 sidecar, manifest, system record or line the asz plugin wrote can land whole this way. The
 writer inserts that JSON after <code>json.Compact</code>, keeping its bytes apart from whitespace between
-tokens. This keeps each landed record on one line. Whitespace inside strings is unchanged.</li>
+tokens. This keeps each landed record on one line. Whitespace inside strings is unchanged. JSON
+that holds a byte that is not valid UTF-8 is taken out instead, as
+<a href="#reading-a-record">Reading a record</a> describes.</li>
 <li>Bytes the dialect could not describe: an <code>unknown</code> part holds them inside one JSON string,
 using base64 when needed, as described below. <code>Part.Raw</code> returns the original bytes whatever
 escapes that string uses.</li>
@@ -2306,8 +2329,9 @@ The measured corpus is 62 Claude Code sessions: 3,032 files and 1,100.1 MB of so
 tool result in it was 1.1 MB. Over its 28 sessions larger than 1 MB, the share of a session that is
 tool output ran from 17.3% to 83.5%, with a median of 35.1%. A rule tuned to the median is wrong by
 a factor of two at both ends. So every part states its own size and state, and a reader decides.
-No built-in adapter writes <code>omitted</code>, and a part one writes as <code>truncated</code> is one made smaller to fit
-the budget, so no part they write is clipped otherwise. Clipping is
+No built-in adapter writes <code>omitted</code> itself, and a part that lands as <code>omitted</code> or <code>truncated</code> is
+one made smaller to fit the budget or to hold only valid UTF-8, so no part is clipped otherwise.
+Clipping is
 left to a reader, such as the <a href="../asz-view#a-node-in-talks">asz.view</a> document, which clips a
 node&rsquo;s text and gives the full size beside it. A part is still not always all the runtime gave.
 The Claude Code dialect leaves some content out with no <code>dropped</code> entry. Its
@@ -2420,7 +2444,8 @@ hooks, nor the transcript.</li>
 <h2 id="dropped">Dropped</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#0a3069">&#34;dropped&#34;</span><span style="color:#f6f8fa;background-color:#82071e">:</span><span style="color:#1f2328">[{</span><span style="color:#0550ae">&#34;what&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;reasoning signature&#34;</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;bytes&#34;</span><span style="color:#1f2328">:</span><span style="color:#0550ae">588</span><span style="color:#1f2328">,</span><span style="color:#0550ae">&#34;why&#34;</span><span style="color:#1f2328">:</span><span style="color:#0a3069">&#34;a provider verifies it; a reader cannot read it&#34;</span><span style="color:#1f2328">}]</span>
 </span></span></code></pre></div><p><code>dropped</code> exists so a loss is stated rather than silent. It lists only what the dialect understood
-and chose not to carry. Everything it did not understand travels as an <code>unknown</code> part, so a later
+and chose not to carry, and the data the writer took out because it held a byte that is not valid
+UTF-8 (see <a href="#reading-a-record">Reading a record</a>). Everything it did not understand travels as an <code>unknown</code> part, so a later
 version of the dialect can interpret it without collecting again. In an entry, <code>what</code> and <code>why</code>
 are strings and <code>bytes</code> is an integer.</p>
 <p>A source record is not always kept whole, so a <code>.sd</code> file is the only landed copy of what its parts

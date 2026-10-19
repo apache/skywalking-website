@@ -33,7 +33,7 @@
   <meta itemprop="name" content="Storage Root">
   <meta itemprop="description" content="Storage Root The storage root is a directory. Everything the project keeps is under it, in two halves: what was collected, one directory per session, and what was assembled, one directory per conversation. Beside them sit the metrics spool and the export state, which belong to the root rather than to a session.
 &lt;root&gt;/ &lt;session-id&gt;/ session.state next_seq, liveness (always unknown), last scan .lock one collector per session removing.json a removal in progress, see Retention removal.state the generation of the last removal that deleted files langsmith.shape.json where LangSmith runs were placed, when it collects them provider/ the bytes of removed chain tips and pieces, see Retention metrics/ immutable decisions of local metric derivation 000001.json exact request and accounting for landed file 1 streams/ main/ transcript.cursor how far the source has been read transcript-&lt;collected-at&gt;-&lt;seq&gt;.sd transcript-&lt;collected-at&gt;-&lt;seq&gt;.sk the skeleton of a landed file retention removed changes.cursor the plugin&#39;s change records for the stream, when changes-&lt;collected-at&gt;-&lt;seq&gt;.sd the asz Claude Code plugin is installed execution.cursor the plugin&#39;s execution records for the stream: which execution-&lt;collected-at&gt;-&lt;seq&gt;.sd MCP server each call went to, and how it ended &lt;agent-id&gt;/ one directory per child agent transcript.cursor transcript-&lt;collected-at&gt;-&lt;seq&gt;.sd meta.cursor meta-&lt;collected-at&gt;-&lt;seq&gt;.sd runs/ &lt;run-id&gt;/ one directory per workflow run journal.cursor · journal-…sd manifest.cursor · manifest-…sd script.cursor · script-…sd provider_body/ the bodies the runtime exchanged with its model provider_body-&lt;collected-at&gt;-&lt;seq&gt;.sd provider, when claude-code-provider collects them index/ entries.bin the derived index index.state how far the index reaches _conversations/ &lt;conversation-id&gt;/ conversation.state the head pointer, outside every digest .lock one parser per chain rounds/ r000001-&lt;digest&gt;.sf r000002-&lt;digest&gt;.sf _provider/ when claude-code-provider runs seen.state which body files landed, in which session, and which wait .lock one provider collector per root _metrics/ the metrics spool, when metrics are on and sent .lock one derivation per root metrics.state what the derivation has counted metrics-&lt;session-id&gt;-&lt;seq&gt;-local.pb the points derived from the session&#39;s landed file &lt;seq&gt; push.state what has been sent: each file&#39;s digest, the receivers, the owner of each session, and the files a receiver rejected records of _root/ .lock one writing command per root, for one pass _export/ .lock one pusher per root _scenario/ only in a root a claude-code scenario build wrote .lock one pipeline per scenario root _langsmith/ when the LangSmith receiver runs runs-&lt;received-at&gt;-&lt;n&gt;.request a request received and not landed yet unreadable/ requests set aside, each with why open.json the runs remembered, and the conversation of each .lock one LangSmith collector per root _retired/ the retired sessions &lt;session-id&gt; an empty file: the session is never collected again _removed/ what a removal of a scenario session, or a retirement, &lt;session-id&gt;/ is deleting: the session directory, moved here whole, &lt;session-id&gt;.chain/ and its conversation&#39;s directory, moved here whole Child streams are flat siblings of main, keyed by agent id. Provider bodies sit under the session, not under a stream, because a body names no stream; the view joins each to its call. The storage path deliberately does not mirror the source tree: a path must not encode a relationship the pipeline is supposed to derive. OTLP Records says how the metrics spool fills and what push.state records. _scenario/ exists only in a root a scenario build wrote, and _retired/ once a session is retired. _removed/ is used by a scenario’s removal and by a retirement. Retention says what each is for.">
-  <meta itemprop="wordCount" content="8816">
+  <meta itemprop="wordCount" content="9779">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Storage Root">
   <meta name="twitter:description" content="Storage Root The storage root is a directory. Everything the project keeps is under it, in two halves: what was collected, one directory per session, and what was assembled, one directory per conversation. Beside them sit the metrics spool and the export state, which belong to the root rather than to a session.
@@ -1554,7 +1554,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b5a56e3</div>
+                  <div class="commit-id">Commit Id: 928b67a</div>
                 
 
 
@@ -1739,11 +1739,21 @@ addresses every record by file and line and binds itself to the file digests, so
 that a round references would break every reference. A change of budget applies to new files
 only. To bring an existing root under a new budget, <code>asz repack DEST</code> re-cuts every file into a
 new root, keeping each record&rsquo;s bytes and order, carries the cursors over, and builds the chains
-again on the new files, which describe the same conversation at new positions.</p>
+again on the new files, which describe the same conversation at new positions. It cuts a file by
+what it takes once written, header and closing line included, as the collector does. It cuts
+records of two files into one only when the files are next to each other in their directory and
+their headers are the same apart from <code>seq</code> and <code>at</code>, so every file still names its own source and
+every record keeps its place. Each new file has the header of the newest file its records
+came from, <code>at</code> included, and the files are numbered in the order their records landed.</p>
 <h2 id="cursors">Cursors</h2>
 <p>Each source has one cursor, beside the files it tracks, named <code>&lt;kind&gt;.cursor</code>. The dot matters.
 Landed files are named <code>&lt;kind&gt;-&lt;collected-at&gt;-&lt;seq&gt;.sd</code>, so a cursor named with a hyphen would share
-their prefix, and a scan for one kind&rsquo;s files would take the cursor for data.</p>
+their prefix, and a scan for one kind&rsquo;s files would take the cursor for data. A stream can hold more
+than one source of the plugin&rsquo;s kinds: the same session in a second plugin directory or recorder
+root, or a file the plugin wrote again at the same path (see <a href="#pruned-sources">Pruned sources</a>). The
+first source keeps the plain name. Each other one has a cursor named
+<code>&lt;kind&gt;-&lt;12 hexadecimal characters&gt;.cursor</code>, which a scan for landed files passes over by its
+extension.</p>
 <p>A cursor belongs to one source rather than to the session, because a session can hold hundreds of
 sources. Measured on 2026-09-11 on one machine&rsquo;s storage root of 60 Claude Code sessions, the
 largest session has 616 streams and 1,309 cursors, 614,788 bytes in all. One file per session would
@@ -1777,11 +1787,11 @@ change records.</p>
   <tbody>
       <tr>
           <td><code>source</code></td>
-          <td>the source path, relative to the adapter&rsquo;s root, with forward slashes</td>
+          <td>the source path, relative to the adapter&rsquo;s root, with forward slashes. For a source of the plugin&rsquo;s that lands under a <code>src</code> of its own, that <code>src</code>, see <a href="#pruned-sources">Pruned sources</a></td>
       </tr>
       <tr>
           <td><code>origin</code></td>
-          <td>the adapter&rsquo;s root the source is under, with forward slashes: relative to the storage root when the source root lies inside it, so a root copied whole keeps its cursors, and absolute otherwise. Written since 0.5.0 by an adapter that reads more than one root, since two roots can hold one relative path. A cursor without it was written before 0.5.0 and belongs to the root whose file it was read from - the file with its <code>dev</code> and <code>ino</code> and the bytes of its <code>tail_sha256</code>, since two filesystems can give one inode number to unrelated files - and that root writes the key on its next pass. A legacy cursor whose file was copied or restored since is not claimed; that source is read again from its start behind a cursor of its own, and the index keeps the first record it holds for an id</td>
+          <td>the adapter&rsquo;s root the source is under, with forward slashes: relative to the storage root when the source root lies inside it, so a root copied whole keeps its cursors, and absolute otherwise. <code>asz repack</code> writes a relative origin again for its new root, which the source root is outside, and renames each cursor named for it to match: a second source&rsquo;s, and a later file&rsquo;s. Written since 0.5.0 by an adapter that reads more than one root, since two roots can hold one relative path. A cursor without it was written before 0.5.0 and belongs to the root whose file it was read from - the file with its <code>dev</code> and <code>ino</code> and the bytes of its <code>tail_sha256</code>, since two filesystems can give one inode number to unrelated files - and that root writes the key on its next pass. A legacy cursor whose file was copied or restored since is not claimed; that source is read again from its start behind a cursor of its own, and the index keeps the first record it holds for an id</td>
       </tr>
       <tr>
           <td><code>dev</code>, <code>ino</code></td>
@@ -1802,6 +1812,10 @@ change records.</p>
       <tr>
           <td><code>tail_sha256</code></td>
           <td>the SHA-256 of the 1 MiB before <code>offset</code>. A mismatch means bytes already read were rewritten.</td>
+      </tr>
+      <tr>
+          <td><code>head_sha256</code></td>
+          <td>the SHA-256 of the file&rsquo;s first line, without its newline, taken from the bytes the first read landed. Written for the plugin&rsquo;s files, which the plugin can remove and write again at the same path, on every cursor that has read a line since 0.6.0, see <a href="#pruned-sources">Pruned sources</a>. A file that does not begin with this line is another file. A cursor that read lines before 0.6.0 has none and is never given one, so the file at its path is taken to be its file, and a file the plugin writes again there is a <code>conflict</code>.</td>
       </tr>
       <tr>
           <td><code>size</code>, <code>mtime</code></td>
@@ -1917,6 +1931,39 @@ plugin removes an output file itself once it has not been written to for <code>r
 by default (see <a href="../../adapters/claude-code-plugin#retention">Retention</a>). Their adapter sets
 <code>source_gone</code> only on a file that goes while a pass reads it, so the cursor of a file the plugin
 removed is left as it was.</p>
+<p>When the session goes on after that, the plugin writes a new file at the same path. Its bytes are
+not the ones the old cursor read, so read against that cursor it would be a <code>conflict</code>, and nothing
+more from the path would be collected. So the cursor of a plugin file records <code>head_sha256</code>, and a
+pass finds a file&rsquo;s cursor before it reads the file:</p>
+<ol>
+<li>It starts at the path&rsquo;s cursor, <code>&lt;kind&gt;.cursor</code> or the one of a second source.</li>
+<li>A cursor with no <code>head_sha256</code> takes the file. It has read nothing yet, or it was written before
+0.6.0.</li>
+<li>Otherwise the pass reads the file&rsquo;s first line. When its SHA-256 is <code>head_sha256</code>, the file is
+the cursor&rsquo;s file. The line is read on every pass, even when the file has the <code>ino</code> the cursor
+recorded and a size equal to its <code>offset</code>: a file system can give a new file the inode of the
+one removed before it, and a new file of the same length would otherwise never be read.</li>
+<li>Otherwise the file is a later one. The next cursor is <code>&lt;kind&gt;-&lt;12 hexadecimal characters&gt;.cursor</code>,
+the first 12 hexadecimal characters of the SHA-256 of the adapter&rsquo;s root as <code>origin</code> writes it,
+the source path and that <code>head_sha256</code>, joined by newlines. The pass goes back to step 2 with it.
+A file that holds no complete line yet begins with no line, so it comes to a cursor that has read
+nothing, and waits there for its first line.</li>
+</ol>
+<p>A later file is read from its start, its lines numbered from 1, behind a cursor that has read
+nothing. Nothing of the file before it is landed again: that file is gone, and the plugin writes
+each record once, so two files it writes never begin with the same line. A file rewritten behind
+its cursor still begins with the line it began with, so it stays with its cursor and is a
+<code>conflict</code> there, as <a href="#append-cursors">Append cursors</a> says. A file whose first line was rewritten
+is taken for a later file.</p>
+<p>A source with a cursor other than <code>&lt;kind&gt;.cursor</code>, a later file at the path or the same path under
+a second recorder root, lands under a <code>src</code> of its own: the source path, <code>#</code>, and the first 12
+hexadecimal characters of its <code>head_sha256</code>. Its cursor&rsquo;s <code>source</code> is that <code>src</code>. Its lines number
+from 1 again, so a reader of the landed files alone tells it from the other sources of the stream,
+and <code>asz verify</code> checks each <code>src</code> of the plugin&rsquo;s kinds apart, as
+<a href="../session-data#header">Session Data</a> says. A skeleton keeps its file&rsquo;s header, and <code>asz repack</code>
+cuts the records of two files into one only when their headers are the same, so both keep it. A
+cursor that read lines before 0.6.0
+has no <code>head_sha256</code>, and its files land under the source path, as they did.</p>
 <p>A session a scenario build marked is the one case where asz deletes a source itself. Once all of
 the session is sent, a pipeline removes its source first and then the whole session directory, as
 <a href="#retention">Retention</a> describes.</p>
@@ -1955,8 +2002,11 @@ rebuilds it from the landed files; a schema change discards it rather than migra
 and its counts of entries, blocks and strings. Cursors commit per source, but the index is written
 once per session, at the end of its pass. A crash between the two leaves the index behind what
 landed, and nothing would land again to fill the gap. So the next collect compares <code>indexed_seq</code>
-with the highest sequence on disk and indexes the landed files above it again. Parse never reads
-past <code>indexed_seq</code>, so a round cannot cite a record the index does not hold.</p>
+with the highest sequence on disk and indexes the landed files above it again. A collector does
+that only for a session whose source it still finds, and a runtime can delete a session&rsquo;s source
+before the next pass. So parse makes the same comparison before it cuts a round, and indexes the
+landed files above <code>indexed_seq</code> itself. Parse never reads past <code>indexed_seq</code>, so a round cannot
+cite a record the index does not hold.</p>
 <h2 id="the-chain">The chain</h2>
 <p><code>_conversations/&lt;id&gt;/rounds/</code> holds <a href="../session-flow">Session Flow</a>: an append-only chain of
 immutable rounds. The conversation is the fold of every round; there is no other state. The file
@@ -1978,8 +2028,10 @@ exclusive rename uses a hard link, which has the same guarantees. exFAT on macOS
 disk image, both calls returned &ldquo;operation not supported&rdquo;. There asz creates an empty file with
 <code>O_EXCL</code>, which still refuses an existing round, then renames the complete round over it. Between
 those two calls, with no write between them, a reader or a crash can see an empty round file.</p>
-<p>No round or receipt is ever empty, so an empty file under such a name is a reservation. The chain
-does not count an empty round file, and the next publication removes one older than a minute. An
+<p>No round or receipt is ever empty, so an empty file under such a name is a reservation. No reader
+counts an empty round file: not the chain, the page, <code>asz push</code>, retention or a scenario removal,
+so none of them waits for one or fails reading it. The next publication removes one older than a
+minute, and an idle conversation may keep one until its directory goes. An
 empty receipt holds no decision, so its file is derived again, and a publication replaces a
 receipt reservation older than a minute. A younger one may belong to a writer still running, so
 the file waits for a later pass.</p>
@@ -2046,8 +2098,11 @@ The store had also outlived its source: it held 48 sessions where the source dir
 <h3 id="storageretention">storage.retention</h3>
 <p><code>storage.retention</code> says how long an idle conversation keeps what in the root, at two levels on one
 clock. A conversation is idle for as long as nothing new has landed in any of its streams, by asz&rsquo;s
-clock: the time is read from the header of its newest landed file or skeleton, never from a
-record&rsquo;s time, a file&rsquo;s time or when a file was removed. Whether it was sent, whether an endpoint
+clock: the time is read from the header of its newest landed file or skeleton, the one with the
+highest sequence, never from a record&rsquo;s time, a file&rsquo;s time or when a file was removed. A root
+<code>asz repack</code> wrote has the same clock as the root it read: each file it cuts says when the newest
+file its records came from was collected, and its files are numbered in the order their records
+landed. Whether it was sent, whether an endpoint
 is set, and whether its source is still there do not change that. Each setting is <code>-1</code>, off, by
 default, and only both off keeps everything.</p>
 <ul>
@@ -2136,9 +2191,10 @@ anything lands, whatever <code>storage.retention</code> says now. Until a remova
 lands into its session: each finds the session busy. While both a landed file and its skeleton
 are there, every reader reads the landed file, and one that finds the file gone after it listed it
 reads the skeleton. The two read as the same index. The page keeps what it read of a conversation
-for its chain head and the generation in <code>removal.state</code>, and keeps nothing while a removal is in
-progress, so a page in another process than the pipeline draws the skeletons once the files are
-removed.</p>
+for its chain head, the generation in <code>removal.state</code> and the names of the session&rsquo;s landed files
+and skeletons, and keeps nothing while a removal is in progress. So a page in another process than
+the pipeline draws the skeletons once the files are removed, and never draws text from files that
+are gone.</p>
 <p>A root with skeletons still verifies. <code>asz verify</code> checks lines and bytes through each skeleton,
 binds each round to the digest each file had, which its skeleton recorded, and reports every removed
 file with what the receiver confirmed of it, never as verified. <code>asz show</code> says a record was
@@ -2220,7 +2276,10 @@ again.</li>
 <li>The session&rsquo;s directory is renamed to <code>_removed/&lt;session-id&gt;/</code>, and its conversation&rsquo;s to
 <code>_removed/&lt;session-id&gt;.chain/</code>, and each is deleted there. The lock inside each is released
 first, since Windows cannot rename a directory that holds an open lock. After each rename, the
-two directories it changed are synced, the errors checked, before anything moved is deleted.</li>
+two directories it changed are synced, the errors checked, before anything moved is deleted.
+The conversation directory named by the session&rsquo;s id goes only when its head round&rsquo;s header
+names the session, or it has no round. Rounds that name another session are that session&rsquo;s
+chain, as <code>asz push</code> reads them, and they stay.</li>
 <li>Every metrics request of the session the receiver has, a partly rejected one included, is
 deleted. Then the root, <code>_conversations/</code>, <code>_removed/</code> and the spool are synced, the errors
 checked. Every attempt syncs them, so what an earlier attempt changed is durable too: a rename

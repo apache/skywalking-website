@@ -37,7 +37,7 @@ Is apache-skywalking-asz-langchain says when a tool call begins and ends asz-cha
 The LangChain receiver brings the conversation. This brings what the tools did to the workspace, which nothing on the wire says.
 What it is Two pieces, and neither holds any logic of its own:
 Is apache-skywalking-asz-langchain says when a tool call begins and ends asz-changes scans the watched path and writes the difference asz-changes is the same program the Claude Code plugin runs. LangChain has no way to tell a program outside the process that a tool started, and Claude Code does, which is the whole reason the Python half exists.">
-  <meta itemprop="wordCount" content="849">
+  <meta itemprop="wordCount" content="1150">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="LangChain Plugin">
   <meta name="twitter:description" content="LangChain Plugin Records what each of a LangChain agent’s tool calls changed on disk, so a conversation shows the work as well as the words.
@@ -1560,7 +1560,7 @@ Is apache-skywalking-asz-langchain says when a tool call begins and ends asz-cha
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b5a56e3</div>
+                  <div class="commit-id">Commit Id: 928b67a</div>
                 
 
 
@@ -1739,14 +1739,39 @@ and digested so two owners cannot collide. The rule is written twice, once in
 Python and once in Go, and a test holds them to the same table — the receiver
 lands the conversation, this lands what changed, and they meet only in the name
 of the session directory.</p>
+<p>The project is the one the tool&rsquo;s run is traced under, whether it was set in
+code, with <code>LangChainTracer(project_name=...)</code>, <code>tracing_v2_enabled(project_name=...)</code>
+or langsmith&rsquo;s <code>tracing_context(project_name=...)</code>, or by the environment. The
+plugin watches LangChain&rsquo;s tracer start each tool run and reads the project
+from the run. The tracer and the plugin are both told of a tool&rsquo;s start before
+the tool runs, in either order, and the scan before the tool runs is made once
+both have been, under the tracer&rsquo;s project.</p>
 <p>A tool call in a run with no thread key records nothing. There is no
-conversation to file it under, and inventing one would be worse than the gap.</p>
+conversation to file it under, and inventing one would be worse than the gap.
+Nor does a tool call that no LangChain tracer traces, or that one traces with
+tracing turned off, as inside <code>tracing_context(enabled=False)</code>: no
+conversation holds its run, and nothing says which project it is in.</p>
+<p>If the installed LangChain&rsquo;s tracer cannot be watched, the plugin logs a
+warning when it loads and files every change under the project the
+environment names, read as the tracing client reads it.</p>
 <h2 id="what-it-cannot-see">What it cannot see</h2>
 <ul>
 <li><strong>Changes outside the watched path</strong>, including anything in another container
 or on another host.</li>
 <li><strong>Which tool changed what, when two run at once.</strong> The window is shared, and
 the record says so rather than guessing.</li>
+<li><strong>One tool&rsquo;s start, told late to a second set of handlers.</strong> LangChain tells
+every handler of a tool&rsquo;s start together, before the tool runs. When two
+callback managers are merged, a tool&rsquo;s start reaches two copies of the
+plugin and two tracers, and the plugin writes one begin record for it. It
+remembers the last 100,000 tool starts it has seen from both a plugin and a
+tracer, or has stopped waiting for, whether or not a begin was written and
+whether or not the tool has ended. If some of one tool&rsquo;s start callbacks are
+held up until 100,000 other starts have been remembered, the late ones can
+write a second begin record, under their own tracer&rsquo;s project. A tool whose start callbacks are more than ten
+minutes apart records nothing, and the same lag lets it write a begin after
+all. Telling them apart however late they come would need memory without
+bound.</li>
 <li><strong>Anything at all after a long collector outage.</strong> Output expires on the
 retention window whether or not it was collected, the same as on the Claude
 Code path.</li>

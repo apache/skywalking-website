@@ -35,7 +35,7 @@ Where the data comes from langsmith, the tracing client, is a dependency of lang
   <meta itemprop="description" content="LangChain How an agent built on LangChain or LangGraph maps onto the unified conversation model, what the langsmith-ingest adapter reads, and what the wire cannot supply.
 For turning it on, see LangChain and LangGraph. For the words, see the LangChain glossary.
 Where the data comes from langsmith, the tracing client, is a dependency of langchain-core, so every LangChain application already carries it. It is pointed at asz with environment variables and sends what the graph did. asz accepts what that client sends; it carries none of its code and claims no affiliation with the product it was written for.">
-  <meta itemprop="wordCount" content="5303">
+  <meta itemprop="wordCount" content="5722">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="LangChain">
   <meta name="twitter:description" content="LangChain How an agent built on LangChain or LangGraph maps onto the unified conversation model, what the langsmith-ingest adapter reads, and what the wire cannot supply.
@@ -1557,7 +1557,7 @@ Where the data comes from langsmith, the tracing client, is a dependency of lang
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b5a56e3</div>
+                  <div class="commit-id">Commit Id: 928b67a</div>
                 
 
 
@@ -1711,13 +1711,31 @@ passed down, a model call made inside a decorated function supplies no thread of
 the function&rsquo;s, as <a href="#ownership-is-a-namespace">Ownership is a namespace</a> says a run that supplies
 none does; landed under its trace, the answer was a conversation of its own and the question&rsquo;s had
 none. A LangGraph JS graph puts the thread on every run.</p>
+<p>The receiver serves <code>GET /info</code>, <code>POST /runs/multipart</code>, the JSON batch <code>POST /runs/batch</code>, and
+the one-run endpoints: <code>POST /runs</code> starts a run, and <code>PATCH /runs/{id}</code> updates one. The run an
+update names in its path is the run it updates, and its body need not name it again. Read in
+LangSmith JS 0.10.8: when it does not batch, as with <code>autoBatchTracing: false</code>, its <code>updateRun</code>
+puts the run&rsquo;s id in the path alone and sends the body without it. Every such update was refused,
+so none of the runs it traced finished. A body whose <code>id</code> names another run than its path is
+refused, because which of the two the client meant cannot be told, and so is a body with no <code>id</code>
+sent to a path that names no run.</p>
 <p>An update carries only what changed. <code>update_run(id, outputs=...)</code> sends the id and the outputs,
 with the trace, the project, the kind of run and the dotted order all null — read on its own,
 a run belonging to no conversation and of no kind. So the runs that have started and not ended
 are remembered, and an update is completed from what its own start said. Nothing is invented:
-every field comes from an earlier arrival about the same run.</p>
+every field comes from another arrival about the same run, in an earlier request or anywhere in
+the same one. Both clients write a run&rsquo;s start before its update, but a client written by hand
+need not, and an update completed only from the arrivals before it had no kind, landed as a
+graph&rsquo;s own run, and lost the model call&rsquo;s answer. So the arrivals of a run in one request are
+read together, with the earlier start and the later end, and a response body lands after its run&rsquo;s
+request, which its reply is read against.</p>
 <p>A run is remembered by when it was last seen, and forgotten 24 hours after that, or sooner when
 more than 50,000 runs are remembered, the oldest first. A run that keeps arriving stays remembered.
+What a trace remembers of its runs, to place a run that arrives inside them, follows the same rule,
+except that a run a remembered run ran inside is kept with it. So a trace that runs for days keeps
+its ancestry, not every run it made. A run that arrives inside a run forgotten this way waits for
+it, as a run of a trace idle for a day does, and then, when its conversation is known, lands with
+the ancestry that did arrive.
 An update that names no conversation of its own, whose start is not remembered because it was
 forgotten or never came, cannot be given back its conversation. It waits, as a run waits for its
 ancestry, in case its start is still on its way, and once it has waited as long as it may it is
@@ -1771,6 +1789,13 @@ the captures, from the Python client, carry the project and the thread.</p>
       </tr>
   </tbody>
 </table>
+<p>A chat model invoked on its own is the root of its trace, and its question is the human message
+at the end of its <code>inputs.messages</code>, as a graph&rsquo;s is. LangChain&rsquo;s tracer writes a chat model&rsquo;s
+messages as a list per prompt, <code>[[...]]</code>, read in langchain-core 1.6.3, and both that and a single
+list are read. Read as one flat list, no item of it was a person&rsquo;s message, so nothing opened the
+conversation, and with provider bodies off the question was not landed. The corpus has no such
+trace: all 51 of its trace roots are chain runs. Any other run&rsquo;s <code>messages</code> are the application&rsquo;s
+own value, and a list of lists there is not read as messages.</p>
 <h3 id="a-record-is-an-arrival-not-a-run">A record is an arrival, not a run</h3>
 <p>A run is posted when it starts and patched when it ends, so the same run can reach asz more than
 once. Both clients send the two as one post of the finished run when they fall in one batch, as
