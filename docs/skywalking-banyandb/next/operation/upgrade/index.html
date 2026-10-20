@@ -35,7 +35,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
   <meta itemprop="description" content="Upgrade Procedure This document describes how to upgrade your existing installation of the BanyanDB database.
 Server and File Versioning BanyanDB uses a separate version for the server and the file format. The server version is the version of the BanyanDB server binary, and the file version is the version of the data files stored on the disk.
 You can use “banyand liaison/data/standalone -v” to check the server version. The file version is stored in “metadata” file laid in each “segment” folder.">
-  <meta itemprop="wordCount" content="2104">
+  <meta itemprop="wordCount" content="2238">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Upgrade Procedure">
   <meta name="twitter:description" content="Upgrade Procedure This document describes how to upgrade your existing installation of the BanyanDB database.
@@ -2081,7 +2081,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f2f351b</div>
+                  <div class="commit-id">Commit Id: f942404</div>
                 
 
 
@@ -2139,7 +2139,7 @@ You can use “banyand liaison/data/standalone -v” to check the server version
 <p>BanyanDB uses a separate version for the server and the file format. The server version is the version of the BanyanDB server binary, and the file version is the version of the data files stored on the disk.</p>
 <p>You can use &ldquo;banyand liaison/data/standalone -v&rdquo; to check the server version. The file version is stored in &ldquo;metadata&rdquo; file laid in each <a href="../../concept/tsdb#segment">&ldquo;segment&rdquo;</a> folder.</p>
 <p>The server will check the file version when it starts. If the file version is not compatible with the supported version list in the server, the server will refuse to start. Please check the <a href="https://github.com/apache/skywalking-banyandb/tree/master/CHANGES.md">CHANGELOG.md</a> to ensure that the new version is compatible with the existing data files.</p>
-<p>BanyanDB upgrade procedure is a rolling upgrade. You can upgrade the BanyanDB cluster without downtime. But you need to follow the instructions carefully to avoid any data loss:</p>
+<p>BanyanDB upgrade procedure is a rolling upgrade, except where a release says otherwise: <strong>0.12 does not support rolling upgrades</strong> (see <a href="#upgrading-to-012">Upgrading to 0.12</a>). You can upgrade the BanyanDB cluster without downtime. But you need to follow the instructions carefully to avoid any data loss:</p>
 <ul>
 <li>Perform the upgrades consecutively. You cannot skip versions.</li>
 <li>You must keep the all nodes with the same version. Do not mix versions in the same cluster.</li>
@@ -2161,11 +2161,13 @@ You can use “banyand liaison/data/standalone -v” to check the server version
 <li>After upgrading all nodes, the cluster will be running the new version.</li>
 </ul>
 <blockquote>
-<p><strong>Exception — upgrading to 0.11 or later.</strong> The vectorized query paths change the
+<p><strong>Exception — upgrading to 0.11.</strong> The vectorized query paths change the
 liaison&lt;-&gt;data wire format, and a data node must never emit a frame that the liaison it
-answers cannot decode. For 0.11 and later the order is <strong>reversed</strong>: upgrade &ldquo;liaison&rdquo;
-nodes first, then &ldquo;data&rdquo; nodes. See <a href="#vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default</a>
-for 0.11 and <a href="#row-based-query-path-removed-breaking">Row-based query path removed</a> for 0.12.</p>
+answers cannot decode. For 0.11 the order is <strong>reversed</strong>: upgrade &ldquo;liaison&rdquo;
+nodes first, then &ldquo;data&rdquo; nodes. See <a href="#vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default</a>.</p>
+<p><strong>Exception — upgrading to 0.12.</strong> Rolling and mixed-version upgrades are <strong>not supported</strong>.
+Use the <a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy</a> and see
+<a href="#rolling-and-mixed-version-upgrades-are-not-supported-breaking">Rolling and mixed-version upgrades are not supported</a>.</p>
 </blockquote>
 <p>To ensure this strategy works, you should have a minimum of one node for each role of node in the cluster. For example, if you have a 2-node cluster, you should have at least one &ldquo;liaison&rdquo; and one &ldquo;data&rdquo; node.</p>
 <p>The cluster should also have enough capacity to handle the load when one node is down for upgrade.</p>
@@ -2181,16 +2183,23 @@ for 0.11 and <a href="#row-based-query-path-removed-breaking">Row-based query pa
 <p>If you don&rsquo;t have enough resource to perform a rolling upgrade or you have a large cluster with many nodes, you can use the minimum downtime strategy.</p>
 <h2 id="upgrading-to-012">Upgrading to 0.12</h2>
 <p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.12.0.</p>
+<h3 id="rolling-and-mixed-version-upgrades-are-not-supported-breaking">Rolling and mixed-version upgrades are not supported (breaking)</h3>
+<p>BanyanDB 0.12.0 does <strong>not</strong> support rolling upgrades. Upgrade the whole cluster at once:</p>
+<ol>
+<li>Stop all clients and every BanyanDB node, liaison and data.</li>
+<li>Replace the binaries with 0.12.</li>
+<li>Start the 0.12 data nodes, then the 0.12 liaison nodes.</li>
+<li>Verify schema initialization and ingestion before restoring normal traffic.</li>
+</ol>
+<p>A cluster that mixes 0.12 nodes with nodes of an earlier release is not supported, whatever the node order. Two changes make the two sides unable to talk to each other:</p>
+<ul>
+<li>The liaison and the data nodes exchange native columnar frames, and a 0.12 data node always sends them: measure frames are version 4 only, and a 0.12 liaison rejects a measure frame of any other version with an error. A liaison of an earlier release has no frame decoder for it. There is no negotiation and no fallback to protobuf or to the earlier row-oriented measure frame.</li>
+<li>The series index cutover described in <a href="https://github.com/apache/skywalking-banyandb/tree/master/CHANGES.md">CHANGES.md</a> changes data that all nodes read and write.</li>
+</ul>
+<p><strong>Rollback.</strong> Rollback is a binary downgrade of the whole cluster, not a flag flip: stop every node and follow the <a href="#rollback">Rollback</a> procedure below. Do not run a mixed cluster during rollback either. The on-disk format of the vectorized query paths is unchanged by this release.</p>
 <h3 id="row-based-query-path-removed-breaking">Row-based query path removed (breaking)</h3>
 <p>The row-based query execution path is gone. Stream, measure and trace queries all execute through the vectorized columnar pipeline, and a distributed data node always answers with a native columnar frame. There is no runtime switch back to row execution or to the protobuf wire format.</p>
-<p><code>--stream-vectorized-enabled</code>, <code>--trace-vectorized-enabled</code> and <code>--measure-vectorized-enabled</code> are still registered so an existing command line keeps parsing, but they are no longer switches:</p>
-<ul>
-<li><code>=true</code>, or the flag omitted, is the only supported setting and changes nothing.</li>
-<li><code>=false</code> makes the node <strong>exit at startup</strong> with an error naming <a href="https://github.com/apache/skywalking/issues/13998">apache/skywalking#13998</a>, rather than silently discarding an explicit rollback request.</li>
-</ul>
-<p>All three flags are removed outright in 0.13.0. Drop them from systemd units, Helm values, container arguments and compose files as part of this upgrade.</p>
-<p><strong>Upgrade &ldquo;liaison&rdquo; nodes BEFORE &ldquo;data&rdquo; nodes</strong>, as in 0.11. A 0.12 data node emits columnar frames unconditionally, and a liaison on an older binary has no frame decoder. The 0.11 workaround — starting the new data nodes with the vectorized paths disabled and enabling them once every liaison is upgraded — is no longer available, because the paths can no longer be disabled. If you cannot control node ordering, use the <a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy</a>.</p>
-<p><strong>Rollback.</strong> Rollback is a binary downgrade, not a flag flip: follow the <a href="#rollback">Rollback</a> procedure below. The on-disk format is unchanged by this release, so no data migration is involved.</p>
+<p><code>--stream-vectorized-enabled</code>, <code>--trace-vectorized-enabled</code> and <code>--measure-vectorized-enabled</code> are removed. A node started with any of them fails at startup with an unknown-flag error. Drop them from systemd units, Helm values, container arguments and compose files as part of this upgrade. <code>--stream-vectorized-batch-size</code>, <code>--trace-vectorized-batch-size</code> and the <code>*-vectorized-query-memory-mib</code> flags are unchanged.</p>
 <h3 id="stream-timestamp-order-queries-with-criteria-spanning-multiple-segments">Stream timestamp-order queries with criteria spanning multiple segments</h3>
 <p>Stream queries that are ordered by timestamp, carry a criteria filter, and span more than one segment may now return fewer elements than 0.11.x did. The removed row scan resumed segment by segment: after its first <code>maxElementSize</code>-sized batch it could keep pulling from later segments, accumulating further matches until the requested limit was filled. The vectorized scan does not see segment boundaries, so it caps at <code>maxElementSize</code> and stops there.</p>
 <p>The results it returns are correct and correctly ordered — the response is simply under-filled against the limit where the old path would have gone back for more. Index-order (tag-ordered) queries are unaffected: their merge stays uncapped and still fills the limit.</p>
@@ -2228,6 +2237,9 @@ BanyanDB 0.10 and 0.11 nodes is not supported.</p>
 <p><strong>Rollback.</strong> Stop all clients and BanyanDB nodes before restoring the previous versions. Do not run a mixed 0.10/0.11
 BanyanDB cluster during rollback.</p>
 <h3 id="vectorized-query-paths-enabled-by-default-breaking-for-rolling-upgrades">Vectorized query paths enabled by default (breaking for rolling upgrades)</h3>
+<blockquote>
+<p>This section describes upgrading to 0.11 only. The flags below were removed in 0.12, and 0.12 does not support rolling or mixed-version upgrades; see <a href="#rolling-and-mixed-version-upgrades-are-not-supported-breaking">Rolling and mixed-version upgrades are not supported</a>.</p>
+</blockquote>
 <p>The vectorized <strong>stream</strong> and <strong>trace</strong> query paths are now enabled by default, joining <strong>measure</strong> (default-on since 0.10). <code>--stream-vectorized-enabled</code>, <code>--trace-vectorized-enabled</code> and <code>--measure-vectorized-enabled</code> all default to <code>true</code>.</p>
 <p><strong>This changes the required rolling-upgrade order. Upgrade &ldquo;liaison&rdquo; nodes BEFORE &ldquo;data&rdquo; nodes.</strong></p>
 <p>The reason is that each flag selects the liaison&lt;-&gt;data wire format as well as the query engine. A flag-on distributed <strong>data</strong> node emits a native columnar frame instead of protobuf. Liaison nodes on 0.11 accept both — they dispatch per message on the frame&rsquo;s leading magic byte and fall back to protobuf — but a liaison still running an older binary has <strong>no frame decoder at all</strong> and will fail to deserialize the response.</p>
@@ -2259,7 +2271,7 @@ BanyanDB cluster during rollback.</p>
 </span></span></code></pre></div><p>Standalone deployments are unaffected: the frame is only emitted on a distributed data node, so a standalone server always uses the protobuf path regardless of the flag.</p>
 <p><strong>Rollback.</strong> Pass <code>--stream-vectorized-enabled=false</code> / <code>--trace-vectorized-enabled=false</code> / <code>--measure-vectorized-enabled=false</code> on the standalone or data-node command line and restart. The row path and the protobuf wire format resume immediately; no data migration is involved, because the flags affect only the query and wire paths, never the on-disk format.</p>
 <blockquote>
-<p>This rollback applies to 0.11 only. The row path was removed in 0.12.0 and <code>=false</code> is no longer accepted — see <a href="#row-based-query-path-removed-breaking">Row-based query path removed</a>.</p>
+<p>This rollback applies to 0.11 only. The row path and these flags were removed in 0.12.0 — see <a href="#row-based-query-path-removed-breaking">Row-based query path removed</a>.</p>
 </blockquote>
 <h2 id="upgrading-to-010">Upgrading to 0.10</h2>
 <p>This section describes breaking changes and important behavioral changes when upgrading to BanyanDB 0.10.0.</p>
@@ -2323,6 +2335,7 @@ BanyanDB cluster during rollback.</p>
         <li><a href="#minimum-downtime-strategy-to-upgrade-a-cluster">Minimum Downtime Strategy to Upgrade a Cluster</a></li>
         <li><a href="#upgrading-to-012">Upgrading to 0.12</a>
           <ul>
+            <li><a href="#rolling-and-mixed-version-upgrades-are-not-supported-breaking">Rolling and mixed-version upgrades are not supported (breaking)</a></li>
             <li><a href="#row-based-query-path-removed-breaking">Row-based query path removed (breaking)</a></li>
             <li><a href="#stream-timestamp-order-queries-with-criteria-spanning-multiple-segments">Stream timestamp-order queries with criteria spanning multiple segments</a></li>
             <li><a href="#index-order-queries-that-do-not-project-the-ordered-tag">Index-order queries that do not project the ordered tag</a></li>
@@ -2460,6 +2473,20 @@ BanyanDB cluster during rollback.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,0 +1,13183 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="twitter:site" content="skywalking.apache.org">
+<meta name="twitter:image:src" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+<meta property="og:image" content="https://skywalking.apache.org/images/skywalking_400x400.png">
+
+<meta name="generator" content="Hugo 0.159.0">
+
+<META NAME="ROBOTS" CONTENT="INDEX, FOLLOW">
+<link rel="stylesheet" href="/css/iconfont/iconfont.css">
+
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png">
+<link rel="manifest" href="/favicons/site.webmanifest">
+<link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+<title>Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge | Apache SkyWalking</title><meta property="og:url" content="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/measure-scan-path-v2/readme/">
+  <meta property="og:site_name" content="Apache SkyWalking">
+  <meta property="og:title" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
+  <meta property="og:description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
+This document specifies how a measure query turns storage blocks into batches on a data node: partIter / tstIter, block decoding, blockCursor, and the scan orchestration in banyand/measure/query.go and query_batch.go. It is the companion of Measure batch v2, which defines the batch, the reference-counted cursor and the frame this scan produces and consumes.">
+  <meta property="og:locale" content="en">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="docs">
+
+  <meta itemprop="name" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
+  <meta itemprop="description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
+This document specifies how a measure query turns storage blocks into batches on a data node: partIter / tstIter, block decoding, blockCursor, and the scan orchestration in banyand/measure/query.go and query_batch.go. It is the companion of Measure batch v2, which defines the batch, the reference-counted cursor and the frame this scan produces and consumes.">
+  <meta itemprop="wordCount" content="4630">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
+  <meta name="twitter:description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
+This document specifies how a measure query turns storage blocks into batches on a data node: partIter / tstIter, block decoding, blockCursor, and the scan orchestration in banyand/measure/query.go and query_batch.go. It is the companion of Measure batch v2, which defines the batch, the reference-counted cursor and the frame this scan produces and consumes.">
+
+
+
+<link rel="preload" href="/scss/main.min.c970279f2301f0c9cf2beb4e5df2392fb1a258d8f52d8fc73e2ee4b6b26e0e05.css" as="style">
+<link href="/scss/main.min.c970279f2301f0c9cf2beb4e5df2392fb1a258d8f52d8fc73e2ee4b6b26e0e05.css" rel="stylesheet" integrity="">
+
+
+
+<link rel="stylesheet" href="/css/highlight-github.css" />
+
+<script src="/js/jquery-3.6.0.min.js"></script>
+
+<link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/measure-scan-path-v2/readme/">
+<meta name="description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document). This document specifies…">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/measure-scan-path-v2/readme/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/measure-scan-path-v2/readme/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/measure-scan-path-v2/readme/","name":"Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge","position":3}]}]}</script>
+
+
+<link rel="alternate" type="application/rss+xml" href="https://skywalking.apache.org/feed.xml" title="Apache SkyWalking">
+
+
+
+  </head>
+  <body class="td-page  project-doc">
+    <header>
+      
+
+
+
+  
+  
+
+  
+  
+
+  
+  
+
+  
+  
+    
+  
+
+  
+  
+
+  
+  
+
+
+
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+    
+    
+  
+
+<nav class="js-navbar-scroll navbar navbar-expand td-navbar" aria-label="Main navigation">
+  <div class="sw-navbar-inner">
+    <button type="button" class="sidebar-button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="site-navigation-drawer">
+      <i class="iconfont icon-menu" aria-hidden="true"></i>
+    </button>
+    <a class="navbar-brand" href="/">
+        <span class="navbar-logo"><img width="130" src="/images/logo.svg" alt="SkyWalking"></span> 
+    </a>
+    <div class="td-navbar-nav-scroll navbar-nav-wrapper" id="navigation">
+        <ul class="navbar-nav mt-lg-0">
+            
+            
+            <li class="nav-item mr-3 mb-lg-0">
+				
+				
+				
+				
+				
+				
+				
+				
+                
+                <a class="nav-link" href="/" ><span>Home</span></a>
+			</li>
+            
+            
+            
+            <li class="nav-item dropdown sw-projects-item">
+                <button type="button" class="nav-link dropdown-toggle sw-projects-toggle active" id="projects-menu-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Projects</button>
+                <div class="dropdown-menu sw-projects-menu" aria-labelledby="projects-menu-toggle">
+                    
+
+
+<div class="sw-projects-content">
+  <a class="dropdown-item sw-projects-intro" href="/get-started/">
+    <span><strong>Get started in minutes</strong><span>Try the Showcase or install SkyWalking</span></span>
+    <span aria-hidden="true">→</span>
+  </a>
+  <div class="sw-projects-groups">
+    
+    
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+    <div class="sw-projects-group">
+      <p class="sw-projects-label">Platform</p>
+    
+      <div class="sw-projects-group-links">
+        <div class="sw-projects-columns">
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalking">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking</strong><span class="sw-project-description">Core observability server</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link active" href="/docs/#BanyanDB">
+          <img src="/images/project/banyan-db.svg" width="28" height="28" alt="">
+          <span><strong>BanyanDB</strong><span class="sw-project-description">Observability database</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#HorizonUI">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>Horizon UI</strong><span class="sw-project-description">Next-generation UI</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#AISessionizer">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>AI Sessionizer</strong><span class="sw-project-description">AI agent observability</span></span>
+        </a>
+        
+        
+        </div>
+        
+        </div>
+        
+        <a class="dropdown-item sw-projects-more" href="/docs/#SkyWalkingServers">All platform projects <span aria-hidden="true">→</span></a>
+        
+      </div>
+    </div>
+    
+    
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+    <div class="sw-projects-group sw-projects-group-wide">
+      <p class="sw-projects-label">Agents &amp; collection</p>
+    
+      <div class="sw-projects-group-links">
+        <div class="sw-projects-columns">
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#JavaAgent">
+          <img src="/images/project/java-agent.svg" width="28" height="28" alt="">
+          <span><strong>Java Agent</strong><span class="sw-project-description">Java tracing and profiling</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#GoAgent">
+          <img src="/images/project/skywalking-go.svg" width="28" height="28" alt="">
+          <span><strong>Go Agent</strong><span class="sw-project-description">Go tracing and metrics</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#PythonAgent">
+          <img src="/images/project/python-agent.svg" width="28" height="28" alt="">
+          <span><strong>Python Agent</strong><span class="sw-project-description">Python tracing and profiling</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#NodeJSAgent">
+          <img src="/images/project/nodejs-agent.svg" width="28" height="28" alt="">
+          <span><strong>NodeJS Agent</strong><span class="sw-project-description">Node.js distributed tracing</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#PHPAgent">
+          <img src="/images/project/php-agent.svg" width="28" height="28" alt="">
+          <span><strong>PHP Agent</strong><span class="sw-project-description">PHP distributed tracing</span></span>
+        </a>
+        
+        
+        </div>
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingRover">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Rover</strong><span class="sw-project-description">eBPF metrics and profiling</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingSatellite">
+          <img src="/images/project/skywalking-satellite.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Satellite</strong><span class="sw-project-description">Lightweight telemetry collector</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#KubernetesEventExporter">
+          <img src="/images/project/kubernetes.svg" width="28" height="28" alt="">
+          <span><strong>Kubernetes Event Exporter</strong><span class="sw-project-description">Kubernetes event collection</span></span>
+        </a>
+        
+        
+        </div>
+        
+        </div>
+        
+        <a class="dropdown-item sw-projects-more" href="/docs/#Agents">View all agents &amp; collectors <span aria-hidden="true">→</span></a>
+        
+      </div>
+    </div>
+    
+    
+    
+      
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+      
+    
+    
+    
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+      
+        
+      
+    
+    
+    
+    <div class="sw-projects-group">
+      <p class="sw-projects-label">Operations &amp; tools</p>
+    
+      <div class="sw-projects-group-links">
+        <div class="sw-projects-columns">
+        
+        <div class="sw-projects-column">
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingCLI">
+          <img src="/images/project/skywalking-cli.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking CLI</strong><span class="sw-project-description">Command-line operations</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingMCP">
+          <img src="/images/project/skywalking.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking MCP</strong><span class="sw-project-description">Observability for AI assistants</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#KubernetesHelm">
+          <img src="/images/project/helm.svg" width="28" height="28" alt="">
+          <span><strong>Kubernetes Helm</strong><span class="sw-project-description">Deploy SkyWalking with Helm</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingCloudonKubernetes">
+          <img src="/images/project/kubernetes.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Cloud on Kubernetes</strong><span class="sw-project-description">Kubernetes operator</span></span>
+        </a>
+        
+        
+        
+        
+        
+        <a class="dropdown-item sw-project-link" href="/docs/#SkyWalkingEyes">
+          <img src="/images/project/skywalking-eyes.svg" width="28" height="28" alt="">
+          <span><strong>SkyWalking Eyes</strong><span class="sw-project-description">License checks and fixes</span></span>
+        </a>
+        
+        
+        </div>
+        
+        </div>
+        
+        <a class="dropdown-item sw-projects-more" href="/docs/#Operation">All operations projects <span aria-hidden="true">→</span></a>
+        
+      </div>
+    </div>
+    
+  </div>
+  <div class="sw-projects-footer">
+    <a class="dropdown-item sw-projects-all" href="/docs/">All projects <span aria-hidden="true">→</span></a>
+    <a class="dropdown-item sw-projects-downloads" href="/downloads/">Downloads <span aria-hidden="true">→</span></a>
+  </div>
+</div>
+
+                </div>
+            </li>
+            
+            
+            
+            
+            <li class="nav-item"><a class="nav-link" href="/blog">Blogs</a></li>
+            
+            
+            
+            
+            
+            <li class="nav-item" data-nav-promote="events" hidden><a class="nav-link" href="/events/">Release Posts</a></li>
+            
+            <li class="nav-item" data-nav-promote="events/calendar" hidden><a class="nav-link" href="/events/calendar/">Event Calendar</a></li>
+            
+            <li class="nav-item" data-nav-promote="users" hidden><a class="nav-link" href="/users">Users</a></li>
+            
+            <li class="nav-item" data-nav-promote="team" hidden><a class="nav-link" href="/team">Team</a></li>
+            
+            <li class="nav-item" data-nav-promote="zh" hidden><a class="nav-link" href="/zh/">中文博客</a></li>
+            
+            
+            <li class="nav-item dropdown" data-nav-more>
+                <button type="button" class="nav-link dropdown-toggle sw-more-toggle" id="more-menu-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">More</button>
+                <div class="dropdown-menu sw-more-menu" aria-labelledby="more-menu-toggle">
+                    
+                    <a class="dropdown-item" data-nav-overflow="events" href="/events/">Release Posts</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="events/calendar" href="/events/calendar/">Event Calendar</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="users" href="/users">Users</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="team" href="/team">Team</a>
+                    
+                    <a class="dropdown-item" data-nav-overflow="zh" href="/zh/">中文博客</a>
+                    
+                </div>
+            </li>
+            
+            
+            
+            
+            
+            
+            
+			
+        </ul>
+    </div>
+
+    <div class="sw-navbar-actions">
+        <button type="button" class="sw-kapa-search" aria-label="Search SkyWalking documentation and ask AI" aria-haspopup="dialog" title="Search and ask AI">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/></svg>
+  <span>Search</span>
+</button>
+
+        <div class="navbar-nav d-none d-lg-block search-input-box">
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <span class="link dropdown sw-navdd">
+                <a class="link-name nav-link dropdown-toggle sw-navdd-toggle" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <img class="sw-navdd-asf" src="/images/asf-oakleaf.svg" alt="" aria-hidden="true"> Apache
+                </a>
+                <div class="dropdown-menu sw-navmenu sw-navmenu--wide">
+                    <div class="sw-navmenu-head">
+                        <img src="/images/asf-oakleaf.svg" alt="Apache Software Foundation feather">
+                        <div><strong>The Apache Software Foundation</strong><span>governance · trademarks · sponsorship</span></div>
+                    </div>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Software Foundation</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/issues" target="_blank" rel="noopener noreferrer">
+                        <span>GitHub Issue Tracker</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://github.com/apache/skywalking/discussions" target="_blank" rel="noopener noreferrer">
+                        <span>Discussion</span>
+                        <em>github.com</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank" rel="noopener noreferrer">
+                        <span>Dev Mailing List</span>
+                        <em>lists.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home" target="_blank" rel="noopener noreferrer">
+                        <span>WIKI</span>
+                        <em>cwiki.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/licenses/" target="_blank" rel="noopener noreferrer">
+                        <span>License</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/events/current-event" target="_blank" rel="noopener noreferrer">
+                        <span>Apache Events</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/security/" target="_blank" rel="noopener noreferrer">
+                        <span>Security</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noopener noreferrer">
+                        <span>Sponsor and Donate</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="http://www.apache.org/foundation/thanks.html" target="_blank" rel="noopener noreferrer">
+                        <span>Thanks</span>
+                        <em>www.apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                    
+                    <a class="sw-navmenu-item" href="https://apache.org/foundation/policies/privacy.html" target="_blank" rel="noopener noreferrer">
+                        <span>Privacy</span>
+                        <em>apache.org</em>
+                        <i class="iconfont icon-arrow-up-right"></i>
+                    </a>
+                    
+                </div>
+            </span>
+            
+        
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+            <a class="sw-nav-cta" href="/get-started/">Get started</a>
+            
+        
+            
+        
+        </div>
+    </div>
+  </div>
+</nav>
+
+    </header>
+    <div class="container-fluid td-outer">
+
+      <div class="td-main">
+        <div class="row flex-xl-nowrap">
+          <div class="col-12 col-md-3 col-xl-2 d-print-none scroll-bar td-sidebar">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  <div class="description-wrapper">
+                    <h5>
+                    <img width="26" height="26" src="/images/project/banyan-db.svg">
+                    BanyanDB
+                    </h5>
+                    <p>An observability database aims to ingest, analyze and store Metrics, Tracing and Logging data.</p>
+                  </div>
+                  
+                  <div class="version-wrapper">Version: 
+                  <select class="version-select">
+                  
+                    
+                    
+                    <option selected value="next">
+                    
+                      next
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="latest">
+                    
+                      latest
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="v0.11.1">
+                    
+                      v0.11.1
+                    
+                    </option>
+                  
+                    
+                    
+                    <option ZgotmplZ value="v0.11.0">
+                    
+                      v0.11.0
+                    
+                    </option>
+                  
+                  </select>
+                  </div>
+                  
+                  <ul class="sidebar-menu">
+    
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/readme">Welcome</a>
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">User Guide<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">Installation<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/binaries">Get Binaries</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/standalone">Standalone Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/cluster">Cluster Mode</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/docker">Installation On Docker</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/kubernetes">Installation On Kubernetes</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Basic Concepts and Terminology<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/data-model">Data Model</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/guides/quick-start/quick-start">Quick Start Tutorial</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/installation/versions">Versions and Compatibility</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Interacting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+
+            
+            <a href="#">CLI<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/bydbctl">bydbctl</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/agent">BYDBQL Agent TUI</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">CRUD Schema<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/group">Group</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/index-rule">IndexRule</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/index-rule-binding">IndexRuleBinding</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/schema/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Querying Data<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/measure">Measure</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/stream">Stream</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/trace">Trace</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/filter-operation">Filter Operation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/query/top-n-aggregation">Top N Aggregation</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/property">CRUD Property</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbctl/analyze">Analyzing Data</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/client">Client APIs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/canopy">Web Console (Canopy)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/data-lifecycle">Data Lifecycle</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Schema Consistency<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/barriers">Barrier RPCs</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/revision-gates">Revision Gates</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/schema-consistency/scenarios">Scenarios</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/interacting/bydbql">BydbQL</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Operation and Maintenance<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/configuration">Configure BanyanDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/disk-management">Disk Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/system">System Configuration</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/upgrade">Upgrade</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Trace Pipeline Plugins<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins-development">Development Guide</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins">Packaging and Deployment</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/plugins-debugging">Debugging (Offline)</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Observability<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/logging">Logging</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/metrics">Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/providers">Metrics Providers</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/profiling">Profiling</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/observability/tracing">Query Tracing</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/cluster">Cluster Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Troubleshooting<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/error-checklist">Error Checklist</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/install">Troubleshooting Installation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/crash">Troubleshooting Crash</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/no-data">Troubleshooting No Data</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/overhead">Troubleshooting Overhead</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/query">Troubleshooting Query</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/troubleshooting/common-issues">Common Issues</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/security">Security</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/backup">Backup</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/restore">Restore</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/lifecycle">Lifecycle Management</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">MCP Server<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/setup">Setup MCP</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/inspector">Test via Inspector</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/build">Build and Package</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/mcp/plugin">Plugin Packaging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">First Occurrence Data Collection (FODC)<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/overview">Overview</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/ktm_metrics">KTM Metrics</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/apis">Proxy APIs and CLI Flags</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/fodc/topology">Cluster Topology Rendering</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+
+            
+            <a href="#">Benchmark<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/benchmark/benchmark-single-model">Single‑Model Benchmark (Trace / Log / Measure / Property)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/operation/benchmark/benchmark-hybrid">Hybrid Scenario Benchmark</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">File Format<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/storage-and-format">Storage &amp; File Format (by API resource)</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/tsdb">v1.3.0</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Concepts<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/clustering">Clustering</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/distributed-measure-aggregation">Distributed Measure Aggregation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/tsdb">TSDB</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/rotation">Data Rotation</a>
+        
+    </li>
+
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/concept/property-repair">Property Background Repair</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+    <li>
+        
+            
+            <a href="#">Contribute<i class="iconfont icon-arrow-right pull-right"></i></a>
+            
+
+            
+<ul class="sidebar-submenu">
+    
+
+    <li>
+        
+            <a href="/docs/skywalking-banyandb/next/contribute/debugging">Debugging</a>
+        
+    </li>
+
+    
+
+</ul>
+
+        
+    </li>
+    
+</ul>
+<script src="/js/sidebar-menu.js"></script>
+<script>
+  (function (){
+    $.sidebarMenu($('.sidebar-menu'))
+    var path = window.location.pathname;
+    var hash = window.location.hash;
+    var $a = $('.sidebar-menu a')
+    $a.each(function (e){
+      if($(this).attr('href')+'/' === path || $(this).attr('href').replace('#','/#') === path+hash){
+        $(this).parents('li').addClass('active').show()
+      }
+    })
+    $a.on('click',function (){
+      var url = $(this).attr('href')
+      if(url!=='#'){
+        window.location.href = url
+      }
+    })
+  })()
+</script>
+
+                  <div class="commit-id">Commit Id: f942404</div>
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</div>
+            <main class="col-12 col-md-9 col-xl-8 pl-md-5 pr-md-4" role="main">
+              <i class="iconfont icon-menu-doc doc-menu-button"></i>
+              
+<div class="td-content">
+	<h1 id="measure-scan-path-v2-streaming-series-windows-and-a-time-ordered-merge">Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge</h1>
+<p>Status: <strong>implemented</strong> in 0.12.0 (see &ldquo;As built&rdquo; in each document).</p>
+<p>This document specifies how a measure query turns storage blocks into batches on a data node:
+<code>partIter</code> / <code>tstIter</code>, block decoding, <code>blockCursor</code>, and the scan orchestration in
+<code>banyand/measure/query.go</code> and <code>query_batch.go</code>. It is the companion of
+<a href="../../measure-batch-v2/readme">Measure batch v2</a>, which defines the batch, the reference-counted
+cursor and the frame this scan produces and consumes.</p>
+<p>Code references in the original proposal were to <code>origin/main</code> at <code>18386182</code>; sections that
+describe the pre-change code keep them as design-time references. The shipped code is in
+<code>banyand/measure/scan_window.go</code>, <code>scan_merge.go</code>, <code>scan_prefetch.go</code>, <code>scan_decode_pool.go</code> and
+<code>scan_resources.go</code>.</p>
+<hr>
+<h2 id="1-summary">1. Summary</h2>
+<p>Before this work, a measure query decoded every matching block before it emitted a row, then merged
+them one row at a time. The design streams the scan one series at a time: blocks of a single series
+are lent to batches without copying, and only series whose blocks overlap in time are merged, on
+timestamps first, then one column at a time.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Then (design-time reading of the code)</th>
+          <th></th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>All blocks</td>
+          <td>decoded before the first row is emitted, one goroutine per block</td>
+      </tr>
+      <tr>
+          <td>1 block</td>
+          <td>the only case that skipped the row-by-row merge: the whole query had to match exactly one block</td>
+      </tr>
+      <tr>
+          <td>Per cell</td>
+          <td>type dispatch on every copied cell; newer versions overwrote rows cell by cell</td>
+      </tr>
+  </tbody>
+</table>
+<p>The changes, by component:</p>
+<ul>
+<li><code>partIter</code> / <code>tstIter</code>: keep. They already yield blocks in (series, time) order.</li>
+<li>Block decoding: refactor. Typed numeric columns, string data plus offsets, and time-range trimming
+by offset instead of copying.</li>
+<li><code>blockCursor</code>: redesign. It becomes the reference-counted owner of its decoded buffers and lends
+them to batches.</li>
+<li>Scan orchestration: redesign. Stream per series with bounded prefetch; a zero-copy fast path per
+series; a keys-first merge plus column gather where blocks overlap.</li>
+</ul>
+<h2 id="2-as-built">2. As built</h2>
+<p>Shipped as steps 4a (series windows), 4c (time-ordered merge), 4b (decode pool), 4d (validation) and
+step 5 (constant columns and runs), on top of the batch-v2 core.</p>
+<h3 id="21-what-shipped">2.1 What shipped</h3>
+<ul>
+<li><strong>Series windows and segments (4a).</strong> The matching blocks are grouped into series windows: all the
+in-range blocks of one series, from every part. A window is cut into segments from block metadata
+alone: blocks ordered by first timestamp, a block that starts at or before the running segment&rsquo;s
+last timestamp (an equal boundary may be a duplicate version) joining that segment. A segment is
+decoded only when the scan reaches it.</li>
+<li><strong>Zero-copy lend.</strong> A one-block segment is decoded and lent to the pipeline without copying
+(<code>blockCursor.lendBatch</code>). String, bytes and string-array cells borrow the cursor&rsquo;s memory, and
+numeric, timestamp and version columns borrow its typed slices through <code>TypedColumn.Borrow</code>, which
+copies before any write and drops the borrowed array on reset. Borrowed batches pass through at
+block size, up to 8,192 rows; batches under 256 rows are coalesced into one owned batch.
+Descending order sets a reversed <code>Selection</code> instead of reversing a copy.</li>
+<li><strong>Time-ordered keys-first merge with lazy frontier decode (4c).</strong> <code>timeMerge</code> replaces the
+legacy eager decode plus <code>mergeBatch</code> for overlapping segments <strong>and</strong> for multi-series
+time-ordered queries (the default no-ORDER-BY case, whose rows are time-ordered across series).
+It orders cursors by first timestamp (last for descending), decodes a cursor only when the merge
+frontier reaches it, and releases it as soon as its rows are consumed, so decoded memory is bounded
+by the blocks overlapping the current instant. Each page first merges (timestamp, series, version)
+keys with newest-version dedup, then gathers every column once: numerics by index copy, strings,
+bytes and string arrays as borrowed views pinned on the batch. Series windows disjoint from all
+others keep the zero-copy lend path. The merge never closes a page inside a duplicate group, which
+fixes the legacy merge emitting a same-series, same-timestamp duplicate twice at its 4,096-row
+page cut.</li>
+<li><strong>Node-wide decode pool, prefetch and reservations (4b).</strong> One <code>decodePool</code> per data node or
+standalone server, <code>GOMAXPROCS</code> workers, created in <code>PreRun</code> and closed in <code>GracefulStop</code>. A
+decode the scan is waiting on goes to an urgent lane, and a prefetched decode that becomes the
+head is promoted there. The scan requests decodes in exactly the order it consumes them and
+collects them head-first, so completion order never changes output. Prefetch depth starts at 2 and
+grows to 8 while reservations succeed (inside a merge, <code>max(8, frontier/4)</code>, at most 32). Each
+cursor reserves its uncompressed size before decoding and releases it when its reference count
+reaches zero, after every borrowing batch is released. Prefetch is refused beyond the protector&rsquo;s
+headroom, and the protector is consulted only at query admission: once the query holds memory its
+current cursor never blocks on the protector, which rules out two queries waiting for memory the
+other holds. Cancellation withdraws queued decodes and waits for running ones before a cursor is
+released. A query fails with the existing <code>block scan quota exceeded</code> error only when the block it
+needs next would exceed its own quota.</li>
+<li><strong>Leak checks, soak and audits (4d).</strong> <code>verifyNoScanLeaks</code>, <code>ScanResourceSnapshot</code> and
+<code>OutstandingOwnerPins</code> fail a test that ends with cursors, owner pins, query results, scan
+reservations or decode tasks outstanding; the test binaries&rsquo; <code>TestMain</code> check the same. The
+in-process soak <code>TestMeasureVecSoak</code> (<code>DQB_SOAK=1</code>) runs a two-data-node cluster with background
+writes, nine query shapes, and concurrent and cancelled queries. Selection-order and large-batch
+audits cover the operators (7 to 65,536 rows; reversed, shuffled and subset selections).</li>
+<li><strong>Fixes found on the way.</strong> Queries wrote the block cache and shard ID into parts shared with
+concurrent queries and decode workers; both are now carried in a <code>partRef</code> beside each part.
+Opening a measure group closed the previous group&rsquo;s query metrics, so a node with several groups
+exported only the last one&rsquo;s; each group now keeps its own.</li>
+<li><strong>Constant columns and runs (step 5).</strong> Decision 5 of this design: <code>ConstColumn</code> for entity tags
+(single-series lent batches only), run-based aggregation and time-bucket runs (galloping search,
+ascending or descending), and <code>SelectRows</code> / <code>BatchColumnFilter</code>. Count-distinct, reduce mode,
+unknown hints and fragmented batches (runs under three rows on average) use the per-row path.
+<code>SelectRows</code> and <code>BatchColumnFilter</code> exist but are not wired to the planner.</li>
+</ul>
+<p>New metrics, per group, under <code>banyandb_measure_query_*</code>: <code>total_scan_windows</code>,
+<code>total_scan_windows_overlapped</code>, <code>total_scan_segments_fast</code>, <code>total_scan_segments_overlap</code>,
+<code>total_scan_merge_rows</code>, <code>total_scan_merge_cursors</code>, <code>scan_merge_peak_live_cursors</code>,
+<code>scan_prefetch_depth</code>, <code>scan_decode_queue_wait_seconds</code>, <code>total_scan_reservations_waiting</code> and
+<code>total_scan_reservations_failed</code>.</p>
+<h3 id="22-deviations-from-the-proposal">2.2 Deviations from the proposal</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Proposal</th>
+          <th>As built</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Replace <code>searchBlocks</code></td>
+          <td>Cursors are still created up front by <code>searchBlocks</code>, but only as metadata; decoding is lazy and bounded.</td>
+      </tr>
+      <tr>
+          <td>A small merge for overlap, fast path otherwise</td>
+          <td>The overlap path became a general keys-first, time-ordered merge, also used for the default no-ORDER-BY multi-series case.</td>
+      </tr>
+      <tr>
+          <td>One-shot quota check replaced by per-window reservation</td>
+          <td>Replaced by incremental per-cursor reservations; a failure keeps the <code>block scan quota exceeded</code> error.</td>
+      </tr>
+      <tr>
+          <td>Prefetch cap about eight</td>
+          <td>Eight for window prefetch; inside a merge <code>max(8, frontier/4)</code> capped at 32.</td>
+      </tr>
+      <tr>
+          <td>One shared decode pool</td>
+          <td>As proposed, plus an urgent lane for the decode the scan is waiting on and promotion of a prefetched head.</td>
+      </tr>
+      <tr>
+          <td>TopN and index-mode paths unchanged</td>
+          <td>Unchanged. The legacy per-row path (<code>loadCursorsForBatch</code>, <code>mergeBatch</code>, <code>copyAllToBatch</code>, <code>replaceInBatch</code>) is still in the tree and is still used by queries the window scan does not take; its callers were not audited for this document.</td>
+      </tr>
+      <tr>
+          <td>&ldquo;Retire <code>copyToBatch</code>&rdquo;</td>
+          <td>Not retired; see the previous row.</td>
+      </tr>
+      <tr>
+          <td>Frame, numeric and string refactor as steps 1-2</td>
+          <td>Shipped as part of the batch-v2 core, not as a separate step.</td>
+      </tr>
+      <tr>
+          <td>A cheap overlap counter read on a real cluster before optimizing</td>
+          <td>The counters shipped; reading them on a real cluster has not happened.</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="23-measured-results">2.3 Measured results</h3>
+<p>Real stored blocks; the gate workloads W1-W15 are in
+<code>banyand/measure/vectorized_gates_benchmark_test.go</code> (W9-W12 are the multi-part layouts, with
+disjoint and overlapping blocks; W13-W15 are the entity-group and time-bucket shapes).</p>
+<table>
+  <thead>
+      <tr>
+          <th>Change</th>
+          <th>Result</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Series-window scan with zero-copy lend (4a)</td>
+          <td>Geomean -53% time across the eight gate workloads</td>
+      </tr>
+      <tr>
+          <td>Time-ordered keys-first merge (4c), W11 / W12</td>
+          <td>-57% / -54%; multi-series queries over a shared time range 54-57% faster</td>
+      </tr>
+      <tr>
+          <td>Decode pool and reserved prefetch (4b)</td>
+          <td>Geomean -4%</td>
+      </tr>
+      <tr>
+          <td>Constant columns and run-based aggregation (step 5)</td>
+          <td>Geomean -25%; group-by + SUM/COUNT -67%, group by entity tags -68%</td>
+      </tr>
+  </tbody>
+</table>
+<p>Peak decoded blocks of a time-ordered scan drop from every matching block to about one per series.
+The soak ran 5,488 queries in 70 s with every scan resource returning to baseline.</p>
+<hr>
+<h2 id="3-relationship-to-batch-v2">3. Relationship to batch v2</h2>
+<table>
+  <thead>
+      <tr>
+          <th>This design uses from batch v2</th>
+          <th>This design gives batch v2</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>The reference-counted <code>Owner</code> and the batch&rsquo;s pin set.</td>
+          <td>The buffers that batch v2 borrows: typed slices and contiguous string data.</td>
+      </tr>
+      <tr>
+          <td>Typed columns with borrowed slices, and strings borrowed from the cursor.</td>
+          <td>Runs supplied by storage. Every fast-path batch is one series, so aggregation gets its group runs without comparing rows, the case that measured 45-89x faster than the old aggregation in the batch-v2 benchmarks.</td>
+      </tr>
+      <tr>
+          <td>The copy-on-retain rule for operators that keep rows.</td>
+          <td>A bounded memory footprint for the query memory budget.</td>
+      </tr>
+  </tbody>
+</table>
+<p>The proposal also listed <code>FixedColumn</code>, <code>ViewColumn</code> and <code>OffsetsColumn</code> here; as built the first
+is <code>TypedColumn</code> with <code>Borrow</code>, the second is plain Go strings into cursor memory, and the third was
+not introduced (see the batch-v2 document, section 2.2).</p>
+<h2 id="4-todays-scan-path-before-this-work">4. Today&rsquo;s scan path (before this work)</h2>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TB
+    PI[&#34;partIter and tstIter: block metadata in series, time order. tstable.go:523&#34;]
+    SB[&#34;searchBlocks: a cursor for every matching block, every part. query.go:609-622&#34;]
+    LC[&#34;loadCursorsForBatch: one goroutine per block, decode all before the first row. query_batch.go:188-237&#34;]
+    HP[&#34;Heap over all cursors: series, then time, then version&#34;]
+    ONE[&#34;1 block in query: copyAllToBatch copies every value&#34;]
+    MANY[&#34;Otherwise: copyToBatch per row, replaceInBatch per newer version, per cell&#34;]
+    REL[&#34;Popped cursor goes straight to the pool&#34;]
+    PI --&gt; SB --&gt; LC --&gt; HP
+    HP --&gt; ONE
+    HP --&gt; MANY
+    MANY --&gt; REL
+</code></pre><p><em>Figure 1.</em> Consequences: peak memory is about every matching block decoded plus the copies made
+into batches, bounded only by a quota check on the total uncompressed size; and a query over many
+series always takes the row-by-row merge, even when each series has a single block and nothing
+needs merging.</p>
+<ul>
+<li><code>tstIter</code> keeps a heap of per-part iterators ordered by their current block (<code>tstable.go:523</code>),
+yielding blocks in (series, time) order.</li>
+<li><code>searchBlocks</code> creates a <code>blockCursor</code> for each block and appends it to <code>result.data</code>, checking
+the running total of uncompressed block sizes against <code>m.pm.AvailableBytes()</code>
+(<code>query.go:594-640</code>).</li>
+<li><code>loadCursorsForBatch</code> starts one goroutine per cursor and calls <code>loadData</code> on each
+(<code>query_batch.go:188-237</code>).</li>
+<li><code>loadData</code> decodes into a temporary block using the cursor&rsquo;s own <code>BytesBlockDecoder</code>, then copies
+the in-range timestamps, versions and per-value <code>[][]byte</code> headers into the cursor
+(<code>block.go:818-895</code>).</li>
+<li><code>PullBatch</code> takes <code>copyAllToBatch</code> only when <code>len(qr.data) == 1</code>; otherwise <code>mergeBatch</code> pops the
+heap per row, stops at each series boundary, and emits at most 4,096 rows per call
+(<code>query_batch.go:64-181</code>).</li>
+</ul>
+<h2 id="5-problems">5. Problems</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Problem</th>
+          <th>Where</th>
+          <th>Effect</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Everything is decoded before anything is emitted</td>
+          <td><code>searchBlocks</code>, <code>loadCursorsForBatch</code></td>
+          <td>Peak memory scales with the whole result; the first row waits for the last block.</td>
+      </tr>
+      <tr>
+          <td>One goroutine per block</td>
+          <td><code>loadCursorsForBatch</code></td>
+          <td>Fan-out scales with the number of matching blocks, not with available cores.</td>
+      </tr>
+      <tr>
+          <td>The no-merge path needs a single-block query</td>
+          <td><code>PullBatch</code>, <code>len(qr.data) == 1</code></td>
+          <td>Multi-series queries merge row by row even when no series has overlapping blocks.</td>
+      </tr>
+      <tr>
+          <td>Per-cell copying and dispatch</td>
+          <td><code>copyToBatch</code>, <code>fillTagCell</code>, <code>replaceInBatch</code></td>
+          <td>A type switch per cell, and cell-by-cell overwrites for newer versions.</td>
+      </tr>
+      <tr>
+          <td>Values held twice</td>
+          <td>cursor + batch</td>
+          <td>Decoded bytes stay in the cursor while copies are made into batch columns.</td>
+      </tr>
+      <tr>
+          <td>Numbers round-trip through bytes</td>
+          <td><code>column.go:359-361, 404-406</code></td>
+          <td>Each decoded <code>int64</code> / <code>float64</code> is re-encoded into an 8-byte heap slice, then decoded again.</td>
+      </tr>
+      <tr>
+          <td>Cursor lifetime tied to the heap</td>
+          <td>Pop to <code>releaseBlockCursor</code> (<code>query.go:953-958</code>)</td>
+          <td>Nothing may borrow from a cursor, so every value must be copied out.</td>
+      </tr>
+  </tbody>
+</table>
+<p>No benchmark of the scan path existed when this was written; the problems were read from the code.
+Section 13 lists the measurements that were to precede the rollout; the gate workloads of
+section 2.3 are what was built.</p>
+<h2 id="6-goals-and-non-goals">6. Goals and non-goals</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Goals</th>
+          <th>Non-goals</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Memory bounded by a window of series, not by the whole result.</td>
+          <td>Changing on-disk formats or the part merge policy.</td>
+      </tr>
+      <tr>
+          <td>No copy when a series&rsquo; blocks do not overlap in time: one block, or several from different parts covering disjoint ranges.</td>
+          <td>The TopN merge (<code>mergeTopNResult</code>): a follow-up.</td>
+      </tr>
+      <tr>
+          <td>Column-at-a-time work where rows must be merged.</td>
+          <td>Index-mode measures (<code>indexSortResult</code>) beyond using the new column kinds.</td>
+      </tr>
+      <tr>
+          <td>Decoding parallelism bounded by a worker pool.</td>
+          <td></td>
+      </tr>
+      <tr>
+          <td>Byte-identical query results.</td>
+          <td></td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="7-proposed-scan-path">7. Proposed scan path</h2>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TB
+    PI[&#34;partIter and tstIter: unchanged, pass series ID and time range with each block&#34;]
+    SW[&#34;Series window: collects one series&#39; blocks across parts, prefetches the next windows&#34;]
+    DP[&#34;Decode pool: one per node, typed buffers, string data and offsets, trimmed by offset not copied&#34;]
+    Q{&#34;Blocks overlap in time? decided from block metadata&#34;}
+    FP[&#34;Fast path, no overlap: each block lent in time order, no copy, carries a run: one series, time-ordered&#34;]
+    OP[&#34;Overlap path: 1. merge timestamps and versions to winning rows; 2. gather each column once into an owned column&#34;]
+    OUT[&#34;Batch v2 columns: filters, aggregation and the frame encoder are shared&#34;]
+    PI --&gt; SW --&gt; DP --&gt; Q
+    Q -- no --&gt; FP --&gt; OUT
+    Q -- yes --&gt; OP --&gt; OUT
+</code></pre><p><em>Figure 2.</em> Peak memory is about the current series window plus a reservation-sized prefetch.
+Cursors live until the last batch borrowing them is released. Both paths emit batch v2 columns, so
+everything downstream is shared. As built, the &ldquo;overlap&rdquo; branch is the general time-ordered merge of
+section 9 and also takes multi-series time-ordered queries.</p>
+<h2 id="8-component-changes">8. Component changes</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Component</th>
+          <th>Verdict</th>
+          <th>Change</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>partIter</code>, <code>tstIter</code></td>
+          <td>keep</td>
+          <td>Pass each block&rsquo;s series ID and time range along with it, so series windows and time-bucket edges come from metadata. Metadata buffers (<code>primaryBuf</code>, <code>compressedPrimaryBuf</code>) stay as they are.</td>
+      </tr>
+      <tr>
+          <td>Block decoding: <code>block.mustReadFrom</code>, <code>column.go</code>, <code>BytesBlockDecoder</code></td>
+          <td>refactor</td>
+          <td>Decode <code>int64</code> / <code>float64</code> into typed slices and stop re-encoding them. Return string data plus offsets instead of <code>[][]byte</code> subslices (<code>pkg/encoding/bytes.go:106-123</code>). Trim to the query&rsquo;s time range with an offset and length, not a copy (<code>block.go:850-895</code>).</td>
+      </tr>
+      <tr>
+          <td><code>blockCursor</code></td>
+          <td>redesign</td>
+          <td>Embeds a reference-counted owner. The heap holds one reference, each borrowing batch another; the cursor returns to its pool at zero. Pop drops the heap&rsquo;s reference instead of calling <code>releaseBlockCursor</code>.</td>
+      </tr>
+      <tr>
+          <td>Scan orchestration: <code>searchBlocks</code>, <code>loadCursorsForBatch</code>, <code>mergeBatch</code></td>
+          <td>redesign</td>
+          <td>Replaced by a streaming series-window scan with a bounded decode pool and the two emit paths below.</td>
+      </tr>
+      <tr>
+          <td><code>copyAllToBatch</code>, <code>copyToBatch</code>, <code>replaceInBatch</code></td>
+          <td>replace</td>
+          <td>Borrowing (fast path) and the column gather (overlap path) take over. The per-cell fill helpers remain only for substituted index tags.</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="81-sketch-proposal">8.1 Sketch (proposal)</h3>
+<p>Illustrative, to fix the shapes under review. The shipped code is organized differently (a
+<code>windowScan</code> and a <code>timeMerge</code> driven by a <code>prefetcher</code>).</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#57606a">// seriesWindow is every in-range block of one series, from all parts.</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">type</span><span style="color:#fff"> </span><span style="color:#1f2328">seriesWindow</span><span style="color:#fff"> </span><span style="color:#cf222e">struct</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#1f2328">seriesID</span><span style="color:#fff"> </span><span style="color:#1f2328">common</span><span style="color:#1f2328">.</span><span style="color:#1f2328">SeriesID</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#1f2328">cursors</span><span style="color:#fff">  </span><span style="color:#1f2328">[]</span><span style="color:#0550ae">*</span><span style="color:#1f2328">blockCursor</span><span style="color:#fff"> </span><span style="color:#57606a">// decoded; each holds one heap/window reference</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#57606a">// scan streams windows in series order and turns each into batches.</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">func</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span><span style="color:#1f2328">s</span><span style="color:#fff"> </span><span style="color:#0550ae">*</span><span style="color:#1f2328">scan</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#6639ba">next</span><span style="color:#1f2328">(</span><span style="color:#1f2328">ctx</span><span style="color:#fff"> </span><span style="color:#1f2328">context</span><span style="color:#1f2328">.</span><span style="color:#1f2328">Context</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span><span style="color:#0550ae">*</span><span style="color:#1f2328">vectorized</span><span style="color:#1f2328">.</span><span style="color:#1f2328">Batch</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">error</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#1f2328">w</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">err</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#1f2328">s</span><span style="color:#1f2328">.</span><span style="color:#1f2328">windows</span><span style="color:#1f2328">.</span><span style="color:#6639ba">next</span><span style="color:#1f2328">(</span><span style="color:#1f2328">ctx</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#57606a">// prefetched by the decode pool</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#1f2328">err</span><span style="color:#fff"> </span><span style="color:#0550ae">!=</span><span style="color:#fff"> </span><span style="color:#cf222e">nil</span><span style="color:#fff"> </span><span style="color:#0550ae">||</span><span style="color:#fff"> </span><span style="color:#1f2328">w</span><span style="color:#fff"> </span><span style="color:#0550ae">==</span><span style="color:#fff"> </span><span style="color:#cf222e">nil</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">		</span><span style="color:#cf222e">return</span><span style="color:#fff"> </span><span style="color:#cf222e">nil</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">err</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#57606a">// Cursors are ordered by their first timestamp. A segment is a run of</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#57606a">// cursors whose time ranges intersect; disjoint cursors are segments of one.</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#cf222e">for</span><span style="color:#fff"> </span><span style="color:#1f2328">_</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">seg</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#cf222e">range</span><span style="color:#fff"> </span><span style="color:#6639ba">segments</span><span style="color:#1f2328">(</span><span style="color:#1f2328">w</span><span style="color:#1f2328">.</span><span style="color:#1f2328">cursors</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff"> </span><span style="color:#57606a">// max(prev) &lt; min(next) =&gt; new segment</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">		</span><span style="color:#cf222e">if</span><span style="color:#fff"> </span><span style="color:#6639ba">len</span><span style="color:#1f2328">(</span><span style="color:#1f2328">seg</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#0550ae">==</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">			</span><span style="color:#1f2328">s</span><span style="color:#1f2328">.</span><span style="color:#6639ba">emit</span><span style="color:#1f2328">(</span><span style="color:#6639ba">borrow</span><span style="color:#1f2328">(</span><span style="color:#1f2328">seg</span><span style="color:#1f2328">[</span><span style="color:#0550ae">0</span><span style="color:#1f2328">]))</span><span style="color:#fff"> </span><span style="color:#57606a">// fast path: zero copy, in time order</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">			</span><span style="color:#cf222e">continue</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">		</span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">		</span><span style="color:#1f2328">winners</span><span style="color:#fff"> </span><span style="color:#0550ae">:=</span><span style="color:#fff"> </span><span style="color:#6639ba">mergeKeys</span><span style="color:#1f2328">(</span><span style="color:#1f2328">seg</span><span style="color:#1f2328">)</span><span style="color:#fff">    </span><span style="color:#57606a">// (cursor, row) pairs; newest version wins</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">		</span><span style="color:#1f2328">s</span><span style="color:#1f2328">.</span><span style="color:#6639ba">emit</span><span style="color:#1f2328">(</span><span style="color:#6639ba">gather</span><span style="color:#1f2328">(</span><span style="color:#1f2328">seg</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">winners</span><span style="color:#1f2328">))</span><span style="color:#fff"> </span><span style="color:#57606a">// one loop per column</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#cf222e">return</span><span style="color:#fff"> </span><span style="color:#1f2328">s</span><span style="color:#1f2328">.</span><span style="color:#1f2328">pending</span><span style="color:#1f2328">.</span><span style="color:#6639ba">next</span><span style="color:#1f2328">(),</span><span style="color:#fff"> </span><span style="color:#cf222e">nil</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span></code></pre></div><h2 id="9-fast-path-borrow">9. Fast path: borrow</h2>
+<p>When a series&rsquo; blocks in the query&rsquo;s time range do not overlap in time, each block&rsquo;s decoded columns
+become a batch&rsquo;s columns directly, one block after another in time order. That covers a single block
+and the more common case after flushes: several blocks from different parts that hold disjoint time
+ranges. Nothing is copied, and each batch is by construction a single series in time order.</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    subgraph CUR[&#34;blockCursor, series 42, refs = 2&#34;]
+        direction TB
+        TS[&#34;timestamps []int64, trimmed by offset and length&#34;]
+        FV[&#34;field value []int64, typed, no round trip&#34;]
+        TG[&#34;tag string data plus offsets, decoded once by its own decoder&#34;]
+    end
+    subgraph BAT[&#34;Batch v2, pins: cursor 42&#34;]
+        direction TB
+        BT[&#34;ts: typed column, borrowed&#34;]
+        BF[&#34;value: typed column, borrowed&#34;]
+        BG[&#34;tag: strings pointing into cursor data&#34;]
+        RUN[&#34;run: series 42, rows 0 to n, time-ordered&#34;]
+    end
+    TS -. borrow .-&gt; BT
+    FV -. borrow .-&gt; BF
+    TG -. borrow .-&gt; BG
+</code></pre><p><em>Figure 3.</em> The run metadata is what lets aggregation skip per-row key comparison, the measured
+45-89x case in the batch-v2 benchmarks. As built, the entity tags of such a batch are
+<code>ConstColumn</code>s and the batch carries series-end and time-order hints.</p>
+<p>This extends the old single-block path, reachable only when the whole query matched one block, to
+every series, one series at a time. A block holds at most 8,192 rows and never spans two series
+(<code>measure.go:49</code>, <code>part.go:201-202</code> at design time), so borrowed batches pass through at block size;
+see decision 4 in section 14.</p>
+<h2 id="10-overlap-path-merge-keys-then-gather">10. Overlap path: merge keys, then gather</h2>
+<p>Several blocks for one series do not, by themselves, need merging: parts are flushed in time order,
+so their blocks usually cover disjoint time ranges and take the fast path one after another. Merging
+is needed only where blocks intersect in time: late or out-of-order writes, or rewrites with a
+newer version. Block metadata already records each block&rsquo;s first and last timestamp, and blocks
+arrive ordered by first timestamp (<code>block_metadata.go:186-188</code>), so overlap is decided before
+decoding: a block that starts at or before the previous one&rsquo;s last timestamp joins its segment. An
+equal boundary timestamp counts as overlap, since it may be a duplicate version. Within an
+overlapping segment, rows are interleaved by time and the newest version of a timestamp wins. The
+merge looks only at timestamps and versions; values are copied once per column afterwards.</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart TB
+    subgraph IN[&#34;Inputs: timestamp and version only, tag and field bytes untouched&#34;]
+        direction LR
+        CA[&#34;Cursor A, older part: A0 10 v1, A1 20 v1, A2 30 v1, A3 40 v1&#34;]
+        CB[&#34;Cursor B, newer part: B0 25 v2, B1 30 v2, B2 35 v2&#34;]
+    end
+    MK[&#34;1. Merge keys: heap on time, then version descending. 30 v2 beats 30 v1&#34;]
+    WIN[&#34;winners: A0, A1, B0, B1, B2, A3&#34;]
+    GA[&#34;2. Gather per column: one loop over the winners list into an owned column&#34;]
+    REL[&#34;Cursors released after the gather&#34;]
+    CA --&gt; MK
+    CB --&gt; MK
+    MK --&gt; WIN --&gt; GA --&gt; REL
+</code></pre><p><em>Figure 4.</em> A0 to A3 and B0 to B2 are row positions within each cursor. The winners list is the only
+per-row state the merge builds.</p>
+<p>Why keys first:</p>
+<ul>
+<li>Before, each row was copied cell by cell as it left the heap, and a newer version overwrote the
+row cell by cell (<code>replaceInBatch</code>).</li>
+<li>Splitting decides the order once, on two small columns, then copies each column in one tight loop,
+the same shape as Arrow&rsquo;s <code>take</code> kernel.</li>
+</ul>
+<p>The overlap path always copies, because the output interleaves rows from several cursors. As built,
+strings, bytes and string arrays are the exception: the gather borrows them as views pinned on the
+batch, and only numerics are index-copied. With overlap decided from metadata it should be rare;
+the counters of section 2.1 exist to confirm that on a real cluster before the path is optimized
+further.</p>
+<h2 id="11-memory-and-concurrency">11. Memory and concurrency</h2>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    subgraph TODAY[&#34;Then, illustrative&#34;]
+        direction LR
+        T1[&#34;every block decoded&#34;] --&gt; T2[&#34;merge and emit, row by row&#34;]
+    end
+    subgraph PROP[&#34;Proposed, illustrative. Bound: series window plus prefetch depth&#34;]
+        direction LR
+        P1[&#34;decode, emit and release one series window&#34;] --&gt; P2[&#34;next series window&#34;]
+    end
+</code></pre><p><em>Figure 5.</em> Schematic, not measurements: it shows where the peak is set, not its size. Before, the
+peak was every matching block; after, it is the current window plus prefetch.</p>
+<ul>
+<li><strong>Decode pool.</strong> One pool per node, sized to <code>GOMAXPROCS</code> and shared by every query, decodes the
+next windows while the current one is emitted. A pool per query would bring back the old fan-out
+under concurrent queries.</li>
+<li><strong>Prefetch depth.</strong> Derived, not configured. Block metadata gives each block&rsquo;s uncompressed size,
+so a window&rsquo;s cost is known before decoding. Each query starts two windows ahead and grows while
+its reservations succeed, up to a cap of about eight. Metrics expose the depth reached
+(<code>scan_prefetch_depth</code>); there is no tuning knob.</li>
+<li><strong>Accounting.</strong> Each window reserves its decoded size from the query&rsquo;s memory tracker and releases
+it when its cursors return to the pool, counting pinned buffers once. This replaces the one-shot
+quota check over the whole result. As built, the reservation is per cursor rather than per window.</li>
+<li><strong>Backpressure.</strong> A window is not decoded until its reservation succeeds, so a slow consumer
+stalls decoding instead of growing memory.</li>
+<li><strong>Cancellation.</strong> Workers check the query context between blocks; an interrupted scan releases
+every reservation and returns cursors to the pool.</li>
+</ul>
+<h2 id="12-edge-cases">12. Edge cases</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Case</th>
+          <th>Before</th>
+          <th>As designed (and built)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Descending time order</td>
+          <td>The cursor is walked backwards (<code>idx</code> decrements)</td>
+          <td>Reversed selection vector: the borrowed batch is unchanged and its <code>Selection</code> is <code>[n-1, ..., 0]</code>. No column data is copied. See decision 1.</td>
+      </tr>
+      <tr>
+          <td>Tags substituted from the index (<code>storedIndexValue</code>)</td>
+          <td>Filled per row</td>
+          <td>Those columns are owned and filled per row; other columns are still borrowed.</td>
+      </tr>
+      <tr>
+          <td>Projected column missing from a block</td>
+          <td>Null-filled per row</td>
+          <td>An owned all-null column: a set validity bitmap and a zero-filled buffer.</td>
+      </tr>
+      <tr>
+          <td>TopN merge (<code>mergeTopNResult</code>)</td>
+          <td>Row path</td>
+          <td>Unchanged; follow-up.</td>
+      </tr>
+      <tr>
+          <td>Index-mode measures (<code>indexSortResult</code>)</td>
+          <td>Rows from index segments</td>
+          <td>Owned batch v2 columns; no borrowing, since there are no blocks.</td>
+      </tr>
+      <tr>
+          <td>A low-rate series with only a few rows</td>
+          <td>-</td>
+          <td>Copied with other small windows into one owned batch, so per-batch overhead does not dominate. See decision 4.</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="13-validation">13. Validation</h2>
+<p>Planned before implementation (design-time): quantify the old cost on a realistic dataset, since
+none of it was measured: peak decoded memory and goroutine count for queries over 1, 100 and 10,000
+series; time to first batch versus total query time; and how often a series&rsquo; blocks overlap in time
+against disjoint multi-block windows, via a cheap counter. Only the counter was built, and it has
+not been read on a real cluster.</p>
+<p>Planned and built during implementation:</p>
+<ul>
+<li>the existing measure query equivalence suites, which stay byte-identical;</li>
+<li>a leak-checking owner in tests (a cursor still referenced at test end fails the test) and buffer
+poisoning on release (<code>BYDB_POISON_RELEASED_CURSOR=1</code>);</li>
+<li><code>-race</code> runs of the decode pool with cancellation mid-scan;</li>
+<li>the soak test, watching cursor-pool size and query memory reservations (<code>TestMeasureVecSoak</code>);</li>
+<li>an audit that every operator rebuilding a selection keeps the input order, so reversed selections
+stay correct;</li>
+<li>a check that no operator assumes 1,024-row batches, since borrowed batches can be up to 8,192 rows.</li>
+</ul>
+<h2 id="14-rollout-and-decisions">14. Rollout and decisions</h2>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">flowchart LR
+    S1[&#34;Step 1: decode refactor. Typed numerics, string data and offsets, trim by offset&#34;]
+    S2[&#34;Step 2: Owner cursor. Reference count, Pop drops a reference, leak checks in tests&#34;]
+    S3[&#34;Step 3: per-series fast path. Borrow disjoint blocks, reversed selection, emit runs&#34;]
+    S4[&#34;Step 4: streaming windows. Bounded decode pool, per-window reservations, backpressure&#34;]
+    S5[&#34;Step 5: overlap merge. Overlapping blocks only, keys-first merge and gather, retire copyToBatch&#34;]
+    S1 --&gt; S2 --&gt; S3 --&gt; S4 --&gt; S5
+</code></pre><p><em>Figure 6.</em> Proposed order. Steps 1-2 were phase 2 of the batch-v2 rollout; step 3 needs batch v2&rsquo;s
+column kinds. Step 3 was highlighted in the proposal because it delivers most of the value:
+zero-copy batches and storage-supplied runs for the common case.</p>
+<p>As built, the numbering differs: the decode refactor and cursor owner shipped with the batch-v2
+core; 4a delivered the fast path and series windows; 4c the general keys-first merge (the overlap
+path); 4b the decode pool and reservations; 4d the leak checks and soak; and step 5 became the
+constant columns and runs of decision 5. The legacy <code>copyToBatch</code> was not retired.</p>
+<h3 id="141-decisions">14.1 Decisions</h3>
+<p>The open questions from the first draft, with the resolution adopted and the reason. All were
+implemented as stated unless noted.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Question</th>
+          <th>Decision</th>
+          <th>Why</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>1. Descending time order</td>
+          <td>Keep the borrowed batch unchanged and set <code>Selection</code> to <code>[n-1, ..., 1, 0]</code>.</td>
+          <td>The batch contract already defines row order through <code>Selection</code>: the frame encoder emits &ldquo;rows listed in Selection (in their order)&rdquo; (<code>frame/encode.go:35-37, 83-84</code> at design time), the serializer walks it in order (<code>measure/serialize.go:54</code>), and limit preserves it (<code>measure/limit.go:81-103</code>). Nothing sorts or binary-searches a selection. Blocks are at most 8,192 rows, so the <code>uint16</code> selection always fits; the cost is 2 bytes per row. Copying in reverse would give up zero-copy for every &ldquo;latest N points&rdquo; query; a reversed-batch flag would have to be taught to every operator.</td>
+      </tr>
+      <tr>
+          <td>2. Window size and prefetch depth</td>
+          <td>Window = one series. One decode pool per node, sized to <code>GOMAXPROCS</code>. Prefetch depth derived from the query&rsquo;s memory reservation: start at two windows, grow while reservations succeed, cap at about eight (built: 8, or <code>max(8, frontier/4)</code> up to 32 inside a merge).</td>
+          <td>A series window is naturally bounded by block limits (8,192 rows, 2 MiB). Window cost is known exactly from block metadata before decoding. A per-query pool would recreate the old fan-out under concurrent load. A failed reservation makes decoding wait; a query fails only if it cannot reserve its current block: the old quota error.</td>
+      </tr>
+      <tr>
+          <td>3. Overlap frequency</td>
+          <td>Split &ldquo;several blocks&rdquo; from &ldquo;overlapping blocks&rdquo;. Disjoint blocks take the fast path in sequence; only time-intersecting segments are merged.</td>
+          <td>Parts are flushed in time order, so a series&rsquo; blocks from different parts usually cover disjoint ranges. Overlap is decided from block metadata before decoding. This makes the overlap path rare enough to keep simple; the counters confirm it on a real cluster.</td>
+      </tr>
+      <tr>
+          <td>4. Batch size</td>
+          <td>Pass borrowed batches through at block size; no coalescing at the scan. Exception: windows below about 256 rows are copied together into one owned batch.</td>
+          <td>Coalescing blocks from different cursors means copying, which defeats the fast path. Blocks never exceed 8,192 rows, so there is nothing to slice. Tiny windows from low-rate series would otherwise make per-batch overhead dominate; DataFusion follows the same rule, copying only batches under about half the target. The threshold is tuned from metrics.</td>
+      </tr>
+      <tr>
+          <td>5. Time-bucket runs</td>
+          <td>Emit them. Runs are a generic list of row offsets where a grouping key changes, so tag runs and bucket runs share one mechanism. Entity tags become constant columns in batch v2.</td>
+          <td>Bucket edges in a time-ordered block cost one binary search each. A series&rsquo; entity tags are constant for the whole batch, so a constant column (one value plus a length) removes their per-row memory, makes grouping by them free, and lets a filter on them keep or drop the whole batch at once. Built in step 5.</td>
+      </tr>
+  </tbody>
+</table>
+<p>Order of resolution in the proposal: decisions 1 and 3 shape the fast path and step 5; decision 2
+shapes streaming; decisions 4 and 5 are refined during the fast path.</p>
+<h3 id="142-remaining-open">14.2 Remaining open</h3>
+<ul>
+<li>The small-window threshold (256 rows) and the prefetch cap (8 windows, 32 inside a merge) are
+starting points, to be set from metrics.</li>
+<li>Whether the overlap counters, once read on a real cluster, show that the overlap path is rare
+enough to stay as specified (the general merge now also serves multi-series time-ordered scans, so
+it is not only the overlap path).</li>
+<li>Adopting the series-window scan in the stream and trace engines.</li>
+<li>The TopN merge (<code>mergeTopNResult</code>) and index-mode paths still use the row-oriented machinery.</li>
+<li>SIMD and radix sort for aggregation, deferred (see the batch-v2 document).</li>
+<li>Wiring <code>SelectRows</code> / <code>BatchColumnFilter</code> into the planner so entity-tag filters are evaluated once
+per batch.</li>
+<li><code>ConstColumn</code> on the liaison and offsets-based strings there.</li>
+</ul>
+<h2 id="appendix-code-references">Appendix: code references</h2>
+<p><em>Design-time</em>, at <code>origin/main</code> <code>18386182</code>, under <code>banyand/measure/</code> unless noted.</p>
+<table>
+  <thead>
+      <tr>
+          <th>What</th>
+          <th>Where</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Block iteration across parts, heap order</td>
+          <td><code>tstable.go:397-403, 523-526</code>; <code>part_iter.go:36-49</code></td>
+      </tr>
+      <tr>
+          <td>A cursor per matching block; size quota</td>
+          <td><code>query.go:594-640</code> (cursor creation 609-622)</td>
+      </tr>
+      <tr>
+          <td>Decode every cursor, one goroutine each</td>
+          <td><code>query_batch.go:188-237</code></td>
+      </tr>
+      <tr>
+          <td>Single-block path only for a single-block query</td>
+          <td><code>query_batch.go:80-86</code></td>
+      </tr>
+      <tr>
+          <td>Row-by-row merge, version replacement, 4,096-row cap</td>
+          <td><code>query_batch.go:122-181</code></td>
+      </tr>
+      <tr>
+          <td>Cursor struct and its own decoder</td>
+          <td><code>block.go:460-475</code></td>
+      </tr>
+      <tr>
+          <td>Decode, trim and copy into the cursor</td>
+          <td><code>block.go:818-895</code></td>
+      </tr>
+      <tr>
+          <td>Popped cursor goes back to the pool</td>
+          <td><code>query.go:953-958</code></td>
+      </tr>
+      <tr>
+          <td>Numeric values re-encoded to bytes</td>
+          <td><code>column.go:359-361, 404-406</code>; <code>pkg/convert/number.go:26-29</code></td>
+      </tr>
+      <tr>
+          <td>String values as subslices of the decoder buffer</td>
+          <td><code>pkg/encoding/bytes.go:106-123</code></td>
+      </tr>
+      <tr>
+          <td>Per-cell batch fill</td>
+          <td><code>block_batch.go:77, 241, 275, 317</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>As built: <code>scan_window.go</code> (series windows, segments, lend path), <code>scan_merge.go</code> (<code>timeMerge</code>),
+<code>scan_prefetch.go</code> (<code>prefetcher</code>), <code>scan_decode_pool.go</code> (<code>decodePool</code>, <code>scanBudget</code>,
+per-cursor reservations), <code>scan_resources.go</code> (leak snapshots), <code>block_batch.go</code> (<code>lendBatch</code>),
+<code>measure.go</code> (the scan metrics).</p>
+
+</div>
+
+            </main>
+          <div id="toc" class="d-none d-xl-block col-xl-2 td-toc d-print-none">
+            
+
+
+
+
+<div class="td-page-meta ml-2 pb-1 pt-2 mb-0">
+
+
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+
+
+
+<div class="td-toc-label">On this page</div>
+<nav id="TableOfContents">
+  <ul>
+    <li><a href="#measure-scan-path-v2-streaming-series-windows-and-a-time-ordered-merge">Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge</a>
+      <ul>
+        <li><a href="#1-summary">1. Summary</a></li>
+        <li><a href="#2-as-built">2. As built</a>
+          <ul>
+            <li><a href="#21-what-shipped">2.1 What shipped</a></li>
+            <li><a href="#22-deviations-from-the-proposal">2.2 Deviations from the proposal</a></li>
+            <li><a href="#23-measured-results">2.3 Measured results</a></li>
+          </ul>
+        </li>
+        <li><a href="#3-relationship-to-batch-v2">3. Relationship to batch v2</a></li>
+        <li><a href="#4-todays-scan-path-before-this-work">4. Today&rsquo;s scan path (before this work)</a></li>
+        <li><a href="#5-problems">5. Problems</a></li>
+        <li><a href="#6-goals-and-non-goals">6. Goals and non-goals</a></li>
+        <li><a href="#7-proposed-scan-path">7. Proposed scan path</a></li>
+        <li><a href="#8-component-changes">8. Component changes</a>
+          <ul>
+            <li><a href="#81-sketch-proposal">8.1 Sketch (proposal)</a></li>
+          </ul>
+        </li>
+        <li><a href="#9-fast-path-borrow">9. Fast path: borrow</a></li>
+        <li><a href="#10-overlap-path-merge-keys-then-gather">10. Overlap path: merge keys, then gather</a></li>
+        <li><a href="#11-memory-and-concurrency">11. Memory and concurrency</a></li>
+        <li><a href="#12-edge-cases">12. Edge cases</a></li>
+        <li><a href="#13-validation">13. Validation</a></li>
+        <li><a href="#14-rollout-and-decisions">14. Rollout and decisions</a>
+          <ul>
+            <li><a href="#141-decisions">14.1 Decisions</a></li>
+            <li><a href="#142-remaining-open">14.2 Remaining open</a></li>
+          </ul>
+        </li>
+        <li><a href="#appendix-code-references">Appendix: code references</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+
+
+
+
+<script>
+  $(function () {
+    var $toc = $("#TableOfContents");
+    if (!$toc || !$toc.length) {
+      return;
+    }
+    var top = $toc.offset().top;
+    $(window).on("scroll", debounce(setTop, 100))
+    $(window).on("scroll", debounce(addActive, 30))
+
+    function addActive() {
+      var scrollValue = $(window).scrollTop();
+      var topEle = null;
+      $.each($('main h1, main h2, main h3'), function (index, item) {
+        if ($(item).offset().top - 70 > scrollValue) {
+          return
+        }
+        if (!topEle) {
+          topEle = item
+        } else if ($(item).offset().top >= $(topEle).offset().top) {
+          topEle = item
+        }
+        if (topEle) {
+          var id = $(item).attr('id');
+          $toc.find('a').removeClass("active").end().find('a[href="' + '#' + id + '"]').addClass("active")
+        }
+      })
+    }
+
+    function setTop() {
+      var scrollValue = $(window).scrollTop();
+      if (scrollValue >= top - 70) {
+        $toc.addClass('fixed')
+      } else {
+        $toc.removeClass('fixed')
+      }
+    }
+
+    function debounce(fn, wait) {
+      var timeout = null;
+      return function () {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          fn.apply(this, arguments);
+        }, wait);
+      };
+    }
+  })
+</script>
+
+          </div>
+
+        </div>
+      </div>
+
+      
+<footer class="py-5 sky-row">
+  <div class="container-fluid text-center">
+    <div class="">
+        
+        
+        
+<ul class="list-inline mb-0">
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Twitter" aria-label="Twitter">
+    <a class="text-color" target="_blank" rel="noopener" href="https://twitter.com/asfskywalking"><i class="iconfont icon-twitter"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Slack" aria-label="Slack">
+    <a class="text-color" target="_blank" rel="noopener" href="mailto:dev@skywalking.apache.org?subject=Request%20to%20join%20SkyWalking%20Slack"><i class="iconfont icon-slack"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="Mailing list" aria-label="Mailing list">
+    <a class="text-color" target="_blank" rel="noopener" href="https://lists.apache.org/list.html?dev@skywalking.apache.org"><i class="iconfont icon-email"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="GitHub" aria-label="GitHub">
+    <a class="text-color" target="_blank" rel="noopener" href="https://github.com/apache/skywalking"><i class="iconfont icon-github"></i></a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="B站" aria-label="B站">
+    <a class="text-color" target="_blank" rel="noopener" href="https://space.bilibili.com/390683219">B站</a>
+  </li>
+  <li class="list-inline-item mx-2 footer-link-text" data-toggle="tooltip" data-placement="top" title="掘金" aria-label="掘金">
+    <a class="text-color" target="_blank" rel="noopener" href="https://juejin.cn/user/13673577331607">掘金</a>
+  </li>
+  
+</ul>
+
+        
+        
+    </div>
+    <p class="footer-contribute">
+      <a id="contribute" href="https://github.com/apache/skywalking-website" target="_blank" rel="noopener">Help improve this website <span aria-hidden="true">↗</span></a>
+    </p>
+    <div class="">
+
+        <small class="text-color">&copy; 2017 - 2026 The Apache Software Foundation All Rights Reserved</small>
+        
+	
+    </div>
+    <div class="">
+      <small class="text-color mt-4">Apache SkyWalking, SkyWalking, Apache, the Apache feather logo, and the Apache SkyWalking project logo are either registered trademarks or trademarks of the Apache Software Foundation.</small>
+    </div>
+  </div>
+</footer>
+
+
+    </div>
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<div id="popup">
+    <div class="mask">
+        <img src=""/>
+    </div>
+</div>
+
+    
+
+
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+  
+    
+  
+
+<div class="sidebar-mask" aria-hidden="true"></div>
+<div class="sidebar" id="site-navigation-drawer" role="dialog" aria-modal="true" aria-label="Navigation" aria-hidden="true" tabindex="-1">
+  <div class="sidebar-header">
+    <span>Menu</span>
+    <button type="button" class="sidebar-close" aria-label="Close navigation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <nav class="nav-links" aria-label="Site pages">
+    <ul class="sidebar-primary">
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/">Home</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link active" href="/docs" aria-current="page">Projects</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/blog">Blogs</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/events/">Release Posts</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/events/calendar/">Event Calendar</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/users">Users</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/team">Team</a></li>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <li><a class="nav-link" href="/zh/">中文博客</a></li>
+      
+      
+    </ul>
+    <ul class="sidebar-secondary">
+      <li><a class="nav-link" href="/downloads/">Downloads</a></li>
+      
+      <li><a class="nav-link" href="/get-started/">Get started</a></li>
+      
+    </ul>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <details class="sidebar-resources">
+      <summary><span>Apache</span><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></summary>
+      <ul class="sidebar-resource-links">
+        
+        <li><a class="nav-link" href="http://www.apache.org/" target="_blank" rel="noopener noreferrer"><span>Apache Software Foundation</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://github.com/apache/skywalking/issues" target="_blank" rel="noopener noreferrer"><span>GitHub Issue Tracker</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://github.com/apache/skywalking/discussions" target="_blank" rel="noopener noreferrer"><span>Discussion</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://lists.apache.org/list.html?dev@skywalking.apache.org" target="_blank" rel="noopener noreferrer"><span>Dev Mailing List</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://cwiki.apache.org/confluence/display/SKYWALKING/Home" target="_blank" rel="noopener noreferrer"><span>WIKI</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/licenses/" target="_blank" rel="noopener noreferrer"><span>License</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/events/current-event" target="_blank" rel="noopener noreferrer"><span>Apache Events</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/security/" target="_blank" rel="noopener noreferrer"><span>Security</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/foundation/sponsorship.html" target="_blank" rel="noopener noreferrer"><span>Sponsor and Donate</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="http://www.apache.org/foundation/thanks.html" target="_blank" rel="noopener noreferrer"><span>Thanks</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+        <li><a class="nav-link" href="https://apache.org/foundation/policies/privacy.html" target="_blank" rel="noopener noreferrer"><span>Privacy</span><span class="sidebar-external" aria-hidden="true">↗</span></a></li>
+        
+      </ul>
+    </details>
+    
+    
+  </nav>
+</div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+<script src="/js/main.min.a351a9c3ee226044b9050a859fb2f5a6019a548cfe22e3ca281fb08443c28976.js" integrity="sha256-o1Gpw&#43;4iYES5BQqFn7L1pgGaVIz&#43;IuPKKB&#43;whEPCiXY=" crossorigin="anonymous"></script>
+
+
+<script src="/js/highlight.min.js"></script>
+<script src="/js/mermaid.min.js"></script>
+<script>
+    window.onload = () => mermaid.init(undefined, ".language-mermaid");
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('pre code.language-json5').forEach((block) => {
+      if (block.classList.contains('language-json5')) {
+        try {
+          hljs.registerLanguage('json5', function(hljs) {
+            return hljs.getLanguage('json');
+          });
+          hljs.highlightElement(block);
+        } catch (error) {
+          console.error("Error parsing JSON5:", error);
+        }
+      }
+    });
+  });
+</script>
+
+
+<script defer
+src="/js/kapa-widget.bundle.js"
+data-website-id="8a08392b-9c4d-4816-8bc4-f93e0ecdd2a7"
+data-project-name="SkyWalking"
+data-project-color="#2B74B8"
+data-button-text="Ask AI"
+data-search-mode-enabled="true"
+data-search-mode-default="false"
+data-modal-override-open-selector-search=".sw-kapa-search"
+data-modal-open-on-command-k="true"
+data-modal-command-k-search-mode-default="true"
+data-modal-z-index="10000"
+data-modal-disclaimer="The AI supports multiple languages, but it may not be accessible in China, a proxy is required."
+data-project-logo="/images/widget-logo.jpg"
+data-modal-example-questions="What is Apache SkyWalking?,How to deploy SkyWalking?,How to inject agents non-intrusively?,How to setup trace sampling?"
+data-button-position-right="20px"
+data-button-position-bottom="200px"
+data-consent-required="true"  
+data-user-analytics-cookie-enabled="true"  
+data-consent-screen-title="Help us improve our AI assistant"  
+data-consent-screen-disclaimer="By clicking 'Allow tracking', you consent to anonymous user tracking which helps us improve our service. We don't collect any personally identifiable information."  
+data-consent-screen-accept-button-text="Allow tracking"  
+data-consent-screen-reject-button-text="No, thanks"
+></script>
+<script>
+  (function () {
+    var SEL = 'details.topic-filter';
+
+    function closeAll(except) {
+      document.querySelectorAll(SEL).forEach(function (d) {
+        if (d !== except && d.open) { d.open = false; }
+      });
+    }
+
+    
+    
+    document.addEventListener('click', function (e) {
+      var target = e.target instanceof Element ? e.target.closest(SEL) : null;
+      closeAll(target);
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'Esc') { closeAll(null); }
+    });
+  })();
+</script>
+
+
+    <script>
+      
+      document.querySelectorAll('.project-doc .td-content .highlight').forEach(function (block) {
+        if (block.querySelector('.sw-code-bar')) return;
+        var codeEl = block.querySelector('code');
+        var lang = '';
+        if (codeEl) {
+          var m = (codeEl.className || '').match(/language-([\w+-]+)/);
+          if (m) lang = m[1];
+          if (!lang && codeEl.getAttribute('data-lang')) lang = codeEl.getAttribute('data-lang');
+        }
+        var bar = document.createElement('div');
+        bar.className = 'sw-code-bar';
+        bar.innerHTML = '<span class="lang">' + (lang || 'code') + '</span><button class="copy" type="button">Copy</button>';
+        block.insertBefore(bar, block.firstChild);
+        bar.querySelector('.copy').addEventListener('click', function () {
+          var btn = this;
+          var text = (block.querySelector('pre') || {}).innerText || '';
+          navigator.clipboard && navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      });
+    </script>
+  </body>
+  <script>
+    $(function (){
+      $('.doc-menu-button').on('click',function (){
+        $('.td-sidebar').toggleClass('active')
+      })
+      $('.version-select').on('change', function (){
+        var selectVersion = $(this).val().toLowerCase();
+        var prefix = '';
+        var url = location.href.replace(/(\/docs\/[a-zA-Z\-]+\/)([\w|\.]+)(\/.*)/, function (match, p1, p2, p3){
+          prefix = p1 + selectVersion;
+          return p1 + selectVersion + p3
+        })
+        go2SelectVersion(url, prefix)
+
+      })
+      function go2SelectVersion(url, prefix){
+        $.ajax({
+          url: url,
+          type: "get",
+          success:function(){
+            location.href = url;
+          },
+          statusCode: {
+            404:function(){
+              location.href = prefix + '/readme/';
+            }
+          }
+        });
+      }
+    })
+  </script>
+</html>
