@@ -44,6 +44,39 @@ from `data/projects.yml`. Its `showcase` block contains Showcase metadata,
 See the complete YAML example in README.md. Run `node scripts/project-config.js`
 for local configuration validation without fetching repositories or artifacts.
 
+`data/repositories.yml` catalogs every repository whose contributors the site
+counts — each repository of `data/projects.yml`, the Showcase and the Website —
+into the contribution categories of the Certificate of Contribution
+(`/certificate/`). **When a repository is added to the site, add it as
+`owner/repo` to exactly one category there in the same change.** The validator
+rejects missing, duplicate and stale entries, and it runs inside every build.
+Category order is the vertex order of the certificate's contribution polygon.
+
+### Certificate of Contribution data
+
+`scripts/certificate.js` runs in every build: after `npm run team` in
+`build-with-docs` (the deploy) and `build-preview`; `npm run build` has no
+contributor data, so its certificates list members only. Locally, run
+`npm run team` (needs `GITHUB_TOKEN`) and then `npm run certificate` before
+`hugo server`. It writes two gitignored files:
+
+- `assets/certificate/people.json`: today's data the `/certificate/` page draws
+  from. It is regenerated every build and never kept.
+- `static/certificate/verify/<yyyy-mm-dd>.txt`: a `#` header naming that day's
+  categories in polygon order, then the code of every certificate that can be
+  issued that day. A certificate's verify link carries its date, code and facts;
+  the page recomputes the code, looks it up in that day's list, and labels the
+  polygon with that day's categories.
+
+`asf-site` is replaced on every deploy, except `certificate/verify/`: the
+"Keep issued certificate records" step in `.github/workflows/deploy.yaml`
+carries that one folder forward and merges same-day lists; deploying runs share one
+concurrency group so they cannot drop each other's records. **Never delete or
+rename it, and never carry any other folder forward.** The code format lives in
+`assets/js/certificate/model.js` (`canonical`, `encode`); changing it breaks
+every issued certificate, so a new format needs a new `VERSION` while `v1`
+links keep verifying.
+
 ## Releases in data/projects.yml
 
 Each release has `version` and a boolean `latest`. Keep exactly one `latest: true`

@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const {validateProjectConfig, docsForProject, deriveDocsList, collectRepos, websiteProject} = require('./project-config');
+const {loadProjectConfig, validateProjectConfig, validateRepositoryCatalog, docsForProject, deriveDocsList, collectRepos, websiteProject} = require('./project-config');
 
 function fixture() {
   return {
@@ -161,4 +161,27 @@ test('includes Showcase and package-derived Website in the team/stars repository
     name: 'Example Website', icon: 'example-website',
     description: 'This is the repository including all source codes of https://example.apache.org', user: 'apache', repo: 'example-website',
   });
+});
+
+test('the repository catalog lists every repository of the site exactly once', () => {
+  const config = validateProjectConfig(fixture());
+  const catalog = repos => ({categories: [{id: 'main', name: 'Main', repos}]});
+  validateRepositoryCatalog(catalog(['apache/example', 'apache/example-showcase']), config);
+  // Owner and repository names compare case-insensitively, as GitHub does.
+  validateRepositoryCatalog(catalog(['Apache/Example', 'apache/example-showcase']), config);
+  assert.throws(() => validateRepositoryCatalog(catalog(['apache/example']), config), /add apache\/example-showcase to a category/);
+  assert.throws(() => validateRepositoryCatalog(catalog(['apache/example', 'apache/example-showcase', 'apache/example']), config), /more than once/);
+  assert.throws(() => validateRepositoryCatalog(catalog(['apache/example', 'apache/example-showcase', 'apache/gone']), config), /apache\/gone, which the site no longer includes/);
+  assert.throws(() => validateRepositoryCatalog(catalog(['example', 'apache/example-showcase']), config), /must be owner\/repo/);
+  assert.throws(() => validateRepositoryCatalog({categories: [
+    {id: 'main', name: 'Main', repos: ['apache/example']},
+    {id: 'main', name: 'Again', repos: ['apache/example-showcase']},
+  ]}, config), /duplicate category id main/);
+  assert.throws(() => validateRepositoryCatalog({categories: [{id: 'Main', name: 'Main', repos: ['apache/example', 'apache/example-showcase']}]}, config), /lower-case id/);
+});
+
+test('the checked-in configuration catalogs every repository', () => {
+  const config = loadProjectConfig();
+  const listed = config.repositoryCatalog.categories.flatMap(category => category.repos).length;
+  assert.equal(listed, collectRepos(config).length);
 });
