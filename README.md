@@ -82,6 +82,18 @@ available. Each project's `dockerImages` array sits alongside `releases` and
 contains named Docker Hub repository links with optional descriptions. Images
 remain available independently of the selected release; they are repository
 links rather than version-pinned image tags.
+`data/repositories.yml` catalogs every repository whose contributors the site counts
+(each repository of `data/projects.yml`, the Showcase and the Website) into the
+contribution categories of the Certificate of Contribution at `/certificate/`. Add a
+new repository there, as `owner/repo` under one category, in the same change that adds
+it to the site; validation fails while any repository is missing, duplicated or stale.
+`scripts/certificate.js` (part of every build) builds the certificate page's data and
+the day's list of issued certificate codes, `certificate/verify/<date>.txt`. It reads
+the contributor data that `npm run team` fetches, so `build-with-docs` and
+`build-preview` run it after `npm run team`; `npm run build` has no contributor data
+and lists members only. The deploy keeps `certificate/verify/` on `asf-site` across
+deploys, so issued certificates stay verifiable; everything else is replaced. Locally,
+run `npm run team` (with `GITHUB_TOKEN`) and `npm run certificate` before `hugo server`.
 Run `node scripts/project-config.js` to validate the configuration locally without
 fetching documentation or release artifacts.
 

@@ -27,6 +27,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # A deploy replaces the whole asf-site tree, carrying certificate/verify/ forward from the
+    # tree it fetched. Two deploys at once could drop each other's certificate records, so
+    # deploying runs queue in one group; pull request builds keep their own groups.
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'asf-site-deploy' }}
+      cancel-in-progress: false
     permissions:
       contents: write
     env:
@@ -47,6 +53,27 @@ jobs:
           # Used by scripts/stars.js to lift the GitHub API rate limit
           # from 60/hr (anonymous) to 1,000/hr.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The deploy below replaces the whole asf-site tree. The daily lists of issued certificate
+      # codes (certificate/verify/<date>.txt) are what keeps a certificate verifiable, so this
+      # one folder is carried forward from asf-site and merged with today's list. Nothing else
+      # is kept. Only that folder's files are downloaded (blobless fetch); any failure stops the
+      # deploy rather than publishing without the records.
+      - name: Keep issued certificate records
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          git fetch --depth=1 --filter=blob:none origin asf-site
+          if git cat-file -e FETCH_HEAD:certificate/verify 2>/dev/null; then
+            kept=$(mktemp -d)
+            git --work-tree="$kept" restore --source=FETCH_HEAD --worktree -- certificate/verify
+            mkdir -p public/certificate/verify
+            for file in "$kept"/certificate/verify/*; do
+              target="public/certificate/verify/$(basename "$file")"
+              # Byte order keeps the '#' category header first and merges identical headers.
+              if [ -f "$target" ]; then LC_ALL=C sort -u "$file" "$target" -o "$target"; else cp "$file" "$target"; fi
+            done
+            echo "Kept $(ls "$kept"/certificate/verify | wc -l) daily certificate records."
+          fi
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4

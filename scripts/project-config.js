@@ -129,6 +129,34 @@ function validateProjectConfig(config) {
   return config;
 }
 
+// data/repositories.yml groups every counted repository into the contribution categories of
+// the Certificate of Contribution. It lists each repository of the site exactly once, and
+// nothing else, so a repository added to the site cannot go uncategorised.
+function validateRepositoryCatalog(catalog, config) {
+  check(isObject(catalog) && Array.isArray(catalog.categories) && catalog.categories.length > 0, 'data/repositories.yml requires a categories array');
+  const ids = new Set();
+  const listed = new Set();
+  catalog.categories.forEach((category, index) => {
+    const where = `data/repositories.yml categories[${index}]`;
+    check(isObject(category) && /^[a-z][a-z0-9-]*$/.test(category.id || '') && isText(category.name), `${where} requires a lower-case id and a name`);
+    check(!ids.has(category.id), `data/repositories.yml has duplicate category id ${category.id}`);
+    ids.add(category.id);
+    check(Array.isArray(category.repos) && category.repos.length > 0, `${where}.repos must be a nonempty array`);
+    category.repos.forEach(entry => {
+      check(typeof entry === 'string' && /^[a-z0-9_-]+\/[a-z0-9_.-]+$/i.test(entry), `${where}.repos entry ${entry} must be owner/repo`);
+      check(!listed.has(entry.toLowerCase()), `data/repositories.yml lists ${entry} more than once`);
+      listed.add(entry.toLowerCase());
+    });
+  });
+  const expected = collectRepos(config).map(({user, repo}) => `${user}/${repo}`);
+  const missing = expected.filter(name => !listed.has(name.toLowerCase()));
+  check(!missing.length, `add ${missing.join(', ')} to a category in data/repositories.yml`);
+  const known = new Set(expected.map(name => name.toLowerCase()));
+  const stale = [...listed].filter(name => !known.has(name));
+  check(!stale.length, `data/repositories.yml lists ${stale.join(', ')}, which the site no longer includes`);
+  return catalog;
+}
+
 function websiteProject(packageInfo) {
   const repository = typeof packageInfo.repository === 'string' ? packageInfo.repository : packageInfo.repository.url;
   const url = new URL(repository.replace(/^git\+/, ''));
@@ -147,7 +175,9 @@ function loadProjectConfig(root = path.join(__dirname, '..')) {
   const projects = YAML.load(path.join(root, 'data/projects.yml'));
   const {showcase} = YAML.load(path.join(root, 'data/get-started.yml'));
   const packageInfo = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  return validateProjectConfig({...projects, showcase, website: websiteProject(packageInfo)});
+  const config = validateProjectConfig({...projects, showcase, website: websiteProject(packageInfo)});
+  config.repositoryCatalog = validateRepositoryCatalog(YAML.load(path.join(root, 'data/repositories.yml')), config);
+  return config;
 }
 
 function docsForProject(project) {
@@ -196,13 +226,13 @@ function collectRepos(config) {
     .map(({user, repo}) => ({user, repo}));
 }
 
-module.exports = {loadProjectConfig, validateProjectConfig, docsForProject, deriveDocsList, collectRepos, websiteProject};
+module.exports = {loadProjectConfig, validateProjectConfig, validateRepositoryCatalog, docsForProject, deriveDocsList, collectRepos, websiteProject};
 
 if (require.main === module) {
   try {
     const config = loadProjectConfig();
     const docs = deriveDocsList(config).flatMap(group => group.list).flatMap(project => project.docs || []);
-    console.log(`Validated ${config.catalogs.length} catalogs, ${collectRepos(config).length} repositories and ${docs.length} documentation entries.`);
+    console.log(`Validated ${config.catalogs.length} catalogs, ${collectRepos(config).length} repositories in ${config.repositoryCatalog.categories.length} contribution categories and ${docs.length} documentation entries.`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
