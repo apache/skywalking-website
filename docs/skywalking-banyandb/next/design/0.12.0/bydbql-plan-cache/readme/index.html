@@ -24,23 +24,20 @@
 <title>Proto-Free BydbQL Measure Planning with a Reusable Plan Cache | Apache SkyWalking</title><meta property="og:url" content="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/bydbql-plan-cache/readme/">
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache">
-  <meta property="og:description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: partially implemented. Step 3 (the local schema source, §5) ships in 0.12.0 as pkg/bydbql/schema_source.go and banyand/liaison/grpc/bydbql_schema_source.go; the plan IR, the plan cache and the remaining steps are not implemented.
-This document specifies a restructuring of how the liaison turns a BydbQL measure query into an executable request:
-pkg/bydbql stops building request protobufs. It compiles a statement into a proto-free, schema-bound plan, and a separate lowering step renders that plan as the measurev1.QueryRequest the query services already accept. The liaison resolves measure schemas from its local, watch-fed schema view instead of the cluster-wide metadata fan-out it uses today. The compiled plan is cached and reused across requests, keyed by query text and invalidated by a schema-dependency set. (2) removes the dominant per-request cost on its own, with no cache. It is therefore sequenced first and measured before (3) is built (§9).">
+  <meta property="og:description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: historical proposal, superseded for compiled caching by Catalog B T05. The local-schema-source step ships in pkg/bydbql/schema_source.go and banyand/liaison/grpc/bydbql_schema_source.go. The separate compiled measure-template cache is now implemented in PR #1417; its current architecture is documented in the reusable QL plan design and its latest measurements in the PR 1 verification record.
+The proposal, source line references and measurements below retain their original context, including the decision in §11.4 to defer caching for the older transformer. They do not assert that today’s cache is unimplemented or that the entire proto-free restructuring proposed here was adopted literally.">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="docs">
 
   <meta itemprop="name" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache">
-  <meta itemprop="description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: partially implemented. Step 3 (the local schema source, §5) ships in 0.12.0 as pkg/bydbql/schema_source.go and banyand/liaison/grpc/bydbql_schema_source.go; the plan IR, the plan cache and the remaining steps are not implemented.
-This document specifies a restructuring of how the liaison turns a BydbQL measure query into an executable request:
-pkg/bydbql stops building request protobufs. It compiles a statement into a proto-free, schema-bound plan, and a separate lowering step renders that plan as the measurev1.QueryRequest the query services already accept. The liaison resolves measure schemas from its local, watch-fed schema view instead of the cluster-wide metadata fan-out it uses today. The compiled plan is cached and reused across requests, keyed by query text and invalidated by a schema-dependency set. (2) removes the dominant per-request cost on its own, with no cache. It is therefore sequenced first and measured before (3) is built (§9).">
-  <meta itemprop="wordCount" content="3525">
+  <meta itemprop="description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: historical proposal, superseded for compiled caching by Catalog B T05. The local-schema-source step ships in pkg/bydbql/schema_source.go and banyand/liaison/grpc/bydbql_schema_source.go. The separate compiled measure-template cache is now implemented in PR #1417; its current architecture is documented in the reusable QL plan design and its latest measurements in the PR 1 verification record.
+The proposal, source line references and measurements below retain their original context, including the decision in §11.4 to defer caching for the older transformer. They do not assert that today’s cache is unimplemented or that the entire proto-free restructuring proposed here was adopted literally.">
+  <meta itemprop="wordCount" content="3590">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache">
-  <meta name="twitter:description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: partially implemented. Step 3 (the local schema source, §5) ships in 0.12.0 as pkg/bydbql/schema_source.go and banyand/liaison/grpc/bydbql_schema_source.go; the plan IR, the plan cache and the remaining steps are not implemented.
-This document specifies a restructuring of how the liaison turns a BydbQL measure query into an executable request:
-pkg/bydbql stops building request protobufs. It compiles a statement into a proto-free, schema-bound plan, and a separate lowering step renders that plan as the measurev1.QueryRequest the query services already accept. The liaison resolves measure schemas from its local, watch-fed schema view instead of the cluster-wide metadata fan-out it uses today. The compiled plan is cached and reused across requests, keyed by query text and invalidated by a schema-dependency set. (2) removes the dominant per-request cost on its own, with no cache. It is therefore sequenced first and measured before (3) is built (§9).">
+  <meta name="twitter:description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: historical proposal, superseded for compiled caching by Catalog B T05. The local-schema-source step ships in pkg/bydbql/schema_source.go and banyand/liaison/grpc/bydbql_schema_source.go. The separate compiled measure-template cache is now implemented in PR #1417; its current architecture is documented in the reusable QL plan design and its latest measurements in the PR 1 verification record.
+The proposal, source line references and measurements below retain their original context, including the decision in §11.4 to defer caching for the older transformer. They do not assert that today’s cache is unimplemented or that the entire proto-free restructuring proposed here was adopted literally.">
 
 
 
@@ -54,7 +51,7 @@ pkg/bydbql stops building request protobufs. It compiles a statement into a prot
 <script src="/js/jquery-3.6.0.min.js"></script>
 
 <link rel="canonical" href="https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/bydbql-plan-cache/readme/">
-<meta name="description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: partially implemented. Step 3 (the local schema source, §5) ships in 0.12.0 as…">
+<meta name="description" content="Proto-Free BydbQL Measure Planning with a Reusable Plan Cache Status: historical proposal, superseded for compiled caching by Catalog B T05. The…">
 
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@id":"https://skywalking.apache.org/#organization","@type":"Organization","logo":"https://skywalking.apache.org/images/skywalking_400x400.png","name":"Apache SkyWalking","parentOrganization":{"@type":"Organization","name":"The Apache Software Foundation","url":"https://www.apache.org/"},"sameAs":["https://github.com/apache/skywalking","https://twitter.com/asfskywalking","https://projects.apache.org/project.html?skywalking"],"url":"https://skywalking.apache.org/"},{"@type":"TechArticle","headline":"Proto-Free BydbQL Measure Planning with a Reusable Plan Cache","inLanguage":"en","mainEntityOfPage":{"@id":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/bydbql-plan-cache/readme/","@type":"WebPage"},"publisher":{"@id":"https://skywalking.apache.org/#organization"},"url":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/bydbql-plan-cache/readme/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://skywalking.apache.org/","name":"Apache SkyWalking","position":1},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/","name":"Documentation","position":2},{"@type":"ListItem","item":"https://skywalking.apache.org/docs/skywalking-banyandb/next/design/0.12.0/bydbql-plan-cache/readme/","name":"Proto-Free BydbQL Measure Planning with a Reusable Plan Cache","position":3}]}]}</script>
 
@@ -2081,7 +2078,7 @@ pkg/bydbql stops building request protobufs. It compiles a statement into a prot
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f942404</div>
+                  <div class="commit-id">Commit Id: 450c73a</div>
                 
 
 
@@ -2134,9 +2131,16 @@ pkg/bydbql stops building request protobufs. It compiles a statement into a prot
               
 <div class="td-content">
 	<h1 id="proto-free-bydbql-measure-planning-with-a-reusable-plan-cache">Proto-Free BydbQL Measure Planning with a Reusable Plan Cache</h1>
-<p>Status: <strong>partially implemented.</strong> Step 3 (the local schema source, §5) ships in 0.12.0 as
-<code>pkg/bydbql/schema_source.go</code> and <code>banyand/liaison/grpc/bydbql_schema_source.go</code>; the plan IR, the
-plan cache and the remaining steps are not implemented.</p>
+<p>Status: <strong>historical proposal, superseded for compiled caching by Catalog B T05.</strong>
+The local-schema-source step ships in <code>pkg/bydbql/schema_source.go</code> and
+<code>banyand/liaison/grpc/bydbql_schema_source.go</code>. The separate compiled measure-template
+cache is now implemented in <a href="https://github.com/apache/skywalking-banyandb/pull/1417">PR #1417</a>;
+its current architecture is documented in the <a href="../../measure-ql-core-sql/plan-reuse">reusable QL plan design</a>
+and its latest measurements in the <a href="../../measure-ql-core-sql/pr1-verification">PR 1 verification record</a>.</p>
+<p>The proposal, source line references and measurements below retain their original
+context, including the decision in §11.4 to defer caching for the older transformer.
+They do not assert that today&rsquo;s cache is unimplemented or that the entire
+proto-free restructuring proposed here was adopted literally.</p>
 <p>This document specifies a restructuring of how the liaison turns a BydbQL measure query into an
 executable request:</p>
 <ol>
@@ -2701,6 +2705,26 @@ Loopback understates production latency, which only strengthens the case for ste
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

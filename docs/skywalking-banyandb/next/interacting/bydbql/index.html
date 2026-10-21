@@ -33,7 +33,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
   <meta itemprop="name" content="BanyanDB Query Language (BydbQL)">
   <meta itemprop="description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB’s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, traces, properties, and Top-N queries.
 This document specifies the language’s syntax, its semantics, and the precise mapping from BydbQL statements to the various Request messages.">
-  <meta itemprop="wordCount" content="6894">
+  <meta itemprop="wordCount" content="8306">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="BanyanDB Query Language (BydbQL)">
   <meta name="twitter:description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB’s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, traces, properties, and Top-N queries.
@@ -2078,7 +2078,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f942404</div>
+                  <div class="commit-id">Commit Id: 450c73a</div>
                 
 
 
@@ -2146,7 +2146,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
 <p>It also provides a specialized syntax for optimized <strong>Top-N</strong> queries against measures.</p>
 <h2 id="2-core-concepts">2. Core Concepts</h2>
 <h3 id="21-parser-architecture">2.1. Parser Architecture</h3>
-<p>BydbQL queries will be processed by a classic three-stage compiler front-end architecture, which ensures modularity and maintainability.</p>
+<p>BydbQL queries pass through lexical analysis, parsing, parameter binding, and schema-aware planning.</p>
 <pre tabindex="0"><code>BydbQL Query String
         ↓
       Lexer
@@ -2161,14 +2161,14 @@ Abstract Syntax Tree (AST)
 </code></pre><ul>
 <li><strong>Lexer</strong>: Breaks the query string into a sequence of tokens.</li>
 <li><strong>Parser</strong>: Builds an Abstract Syntax Tree (AST) from the tokens, validating the query&rsquo;s syntax.</li>
-<li><strong>Parameter Binding</strong>: Fills the <code>?</code> placeholders in the AST from the request&rsquo;s <code>params</code> (see section 2.6); it always runs, so a query holding unbound placeholders is rejected.</li>
-<li><strong>Transformer</strong>: Traverses the AST, performs semantic analysis using a schema, and transforms the AST into the appropriate target protobuf <code>Stream/Measure/Property/Traces/TopN Request</code> message.</li>
+<li><strong>Parameter Binding</strong>: Binds <code>?</code> placeholders to the request&rsquo;s <code>params</code> (see section 2.6) without changing the query text; a query holding unbound placeholders is rejected.</li>
+<li><strong>Transformer</strong>: Resolves columns against the schema and produces the appropriate native request. Extended raw measure queries also use a QL plan for projection, time filtering, and pagination before encoding the existing measure response.</li>
 </ul>
 <h3 id="22-distinguishing-query-types">2.2. Distinguishing Query Types</h3>
-<p>BydbQL distinguishes the target data model explicitly through keywords in the <code>FROM</code> clause. This allows the parser to apply the correct grammar and transformation rules for the query.</p>
+<p>BydbQL names the target data model in the <code>FROM</code> clause. Measure SELECT queries also support the <code>group.measure</code> shorthand.</p>
 <ul>
 <li><strong>Streams</strong>: <code>FROM STREAM &lt;name&gt; IN &lt;groups&gt;</code> or <code>FROM STREAM &lt;name&gt; IN (&lt;groups&gt;)</code></li>
-<li><strong>Measures</strong>: <code>FROM MEASURE &lt;name&gt; IN &lt;groups&gt;</code> or <code>FROM MEASURE &lt;name&gt; IN (&lt;groups&gt;)</code></li>
+<li><strong>Measures</strong>: <code>FROM MEASURE &lt;name&gt; IN &lt;groups&gt;</code>, <code>FROM MEASURE &lt;name&gt; IN (&lt;groups&gt;)</code>, or <code>FROM &lt;group&gt;.&lt;name&gt;</code></li>
 <li><strong>Properties</strong>: <code>FROM PROPERTY &lt;name&gt; IN &lt;groups&gt;</code> or <code>FROM PROPERTY &lt;name&gt; IN (&lt;groups&gt;)</code></li>
 <li><strong>Traces</strong>: <code>FROM TRACE &lt;name&gt; IN &lt;groups&gt;</code> or <code>FROM TRACE &lt;name&gt; IN (&lt;groups&gt;)</code></li>
 </ul>
@@ -2177,12 +2177,12 @@ Abstract Syntax Tree (AST)
 <li><strong>Top-N</strong>: <code>SHOW TOP &lt;n&gt; FROM MEASURE &lt;name&gt; IN &lt;groups&gt;</code> or <code>SHOW TOP &lt;n&gt; FROM MEASURE &lt;name&gt; IN (&lt;groups&gt;)</code></li>
 </ul>
 <h3 id="23-required-clauses">2.3. Required Clauses</h3>
-<p>In BydbQL, the following clauses are <strong>required</strong> for all queries:</p>
+<p>Every query identifies a source and its groups:</p>
 <ul>
 <li><strong><code>FROM</code> clause</strong>: Specifies the data model type, resource name, and group list</li>
-<li><strong><code>IN groups</code> clause</strong>: Specifies one or more groups to query from. Parentheses around the group list are optional.</li>
-<li><strong><code>TIME</code> clause</strong>: Specifies the time range for the query (required for Streams, Measures, Traces, and Top-N queries; not applicable to Property queries)</li>
+<li><strong><code>IN groups</code> clause</strong>: Specifies one or more groups for an explicit resource source. Parentheses around the group list are optional. Measure shorthand embeds its single group in <code>FROM group.measure</code>.</li>
 </ul>
+<p>Measure SELECT queries can specify time bounds in <code>TIME</code>, in <code>WHERE time ...</code>, or in both clauses. The clauses intersect when combined. See <a href="#55-raw-measure-query-extensions">raw measure query extensions</a>. The other resource forms retain their existing <code>TIME</code> syntax; properties have no <code>TIME</code> clause.</p>
 <h3 id="24-case-sensitivity">2.4. Case Sensitivity</h3>
 <p>BydbQL follows SQL-like conventions for case sensitivity:</p>
 <ul>
@@ -2290,6 +2290,11 @@ Abstract Syntax Tree (AST)
           <td>same as above; each boundary binds independently</td>
       </tr>
       <tr>
+          <td>Measure <code>WHERE time</code> comparison</td>
+          <td><code>WHERE time &gt;= ? AND time &lt; ?</code></td>
+          <td><code>str</code> (RFC3339/RFC3339Nano or <code>now</code>), <code>timestamp</code>; relative strings such as <code>-30m</code> are not accepted here</td>
+      </tr>
+      <tr>
           <td>Scalar comparison value (<code>=</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>)</td>
           <td><code>WHERE service_id = ?</code></td>
           <td><code>str</code>, <code>int</code>, <code>null</code></td>
@@ -2333,6 +2338,7 @@ Abstract Syntax Tree (AST)
 </table>
 <p>Bound values are kept out of the query text, so the server can group requests by template. One consequence worth knowing: if a query is slow enough to be logged, the server may record a sample of its bound values. By default it records only a digest of each string, never the string itself, and the operator can turn that off entirely or turn it up to verbatim — see <a href="../../operation/observability/logging#bydbql-slow-queries">BydbQL Slow Queries</a>.</p>
 <p>Array expansion: an array parameter bound inside a value list expands in place — <code>WHERE service_id IN (?)</code> with a three-entry <code>str_array</code> behaves exactly like listing the three strings literally, and literals can be mixed around it (<code>IN ('a', ?, 'b')</code>). The container keeps the form a literal query would have: a single-value <code>HAVING ?</code> stays a single value unless the array holds multiple entries, while a parenthesized <code>HAVING (?)</code> stays a list regardless of the entry count.</p>
+<p>Repeated parameterized measure queries can reuse a compiled plan when their query text and schema dependencies remain valid. Each request still binds its own values, evaluates a fresh execution clock, and checks authorization. Reusing a plan does not reuse query results or freeze <code>now()</code>.</p>
 <h3 id="262-unsupported-positions">2.6.2. Unsupported Positions</h3>
 <p>Placeholders in any position that determines the query <em>structure</em> rather than a compared <em>value</em> are rejected at parse time with a syntax error. Bound parameters therefore can never change the shape of a query, which is what makes binding injection-proof.</p>
 <table>
@@ -2370,8 +2376,8 @@ Abstract Syntax Tree (AST)
 <h3 id="263-type-rules-summary">2.6.3. Type Rules Summary</h3>
 <ul>
 <li><code>binary_data</code> parameters are rejected in every position (BydbQL has no binary literal).</li>
-<li><code>timestamp</code> parameters are accepted only in <code>TIME</code> positions and are validated: a missing or out-of-range timestamp is rejected at bind time.</li>
-<li><code>int</code> parameters are rejected in <code>TIME</code> positions at bind time: the transformer cannot parse a bare integer as a timestamp, so use <code>str</code> or <code>timestamp</code> instead.</li>
+<li><code>timestamp</code> parameters are accepted in <code>TIME</code> positions and measure <code>WHERE time</code> comparisons. Their protobuf timestamp values are validated; a missing or invalid timestamp is rejected at bind time, and measure planning also checks the stored timestamp domain.</li>
+<li><code>int</code> and <code>null</code> parameters are rejected in time positions: use <code>str</code> or <code>timestamp</code> instead.</li>
 <li><code>int</code> parameters in count positions must fit the wire type of the position — <code>[0, 4294967295]</code> for <code>LIMIT</code>/<code>OFFSET</code> and <code>[0, 2147483647]</code> for the <code>TOP N</code> counts; out-of-range values are rejected at bind time instead of silently wrapping, and literal counts are held to the same bounds.</li>
 <li>Empty arrays, parameters without a value, and <code>nil</code> entries are rejected everywhere.</li>
 <li>A <code>?</code> inside a quoted string literal is part of the string, not a placeholder: <code>WHERE msg = 'why?'</code> consumes no parameter.</li>
@@ -2639,52 +2645,63 @@ integer_literal ::= [0-9]+
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>service_id<span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;webapp&#39;</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">100</span><span style="color:#1f2328">;</span><span style="color:#fff">
 </span></span></span></code></pre></div><h2 id="5-bydbql-for-measures">5. BydbQL for Measures</h2>
-<p>BydbQL for measures is tailored for analytical queries on aggregated numerical data. It supports aggregation, grouping, and mixed selection of tags and fields, mapping to the <code>banyandb.measure.v1.QueryRequest</code> message.</p>
+<p>BydbQL for measures supports native aggregation and grouping, plus raw queries with column aliases and time predicates in <code>WHERE</code>. It uses the existing measure query and response messages. The raw extensions and their current limits are described in <a href="#55-raw-measure-query-extensions">section 5.5</a>.</p>
 <h3 id="51-grammar">5.1. Grammar</h3>
-<pre tabindex="0"><code>measure_query     ::= SELECT projection from_measure_clause TIME time_condition [WHERE criteria] [GROUP BY group_list] [ORDER BY order_expression] [WITH QUERY_TRACE] [LIMIT integer] [OFFSET integer]
-from_measure_clause ::= &#34;FROM MEASURE&#34; identifier &#34;IN&#34; [&#34;(&#34;] group_list_id [&#34;)&#34;] [ON [&#34;(&#34;] stage_list [&#34;)&#34;] STAGES]
-projection        ::= &#34;*&#34; | (column_list | agg_function &#34;(&#34; [&#34;DISTINCT&#34;] identifier &#34;)&#34; | top_clause)
-top_clause        ::= &#34;TOP&#34; integer identifier [&#34;ASC&#34; | &#34;DESC&#34;] [&#34;,&#34; column_list]
-column_list       ::= identifier (&#34;,&#34; identifier)* [&#34;::tag&#34; | &#34;::field&#34;]
-stage_list        ::= identifier (&#34;,&#34; identifier)+
-agg_function      ::= &#34;SUM&#34; | &#34;MEAN&#34; | &#34;COUNT&#34; | &#34;MAX&#34; | &#34;MIN&#34;
+<pre tabindex="0"><code>measure_query     ::= SELECT projection from_measure_clause [TIME time_condition] [WHERE criteria] [GROUP BY group_list] [ORDER BY order_expression] [WITH QUERY_TRACE] [LIMIT count] [OFFSET count]
+from_measure_clause ::= (&#34;FROM MEASURE&#34; identifier &#34;IN&#34; [&#34;(&#34;] group_list_id [&#34;)&#34;] | &#34;FROM&#34; identifier &#34;.&#34; identifier) [ON [&#34;(&#34;] stage_list [&#34;)&#34;] STAGES]
+projection        ::= &#34;*&#34; | column_list | top_clause
+top_clause        ::= &#34;TOP&#34; count identifier [&#34;ASC&#34; | &#34;DESC&#34;] [&#34;,&#34; column_list]
+column_list       ::= column (&#34;,&#34; column)*
+column            ::= (&#34;time&#34; | identifier_path | agg_function &#34;(&#34; [&#34;DISTINCT&#34;] identifier_path &#34;)&#34;) [&#34;::TAG&#34; | &#34;::FIELD&#34;] [&#34;AS&#34; identifier_path]
+stage_list        ::= identifier (&#34;,&#34; identifier)*
+agg_function      ::= &#34;SUM&#34; | &#34;MEAN&#34; | &#34;AVG&#34; | &#34;COUNT&#34; | &#34;MAX&#34; | &#34;MIN&#34;
 	/* &#34;DISTINCT&#34; is only valid with COUNT: COUNT(DISTINCT identifier) */
-group_list        ::= group_column (&#34;,&#34; group_column)+
+group_list        ::= group_column (&#34;,&#34; group_column)*
 group_column      ::= identifier | time_bucket_function
 time_bucket_function ::= &#34;TIME_BUCKET&#34; &#34;(&#34; [string_literal] &#34;)&#34;
 	/* at most one TIME_BUCKET(...) per GROUP BY clause; empty width defers
 	   to the measure&#39;s own interval */
-group_list_id     ::= identifier (&#34;,&#34; identifier)+
+group_list_id     ::= identifier (&#34;,&#34; identifier)*
 criteria          ::= condition ((&#34;AND&#34; | &#34;OR&#34;) condition)*
-condition         ::= identifier binary_op (value | value_list)
+condition         ::= identifier_path binary_op (value | value_list) | time_predicate | &#34;(&#34; criteria &#34;)&#34;
+time_predicate    ::= &#34;time&#34; comparison_op time_value [interval_adjustment]
+comparison_op     ::= &#34;=&#34; | &#34;!=&#34; | &#34;&gt;&#34; | &#34;&gt;=&#34; | &#34;&lt;&#34; | &#34;&lt;=&#34;
+time_value        ::= string_literal | &#34;?&#34; | &#34;now&#34; &#34;(&#34; &#34;)&#34;
+interval_adjustment ::= (&#34;+&#34; | &#34;-&#34;) &#34;INTERVAL&#34; string_literal
 time_condition    ::= &#34;=&#34; timestamp | &#34;&gt;&#34; timestamp | &#34;&lt;&#34; timestamp | &#34;&gt;=&#34; timestamp | &#34;&lt;=&#34; timestamp | &#34;BETWEEN&#34; timestamp &#34;AND&#34; timestamp
 binary_op         ::= &#34;=&#34; | &#34;!=&#34; | &#34;&gt;&#34; | &#34;&lt;&#34; | &#34;&gt;=&#34; | &#34;&lt;=&#34; | &#34;IN&#34; | &#34;NOT IN&#34; | &#34;HAVING&#34; | &#34;NOT HAVING&#34; | &#34;MATCH&#34;
-order_expression  ::= identifier [&#34;ASC&#34; | &#34;DESC&#34;]
-value             ::= string_literal | integer_literal | &#34;NULL&#34;
+order_expression  ::= (&#34;time&#34; | identifier_path) [&#34;ASC&#34; | &#34;DESC&#34;] | &#34;ASC&#34; | &#34;DESC&#34;
+value             ::= string_literal | integer_literal | &#34;NULL&#34; | &#34;?&#34;
 value_list        ::= &#34;(&#34; value (&#34;,&#34; value)* &#34;)&#34;
-timestamp         ::= string_literal | integer_literal
+timestamp         ::= string_literal | integer_literal | &#34;?&#34;
 	/* timestamp supports both absolute and relative time formats:
 	   - Absolute: RFC3339 format like &#34;2006-01-02T15:04:05Z07:00&#34;
 	   - Relative: duration strings like &#34;-30m&#34;, &#34;2h&#34;, &#34;1d&#34; (relative to current time) */
 identifier        ::= [a-zA-Z_][a-zA-Z0-9_*-]*
+identifier_path   ::= identifier (&#34;.&#34; identifier)* | quoted_identifier
+quoted_identifier ::= string_literal /* used as a column name */
 string_literal    ::= &#34;&#39;&#34; [^&#39;]* &#34;&#39;&#34; | &#34;\&#34;&#34; [^\&#34;]* &#34;\&#34;&#34;
 integer_literal   ::= [0-9]+
-</code></pre><p><strong>Note</strong>: The <code>TIME</code> clause and <code>IN groups</code> clause are <strong>required</strong> for all measure queries. At least one group must be specified. Parentheses around the group list are optional.</p>
+count             ::= integer_literal | &#34;?&#34;
+</code></pre><p><strong>Source and time bounds</strong>: The explicit source form requires at least one <code>IN</code> group; parentheses around the list are optional. The shorthand names one group and one measure. <code>TIME</code> is optional for measure SELECT; raw queries may use <code>WHERE time</code> instead. Syntax accepted by the parser is subject to the execution limits in section 5.5, including the restrictions on combining raw extensions with aggregation.</p>
 <h3 id="52-bydbql-extensions-for-select">5.2. BydbQL Extensions for <code>SELECT</code></h3>
 <p>The <code>SELECT</code> clause for measures is highly flexible, allowing for the selection of tags, fields, and aggregations in a single, flat list.</p>
 <ul>
 <li><code>SELECT &lt;field_key&gt;, &lt;tag_key&gt;</code>: Returns specific fields and tags. The parser will infer the type of each identifier from the measure&rsquo;s schema.</li>
 <li><code>SELECT &lt;identifier&gt;::field, &lt;identifier&gt;::tag</code>: If a field and a tag share the same name, the <code>::field</code> or <code>::tag</code> syntax <strong>must</strong> be used to disambiguate the identifier&rsquo;s type.</li>
-<li>The clause also supports aggregation functions (<code>SUM</code>, <code>MEAN</code>, <code>COUNT</code>, <code>MAX</code>, <code>MIN</code>) and a <code>TOP N</code> clause for ranked results.</li>
+<li><code>SELECT &lt;column&gt; AS &lt;name&gt;</code>: Renames a raw output column. Family-qualified tags such as <code>default.host</code> select a particular tag family; aliases retain the original tag family or field container.</li>
+<li><code>SELECT time, time AS observed_at</code>: Selects the built-in timestamp. Its response mapping is described in section 5.5.</li>
+<li>The clause also supports one native aggregation function (<code>SUM</code>, <code>MEAN</code>/<code>AVG</code>, <code>COUNT</code>, <code>MAX</code>, <code>MIN</code>) per query and a <code>TOP N</code> clause for ranked results. Raw aliases and the other new raw extensions cannot currently be combined with aggregation or grouping.</li>
 <li>An aggregate function&rsquo;s column resolves against both tags and fields, not just fields — <code>SUM(latency)</code> aggregates a field, <code>COUNT(DISTINCT user_id)</code> aggregates a tag. <code>DISTINCT</code> is only accepted inside <code>COUNT</code>; <code>SUM(DISTINCT x)</code> and similar are rejected as a parse error.</li>
 </ul>
 <h3 id="53-mapping-to-measurev1queryrequest">5.3. Mapping to <code>measure.v1.QueryRequest</code></h3>
 <ul>
 <li><strong><code>FROM MEASURE name IN groups</code></strong> or <strong><code>FROM MEASURE name IN (groups)</code></strong>: Maps to the <code>name</code> and <code>groups</code> fields. Both are required.</li>
+<li><strong><code>FROM group.name</code></strong>: Uses the same measure name and a single group, with the raw-query behavior described in section 5.5.</li>
 <li><strong><code>SELECT &lt;tag1&gt;, &lt;field1&gt;, &lt;field2&gt;</code></strong>: The transformer inspects each identifier. Those identified as tags (either by schema lookup or <code>::tag</code>) are added to <code>tag_projection</code>. Those identified as fields (by schema lookup or <code>::field</code>) are added to <code>field_projection</code>.</li>
 <li><strong><code>SELECT SUM(field)</code></strong>: Maps to <code>agg</code>, setting <code>agg.field_name</code>.</li>
 <li><strong><code>SELECT COUNT(DISTINCT tag)</code></strong>: Maps to <code>agg</code> with <code>function = AGGREGATION_FUNCTION_COUNT_DISTINCT</code>, setting <code>agg.tag_name</code> and <code>agg.tag_family</code> instead of <code>agg.field_name</code>. The output column is named after the tag (<code>tag</code>), not after the function. A <code>COUNT(DISTINCT field)</code> over an INT or FLOAT field is also accepted, and sets <code>agg.field_name</code> as any other field aggregation does.</li>
-<li><strong><code>TIME</code> clause (required)</strong>: Maps to <code>time_range</code>:
+<li><strong><code>TIME</code> clause (optional for measure SELECT)</strong>: Maps to <code>time_range</code>; bounds from <code>WHERE time</code> intersect this range:
 <ul>
 <li><strong><code>TIME = '2023-01-01T00:00:00Z'</code></strong>: Sets <code>begin</code> and <code>end</code> to the same timestamp.</li>
 <li><strong><code>TIME &gt; '2023-01-01T00:00:00Z'</code></strong>: Sets <code>begin</code> to the timestamp.</li>
@@ -2701,7 +2718,7 @@ integer_literal   ::= [0-9]+
 <li><strong><code>SELECT TOP N ...</code></strong>: Maps to the <code>top</code> message. <code>TOP</code> can rank by a tag-targeted aggregation&rsquo;s own output column (e.g. <code>TOP 10 user_id DESC</code> when <code>COUNT(DISTINCT user_id)</code> is projected), not only by a field.</li>
 <li><strong><code>WITH QUERY_TRACE</code></strong>: Maps to the <code>trace</code> field to enable distributed tracing of query execution.</li>
 </ul>
-<p><strong>Note on <code>LIMIT</code> and <code>TIME_BUCKET</code></strong>: <code>LIMIT</code> defaults to 100 when omitted. A bucketed <code>GROUP BY</code> returns one row per (bucket, tag-group), so a wide time window with a narrow bucket width can produce far more than 100 rows; without an explicit <code>LIMIT</code> sized to the expected row count, the response is silently truncated to the first 100 rows in bucket-ascending order rather than returning an error. Always set <code>LIMIT</code> explicitly for a bucketed query.</p>
+<p><strong>Note on <code>LIMIT</code> and <code>TIME_BUCKET</code></strong>: Legacy measure queries default to 100 when <code>LIMIT</code> is omitted. A bucketed <code>GROUP BY</code> returns one row per (bucket, tag-group), so a wide time window with a narrow bucket width can produce far more than 100 rows; without an explicit <code>LIMIT</code> sized to the expected row count, the response is silently truncated to the first 100 rows in bucket-ascending order rather than returning an error. Always set <code>LIMIT</code> explicitly for a bucketed query. Extended raw queries have different omission and zero-limit behavior, described in section 5.5.</p>
 <h3 id="54-examples">5.4. Examples</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#57606a">-- Select a specific tag and a specific field
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff">
@@ -2832,7 +2849,113 @@ integer_literal   ::= [0-9]+
 </span></span></span><span style="display:flex;"><span>TIME<span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;-2h&#39;</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>TIME_BUCKET<span style="color:#1f2328">(</span><span style="color:#0a3069">&#39;5m&#39;</span><span style="color:#1f2328">),</span><span style="color:#fff"> </span>region<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">500</span><span style="color:#1f2328">;</span><span style="color:#fff">
-</span></span></span></code></pre></div><h2 id="6-bydbql-for-top-n">6. BydbQL for Top-N</h2>
+</span></span></span></code></pre></div><h3 id="55-raw-measure-query-extensions">5.5. Raw measure query extensions</h3>
+<p>The following measure SELECT extensions are implemented for 0.12.0. They return the existing <code>measure_result</code> response through the same Query API.</p>
+<h4 id="sources-projections-and-aliases">Sources, projections, and aliases</h4>
+<p><code>FROM metrics.service_cpm</code> names the measure <code>service_cpm</code> in the group <code>metrics</code>. The explicit spelling <code>FROM MEASURE service_cpm IN metrics</code> remains available, including its multi-group form.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">default</span><span style="color:#1f2328">.</span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>reading<span style="color:#1f2328">,</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>observed_at<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;2026-01-01T00:00:00Z&#39;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;2026-01-01T00:05:00Z&#39;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">ORDER</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>observed_at<span style="color:#fff"> </span><span style="color:#cf222e">DESC</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">100</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>Column resolution uses the measure schema:</p>
+<ul>
+<li>Use <code>family.tag</code> to distinguish tags with the same name in different families.</li>
+<li>Use <code>::TAG</code> or <code>::FIELD</code> when a tag and a field share a name. These select the column kind; they do not cast its value.</li>
+<li>A raw column can appear more than once with different aliases. Aliases rename output without changing its value type or nullness.</li>
+<li>A tag alias stays in its original tag family; a field alias stays in the field list. Duplicate output names in the same container are rejected. Different tag families, or tag and field containers, may use the same output name.</li>
+</ul>
+<p>Unquoted <code>time</code> is the stored data-point timestamp. Every returned DataPoint retains its <code>timestamp</code>; selecting <code>time</code> alone adds no separate tag. <code>time AS observed_at</code> also returns a timestamp TagValue named <code>observed_at</code> in the <code>__ql</code> tag family. Selecting a user column with the same <code>__ql</code> output name is rejected. Use family qualification or an explicit column kind to select a user column named <code>time</code>.</p>
+<h4 id="time-predicates-and-binding">Time predicates and binding</h4>
+<p><code>WHERE time</code> supports <code>=</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, and <code>&lt;=</code>. Its right-hand side accepts an RFC3339/RFC3339Nano string, a string or timestamp parameter, or <code>now()</code>, optionally followed by <code>+ INTERVAL 'duration'</code> or <code>- INTERVAL 'duration'</code>.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>reading<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>service_cpm<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>metrics<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span>TIME<span style="color:#fff"> </span><span style="color:#cf222e">BETWEEN</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;2026-01-01T00:00:00Z&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;2026-01-01T00:10:00Z&#39;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">OFFSET</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>For this query, supply five parameters in order: begin timestamp, end timestamp, host string, integer limit, and integer offset. For example, begin at <code>2026-01-01T00:05:00Z</code> and end at <code>2026-01-01T00:06:00Z</code> select that minute within the explicit <code>TIME</code> range. <code>TIME</code> and <code>WHERE time</code> bounds always intersect; neither overrides the other.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>reading<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span>now<span style="color:#1f2328">()</span><span style="color:#fff"> </span><span style="color:#0550ae">-</span><span style="color:#fff"> </span><span style="color:#6639ba">INTERVAL</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;30m&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span>now<span style="color:#1f2328">()</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">100</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>All <code>now()</code> references in one execution use one captured clock. A later request captures a fresh clock even when it reuses the same compiled plan. Quoted <code>'now'</code> is also accepted as a time comparison value. Relative strings such as <code>'-30m'</code> remain valid in the legacy <code>TIME</code> clause; in <code>WHERE time</code>, write <code>now() - INTERVAL '30m'</code> instead.</p>
+<p><code>INTERVAL</code> accepts fixed-duration units <code>ns</code>, <code>us</code>, <code>µs</code>, <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>, and <code>w</code>, including fractional or compound durations such as <code>'1.5s'</code> and <code>'1h30m'</code>. A day means 24 hours and a week means seven days. Calendar months and years are not supported. Bounds outside the stored timestamp domain are rejected. Stored timestamps have millisecond resolution; comparisons preserve their strict or inclusive meaning at fractional-millisecond boundaries, and equality to a non-millisecond-aligned timestamp returns no rows.</p>
+<p>Parenthesized time predicates support <code>AND</code> and <code>OR</code>. A disjoint time predicate keeps its full filter before pagination:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>observed_at<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span><span style="color:#1f2328">(</span>time<span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;2026-01-01T00:00:00Z&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">OR</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;2026-01-01T00:10:00Z&#39;</span><span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;frontend&#39;</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">2</span><span style="color:#fff"> </span><span style="color:#cf222e">OFFSET</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#fff">
+</span></span></span></code></pre></div><h4 id="pagination-and-current-limits">Pagination and current limits</h4>
+<p>A raw query uses the extended behavior when it uses source shorthand, an <code>AS</code> alias, the built-in time projection, or a time predicate in <code>WHERE</code>:</p>
+<ul>
+<li>Omitted <code>LIMIT</code> has no implicit 100-row cap; query memory limits still apply.</li>
+<li>Explicit <code>LIMIT 0</code> returns no rows and performs no native scan. Contradictory time bounds also return no rows without scanning.</li>
+<li><code>OFFSET</code> and <code>LIMIT</code> apply after the complete time filter, including disjoint ranges. Legacy queries without these raw extensions keep their existing pagination defaults.</li>
+<li>Timestamp ordering, including an unambiguous timestamp alias such as <code>ORDER BY observed_at DESC</code>, is supported. Native index-rule ordering remains available. General sorting by tag/field output columns, multiple sort keys, and explicit NULL ordering are not implemented yet.</li>
+</ul>
+<p>The current raw extensions cannot be combined with aggregate projections, <code>GROUP BY</code>, or <code>SELECT TOP</code>. Legacy native aggregation and grouping retain their existing syntax and behavior. Multiple aggregate outputs, post-aggregation HAVING, field-value WHERE filters, arithmetic/casts, CASE/COALESCE, SELECT DISTINCT, and computed grouping are planned capabilities. An <code>OR</code> that mixes time and tag/field predicates is also rejected; combining a pure-time subtree with a tag predicate using <code>AND</code>, as above, is supported.</p>
+<p>Aliases, built-in time projections, <code>now()</code>, timestamp <code>INTERVAL</code> arithmetic, and source shorthand in this section apply to measure SELECT. They do not extend stream, trace, property, or SHOW TOP syntax.</p>
+<h3 id="56-legacy-scalar-distinct-count-pagination">5.6. Legacy scalar distinct-count pagination</h3>
+<p>An ungrouped QL <code>COUNT(DISTINCT column)</code> consumes the complete native input before
+returning its single count row. A positive <code>LIMIT</code> cannot reduce that input;
+<code>LIMIT 0</code> or a positive <code>OFFSET</code> suppresses the row. With no matching input, the
+count is zero. Grouped queries keep their existing native behavior and restrictions.</p>
+<h3 id="57-compiled-plan-cache-controls">5.7. Compiled-plan cache controls</h3>
+<p>The liaison caches immutable compiled templates for parameterized measure QL,
+separately from its prepared-statement/parse cache. Identical query text can reuse
+a template with different parameters. Every execution rebinds values and one fresh
+clock, checks schema dependencies and current authorization, and creates private
+requests/operators. Literal queries bypass compiled reuse. Results and permission
+decisions are not cached.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Liaison flag</th>
+          <th style="text-align: right">Default</th>
+          <th>Meaning of zero</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--bydbql-plan-cache-size</code></td>
+          <td style="text-align: right">4,000 retained templates</td>
+          <td>Disable compiled-plan reuse</td>
+      </tr>
+      <tr>
+          <td><code>--bydbql-plan-cache-max-bytes</code></td>
+          <td style="text-align: right">67,108,864 bytes (64 MiB)</td>
+          <td>Use the default byte limit</td>
+      </tr>
+      <tr>
+          <td><code>--bydbql-plan-max-compiles</code></td>
+          <td style="text-align: right">4 concurrent compilations</td>
+          <td>Use the default concurrency limit</td>
+      </tr>
+      <tr>
+          <td><code>--bydbql-plan-max-in-flight</code></td>
+          <td style="text-align: right">64 distinct shared compilations</td>
+          <td>Use the default in-flight limit</td>
+      </tr>
+  </tbody>
+</table>
+<p>Negative values are rejected. Count and byte limits include evicted templates
+still held by active executions. Byte accounting estimates retained plan memory;
+it is not an exact allocator heap measurement. Oversized plans or unstable local
+schema views execute uncached under existing compilation/query resource limits.
+Disabling compiled reuse preserves QL functionality and the separate prepared
+cache. In particular, setting compiled-plan maximum bytes to zero does not remove
+its byte bound.</p>
+<p>Cache activity is visible through <code>bydbql_plan_cache_total{result}</code>,
+<code>bydbql_plan_compiles_total</code>, <code>bydbql_plan_cache_count</code>,
+<code>bydbql_plan_cache_bytes{kind}</code>, <code>bydbql_plan_work{kind}</code> and
+<code>bydbql_plan_duration_seconds{stage}</code>. Cache outcomes also appear in existing QL
+logs. These metrics distinguish plan reuse from prepared-cache activity.</p>
+<p>Plan reuse reduces repeated planning work; end-to-end latency/CPU effects depend
+on execution costs. The <a href="../../design/0.12.0/measure-ql-core-sql/pr1-verification">current PR 1 measurements</a>
+show lower planning time and allocations but no established RPC latency gain.</p>
+<h2 id="6-bydbql-for-top-n">6. BydbQL for Top-N</h2>
 <p>Top-N queries use a specialized, command-like syntax for clarity and to reflect the optimized nature of the underlying <code>banyandb.measure.v1.TopNRequest</code>. The <code>FROM</code> clause is mandatory.</p>
 <h3 id="61-grammar">6.1. Grammar</h3>
 <pre tabindex="0"><code>topn_query         ::= SHOW TOP integer from_measure_clause TIME time_condition [WHERE topn_criteria] [AGGREGATE BY agg_function] [ORDER BY [&#34;ASC&#34;|&#34;DESC&#34;]] [WITH QUERY_TRACE]
@@ -3224,7 +3347,7 @@ integer_literal       ::= [0-9]+
       <tr>
           <td style="text-align: left"><strong>Primary Command</strong></td>
           <td style="text-align: left"><code>SELECT ... FROM STREAM ... IN ...</code></td>
-          <td style="text-align: left"><code>SELECT ... FROM MEASURE ... IN ...</code></td>
+          <td style="text-align: left"><code>SELECT ... FROM MEASURE ... IN ...</code> or <code>FROM group.measure</code></td>
           <td style="text-align: left"><code>SHOW TOP ... FROM MEASURE ... IN ...</code></td>
           <td style="text-align: left"><code>SELECT ... FROM PROPERTY ... IN ...</code></td>
           <td style="text-align: left"><code>SELECT ... FROM TRACE ... IN ...</code></td>
@@ -3232,7 +3355,7 @@ integer_literal       ::= [0-9]+
       <tr>
           <td style="text-align: left"><strong>Groups Clause</strong></td>
           <td style="text-align: left"><strong>Required</strong> <code>IN groups</code> (parentheses optional)</td>
-          <td style="text-align: left"><strong>Required</strong> <code>IN groups</code> (parentheses optional)</td>
+          <td style="text-align: left"><code>IN groups</code> or single group in shorthand</td>
           <td style="text-align: left"><strong>Required</strong> <code>IN groups</code> (parentheses optional)</td>
           <td style="text-align: left"><strong>Required</strong> <code>IN groups</code> (parentheses optional)</td>
           <td style="text-align: left"><strong>Required</strong> <code>IN groups</code> (parentheses optional)</td>
@@ -3240,7 +3363,7 @@ integer_literal       ::= [0-9]+
       <tr>
           <td style="text-align: left"><strong>Time Clause</strong></td>
           <td style="text-align: left"><strong>Required</strong> <code>TIME ...</code></td>
-          <td style="text-align: left"><strong>Required</strong> <code>TIME ...</code></td>
+          <td style="text-align: left">Optional <code>TIME</code> and/or raw <code>WHERE time</code></td>
           <td style="text-align: left"><strong>Required</strong> <code>TIME ...</code></td>
           <td style="text-align: left">Not applicable</td>
           <td style="text-align: left"><strong>Required</strong> <code>TIME ...</code></td>
@@ -3248,7 +3371,7 @@ integer_literal       ::= [0-9]+
       <tr>
           <td style="text-align: left"><strong>Projection</strong></td>
           <td style="text-align: left">Tags by family</td>
-          <td style="text-align: left">Tags &amp; Fields</td>
+          <td style="text-align: left">Tags, fields, raw aliases, and timestamp projection</td>
           <td style="text-align: left">Implicit (entity, value)</td>
           <td style="text-align: left">Flat list of tags</td>
           <td style="text-align: left">Tags by specification</td>
@@ -3377,6 +3500,9 @@ integer_literal       ::= [0-9]+
             <li><a href="#52-bydbql-extensions-for-select">5.2. BydbQL Extensions for <code>SELECT</code></a></li>
             <li><a href="#53-mapping-to-measurev1queryrequest">5.3. Mapping to <code>measure.v1.QueryRequest</code></a></li>
             <li><a href="#54-examples">5.4. Examples</a></li>
+            <li><a href="#55-raw-measure-query-extensions">5.5. Raw measure query extensions</a></li>
+            <li><a href="#56-legacy-scalar-distinct-count-pagination">5.6. Legacy scalar distinct-count pagination</a></li>
+            <li><a href="#57-compiled-plan-cache-controls">5.7. Compiled-plan cache controls</a></li>
           </ul>
         </li>
         <li><a href="#6-bydbql-for-top-n">6. BydbQL for Top-N</a>
@@ -3517,6 +3643,26 @@ integer_literal       ::= [0-9]+
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
