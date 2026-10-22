@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Trace Analysis Language">
   <meta itemprop="description" content="Trace Analysis Language Trace Analysis Language (TAL) in SkyWalking is a Domain-Specific Language (DSL) to analyze the spans that arrive over the OpenTelemetry protocol. A TAL rule reads one span at a time and decides what it is, which service, instance and endpoint it belongs to, which metrics it feeds, which record it writes, and whether the span itself is stored. The metrics go through the meter system, so they are stored, downsampled, queried and alerted on like every meter metric.">
-  <meta itemprop="wordCount" content="4001">
+  <meta itemprop="wordCount" content="4276">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Analysis Language">
   <meta name="twitter:description" content="Trace Analysis Language Trace Analysis Language (TAL) in SkyWalking is a Domain-Specific Language (DSL) to analyze the spans that arrive over the OpenTelemetry protocol. A TAL rule reads one span at a time and decides what it is, which service, instance and endpoint it belongs to, which metrics it feeds, which record it writes, and whether the span itself is stored. The metrics go through the meter system, so they are stored, downsampled, queried and alerted on like every meter metric.">
@@ -3850,7 +3850,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 75192f9</div>
+                  <div class="commit-id">Commit Id: 9a34d11</div>
                 
 
 
@@ -3964,7 +3964,7 @@ and it means the same thing whatever the input:</p>
   <tbody>
       <tr>
           <td><code>service</code></td>
-          <td>the resource&rsquo;s <code>service.name</code>; the receiver&rsquo;s fallbacks are described in <a href="../../setup/backend/otlp-trace#service-name">OpenTelemetry Trace Format</a></td>
+          <td>the service name the receiver resolved: the resource&rsquo;s <code>service.name</code>, or the fallbacks in <a href="../../setup/backend/otlp-trace#service-name">Service name</a>, in the <code>group::name</code> form when <a href="../../setup/backend/otlp-trace#service-group">service grouping</a> applies</td>
       </tr>
       <tr>
           <td><code>serviceInstance</code></td>
@@ -4329,10 +4329,13 @@ alias of <code>meta.service</code>, the row the agent path derives from its prop
 <code>server.address</code> and <code>server.port</code> are the <code>Host</code> the caller sent, so the caller&rsquo;s <code>resolveAlias</code> finds it. The
 alias rows travel through storage and the core&rsquo;s alias cache, which reloads every 10 seconds, so the first calls
 to a freshly seen address are still address-named, and the topology query folds those.</li>
-<li><strong><code>resolveAlias(address)</code></strong> on the CLIENT side answers, in this order: a host, or its first DNS label, that is the
-name of a service this OAP node has seen spans from; the service an alias row names; the service an earlier pair
-named for the address on this node, see the pairing below; else the address unchanged. A CLIENT span whose own
-pair has not met yet stays address-named; its pair names the calls that follow.</li>
+<li><strong><code>resolveAlias(address)</code></strong> on the CLIENT side answers, in this order, from the services this OAP node has seen
+spans from, or read from storage when it started: for a qualified host, the grouped service of the group its
+second DNS label names (<code>cart.outlet</code> is <code>outlet::cart</code>); the service of the caller&rsquo;s own group named exactly the
+host (<code>cart</code> from <code>shop::frontend</code> is <code>shop::cart</code>); a host, or its first DNS label, that is an ungrouped
+service&rsquo;s name; the service an alias row names; the service an earlier pair named for the address on this node,
+see the pairing below; the one grouped service of any group whose short name the whole host is; else the address
+unchanged. A CLIENT span whose own pair has not met yet stays address-named; its pair names the calls that follow.</li>
 <li><strong>Pairing</strong> resolves the rest from the trace context: a SERVER span&rsquo;s <code>parentSpanId</code> is its caller&rsquo;s span id,
 which needs no attribute convention on either side. Every SERVER span with a parent, and every CLIENT span
 whose peer could not be named, becomes a fact; messaging spans take no part, since a CONSUMER span&rsquo;s parent is
@@ -4341,10 +4344,21 @@ routed to the node that owns the trace, so the two halves meet wherever each arr
 writes the row for every node. Facts wait 60 seconds for their other half; a callee that never reports, an
 uninstrumented service or a dropped trace context, leaves its caller address-named, which is the honest answer.</li>
 </ul>
-<p>Two guards keep an alias honest. An address whose host names another service is never registered: a proxy that
-keeps the <code>Host</code> header hands <code>frontend-proxy:8080</code> to the <code>frontend</code> behind it, and that address stays the proxy&rsquo;s.
-And <code>resolveAlias</code> asks the known-service registry before the cache, so a row that did get through cannot redirect
-an edge away from a service that exists under that name.</p>
+<p>The topology query folds an address-named node into the service its address alias names once the row lands, so
+those first calls join the callee&rsquo;s node. It folds a node that is not a registered service, or a self-call whose
+alias names another service, the shape a caller that dials its downstream by its own service name records until the
+downstream&rsquo;s alias lands. Other registered nodes keep their own names even when the name equals some alias address,
+as an OTLP <code>frontend</code> does while an agent has registered the host <code>frontend</code> for <code>agent::frontend</code>.</p>
+<p>Two guards keep an alias honest. An address whose host names another service is never registered: a proxy that keeps
+the <code>Host</code> header hands <code>frontend-proxy:8080</code> to the <code>frontend</code> behind it, and that address stays the proxy&rsquo;s. With
+service grouping the host&rsquo;s first DNS label counts too: an address whose first label is the short name of any
+group&rsquo;s service that emitted, or was read from storage, within a day, other than the registering service&rsquo;s own, is
+refused, and so is one whose whole host is such a short name, <code>edge.proxy:8080</code> of <code>infra::edge.proxy</code>, so
+<code>frontend-proxy.ingress:8080</code> stays <code>infra::frontend-proxy</code>&rsquo;s even when the group is not the namespace, and two
+groups&rsquo; proxies of one name guard it as one does. A host outside the cluster whose first label happens to be such a
+name, <code>api.example.com</code> while <code>shop::api</code> exists, is refused the same way and its callers stay address-named, as an
+ungrouped <code>api</code> already did. And <code>resolveAlias</code> asks the known-service registry before the cache, so a row that did
+get through cannot redirect an edge away from a service that exists under that name.</p>
 <p>An address listed in the agent analyzer&rsquo;s <a href="../../setup/backend/uninstrumented-gateways">uninstrumented gateways</a> is
 never registered either, by <code>alias</code> or by a pair. The shipped rule does not resolve such a peer: when <code>isGateway</code> says
 it is one, the gateway stays a <code>VIRTUAL_GATEWAY</code> node of its own, as on the agent path, which the caller&rsquo;s edge ends on
