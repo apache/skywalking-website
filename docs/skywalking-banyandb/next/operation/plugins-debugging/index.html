@@ -33,7 +33,7 @@ The live-observability half of this runbook (per-decision metrics, a decision-sa
   <meta itemprop="name" content="Debugging Trace-Pipeline Sampler Plugins (Offline / Config)">
   <meta itemprop="description" content="Debugging Trace-Pipeline Sampler Plugins (Offline / Config) This is the offline/config half of the trace-pipeline sampler-plugin debugging runbook: everything here can be checked from configuration and existing metrics/logs, or reproduced with the offline dev toolkit (pkg/pipeline/sdk/sdktest) — no live cluster access is required beyond reading its config and metrics.
 The live-observability half of this runbook (per-decision metrics, a decision-sample debug log, and a banyand-plugin decide/capture-replay workflow) is not part of this document — those tools are planned in a follow-up PR and do not exist yet. Do not search for metrics or commands beyond what is listed below; they are not yet built.">
-  <meta itemprop="wordCount" content="906">
+  <meta itemprop="wordCount" content="1101">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Debugging Trace-Pipeline Sampler Plugins (Offline / Config)">
   <meta name="twitter:description" content="Debugging Trace-Pipeline Sampler Plugins (Offline / Config) This is the offline/config half of the trace-pipeline sampler-plugin debugging runbook: everything here can be checked from configuration and existing metrics/logs, or reproduced with the offline dev toolkit (pkg/pipeline/sdk/sdktest) — no live cluster access is required beyond reading its config and metrics.
@@ -2078,7 +2078,7 @@ The live-observability half of this runbook (per-decision metrics, a decision-sa
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 450c73a</div>
+                  <div class="commit-id">Commit Id: e409a6c</div>
                 
 
 
@@ -2144,10 +2144,10 @@ follow-up PR and do not exist yet. Do not search for metrics or commands
 beyond what is listed below; they are not yet built.</p>
 </blockquote>
 <p>See <a href="../plugins"><code>docs/operation/plugins.md</code></a> for deployment and
-<a href="https://github.com/apache/skywalking-banyandb/tree/450c73a3a040da9ceac8bbacdf61854517f254b4/plugins/README.md"><code>plugins/README.md</code></a> for the plugin contract.</p>
+<a href="https://github.com/apache/skywalking-banyandb/tree/e409a6c688452a1edf6de15ba1a4692c81bf5665/plugins/README.md"><code>plugins/README.md</code></a> for the plugin contract.</p>
 <h2 id="symptom-my-data-is-not-being-sampled-nothing-is-dropped">Symptom: &ldquo;my data is not being sampled&rdquo; (nothing is dropped)</h2>
-<p>Work through these checks in order; each one either explains the symptom or
-rules out a cause.</p>
+<p>For data-node merge/finalization sampling, work through these checks in order.
+For migration sampling, see <a href="#lifecycle-migration">Lifecycle migration</a> below.</p>
 <ol>
 <li><strong>Is the feature enabled on this node?</strong> <code>-trace-pipeline-native-plugin-enabled</code>
 must be <code>true</code> and <code>-trace-pipeline-trusted-plugin-dir</code> must be set to a
@@ -2181,13 +2181,12 @@ chain) and inspect the returned <code>Verdict.Keep</code>. If every fixture you&
 expect to be dropped comes back <code>true</code>, the sampler&rsquo;s own logic (or its
 config, e.g. a threshold set too permissively) is the cause, not the
 engine.</li>
-<li><strong>Remember: plugins target the whole group, not a schema or a stage.</strong>
-<code>TracePipelineConfig.schema_names</code> / <code>schema_name_regex</code> / <code>stages</code> are
-accepted by the proto but <strong>not wired</strong> into the engine today — the
-validator rejects any config that tries to use them
-(<code>api/validate/validate.go</code>), and the group as a whole is the only unit a
-pipeline can target. If you were expecting a schema-scoped or
-stage-scoped effect, that scoping does not exist yet.</li>
+<li><strong>Check which host owns the chain.</strong> Data-node merge/finalization uses the
+top-level <code>pipeline.plugins</code>. Lifecycle migration uses
+<code>pipeline.stages[].plugins</code> for the source stage. The API accepts
+<code>schema_names</code>, <code>schema_name_regex</code>, and <code>stages</code>; the lifecycle agent applies
+the schema selectors when resolving its source-stage chain. A stage-only
+configuration does not install a data-node merge sampler.</li>
 </ol>
 <h2 id="symptom-unexpected-data-is-being-sampled-wrong-traces-kept-or-dropped">Symptom: &ldquo;unexpected data is being sampled&rdquo; (wrong traces kept or dropped)</h2>
 <ol>
@@ -2230,6 +2229,33 @@ maturity and fragment-boundary range expansion. The fixed fallback is 2h when
 the group omits a positive value. Verify that the deployment&rsquo;s maximum delay
 between fragments of one trace fits within that grace.</li>
 </ol>
+<h2 id="lifecycle-migration">Lifecycle migration</h2>
+<p>For sampling while moving traces between storage stages, check the following:</p>
+<ol>
+<li>Enable <code>--trace-sampling-enabled</code> on the lifecycle agent and set
+<code>--trace-sampling-trusted-dir</code> to the directory containing compatible <code>.so</code>
+files. The data-node plugin flags do not enable the lifecycle host. A missing
+or incompatible plugin fails migration preflight; inspect the agent&rsquo;s error
+log rather than the data-node sampler metrics.</li>
+<li>Check <code>pipeline.enabled</code>, schema selectors, and the source-stage chain.
+For hot-to-warm migration, configure <code>pipeline.stages[].stage: hot</code>.
+Top-level <code>pipeline.plugins</code> and <code>enabled_events</code> do not select migration
+samplers. With no applicable source-stage chain, migration remains unsampled.</li>
+<li>Inspect the lifecycle report&rsquo;s top-level <code>trace_sampling</code> entries for each
+artifact&rsquo;s <code>manifest</code> counts and fail-open reasons, plus <code>resume_count</code>.
+Subtract <code>kept_traces</code> from <code>traces</code> to calculate dropped traces. Migration assembles
+traces across snapshot parts within each segment/shard, and conservatively
+retains unsafe inputs such as oversized traces or possible segment-boundary
+fragments. Data-node per-merge behavior described above is a separate path.</li>
+<li>After a crash, reuse the same progress and snapshot storage. Prepared sampling
+decisions are durable and can be replayed without loading the plugin again;
+changing plugin configuration does not resample those prepared decisions.
+Missing or inconsistent recovery artifacts stop migration instead of silently
+starting over. Unacknowledged delivery may be repeated after recovery.</li>
+</ol>
+<p>See <a href="../lifecycle#trace-retention-sampling">Trace retention sampling</a> for the
+configuration example, report fields, and recovery contract, and
+<a href="../plugins#lifecycle-agent-hosting">Lifecycle-agent hosting</a> for plugin packaging.</p>
 
 </div>
 
@@ -2266,6 +2292,7 @@ between fragments of one trace fits within that grace.</li>
       <ul>
         <li><a href="#symptom-my-data-is-not-being-sampled-nothing-is-dropped">Symptom: &ldquo;my data is not being sampled&rdquo; (nothing is dropped)</a></li>
         <li><a href="#symptom-unexpected-data-is-being-sampled-wrong-traces-kept-or-dropped">Symptom: &ldquo;unexpected data is being sampled&rdquo; (wrong traces kept or dropped)</a></li>
+        <li><a href="#lifecycle-migration">Lifecycle migration</a></li>
       </ul>
     </li>
   </ul>
@@ -2379,6 +2406,20 @@ between fragments of one trace fits within that grace.</li>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

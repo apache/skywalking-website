@@ -26,7 +26,7 @@
   <meta property="og:title" content="Lifecycle Management in BanyanDB">
   <meta property="og:description" content="Lifecycle Management in BanyanDB BanyanDB uses a hot-warm-cold data tiering strategy to optimize storage costs and query performance. The lifecycle management feature automatically migrates data between storage tiers based on configured policies.
 Overview A dedicated lifecycle agent (an independent Go process) is responsible for:
-Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
+Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Applying configured source-stage trace sampling before sending retained spans. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="docs">
@@ -34,13 +34,13 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
   <meta itemprop="name" content="Lifecycle Management in BanyanDB">
   <meta itemprop="description" content="Lifecycle Management in BanyanDB BanyanDB uses a hot-warm-cold data tiering strategy to optimize storage costs and query performance. The lifecycle management feature automatically migrates data between storage tiers based on configured policies.
 Overview A dedicated lifecycle agent (an independent Go process) is responsible for:
-Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
-  <meta itemprop="wordCount" content="1918">
+Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Applying configured source-stage trace sampling before sending retained spans. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
+  <meta itemprop="wordCount" content="3004">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Lifecycle Management in BanyanDB">
   <meta name="twitter:description" content="Lifecycle Management in BanyanDB BanyanDB uses a hot-warm-cold data tiering strategy to optimize storage costs and query performance. The lifecycle management feature automatically migrates data between storage tiers based on configured policies.
 Overview A dedicated lifecycle agent (an independent Go process) is responsible for:
-Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
+Identifying data eligible for migration based on lifecycle stages. Extracting data from the source node. Applying configured source-stage trace sampling before sending retained spans. Migrating data to designated target nodes. Removing the original data after a successful migration. This process ensures data flows correctly through hot, warm, and cold stages as defined in your group configurations.">
 
 
 
@@ -2081,7 +2081,7 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 450c73a</div>
+                  <div class="commit-id">Commit Id: e409a6c</div>
                 
 
 
@@ -2140,6 +2140,7 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 <ul>
 <li>Identifying data eligible for migration based on lifecycle stages.</li>
 <li>Extracting data from the source node.</li>
+<li>Applying configured source-stage trace sampling before sending retained spans.</li>
 <li>Migrating data to designated target nodes.</li>
 <li>Removing the original data after a successful migration.</li>
 </ul>
@@ -2179,6 +2180,8 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 <li>For each stream, measure or trace:
 <ul>
 <li>Query data from the current stage.</li>
+<li>For traces with a matching source-stage sampling chain, persist whole-trace
+decisions across snapshot parts and replay only retained spans.</li>
 <li>Transform data into write requests.</li>
 <li>Send write requests to target nodes.</li>
 </ul>
@@ -2515,6 +2518,190 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 </li>
 </ol>
 <p>This process automatically migrates data according to the defined lifecycle stages, optimizing your storage usage while maintaining data availability.</p>
+<h2 id="trace-retention-sampling">Trace retention sampling</h2>
+<h3 id="selecting-a-policy-through-the-group-api">Selecting a policy through the group API</h3>
+<p>The lifecycle agent applies the source stage&rsquo;s <code>pipeline.stages</code> plugin
+chain before migrating trace rows. Migration sampling is independent of
+<code>enabled_events</code>; the destination stage and top-level plugin chain are not run.
+An applicable stage policy requires an explicitly enabled native plugin host.
+A missing plugin or incompatible ABI fails migration before sending data.</p>
+<p>For <code>hot -&gt; warm</code>, configure <code>pipeline.stages[].stage</code> as <code>hot</code>; a <code>warm</code>
+rule applies when leaving warm for the next stage. For an implicit hot stage,
+the source identity comes from the agent&rsquo;s <code>type</code> node label. Stage names must
+match that resolved identity exactly. Sampling currently requires exactly one
+trace schema in the group. <code>schemaNames</code> and <code>schemaNameRegex</code>, when present,
+select that schema; either selector may match.</p>
+<p>The following example updates an existing <code>sw_trace</code> group through the liaison
+HTTP API. It assumes the group already has hot-to-warm lifecycle stages and a
+SkyWalking <code>segment</code> trace schema. It preserves the group&rsquo;s other settings but
+replaces its pipeline, so include any existing top-level plugins or additional
+stage rules you want to retain.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>curl --fail --silent --show-error <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  http://localhost:17913/api/v1/group/schema/sw_trace &gt; group-current.json
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>jq <span style="color:#0a3069">&#39;{group: .group} | .group.pipeline = {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  enabled: true,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  schemaNames: [&#34;segment&#34;],
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  stages: [{
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    stage: &#34;hot&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    plugins: [{
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      name: &#34;sw-trace-sampler&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      sampler: {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        path: &#34;sw-trace-sampler.so&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        abiVersion: 1,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        config: {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          keepErrors: true,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          durationThresholdMs: 500,
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          healthySampleRate: 0.01
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    }]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  }]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">}&#39;</span> group-current.json &gt; group-sampling.json
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>curl --fail --silent --show-error -X PUT <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  -H <span style="color:#0a3069">&#39;Content-Type: application/json&#39;</span> <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  --data-binary @group-sampling.json <span style="color:#0a3069">\
+</span></span></span><span style="display:flex;"><span>  http://localhost:17913/api/v1/group/schema/sw_trace
+</span></span></code></pre></div><p>The same <code>pipeline</code> can be submitted as part of a complete group document with
+<code>bydbctl group update -f group.yaml</code>, or through
+<code>GroupRegistryService.Update</code> with <code>GroupRegistryServiceUpdateRequest.group</code>.
+The example keeps errors and traces meeting the duration threshold, plus a 1%
+sample of healthy traces; completeness safeguards can retain additional traces.
+See the <a href="https://github.com/apache/skywalking-banyandb/tree/e409a6c688452a1edf6de15ba1a4692c81bf5665/plugins/README.md">sampler configuration reference</a> for supported
+schemas and rule semantics.</p>
+<p>A disabled or absent pipeline, an unmatched schema selector, or no nonempty
+source-stage chain preserves ordinary unsampled migration. <code>enabledEvents</code>
+controls data-node merge/finalization only. This example has no top-level
+<code>plugins</code>, so it configures lifecycle sampling without a data-node sampling chain.
+Deploy a capable lifecycle agent before enabling stage rules: older agents may
+ignore them. Existing unsampled migration attempts finish without retroactive
+sampling.</p>
+<h3 id="enabling-the-lifecycle-plugin-host">Enabling the lifecycle plugin host</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Agent flag</th>
+          <th>Default</th>
+          <th>Purpose</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--trace-sampling-enabled</code></td>
+          <td><code>false</code></td>
+          <td>Enable native sampler hosting</td>
+      </tr>
+      <tr>
+          <td><code>--trace-sampling-trusted-dir</code></td>
+          <td>empty</td>
+          <td>Directory containing trusted <code>.so</code> files</td>
+      </tr>
+      <tr>
+          <td><code>--trace-sampling-timeout</code></td>
+          <td><code>1s</code></td>
+          <td>Batch decision deadline</td>
+      </tr>
+      <tr>
+          <td><code>--trace-sampling-circuit-break</code></td>
+          <td><code>3</code></td>
+          <td>Consecutive timeouts before retaining all batches</td>
+      </tr>
+  </tbody>
+</table>
+<p>Use the <code>-plugins</code> host image for the lifecycle agent and mount the matching
+plugin carrier binaries read-only at the trusted directory. That image builds
+<code>/lifecycle</code>, <code>/banyand</code>, and the plugin carrier from the same Go toolchain,
+CGO setting, SDK module graph, libc and build flags. The ordinary static image
+cannot load native Go plugins. See <a href="../plugins">plugin deployment</a> for carrier
+image volumes and init-container delivery.</p>
+<p>For example, a Compose lifecycle service can use the existing cluster networking
+and discovery options with these additional settings:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">image</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>apache/skywalking-banyandb:&lt;TAG&gt;-plugins<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">entrypoint</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">[</span><span style="color:#0a3069">&#34;/lifecycle&#34;</span><span style="color:#1f2328">]</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">command</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- --trace-sampling-enabled<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- --trace-sampling-trusted-dir=/plugins<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- --trace-sampling-timeout=1s<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- --trace-sampling-circuit-break=3<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- --progress-file=/state/lifecycle-progress.json<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">volumes</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- ./plugins:/plugins:ro<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- lifecycle-state:/state<span style="color:#fff">
+</span></span></span></code></pre></div><p>Persist <code>&lt;progress-file&gt;.sampling</code> together with the progress file and immutable
+snapshots. For <code>/state/lifecycle-progress.json</code>, the artifact directory is
+<code>/state/lifecycle-progress.json.sampling</code>. Prepared decisions and delivery checkpoints remain
+required until source removal succeeds. Restart reuses those decisions even if
+schema or plugin configuration changes; do not downgrade an agent while sampled
+attempts remain pending. Sampler timeouts retain affected traces. Native calls
+that outlive their deadline retain their input buffers and worker slots until
+returning; plugins are closed only afterward.</p>
+<h3 id="delivery-small-parts-and-recovery">Delivery, small parts, and recovery</h3>
+<p>The agent assembles each trace across all core parts in a snapshot&rsquo;s source
+segment/shard before deciding whether to keep it. It retains traces whose
+completeness is uncertain, including source-segment boundary fragments, and
+traces that exceed decision budgets. This is a local snapshot decision, not a
+guarantee that a trace is complete across nodes, segments, or future arrivals.</p>
+<p>Sampling writes durable decision tables, indexes, manifests, and delivery
+checkpoints to disk; bounded scans can also use temporary metadata merge files.
+It does <strong>not</strong> write a reduced native data part for every input part. Retained
+spans flow through continuous bounded batches across source-part boundaries.
+The destination rebuilds indexes through its normal write path and merges small
+parts through normal compaction. A small final part is valid; migration does not
+wait for compaction or retain extra traces to fill it. An all-drop shard sends
+no data and counts as completed only after its decision state is durable.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Interruption point</th>
+          <th>Behavior on restart</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Before a shard&rsquo;s decision manifest is committed</td>
+          <td>Preparation may resample that source segment/shard; completed shards are reused.</td>
+      </tr>
+      <tr>
+          <td>After preparation or during delivery</td>
+          <td>Reuse the committed decisions and pinned schema/routing; resume after the last durably acknowledged source cursor without calling the sampler for that prepared shard.</td>
+      </tr>
+      <tr>
+          <td>After acknowledgement but before checkpoint persistence</td>
+          <td>Some retained rows may be resent: delivery remains at-least-once.</td>
+      </tr>
+      <tr>
+          <td>Required snapshot or committed artifact missing/corrupt</td>
+          <td>Stop the affected migration and preserve available source state; do not silently resample.</td>
+      </tr>
+  </tbody>
+</table>
+<p>Restart with the same progress-file path and snapshot volumes. Do not delete
+<code>.sampling</code> state to retry a failed migration or change policy for an already
+prepared shard. The agent discovers pending sampling artifacts even if the
+legacy progress file is missing. Only successful delivery of all required work
+allows source removal; artifacts are cleaned up after source removal succeeds.</p>
+<p>A missing plugin, incompatible ABI, or disabled host with an applicable chain
+fails preflight before sending. Runtime plugin errors, panics, or invalid verdicts
+bypass that link; other successful links still apply. A batch timeout or open
+circuit retains the affected batch. Source read errors and artifact durability
+failures stop migration rather than treating unreadable data as a sampling drop.</p>
+<h3 id="verifying-sampling">Verifying sampling</h3>
+<p>Use <code>--report-dir</code> to retain migration reports. The top-level <code>trace_sampling</code>
+map records each artifact&rsquo;s <code>manifest</code>, <code>manifest_bytes</code>, <code>replayed_bytes</code>, and
+<code>resume_count</code>. Manifest fields include <code>source_stage</code>, <code>target_stage</code>, <code>traces</code>,
+<code>kept_traces</code>, <code>spans</code>, <code>kept_spans</code>, <code>fail_open</code>, and <code>preparation_nanos</code>.
+Calculate dropped counts by subtracting kept counts from input counts. Logical
+sampling counts describe the prepared snapshot; replay counters can include
+retried deliveries.</p>
+<p>Query the destination both by trace ID and by indexed tags/time range to verify
+that retained spans are available and sampled-out traces are absent. After
+successful migration, confirm source removal and sampling artifact cleanup.
+The regular <a href="https://github.com/apache/skywalking-banyandb/tree/e409a6c688452a1edf6de15ba1a4692c81bf5665/test/integration/distributed/lifecycle">lifecycle integration suite</a>
+includes native sampling and a process-kill recovery case that restarts with the
+sampler binary unavailable, verifies reuse of committed decisions, and checks
+public destination queries. See the
+<a href="../../design/0.12.0/lifecycle-trace-sampling">design</a> for the durable protocol.</p>
 
 </div>
 
@@ -2569,6 +2756,14 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
         <li><a href="#automatic-behavior-on-warm-and-cold-nodes">Automatic Behavior on Warm and Cold Nodes</a></li>
         <li><a href="#best-practices">Best Practices</a></li>
         <li><a href="#example-workflow">Example Workflow</a></li>
+        <li><a href="#trace-retention-sampling">Trace retention sampling</a>
+          <ul>
+            <li><a href="#selecting-a-policy-through-the-group-api">Selecting a policy through the group API</a></li>
+            <li><a href="#enabling-the-lifecycle-plugin-host">Enabling the lifecycle plugin host</a></li>
+            <li><a href="#delivery-small-parts-and-recovery">Delivery, small parts, and recovery</a></li>
+            <li><a href="#verifying-sampling">Verifying sampling</a></li>
+          </ul>
+        </li>
       </ul>
     </li>
   </ul>
@@ -2682,6 +2877,20 @@ Identifying data eligible for migration based on lifecycle stages. Extracting da
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
