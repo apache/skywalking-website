@@ -33,7 +33,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
   <meta itemprop="name" content="BanyanDB Query Language (BydbQL)">
   <meta itemprop="description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB’s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, traces, properties, and Top-N queries.
 This document specifies the language’s syntax, its semantics, and the precise mapping from BydbQL statements to the various Request messages.">
-  <meta itemprop="wordCount" content="10710">
+  <meta itemprop="wordCount" content="13310">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="BanyanDB Query Language (BydbQL)">
   <meta name="twitter:description" content="BanyanDB Query Language (BydbQL) 1. Introduction 1.1. Purpose This document outlines the design of the BanyanDB Data Query Language (BydbQL), a unified query language with SQL-like syntax for all of BanyanDB’s data models. The primary goal of BydbQL is to provide users with a familiar, intuitive, and powerful interface to interact with their data, abstracting the underlying protobuf-based APIs for streams, measures, traces, properties, and Top-N queries.
@@ -2095,7 +2095,7 @@ This document specifies the language’s syntax, its semantics, and the precise 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 05d6bdf</div>
+                  <div class="commit-id">Commit Id: 3bd5e73</div>
                 
 
 
@@ -2179,7 +2179,7 @@ Abstract Syntax Tree (AST)
 <li><strong>Lexer</strong>: Breaks the query string into a sequence of tokens.</li>
 <li><strong>Parser</strong>: Builds an Abstract Syntax Tree (AST) from the tokens, validating the query&rsquo;s syntax.</li>
 <li><strong>Parameter Binding</strong>: Binds <code>?</code> placeholders to the request&rsquo;s <code>params</code> (see section 2.6) without changing the query text; a query holding unbound placeholders is rejected.</li>
-<li><strong>Transformer</strong>: Resolves columns against the schema and produces the appropriate native request. Extended measure queries also use a QL plan for projection, time filtering, local aggregation, and pagination before encoding the existing measure response.</li>
+<li><strong>Transformer</strong>: Resolves columns against the schema and produces the appropriate native request. Extended measure queries also use a QL plan for projection, filtering, aggregation, DISTINCT, ordering and pagination before encoding the existing measure response.</li>
 </ul>
 <h3 id="22-distinguishing-query-types">2.2. Distinguishing Query Types</h3>
 <p>BydbQL names the target data model in the <code>FROM</code> clause. Measure SELECT queries also support the <code>group.measure</code> shorthand.</p>
@@ -2332,6 +2332,11 @@ Abstract Syntax Tree (AST)
           <td><code>str</code>, <code>int</code>, <code>null</code>, <code>str_array</code>, <code>int_array</code></td>
       </tr>
       <tr>
+          <td>Measure pattern</td>
+          <td><code>tag LIKE ?</code>, <code>tag ILIKE ?</code></td>
+          <td>scalar <code>str</code>, <code>null</code>; section 5.15</td>
+      </tr>
+      <tr>
           <td><code>MATCH</code> value list</td>
           <td><code>MATCH(?)</code>, <code>MATCH(?, 'analyzer')</code></td>
           <td><code>str</code>, <code>int</code>, <code>null</code>, <code>str_array</code>, <code>int_array</code></td>
@@ -2384,8 +2389,8 @@ Abstract Syntax Tree (AST)
       </tr>
       <tr>
           <td>Column identifiers</td>
-          <td>column names, legacy condition left-hand side, <code>ORDER BY</code> / <code>GROUP BY</code> columns, aggregate function arguments</td>
-          <td><code>ORDER BY ?</code>, <code>SUM(?)</code></td>
+          <td>column names, legacy condition left-hand side, <code>GROUP BY</code> columns, aggregate function arguments; non-measure <code>ORDER BY</code> columns</td>
+          <td><code>GROUP BY ?</code>, <code>SUM(?)</code>, stream <code>ORDER BY ?</code></td>
       </tr>
       <tr>
           <td>Function options</td>
@@ -2399,15 +2404,15 @@ Abstract Syntax Tree (AST)
       </tr>
   </tbody>
 </table>
-<p>Note that unlike some SQL implementations where <code>ORDER BY ?</code> silently degrades to a no-op constant sort, BydbQL rejects it outright.</p>
-<p>In a measure SELECT or WHERE expression, <code>?</code> denotes a value, including on the left of a comparison. It cannot select a column by name. SELECT expression parameters precede TIME, WHERE, LIMIT and OFFSET parameters in textual order.</p>
+<p>In measure ORDER BY expressions, a bound parameter is a value. <code>ORDER BY ?</code> is a constant key; a string parameter cannot select a column, and an integer parameter cannot select an ordinal. Other resource types retain their existing ORDER BY syntax.</p>
+<p>In a measure SELECT, WHERE or ORDER BY expression, <code>?</code> denotes a value, including on the left of a comparison. It cannot select a column by name. Parameters bind in textual order: SELECT, TIME, WHERE, grouping, HAVING, ORDER BY, LIMIT and OFFSET.</p>
 <h3 id="263-type-rules-summary">2.6.3. Type Rules Summary</h3>
 <ul>
 <li><code>binary_data</code> parameters are accepted in measure SELECT and WHERE expressions; BydbQL has no binary literal.</li>
 <li><code>timestamp</code> parameters are accepted in <code>TIME</code> positions, measure <code>WHERE time</code> comparisons and measure SELECT/WHERE expressions. Their protobuf timestamp values are validated; a missing or invalid timestamp is rejected at bind time. Time predicates check the stored timestamp domain; expressions use the signed int64 nanosecond domain described in section 5.9.</li>
 <li><code>int</code> and <code>null</code> parameters are rejected in time positions: use <code>str</code> or <code>timestamp</code> instead.</li>
 <li><code>int</code> parameters in count positions must fit the wire type of the position — <code>[0, 4294967295]</code> for <code>LIMIT</code>/<code>OFFSET</code> and <code>[0, 2147483647]</code> for the <code>TOP N</code> counts; out-of-range values are rejected at bind time instead of silently wrapping, and literal counts are held to the same bounds.</li>
-<li>Empty arrays are accepted in measure SELECT and typed WHERE expressions, including expansion inside expression IN lists such as <code>value::FIELD IN (?)</code>. Legacy WHERE value lists still reject empty array parameters. Parameters without a value and <code>nil</code> entries are rejected everywhere.</li>
+<li>Empty arrays are accepted in typed measure expressions, including expansion inside expression IN lists such as <code>value::FIELD IN (?)</code>. Legacy WHERE value lists still reject empty array parameters. Parameters without a value and <code>nil</code> entries are rejected everywhere.</li>
 <li>A <code>?</code> inside a quoted string literal is part of the string, not a placeholder: <code>WHERE msg = 'why?'</code> consumes no parameter.</li>
 <li>Legacy tag predicates check bound values against the tag schema by the same rules as literals: a <code>str</code> that cannot parse as an integer fails against an <code>INT</code> tag, while an <code>int</code> bound to a <code>STRING</code> tag is converted, exactly as if written literally. Typed SELECT/WHERE expressions follow section 5.9&rsquo;s type rules and require explicit string/number casts.</li>
 </ul>
@@ -2673,21 +2678,21 @@ integer_literal ::= [0-9]+
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>service_id<span style="color:#fff"> </span><span style="color:#0550ae">=</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;webapp&#39;</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">100</span><span style="color:#1f2328">;</span><span style="color:#fff">
 </span></span></span></code></pre></div><h2 id="5-bydbql-for-measures">5. BydbQL for Measures</h2>
-<p>BydbQL for measures supports aggregation and grouping, raw SELECT expressions, aliases, time and field expressions in <code>WHERE</code>, and post-aggregation <code>HAVING</code>. It uses the existing measure query and response messages. The extensions and their current limits are described in sections 5.5–5.11.</p>
+<p>BydbQL for measures supports aggregation and grouping, raw SELECT expressions, aliases, time and field expressions in <code>WHERE</code>, and post-aggregation <code>HAVING</code>. It uses the existing measure query and response messages. The extensions and their current limits are described in sections 5.5–5.15.</p>
 <h3 id="51-grammar">5.1. Grammar</h3>
 <pre tabindex="0"><code>measure_query     ::= SELECT projection from_measure_clause [TIME time_condition] [WHERE measure_predicate] [GROUP BY group_list] [HAVING expression] [ORDER BY order_expression] [WITH QUERY_TRACE] [LIMIT count] [OFFSET count]
 measure_predicate ::= criteria | expression /* boolean expression; section 5.10 */
 from_measure_clause ::= (&#34;FROM MEASURE&#34; identifier &#34;IN&#34; [&#34;(&#34;] group_list_id [&#34;)&#34;] | &#34;FROM&#34; identifier &#34;.&#34; identifier) [ON [&#34;(&#34;] stage_list [&#34;)&#34;] STAGES]
-projection        ::= &#34;*&#34; | column_list | top_clause
+projection        ::= [&#34;DISTINCT&#34;] column_list | top_clause
 top_clause        ::= &#34;TOP&#34; count identifier [&#34;ASC&#34; | &#34;DESC&#34;] [&#34;,&#34; column_list]
 column_list       ::= column (&#34;,&#34; column)*
-column            ::= ((&#34;time&#34; | identifier_path | agg_function &#34;(&#34; [&#34;DISTINCT&#34;] identifier_path &#34;)&#34;) [&#34;::TAG&#34; | &#34;::FIELD&#34;] | expression) [&#34;AS&#34; identifier_path]
+column            ::= ((&#34;time&#34; | identifier_path | agg_function &#34;(&#34; [&#34;DISTINCT&#34;] expression &#34;)&#34;) [&#34;::TAG&#34; | &#34;::FIELD&#34;] | expression) [&#34;AS&#34; identifier_path]
 	/* expression syntax and current composition limits are in section 5.9 */
 stage_list        ::= identifier (&#34;,&#34; identifier)*
 agg_function      ::= &#34;SUM&#34; | &#34;MEAN&#34; | &#34;AVG&#34; | &#34;COUNT&#34; | &#34;MAX&#34; | &#34;MIN&#34;
-	/* &#34;DISTINCT&#34; is only valid with COUNT: COUNT(DISTINCT identifier) */
+	/* inside an aggregate call, &#34;DISTINCT&#34; is only valid with COUNT */
 group_list        ::= group_column (&#34;,&#34; group_column)*
-group_column      ::= identifier | time_bucket_function
+group_column      ::= identifier_path | expression | positive_select_ordinal | time_bucket_function
 time_bucket_function ::= &#34;TIME_BUCKET&#34; &#34;(&#34; [string_literal] &#34;)&#34;
 	/* at most one TIME_BUCKET(...) per GROUP BY clause; empty width defers
 	   to the measure&#39;s own interval */
@@ -2700,7 +2705,10 @@ time_value        ::= string_literal | &#34;?&#34; | &#34;now&#34; &#34;(&#34; &
 interval_adjustment ::= (&#34;+&#34; | &#34;-&#34;) &#34;INTERVAL&#34; string_literal
 time_condition    ::= &#34;=&#34; timestamp | &#34;&gt;&#34; timestamp | &#34;&lt;&#34; timestamp | &#34;&gt;=&#34; timestamp | &#34;&lt;=&#34; timestamp | &#34;BETWEEN&#34; timestamp &#34;AND&#34; timestamp
 binary_op         ::= &#34;=&#34; | &#34;!=&#34; | &#34;&gt;&#34; | &#34;&lt;&#34; | &#34;&gt;=&#34; | &#34;&lt;=&#34; | &#34;IN&#34; | &#34;NOT IN&#34; | &#34;HAVING&#34; | &#34;NOT HAVING&#34; | &#34;CONTAINS&#34; | &#34;NOT CONTAINS&#34; | &#34;MATCH&#34;
-order_expression  ::= (&#34;time&#34; | identifier_path) [&#34;ASC&#34; | &#34;DESC&#34;] | &#34;ASC&#34; | &#34;DESC&#34;
+pattern_predicate ::= identifier_path [&#34;::TAG&#34;] (&#34;LIKE&#34; | &#34;ILIKE&#34;) (string_literal | &#34;?&#34; | &#34;NULL&#34;) [&#34;ESCAPE&#34; string_literal]
+    /* positive WHERE conjuncts only; section 5.15 */
+order_expression  ::= sort_key (&#34;,&#34; sort_key)* | &#34;ASC&#34; | &#34;DESC&#34;
+sort_key          ::= (expression | positive_select_ordinal) [&#34;ASC&#34; | &#34;DESC&#34;] [&#34;NULLS&#34; (&#34;FIRST&#34; | &#34;LAST&#34;)]
 value             ::= string_literal | integer_literal | &#34;NULL&#34; | &#34;?&#34;
 value_list        ::= &#34;(&#34; value (&#34;,&#34; value)* &#34;)&#34;
 timestamp         ::= string_literal | integer_literal | &#34;?&#34;
@@ -2713,7 +2721,7 @@ quoted_identifier ::= string_literal /* used as a column name */
 string_literal    ::= &#34;&#39;&#34; [^&#39;]* &#34;&#39;&#34; | &#34;\&#34;&#34; [^\&#34;]* &#34;\&#34;&#34;
 integer_literal   ::= [0-9]+
 count             ::= integer_literal | &#34;?&#34;
-</code></pre><p><strong>Source and time bounds</strong>: The explicit source form requires at least one <code>IN</code> group; parentheses around the list are optional. The shorthand names one group and one measure. <code>TIME</code> is optional for measure SELECT; raw queries may use <code>WHERE time</code> instead. Syntax accepted by the parser is subject to the execution limits in section 5.5, and the aggregation and expression composition rules in sections 5.8–5.11.</p>
+</code></pre><p><strong>Source and time bounds</strong>: The explicit source form requires at least one <code>IN</code> group; parentheses around the list are optional. The shorthand names one group and one measure. <code>TIME</code> is optional for measure SELECT; raw queries may use <code>WHERE time</code> instead. Syntax accepted by the parser is subject to the execution limits in section 5.5, and the aggregation and expression composition rules in sections 5.8–5.14.</p>
 <h3 id="52-bydbql-extensions-for-select">5.2. BydbQL Extensions for <code>SELECT</code></h3>
 <p>The <code>SELECT</code> clause for measures is highly flexible, allowing for the selection of tags, fields, and aggregations in a single, flat list.</p>
 <ul>
@@ -2743,12 +2751,12 @@ count             ::= integer_literal | &#34;?&#34;
 <li><strong><code>TIME BETWEEN '-1h' AND 'now'</code></strong>: Sets <code>begin</code> to 1 hour ago and <code>end</code> to current time.</li>
 </ul>
 </li>
-<li><strong><code>GROUP BY &lt;tag1&gt;, &lt;tag2&gt;</code></strong>: The <code>GROUP BY</code> clause takes a list of tags and maps to <code>group_by.tag_projection</code>. Each grouped tag must also appear in the query&rsquo;s own <code>SELECT</code> projection.</li>
-<li><strong><code>GROUP BY TIME_BUCKET(width), &lt;tag&gt;</code></strong>: Maps to <code>group_by.time_bucket</code>, setting <code>group_by.time_bucket.width</code>. An empty <code>width</code> (<code>TIME_BUCKET()</code>) defers to the measure&rsquo;s own <code>interval</code>; a duration string (e.g. <code>'5m'</code>) uses the same units as <code>Measure.interval</code> (<code>ns</code>, <code>us</code>/<code>µs</code>, <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code>, plus the custom <code>d</code> suffix — see <code>pkg/timestamp.ParseDuration</code>). At most one <code>TIME_BUCKET(...)</code> is allowed per <code>GROUP BY</code> clause. Results are pre-ordered by bucket ascending, so a bucketed query needs no <code>ORDER BY</code> for that purpose — a non-time <code>ORDER BY DESC</code> is rejected on a bucketed query.</li>
+<li><strong><code>GROUP BY &lt;tag1&gt;, &lt;tag2&gt;</code></strong>: Legacy native queries take a list of projected tags and map it to <code>group_by.tag_projection</code>. Extended grouping also accepts hidden columns, computed keys and ordinals, as described in sections 5.8 and 5.13.</li>
+<li><strong><code>GROUP BY TIME_BUCKET(width), &lt;tag&gt;</code></strong>: Maps to <code>group_by.time_bucket</code>, setting <code>group_by.time_bucket.width</code>. An empty <code>width</code> (<code>TIME_BUCKET()</code>) defers to the measure&rsquo;s own <code>interval</code>; a duration string (e.g. <code>'5m'</code>) uses the same units as <code>Measure.interval</code> (<code>ns</code>, <code>us</code>/<code>µs</code>, <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code>, plus the custom <code>d</code> suffix — see <code>pkg/timestamp.ParseDuration</code>). At most one <code>TIME_BUCKET(...)</code> is allowed per <code>GROUP BY</code> clause. Legacy native results are pre-ordered by bucket ascending, so they need no <code>ORDER BY</code> for that purpose; a non-time <code>ORDER BY DESC</code> is rejected on a legacy bucketed query. Section 5.13 describes extended bucket projection and execution.</li>
 <li><strong><code>SELECT TOP N ...</code></strong>: Maps to the <code>top</code> message. <code>TOP</code> can rank by a tag-targeted aggregation&rsquo;s own output column (e.g. <code>TOP 10 user_id DESC</code> when <code>COUNT(DISTINCT user_id)</code> is projected), not only by a field.</li>
 <li><strong><code>WITH QUERY_TRACE</code></strong>: Maps to the <code>trace</code> field to enable distributed tracing of query execution.</li>
 </ul>
-<p><strong>Note on <code>LIMIT</code> and <code>TIME_BUCKET</code></strong>: Legacy measure queries default to 100 when <code>LIMIT</code> is omitted. A bucketed <code>GROUP BY</code> returns one row per (bucket, tag-group), so a wide time window with a narrow bucket width can produce far more than 100 rows; without an explicit <code>LIMIT</code> sized to the expected row count, the response is silently truncated to the first 100 rows in bucket-ascending order rather than returning an error. Always set <code>LIMIT</code> explicitly for a bucketed query. Extended raw queries have different omission and zero-limit behavior, described in section 5.5.</p>
+<p><strong>Note on <code>LIMIT</code> and <code>TIME_BUCKET</code></strong>: Legacy measure queries default to 100 when <code>LIMIT</code> is omitted. A bucketed <code>GROUP BY</code> returns one row per (bucket, tag-group), so a wide time window with a narrow bucket width can produce far more than 100 rows; without an explicit <code>LIMIT</code> sized to the expected row count, the legacy response is silently truncated to the first 100 rows in bucket-ascending order rather than returning an error. Set <code>LIMIT</code> explicitly for a legacy bucketed query. Extended raw and grouped queries have different omission and zero-limit behavior, described in sections 5.5 and 5.8.</p>
 <h3 id="54-examples">5.4. Examples</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#57606a">-- Select a specific tag and a specific field
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff">
@@ -2923,9 +2931,9 @@ count             ::= integer_literal | &#34;?&#34;
 <li>Omitted <code>LIMIT</code> has no implicit 100-row cap; query memory limits still apply.</li>
 <li>Explicit <code>LIMIT 0</code> returns no rows and performs no native scan. Contradictory time bounds also return no rows without scanning.</li>
 <li><code>OFFSET</code> and <code>LIMIT</code> apply after time and field filters, including disjoint ranges. Legacy queries without these raw extensions keep their existing pagination defaults.</li>
-<li>Timestamp ordering, including an unambiguous timestamp alias such as <code>ORDER BY observed_at DESC</code>, is supported. Native index-rule ordering remains available. General sorting by tag/field output columns, multiple sort keys, and explicit NULL ordering are not implemented yet.</li>
+<li>ORDER BY supports scalar columns, aliases, expressions, multiple keys and explicit NULL placement. Simple timestamp and native index-rule ordering remain available. Section 5.14 describes sorting and its memory limits.</li>
 </ul>
-<p>The current raw extensions cannot be combined with <code>SELECT TOP</code>. Aggregate projections and named scalar grouping use the extended aggregation behavior in section 5.8. Legacy native aggregation and grouping retain their existing syntax and behavior. SELECT expressions are described in section 5.9; field filters and mixed time/tag/field <code>OR</code> are described in section 5.10; HAVING and collection membership are described in section 5.11. SELECT DISTINCT and computed grouping remain planned capabilities.</p>
+<p>The current raw extensions cannot be combined with <code>SELECT TOP</code>. Aggregate projections and named scalar grouping use the extended aggregation behavior in section 5.8. Legacy native aggregation and grouping retain their existing syntax and behavior. SELECT expressions are described in section 5.9; field filters and mixed time/tag/field <code>OR</code> are described in section 5.10; HAVING and collection membership are described in section 5.11. SELECT DISTINCT, computed grouping and ordering are described in sections 5.12–5.14.</p>
 <p>Aliases, built-in time projections, <code>now()</code>, timestamp <code>INTERVAL</code> arithmetic, and source shorthand in this section apply to measure SELECT. They do not extend stream, trace, property, or SHOW TOP syntax.</p>
 <h3 id="56-legacy-scalar-distinct-count-pagination">5.6. Legacy scalar distinct-count pagination</h3>
 <p>An ungrouped QL <code>COUNT(DISTINCT column)</code> consumes the complete native input before
@@ -2986,16 +2994,19 @@ logs. These metrics distinguish plan reuse from prepared-cache activity.</p>
 on execution costs. The <a href="../../design/0.12.0/measure-ql-core-sql/pr1-verification">current PR 1 measurements</a>
 show lower planning time and allocations but no established RPC latency gain.</p>
 <h3 id="58-extended-measure-aggregation">5.8. Extended measure aggregation</h3>
-<p>Measure queries support multiple <code>COUNT</code>, <code>SUM</code>, <code>MIN</code>, <code>MAX</code>, <code>AVG</code>, and <code>MEAN</code> outputs over named columns. Aggregation uses this extended behavior when the query has multiple aggregate calls, source shorthand, an alias, or a time/field expression in <code>WHERE</code>. Existing single-aggregate queries using <code>FROM MEASURE ... IN ...</code> without these extensions keep their native behavior, including legacy <code>MEAN</code>/<code>AVG</code> results and count-distinct restrictions.</p>
+<p>Measure queries support multiple <code>COUNT</code>, <code>COUNT(DISTINCT ...)</code>, <code>SUM</code>, <code>MIN</code>, <code>MAX</code>, <code>AVG</code>, and <code>MEAN</code> outputs over scalar expressions. Aggregation uses this extended behavior when the query has multiple aggregate calls, source shorthand, an alias, or a time/field expression in <code>WHERE</code>. Existing single-aggregate queries using <code>FROM MEASURE ... IN ...</code> without these extensions keep their native behavior, including legacy <code>MEAN</code>/<code>AVG</code> results and count-distinct restrictions.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>samples<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>total<span style="color:#1f2328">,</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">       </span><span style="color:#cf222e">MIN</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>minimum<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">MAX</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>maximum<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">AVG</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>average<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>All aggregate calls use the complete, deduplicated input after the time, tag and field filters. Repeated calls share work while retaining their separate output aliases. Aggregates appear as named fields in the existing response; without an alias, their names are <code>COUNT(value)</code>, <code>SUM(value)</code>, and so on. Output field names must be unique. Synthesized aggregate rows omit raw-row timestamps, SIDs, and versions.</p>
+</span></span></span></code></pre></div><p>For example, <code>COALESCE(SUM(value), 0)</code> applies a scalar expression to the aggregate result, while <code>SUM(COALESCE(value, 0) + other_value)</code> evaluates its argument for each input row. <code>COUNT(DISTINCT value + 1)</code> counts distinct non-null computed values. These forms can be combined with grouping, HAVING, output aliases and ordering. Expression evaluation observes the usual null and overflow rules; nested aggregates such as <code>SUM(SUM(value))</code> are rejected. Expressions are limited to 64 levels of nesting and 4,096 nodes.</p>
+<p>All aggregate calls use the complete, deduplicated input after the time, tag and field filters. Repeated calls share work while retaining their separate output aliases. Aggregates appear as named fields in the existing response; without an alias, direct named-column calls use names such as <code>COUNT(value)</code> and <code>SUM(value)</code>; computed-argument aggregates and other expression projections use generated <code>expr_N</code> names. Output field names must be unique. Synthesized aggregate rows omit raw-row timestamps, SIDs, and versions.</p>
 <p>The extended aggregate rules are:</p>
 <ul>
 <li><code>COUNT(column)</code> counts non-null values and returns an exact int64, including for floating-point inputs. It accepts scalar tags and fields.</li>
+<li><code>COUNT(DISTINCT column)</code> counts exact distinct non-null scalar values within each group or the complete scalar input. It returns int64, including zero for empty scalar input. Repeated values across input batches are counted once; empty strings remain values. It composes with other aggregates, aliases, HAVING, multiple grouping keys, ORDER BY and final pagination.</li>
+<li>Legacy scalar <code>COUNT(DISTINCT column)</code> also returns one zero row for an empty time window or no matching input. Grouped empty input returns no rows; final <code>LIMIT 0</code> or an offset past the scalar row returns no rows.</li>
 <li><code>SUM</code>, <code>MIN</code>, and <code>MAX</code> accept numeric columns and preserve int64 or float64 values. Integer SUM overflow fails the query.</li>
 <li><code>AVG</code> and <code>MEAN</code> return float64 sum divided by non-null count. Fractional and sub-one averages are preserved; shard populations contribute their values and counts before finalization.</li>
 <li>Scalar empty input returns one row: COUNT is zero, and the other aggregates are null. Grouped empty input returns no rows. All-null groups also have COUNT zero and null SUM/MIN/MAX/AVG.</li>
@@ -3005,7 +3016,16 @@ show lower planning time and allocations but no established RPC latency gain.</p
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>samples<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">AVG</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>average<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>service_cpm<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>metrics<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>Extended aggregate queries currently reject COUNT(DISTINCT), TOP, TIME_BUCKET, array grouping, and ORDER BY. The existing legacy native forms of these supported operations remain available. HAVING supports grouped keys and named aggregate calls, including calls absent from SELECT. Expressions as aggregate arguments or grouping keys remain unsupported.</p>
+</span></span></span></code></pre></div><p>Extended aggregate queries reject TOP and array grouping. Existing legacy native forms remain available. HAVING and ORDER BY support grouped keys and named aggregate calls, including calls absent from SELECT. Computed grouping, ordinal references and selectable TIME_BUCKET values are described in section 5.13. Aggregate arguments may be scalar expressions evaluated on each input row. Computed arguments use local aggregation over the complete raw input; eligible named-column aggregates may use native reduction. Nested aggregate calls and ungrouped source references in aggregate-result expressions are rejected.</p>
+<p>Extended count-distinct queries consume the complete deduplicated raw input; they do not sum potentially overlapping native distinct counts. Distinct state uses the shared query memory tracker and the existing compact grouping-key storage. NULLs are excluded, signed floating zeros compare equal, and NaN representations share a distinct key. Exhausting the budget fails the entire query with <code>ResourceExhausted</code>; disk spilling is not implemented. A small final LIMIT does not bound the input scan or the distinct state. Existing single-aggregate native queries retain their routing/stage restrictions and legacy pagination defaults.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span>service_id<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span><span style="color:#cf222e">DISTINCT</span><span style="color:#fff"> </span>entity_id<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>unique_users<span style="color:#1f2328">,</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">       </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>requests<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>request_user_cpm<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>metrics<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span>TIME<span style="color:#fff"> </span><span style="color:#cf222e">BETWEEN</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>service_id<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">ORDER</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>unique_users<span style="color:#fff"> </span><span style="color:#cf222e">DESC</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span>service_id<span style="color:#fff"> </span><span style="color:#cf222e">ASC</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">OFFSET</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>The secondary key gives deterministic ordering for a fixed input. Separate page requests do not share a snapshot; retained-result sessions remain deferred. Computed scalar arguments are also supported by <code>COUNT(DISTINCT ...)</code>.</p>
 <h4 id="native-aggregate-execution">Native aggregate execution</h4>
 <p>The planner can execute eligible calls through the existing native aggregate operators and combine their batch results by the complete grouping tuple. For example, <code>SUM(f)</code>, <code>COUNT(f)</code>, and repeated <code>AVG(f)</code> outputs over a floating-point field share two native requests: SUM and COUNT. QL computes AVG from their sum and non-null count; it does not use the legacy native MEAN result. Integer MIN, MAX, and COUNT use their matching native requests, sharing the auxiliary COUNT needed to distinguish all-null groups.</p>
 <p>This optimization currently requires one measure group in normal storage mode, one exact time interval, and a single provable lifecycle stage. Grouping keys must be entity tags from one tag family, constrained to non-null values by equality or IN predicates. Each remaining entity tag must be bound to one value, so every SQL group identifies one full entity. A scalar aggregate requires one bound full entity too. This also bounds COUNT by the number of possible stored millisecond timestamps, preserving its exact int64 result even when a native floating-point COUNT is returned.</p>
@@ -3060,7 +3080,7 @@ show lower planning time and allocations but no established RPC latency gain.</p
 <p>Timestamp casts accept RFC3339Nano strings or signed int64 <strong>Unix nanoseconds</strong>, within the int64 nanosecond range. Timestamp-to-INT returns that unit; timestamp-to-STRING returns UTC RFC3339Nano. Timestamp-to-double/boolean casts are unsupported. <code>CAST(NULL AS type)</code> supplies a typed null. An untyped NULL or direct boolean projection is rejected; cast a boolean to INT or STRING for output.</p>
 <p>Ordinary arithmetic and comparisons propagate null. A nonempty IN list with no match and a null operand/member produces null; empty <code>IN ()</code> is false and empty <code>NOT IN ()</code> is true, including for a null left operand. Array parameters expand inside expression IN lists. CASE treats a null condition as false, omitting ELSE produces a typed null, and COALESCE returns the first non-null value. Only needed CASE/COALESCE branches and AND/OR operands evaluate. For example, the zero branch in <code>CASE WHEN value = 0 THEN 0 ELSE 8 / value END</code> avoids division by zero. Types are checked even for unreachable branches; their value conversions and arithmetic are skipped.</p>
 <p>Computed int/double/string/bytes outputs become named fields. Computed timestamps and integer/string arrays use existing TagValue variants in the <code>__ql</code> family. An unnamed computed expression is <code>expr_1</code>, <code>expr_2</code>, etc., by its SELECT position; aliases are recommended. Direct columns retain their existing containers. All DataPoints retain their raw timestamp/SID/version, and hidden expression inputs are omitted. Duplicate names within a container are rejected.</p>
-<p>SELECT expressions currently apply to raw measure queries. Combining computed SELECT outputs with aggregates, GROUP BY or SELECT TOP is rejected. The same expression evaluator supports raw-input WHERE and post-aggregation HAVING, as described below. Computed grouping and general ordering by computed aliases remain later capabilities. Query memory limits still apply; disk spilling is not implemented.</p>
+<p>SELECT expressions apply to raw measure queries and to computed grouping keys described in section 5.13. When a SELECT expression contains an aggregate result, it may combine that result with grouping keys and constants. Other grouped SELECT expressions must match a grouping expression. Scalar expressions may also be used as aggregate arguments. Combining computed SELECT outputs with SELECT TOP is rejected. The same expression evaluator supports raw-input WHERE and post-aggregation HAVING, as described below. General ordering by computed aliases is described in section 5.14. Query memory limits still apply; disk spilling is not implemented.</p>
 <h3 id="510-field-and-expression-filters">5.10. Field and expression filters</h3>
 <p>Measure WHERE accepts the arithmetic, casts, comparisons, null tests, IN lists, CASE, COALESCE and boolean operations from section 5.9. The result must be boolean: only TRUE passes; FALSE and NULL (SQL UNKNOWN) drop the row. A bare <code>WHERE NULL</code> drops every row. Numbers and strings do not become booleans implicitly; use an explicit cast where needed.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)::</span>FIELD<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>total<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)::</span>FIELD<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>samples<span style="color:#fff">
@@ -3086,7 +3106,10 @@ show lower planning time and allocations but no established RPC latency gain.</p
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">HAVING</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">10</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>HAVING supports arithmetic, casts, comparisons, boolean expressions, IN, CASE and COALESCE over grouped source columns and named COUNT/SUM/MIN/MAX/AVG/MEAN calls. A query can select only <code>host</code> while filtering <code>HAVING SUM(value::FIELD) &gt; ?</code>: the hidden aggregate is not returned. Repeated calls share aggregation state and native branches. SELECT aliases are outside HAVING scope: refer to <code>host</code> and <code>SUM(value::FIELD)</code>, not <code>node</code> and <code>total</code>. Nested aggregate calls, computed aggregate arguments and nongrouped source references are rejected before dispatch. Scalar aggregation retains its SQL empty-input row; HAVING can then remove it. Group-only queries with HAVING are supported too.</p>
+</span></span></span></code></pre></div><p>HAVING supports arithmetic, casts, comparisons, boolean expressions, IN, CASE and COALESCE over grouped source columns and named COUNT/SUM/MIN/MAX/AVG/MEAN calls. A query can select only <code>host</code> while filtering <code>HAVING SUM(value::FIELD) &gt; ?</code>: the hidden aggregate is not returned. Repeated calls share aggregation state and native branches. SELECT aliases are outside HAVING scope: refer to <code>host</code> and <code>SUM(value::FIELD)</code>, not <code>node</code> and <code>total</code>. Nested aggregate calls and nongrouped source references are rejected before dispatch. Scalar aggregation retains its SQL empty-input row; HAVING can then remove it. Group-only queries with HAVING are supported too.</p>
+<p>For scaled integer fields, <code>SUM(DECIMAL_FROM_SCALED(cost_scaled, 10))</code> accumulates the integer coefficients exactly. The scale must be an integer literal from 0 through 18. The signed coefficient is limited to 38 decimal digits (absolute value at most 10^38 - 1); exceeding this bound fails the query. Negative values and NULL follow SUM semantics, including NULL for empty or all-NULL input. Results use the existing string field value, formatted with exactly the declared number of fractional digits, including trailing zeros. Ordinary integer SUM remains checked int64.</p>
+<p>Decimal results remain numeric for HAVING comparisons and ORDER BY. Comparisons with integers and other decimal sums use their scales exactly; floating-point operands are unsupported. <code>COALESCE</code> accepts decimal arguments of matching scale, NULL, and the integer literal zero. Decimal arithmetic, casts, CASE results, and general decimal storage are unsupported. Distributed execution merges raw rows and performs decimal aggregation locally; decimal partials are not transported. Group state and buffers share the query memory budget.</p>
+<p><code>IN</code> and <code>NOT IN</code> use the same exact comparisons regardless of operand order, including an integer on the left and decimal sums in the list. With a nonempty list, a NULL left operand yields UNKNOWN. A matching list entry takes precedence over a NULL entry; without a match, a NULL entry makes the result UNKNOWN.</p>
 <p>Within a measure predicate, <code>CONTAINS</code> and <code>NOT CONTAINS</code> are aliases of the existing infix <code>HAVING</code> and <code>NOT HAVING</code> operators. CONTAINS is contextual, so existing tags named <code>contains</code> and resources named <code>contains-svc</code> remain valid. The new aliases are limited to measure queries; other resource types keep their existing syntax.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)::</span>FIELD<span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>samples<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
@@ -3097,6 +3120,131 @@ show lower planning time and allocations but no established RPC latency gain.</p
 </span></span></span><span style="display:flex;"><span><span style="color:#cf222e">HAVING</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#fff">
 </span></span></span></code></pre></div><p>Membership requires all requested integer or string terms; scalar sources can match one value or repeated copies of that value. NULL sources, scalar NULL requests and empty literal lists do not match; NOT CONTAINS complements the result, including for NULL sources. Empty array parameters retain the legacy binding error. Scalar, list and array parameters keep the existing type conversion and expansion rules. Legacy infix HAVING remains available inside WHERE; the grouped HAVING clause follows GROUP BY or the scalar aggregate&rsquo;s WHERE clause.</p>
 <p>QL-evaluated membership on indexed STRING_ARRAY or INT_ARRAY tags returns <code>InvalidArgument</code> before data execution. This conservative restriction remains after the native indexed-array projection repair; this release does not enable typed membership on indexed arrays. The check uses current index bindings even when the query plan is reused. Type qualification does not bypass it. Unindexed array membership and indexed scalar membership remain supported; ordinary legacy native membership retains its routing.</p>
+<h3 id="512-distinct-output-tuples">5.12. DISTINCT output tuples</h3>
+<p><code>SELECT DISTINCT</code> returns each unique combination of projected values once. Equality uses the entire visible tuple, across tag families and fields. Aliases change output names without changing equality. Source timestamps, series identities and hidden predicate or aggregate inputs do not enter the key unless explicitly selected.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">DISTINCT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">zone</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>DISTINCT runs after raw filtering, aggregation, HAVING and visible projection, and before final OFFSET/LIMIT. Projected arithmetic, casts and CASE expressions use their evaluated values as keys. Hidden calls used only by HAVING are removed before deduplication. Omitting LIMIT does not impose the native default of 100 rows; LIMIT 0 skips data execution.</p>
+<p>Integer, double, string, binary and timestamp values can be keys. NULL values compare equal for deduplication, but remain distinct from zero, an empty string or empty bytes. Positive and negative floating zero share a key, and all NaN representations share a key. Array keys are rejected during binding, including arrays selected by <code>*</code>. SELECT DISTINCT cannot be combined with SELECT TOP. It is separate from COUNT(DISTINCT), whose extended behavior is described in section 5.8.</p>
+<p>Without ORDER BY, result order is unspecified. With DISTINCT, each ORDER BY expression must be derivable from visible output values. Visible aliases, selected computed expressions and selected aggregate calls are supported; hidden source columns, grouped keys or aggregate calls are rejected. See section 5.14.</p>
+<p>For timestamp ordering, write <code>ORDER BY TIME ASC</code> or <code>DESC</code>, or use a visible timestamp alias. Direction-only <code>ORDER BY ASC</code> or <code>ORDER BY DESC</code> is rejected with DISTINCT.</p>
+<p>The liaison reuses the SQL grouping table without aggregate states. It stores unique keys in compact chunks under the shared query memory budget. With no ORDER BY and a finite LIMIT, deduplication stops after finding OFFSET + LIMIT unique tuples, including partway through a batch. If fewer unique tuples exist, it reads the complete input. An explicit ORDER BY or an omitted LIMIT also requires complete input. Upstream aggregation and native result materialization may still consume their complete input before DISTINCT sees a batch, so a small LIMIT does not bound total query memory or storage work. Budget exhaustion returns <code>ResourceExhausted</code>; temporary-file spilling is not implemented. The response keeps the existing measure-result format and does not retain an arbitrary source row&rsquo;s identity for each tuple.</p>
+<h3 id="513-computed-grouping-ordinal-references-and-time-buckets">5.13. Computed grouping, ordinal references and time buckets</h3>
+<p>GROUP BY accepts multiple scalar keys, including arithmetic, casts, CASE and COALESCE. Each non-aggregate SELECT expression must match a grouping expression after column and type resolution. Keys may be omitted from SELECT. Aliases name output values; they do not replace source names in GROUP BY.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">CASE</span><span style="color:#fff"> </span><span style="color:#cf222e">WHEN</span><span style="color:#fff"> </span>value<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">4</span><span style="color:#fff"> </span><span style="color:#cf222e">THEN</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;high&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">ELSE</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;low&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">END</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>band<span style="color:#1f2328">,</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">       </span><span style="color:#cf222e">CAST</span><span style="color:#1f2328">(</span><span style="color:#cf222e">zone</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>STRING<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>region<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>total<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span><span style="color:#cf222e">CASE</span><span style="color:#fff"> </span><span style="color:#cf222e">WHEN</span><span style="color:#fff"> </span>value<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">4</span><span style="color:#fff"> </span><span style="color:#cf222e">THEN</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;high&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">ELSE</span><span style="color:#fff"> </span><span style="color:#0a3069">&#39;low&#39;</span><span style="color:#fff"> </span><span style="color:#cf222e">END</span><span style="color:#1f2328">,</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">         </span><span style="color:#cf222e">CAST</span><span style="color:#1f2328">(</span><span style="color:#cf222e">zone</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>STRING<span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>A positive integer in GROUP BY refers to a SELECT position, counted from one after expanding <code>*</code>. The same query can use <code>GROUP BY 1, 2</code>. Zero, negative and out-of-range positions, and positions selecting aggregate calls, are rejected before execution. Grouping without aggregate calls returns unique key tuples through the same SQL group table.</p>
+<p>Ordinal references also preserve parameter identity. For example, <code>SELECT value + ? AS adjusted, COUNT(value) ... GROUP BY 1</code> uses the same bound value for selection and grouping. Writing a second <code>value + ?</code> in GROUP BY creates another parameter occurrence and does not match the first expression. Repeated matching keys share their evaluation for each input row.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span>TIME_BUCKET<span style="color:#1f2328">(</span><span style="color:#0a3069">&#39;2s&#39;</span><span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>bucket<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>total<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#0550ae">2</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>TIME_BUCKET requires grouping and accepts one positive duration string, or no argument to use the measure interval. Duration units match the existing native buckets: <code>ns</code>, <code>us</code>/<code>µs</code>, <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code> and <code>d</code>. Boundaries are fixed widths aligned to the Unix epoch. At most one distinct TIME_BUCKET expression can be a direct grouping key. A selected direct bucket alias appears as a timestamp TagValue in the <code>__ql</code> family; its value is also the DataPoint timestamp. Empty widths use the schema interval, without calendar or timezone alignment. For extended queries spanning measures with different intervals, supply an explicit width. Grouping by both <code>time</code> and TIME_BUCKET preserves the original time and the bucket as separate keys and uses local aggregation.</p>
+<p>Bucket expressions match by their resolved duration: for a two-second measure interval, <code>TIME_BUCKET()</code>, <code>TIME_BUCKET('2s')</code> and <code>TIME_BUCKET('2000ms')</code> refer to the same key. HAVING may use that grouped bucket, or compute a bucket from an explicitly grouped raw <code>time</code> key. It cannot access an ungrouped raw timestamp through TIME_BUCKET. TIME_BUCKET is not supported in WHERE or ungrouped raw projections.</p>
+<p>DISTINCT compares the visible output tuple. When that tuple selects the direct bucket key, DISTINCT preserves its timestamp alias and DataPoint timestamp. An unselected bucket does not become a hidden DISTINCT key or supply an arbitrary timestamp to the result. Timestamp aliases in <code>__ql</code> and field aliases may share a name; duplicate names within the same output container are rejected.</p>
+<p>Computed keys run after WHERE and before local aggregation. HAVING follows completed aggregation, then visible projection, DISTINCT, ORDER BY and final pagination. Eligible bucket aggregates can reuse the existing native reductions; bucket time remains part of the merge key. Other expressions use a complete raw scan and typed local grouping. Extended grouping adds no ordering guarantee. All key buffers, grouping state and output share the existing query memory limit; exhaustion fails the query, and temporary-file spilling remains deferred.</p>
+<h3 id="514-ordering-and-final-pagination">5.14. Ordering and final pagination</h3>
+<p>Measure ORDER BY accepts multiple scalar keys, each with its own direction and NULL placement. Output aliases take precedence over source names; ambiguous output names require qualification. Keys can use SELECT expressions, grouped expressions and named aggregate calls. Integer, double, string, binary and timestamp keys are supported; boolean and array keys are rejected.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>node<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>total<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">MAX</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>peak<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>metrics<span style="color:#1f2328">.</span>service_cpm<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#cf222e">CAST</span><span style="color:#1f2328">(</span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>DOUBLE<span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span><span style="color:#cf222e">host</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">HAVING</span><span style="color:#fff"> </span><span style="color:#cf222e">SUM</span><span style="color:#1f2328">(</span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0550ae">3</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">ORDER</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>total<span style="color:#fff"> </span><span style="color:#cf222e">DESC</span><span style="color:#fff"> </span>NULLS<span style="color:#fff"> </span><span style="color:#cf222e">LAST</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span>node<span style="color:#fff"> </span><span style="color:#cf222e">ASC</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#fff"> </span><span style="color:#cf222e">OFFSET</span><span style="color:#fff"> </span><span style="color:#0550ae">1</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>ASC defaults to NULLS LAST; DESC defaults to NULLS FIRST. Strings and binary values compare byte by byte. Integer comparisons preserve all int64 bits. Floating NaNs follow other non-null numbers in ascending order; descending reverses that numeric order. NULL placement is independent of direction. Equal complete keys have unspecified order, so add a unique final key when stable pagination matters.</p>
+<p>A positive integer literal refers to a SELECT position after expanding <code>*</code>, including an implicit <code>time</code> projection. Zero, negative and out-of-range positions are rejected. Bound values remain constant expressions and never select an ordinal. Bare direction-only ordering retains its timestamp meaning; DISTINCT requires an explicit key derivable from visible output.</p>
+<p>Raw queries may order by unselected columns or expressions. Grouped queries may order by hidden grouped keys or aggregate calls. Such inputs do not appear in the response. DISTINCT requires every key to be derivable from its visible tuple, preventing hidden inputs from deciding the order of deduplicated rows.</p>
+<p>Ordering runs after filtering, aggregation, HAVING and visible-tuple DISTINCT. OFFSET and LIMIT apply last. With no LIMIT, the liaison sorts all completed rows. A finite LIMIT retains at most OFFSET + LIMIT candidate rows in a heap, then sorts those candidates and applies the requested page. The sum uses uint64 arithmetic; large offsets can still require substantial memory. LIMIT 0 performs no data scan.</p>
+<p>Accepted candidates own copies of their values and do not retain source batches. Key buffers, candidate storage and output share the query memory budget. A full sort or a large top-k fails with <code>ResourceExhausted</code> when that budget is exhausted; temporary-file spilling remains deferred. Native input materialization has its own residency costs, so a small LIMIT does not bound total scan work or query memory. Simple timestamp and explicit index-rule ordering retain their existing native execution paths.</p>
+<h3 id="515-indexed-like-and-ilike">5.15. Indexed LIKE and ILIKE</h3>
+<p>Measure queries support two whole-value pattern predicates:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#cf222e">SELECT</span><span style="color:#fff"> </span>name<span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#cf222e">COUNT</span><span style="color:#1f2328">(</span><span style="color:#cf222e">DISTINCT</span><span style="color:#fff"> </span>member<span style="color:#1f2328">)</span><span style="color:#fff"> </span><span style="color:#cf222e">AS</span><span style="color:#fff"> </span>members<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">FROM</span><span style="color:#fff"> </span>MEASURE<span style="color:#fff"> </span>activity<span style="color:#fff"> </span><span style="color:#cf222e">IN</span><span style="color:#fff"> </span>metrics<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">WHERE</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&gt;=</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>time<span style="color:#fff"> </span><span style="color:#0550ae">&lt;</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>name<span style="color:#fff"> </span><span style="color:#cf222e">ILIKE</span><span style="color:#fff"> </span><span style="color:#0550ae">?</span><span style="color:#fff"> </span><span style="color:#cf222e">AND</span><span style="color:#fff"> </span>value<span style="color:#1f2328">::</span>FIELD<span style="color:#fff"> </span><span style="color:#0550ae">&gt;</span><span style="color:#fff"> </span><span style="color:#0550ae">0</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">GROUP</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>name<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">ORDER</span><span style="color:#fff"> </span><span style="color:#cf222e">BY</span><span style="color:#fff"> </span>members<span style="color:#fff"> </span><span style="color:#cf222e">DESC</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span>name<span style="color:#fff"> </span><span style="color:#cf222e">ASC</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">LIMIT</span><span style="color:#fff"> </span><span style="color:#0550ae">20</span><span style="color:#1f2328">;</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>Bind <code>%amber%</code> to find names containing <code>amber</code>. <code>LIKE</code> is case-sensitive;
+<code>ILIKE</code> uses locale-independent Unicode simple folding. Matching preserves the
+original value for projection, grouping and distinct counting.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Pattern</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>amber</code></td>
+          <td>The complete value <code>amber</code></td>
+      </tr>
+      <tr>
+          <td><code>amber%</code></td>
+          <td>A value starting with <code>amber</code></td>
+      </tr>
+      <tr>
+          <td><code>%amber%</code></td>
+          <td>A value containing <code>amber</code></td>
+      </tr>
+      <tr>
+          <td><code>a_b</code></td>
+          <td><code>a</code>, exactly one Unicode character, then <code>b</code></td>
+      </tr>
+      <tr>
+          <td>Empty string</td>
+          <td>Only an empty value</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>%</code> matches zero or more Unicode characters; <code>_</code> matches exactly one. Both
+include newlines. Spaces, punctuation, <code>*</code>, <code>?</code> and regular-expression symbols
+are ordinary literal characters. No tokenization or trimming occurs.</p>
+<p>The default pattern escape character is backslash. <code>ESCAPE '!'</code> chooses another
+single Unicode character; <code>ESCAPE ''</code> disables escaping. An escape quotes the
+following character, so <code>name LIKE 'a!_b' ESCAPE '!'</code> matches the literal <code>a_b</code>.
+A trailing escape is invalid. Prefer bound patterns: QL string literals retain
+their existing backslash decoding, which differs from PostgreSQL standard
+string literals. The <code>ESCAPE</code> argument must be a literal, not a parameter or NULL.</p>
+<p>The source must be a scalar STRING tag with a bound single-tag inverted index
+whose analyzer is omitted, empty or <code>keyword</code>. Tokenizing analyzers such as
+<code>simple</code>, <code>standard</code> and <code>url</code> cannot preserve whole-value matching and are
+rejected. Missing indexes, arrays and ambiguous tag names are also rejected.
+Exactly one distinct valid rule may cover the source tag; multiple rules are
+rejected even when both use <code>keyword</code>, because writes populate only one of them.
+Repeated bindings of the same identified rule do not introduce ambiguity.
+No special analyzer or index rebuild is needed for existing whole-value indexes.
+Index visibility follows the existing query model; missing postings do not
+trigger a raw-data scan or consistency barrier.</p>
+<p>Patterns accept scalar string literals, string parameters or NULL. NULL sources
+or patterns produce UNKNOWN and do not pass WHERE. Numeric coercion and computed
+patterns are unsupported. These predicates support positive AND conjunctions
+with time, tag and field filters; OR/NOT, NOT LIKE/NOT ILIKE, SELECT expressions
+and HAVING are unsupported. Indexed selection runs before field residuals and
+aggregation. Raw pattern queries must order by time or an explicit native index
+rule; they do not fall back to sorting raw rows. Completed aggregate and DISTINCT
+results retain their existing ordering behavior.</p>
+<p>ILIKE does not apply locale-specific collations, accent removal, Unicode
+normalization or multi-character case expansion. It is not a promise of equality
+with every PostgreSQL collation.</p>
+<p>Each query accepts at most 16 pattern predicates of at most 1 KiB each. Workers
+share a 1,000,000-unit dictionary/automaton work limit, 100,000 expanded-term
+limit and 16 MiB cumulative pattern-allocation limit; each automaton also has a
+1 MiB bound. Existing query memory limits can stop execution sooner. Exceeding a
+limit fails the query with ResourceExhausted rather than returning partial counts.
+Cached QL plans retain recipes; bound patterns and automata belong to one execution.
+The operator words are contextual: existing resource and group names such as
+<code>like-rate</code> and <code>escape-group</code> remain valid.</p>
+<p>The external QL RPC and protobuf definitions are unchanged. Distributed pattern queries use
+a versioned internal request envelope. All participating query nodes must support
+it; an older node rejects the request and fails the query. Existing MATCH token
+search and native protobuf queries keep their current semantics.</p>
 <h2 id="6-bydbql-for-top-n">6. BydbQL for Top-N</h2>
 <p>Top-N queries use a specialized, command-like syntax for clarity and to reflect the optimized nature of the underlying <code>banyandb.measure.v1.TopNRequest</code>. The <code>FROM</code> clause is mandatory.</p>
 <h3 id="61-grammar">6.1. Grammar</h3>
@@ -3649,6 +3797,10 @@ integer_literal       ::= [0-9]+
             <li><a href="#59-typed-select-expressions">5.9. Typed SELECT expressions</a></li>
             <li><a href="#510-field-and-expression-filters">5.10. Field and expression filters</a></li>
             <li><a href="#511-group-filtering-and-collection-membership">5.11. Group filtering and collection membership</a></li>
+            <li><a href="#512-distinct-output-tuples">5.12. DISTINCT output tuples</a></li>
+            <li><a href="#513-computed-grouping-ordinal-references-and-time-buckets">5.13. Computed grouping, ordinal references and time buckets</a></li>
+            <li><a href="#514-ordering-and-final-pagination">5.14. Ordering and final pagination</a></li>
+            <li><a href="#515-indexed-like-and-ilike">5.15. Indexed LIKE and ILIKE</a></li>
           </ul>
         </li>
         <li><a href="#6-bydbql-for-top-n">6. BydbQL for Top-N</a>
@@ -3789,6 +3941,42 @@ integer_literal       ::= [0-9]+
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

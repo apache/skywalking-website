@@ -33,7 +33,7 @@ Every shipped BanyanDB binary accepts the same four logging flags: the server (s
   <meta itemprop="name" content="Logging">
   <meta itemprop="description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the logging-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
 Every shipped BanyanDB binary accepts the same four logging flags: the server (standalone, data, liaison), backup, restore, lifecycle, migration, the FODC proxy and the FODC agent. Each flag is also bound to an environment variable named after it, prefixed with BYDB_ and upper-cased with dashes replaced by underscores, which is the usual way to configure them in a container:">
-  <meta itemprop="wordCount" content="878">
+  <meta itemprop="wordCount" content="2178">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Logging">
   <meta name="twitter:description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the logging-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
@@ -2095,7 +2095,7 @@ Every shipped BanyanDB binary accepts the same four logging flags: the server (s
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 05d6bdf</div>
+                  <div class="commit-id">Commit Id: 3bd5e73</div>
                 
 
 
@@ -2188,7 +2188,192 @@ so no level silences it.</p>
 <p><code>logging-modules</code> and <code>logging-levels</code> are used to set the log level for specific modules. The <code>logging-modules</code> flag is a comma-separated list of module names, and the <code>logging-levels</code> flag is a comma-separated list of log levels corresponding to the module names. The log level for a specific module can be set using these flags. Modules on the server include <code>storage</code>, <code>distributed-query</code>, <code>liaison-grpc</code>, <code>liaison-http</code>, <code>measure</code>, <code>stream</code>, <code>trace</code>, <code>metadata</code>, <code>property-schema-registry</code>, <code>metrics</code>, <code>pprof-service</code>, <code>query</code>, <code>server-queue-sub</code>, <code>server-queue-pub</code>. The other binaries name theirs differently: <code>migration</code> in <code>banyand-migration</code>, <code>fodc-proxy</code> in the FODC proxy, and <code>fodc</code>, <code>server</code> and <code>watchdog</code> in the FODC agent.</p>
 <p>Those lists are not exhaustive. A module name is whatever scope the code passes to <code>logger.GetLogger</code>, and every log line carries it in its <code>module</code> field, so reading one off a log line is the reliable way to find the name you need. Matching is case-insensitive. For example, to set the log level for the <code>storage</code> module to <code>debug</code>, you can use the following flags:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--logging-modules<span style="color:#0550ae">=</span>storage --logging-levels<span style="color:#0550ae">=</span>debug
-</span></span></code></pre></div><h2 id="slow-query-logging">Slow Query Logging</h2>
+</span></span></code></pre></div><h2 id="native-self-storage">Native Self-Storage</h2>
+<p>BanyanDB can store its own log events in BanyanDB, alongside the measures native observability already writes into <code>_monitoring</code>. It is off by default and adds a second destination rather than replacing the normal one, which stays enabled and is never degraded by it.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>banyand standalone --logging-native-enabled --logging-native-level<span style="color:#0550ae">=</span>info
+</span></span></code></pre></div><p>Events land in the <code>_monitoring_log</code> group as elements of a stream named <code>log</code>, queryable through the ordinary stream API:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>bydbctl stream query -f - <span style="color:#0a3069">&lt;&lt;EOF
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">name: &#34;log&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">groups: [&#34;_monitoring_log&#34;]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">projection:
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  tagFamilies:
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    - name: &#34;searchable&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      tags: [&#34;node_id&#34;, &#34;module&#34;, &#34;level&#34;, &#34;message&#34;]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">EOF</span>
+</span></span></code></pre></div><h3 id="what-is-stored-where">What is stored where</h3>
+<p>A log line is split across two tag families, and nothing is stored twice.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Tag family</th>
+          <th>Tags</th>
+          <th>Holds</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>searchable</code></td>
+          <td><code>node_id</code>, <code>node_type</code>, <code>module</code>, <code>level</code>, <code>grpc_address</code>, <code>http_address</code>, <code>message</code>, <code>log_id</code></td>
+          <td>the keys with a tag of their own</td>
+      </tr>
+      <tr>
+          <td><code>data</code></td>
+          <td><code>fields</code> (binary)</td>
+          <td><strong>everything else on the line</strong>, as a JSON object; absent when the line has no extra keys</td>
+      </tr>
+  </tbody>
+</table>
+<p>The split matters when you go looking for a value. A call site that writes</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#1f2328">l</span><span style="color:#1f2328">.</span><span style="color:#6639ba">Warn</span><span style="color:#1f2328">().</span><span style="color:#6639ba">Str</span><span style="color:#1f2328">(</span><span style="color:#0a3069">&#34;group&#34;</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;sw_metric&#34;</span><span style="color:#1f2328">).</span><span style="color:#6639ba">Dur</span><span style="color:#1f2328">(</span><span style="color:#0a3069">&#34;took&#34;</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">d</span><span style="color:#1f2328">).</span><span style="color:#6639ba">Msg</span><span style="color:#1f2328">(</span><span style="color:#0a3069">&#34;flush took longer than expected&#34;</span><span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>stores <code>message</code> in <code>searchable</code> and <code>{&quot;group&quot;:&quot;sw_metric&quot;,&quot;took&quot;:1200}</code> in <code>fields</code>. The query above would not show <code>group</code> at all — project the <code>data</code> family to get it:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>bydbctl stream query -f - <span style="color:#0a3069">&lt;&lt;EOF
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">name: &#34;log&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">groups: [&#34;_monitoring_log&#34;]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">projection:
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">  tagFamilies:
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    - name: &#34;searchable&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      tags: [&#34;node_id&#34;, &#34;module&#34;, &#34;level&#34;, &#34;message&#34;]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">    - name: &#34;data&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      tags: [&#34;fields&#34;]
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">EOF</span>
+</span></span></code></pre></div><p><code>fields</code> is a binary tag holding JSON, so it is returned as an opaque blob and is not filterable. A call site that adds a new key needs no schema change for it to be kept.</p>
+<h3 id="filtering">Filtering</h3>
+<p><code>node_id</code> and <code>level</code> are the entity, so filtering on them selects series directly. Entity tags accept only <code>=</code> and <code>IN</code>, which is why several levels are selected with <code>IN</code> rather than by negating one.</p>
+<p>Every other tag is filterable but <strong>unindexed</strong> in this version: there are no index rules on the stream, so a condition on <code>module</code> or <code>message</code> is evaluated after the scan rather than through a posting list. The scan stops at the query&rsquo;s <code>limit</code> before that condition runs, so such a query can return fewer rows than the limit while more matching rows exist. Narrow the time range and the entity first.</p>
+<p><code>MATCH</code> on <code>message</code> does <strong>not</strong> do what it does elsewhere. An analyzer comes from an index rule, and this stream has none, so the value is compared whole instead of being tokenized: searching for <code>timeout</code> will not find <code>write timeout exceeded</code>. The condition does not error — it just fails to match — so an empty result may be this rather than an absence of logs. Use <code>=</code> on the full message, or project <code>message</code> and filter outside the database.</p>
+<p>The flags live in their own namespace, <code>--logging-native-*</code> with <code>BYDB_LOGGING_NATIVE_*</code>, which inherits nothing from <code>--logging-*</code>. An explicit flag beats its environment variable, as everywhere else.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Flag</th>
+          <th>Default</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--logging-native-enabled</code></td>
+          <td><code>false</code></td>
+          <td>store this process&rsquo;s own logs</td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-level</code></td>
+          <td><code>info</code></td>
+          <td>minimum level reaching storage, independent of <code>--logging-level</code></td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-modules</code> / <code>--logging-native-levels</code></td>
+          <td>–</td>
+          <td>per-module native levels, one level per module; the most specific module wins, so <code>measure.block</code> overrides <code>measure</code> for <code>MEASURE.BLOCK</code>; an excluded module stays excluded</td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-exclude-modules</code></td>
+          <td>–</td>
+          <td>modules never stored, with the modules named under them; adds to the built-in protections and cannot remove one</td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-ttl-days</code></td>
+          <td><code>7</code></td>
+          <td>retention, used when the group is created; a different value on a later node is reported and ignored</td>
+      </tr>
+  </tbody>
+</table>
+<p>Native policy is resolved on a logger&rsquo;s complete module, every component it was named with. A <code>--logging-modules</code> override can shorten the module the console prints — <code>--logging-modules=measure</code> makes a <code>MEASURE.BLOCK</code> logger print <code>MEASURE</code> — but it does not change what native storage collects: <code>--logging-native-modules=measure.block</code> and <code>--logging-native-exclude-modules=measure.block</code> still apply. Exclusions match a module and its children, so <code>measure</code> covers <code>MEASURE.BLOCK</code> and not <code>MEASUREMENT</code>.</p>
+<p>Buffering, batching and memory are not configured. Each node writes its own events through its local write path to shard 0 of <code>_monitoring_log</code>, a single-shard group, as native metrics do: no event is sent to another node. The buffer holds at most 8MiB, an event over 64KiB is dropped whole, a batch is written every second or at 100 events, and a stuck write cannot hold shutdown for more than about 5 seconds. While the memory protector reports high pressure, new events are dropped and counted rather than buffered.</p>
+<p>Because the two destinations have independent thresholds, native can be the more verbose of the two. Running normal logging at <code>error</code> and native at <code>info</code> keeps stderr quiet while the database retains the <code>info</code> and <code>warn</code> events that describe what a node was doing beforehand:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Event</th>
+          <th>Normal logging</th>
+          <th>Native storage</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>debug</code></td>
+          <td>–</td>
+          <td>–</td>
+      </tr>
+      <tr>
+          <td><code>info</code>, <code>warn</code></td>
+          <td>dropped</td>
+          <td>stored</td>
+      </tr>
+      <tr>
+          <td><code>error</code></td>
+          <td>printed</td>
+          <td>stored</td>
+      </tr>
+  </tbody>
+</table>
+<p>Note the consequence: an <code>info</code> event dropped by the buffer has no copy on stderr. Losses are counted rather than silent, under <code>banyandb_logging_native_log_dropped_total{reason}</code>, with <code>banyandb_logging_native_log_written_total</code> and the buffer gauges alongside. <code>banyandb_logging_native_log_buffer_bytes</code> has a <code>state</code> label: <code>queued</code> is waiting to be written and <code>in_flight</code> is being written, so a stalled write shows as <code>in_flight</code> that does not fall. Those counters travel the same transport as the events they count, so keeping <code>--observability-modes=prometheus</code> enabled is what makes a loss visible during an outage.</p>
+<p>The <code>reason</code> label takes one of nine values, so a loss is always attributable to a stage:</p>
+<table>
+  <thead>
+      <tr>
+          <th><code>reason</code></th>
+          <th>Meaning</th>
+          <th>What to do</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>buffer_full</code></td>
+          <td>the buffer was at its byte or event bound</td>
+          <td>the writer is behind; raise <code>--logging-native-level</code> to admit less</td>
+      </tr>
+      <tr>
+          <td><code>memory_pressure</code></td>
+          <td>the memory protector reported high pressure</td>
+          <td>accept it: on a node short of memory this is the sink yielding, as intended</td>
+      </tr>
+      <tr>
+          <td><code>oversize_event</code></td>
+          <td>one event exceeded 64KiB</td>
+          <td>shorten the log line</td>
+      </tr>
+      <tr>
+          <td><code>encode_failed</code></td>
+          <td>the line was not the JSON the sink expects</td>
+          <td>a bug; report it with the module name</td>
+      </tr>
+      <tr>
+          <td><code>publish_failed</code></td>
+          <td>the batch did not reach storage</td>
+          <td>look at the write path — the whole batch is lost, never re-queued</td>
+      </tr>
+      <tr>
+          <td><code>schema_unavailable</code></td>
+          <td>the group or stream could not be created yet</td>
+          <td>usually transient at startup; retried every 10s</td>
+      </tr>
+      <tr>
+          <td><code>schema_incompatible</code></td>
+          <td>a <code>log</code> stream exists with a shape this version cannot write</td>
+          <td>drop and recreate the <code>_monitoring_log</code> group; retrying will not fix it. The error is logged once</td>
+      </tr>
+      <tr>
+          <td><code>destination_unready</code></td>
+          <td>the local write path still had no subscriber after 10 retries, one per flush interval</td>
+          <td>expected only at startup; if it persists, the stream service did not start</td>
+      </tr>
+      <tr>
+          <td><code>shutdown_deadline</code></td>
+          <td>still buffered, or in a stuck write, when the drain deadline passed, or logged after shutdown began</td>
+          <td>expected on a busy node during shutdown</td>
+      </tr>
+  </tbody>
+</table>
+<p>Logging caused by storing native logs is never stored, or one stored line could produce the next. That logging still reaches the console. Two modules are reserved for it, and <code>--logging-native-exclude-modules</code> cannot remove them:</p>
+<ul>
+<li><code>NATIVE-LOG</code> is the native log service. While the write path handles a native write, it logs as a child of <code>NATIVE-LOG</code>, for example <code>NATIVE-LOG.STREAM</code>. The same write path logs as before for every other write, so ordinary <code>STREAM</code> and <code>STORAGE</code> logs are collected.</li>
+<li><code>_MONITORING_LOG</code> is the log group&rsquo;s own storage. A storage logger is named after its group, so its segments, shards, flushes and merges log under it.</li>
+</ul>
+<p>A blank entry in <code>--logging-native-exclude-modules</code> is ignored.</p>
+<p>An event logged without a level is stored with the level <code>none</code>, because the level is half the series key and an empty one cannot be queried. Such an event arrives with no severity at all — a library writing through a standard <code>log.Logger</code> produces one — so it is admitted as an informational event and obeys <code>--logging-native-level</code> like any other. The buffer is bounded and in-memory only &ndash; no queue files, no write-ahead log, no disk fallback &ndash; and it never blocks the caller: at its bound the newest event is dropped and counted, so a burst keeps the head that explains it.</p>
+<p><code>restore</code> and <code>migration</code> do not offer these flags at all. Both run when the data tier is unavailable, and a tool that runs while the database is down cannot log into it.</p>
+<h2 id="slow-query-logging">Slow Query Logging</h2>
 <p>BanyanDB supports slow query logging. The <code>slow-query</code> flag is used to set the slow query threshold. If a query takes longer than the threshold, it will be logged as a slow query. The default value is <code>0</code>, which means no slow query logging. This flag is only used for the data and standalone servers.</p>
 <p>The <code>dst-slow-query</code> flag is used to set the distributed slow query threshold. This flag is only used for the liaison server. The default value is <code>5s</code>; set it to <code>0</code> to disable distributed slow query logging.</p>
 <p>When query tracing is enabled, the slow query log won&rsquo;t be generated.</p>
@@ -2261,6 +2446,12 @@ so no level silences it.</p>
   <ul>
     <li><a href="#logging">Logging</a>
       <ul>
+        <li><a href="#native-self-storage">Native Self-Storage</a>
+          <ul>
+            <li><a href="#what-is-stored-where">What is stored where</a></li>
+            <li><a href="#filtering">Filtering</a></li>
+          </ul>
+        </li>
         <li><a href="#slow-query-logging">Slow Query Logging</a>
           <ul>
             <li><a href="#bydbql-slow-queries">BydbQL Slow Queries</a></li>
@@ -2379,6 +2570,42 @@ so no level silences it.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
