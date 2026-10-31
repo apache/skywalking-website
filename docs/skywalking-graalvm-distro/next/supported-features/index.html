@@ -33,7 +33,7 @@ What’s Included Storage Provider Status BanyanDB Included (default) Elasticsea
   <meta itemprop="name" content="Supported Features">
   <meta itemprop="description" content="Supported Features This distro packages the Apache SkyWalking OAP server as a GraalVM native image with a fixed module set. All modules and providers are selected at build time — there is no runtime SPI discovery or dynamic module loading.
 What’s Included Storage Provider Status BanyanDB Included (default) Elasticsearch Not included H2 / MySQL / PostgreSQL / OpenSearch Not included Cluster Provider Status Standalone Included (default) Kubernetes Included ZooKeeper / Consul / Etcd / Nacos Not included Configuration Provider Status none Included k8s-configmap Included (default) Apollo / Consul / Etcd / Nacos / ZooKeeper / gRPC Not included Data Receivers All receivers are included:">
-  <meta itemprop="wordCount" content="938">
+  <meta itemprop="wordCount" content="1046">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Supported Features">
   <meta name="twitter:description" content="Supported Features This distro packages the Apache SkyWalking OAP server as a GraalVM native image with a fixed module set. All modules and providers are selected at build time — there is no runtime SPI discovery or dynamic module loading.
@@ -1269,7 +1269,7 @@ What’s Included Storage Provider Status BanyanDB Included (default) Elasticsea
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 5ea6df6</div>
+                  <div class="commit-id">Commit Id: 41b8023</div>
                 
 
 
@@ -1470,8 +1470,8 @@ runtime SPI discovery or dynamic module loading.</p>
       </tr>
       <tr>
           <td>OpenTelemetry</td>
-          <td>gRPC (OTLP)</td>
-          <td>Metrics + Logs via OTLP</td>
+          <td>gRPC / HTTP (OTLP)</td>
+          <td>Traces, metrics and logs. Traces are analyzed by TAL and stored natively (<code>otlp_span</code>, queried through TraceQL <code>/otlp</code>), or converted to Zipkin with <code>SW_OTEL_TRACE_STORAGE=zipkin</code></td>
       </tr>
       <tr>
           <td>Envoy / Istio ALS</td>
@@ -1546,6 +1546,11 @@ runtime SPI discovery or dynamic module loading.</p>
           <td>Zipkin v2 query API (disabled by default)</td>
       </tr>
       <tr>
+          <td><strong>TraceQL</strong></td>
+          <td>3200</td>
+          <td>Tempo-compatible trace query for Grafana; <code>/otlp</code> (native OTLP spans), <code>/zipkin</code> and <code>/skywalking</code> datasources (disabled by default)</td>
+      </tr>
+      <tr>
           <td><strong>Status</strong></td>
           <td>17128</td>
           <td>Cluster / alarm / TTL status + <code>/debugging/*</code> debug-query trace, on the admin-server host (relocated from the query plugin in 11.0.0)</td>
@@ -1572,11 +1577,31 @@ runtime SPI discovery or dynamic module loading.</p>
   </thead>
   <tbody>
       <tr>
-          <td>Trace Analyzer</td>
+          <td>Agent Analyzer (SkyWalking agent traces and meters, MAL)</td>
           <td>Yes</td>
       </tr>
       <tr>
           <td>Log Analyzer (LAL)</td>
+          <td>Yes</td>
+      </tr>
+      <tr>
+          <td>Trace Analyzer (TAL: OTLP spans into services, topology, metrics and slow statements)</td>
+          <td>Yes — rules compiled at build time, see <a href="../configuration#trace-analyzer">Configuration</a></td>
+      </tr>
+      <tr>
+          <td>iOS / iPadOS span analysis (OpenTelemetry Swift SDK)</td>
+          <td>Yes</td>
+      </tr>
+      <tr>
+          <td>GenAI Analyzer (virtual GenAI services from LLM-call spans)</td>
+          <td>Yes</td>
+      </tr>
+      <tr>
+          <td>AI Evaluation (SWIP-16 LLM-as-judge)</td>
+          <td>Yes (disabled by default)</td>
+      </tr>
+      <tr>
+          <td>AI Agent Conversations (AI Sessionizer files)</td>
           <td>Yes</td>
       </tr>
       <tr>
@@ -1620,6 +1645,40 @@ runtime SPI discovery or dynamic module loading.</p>
       </tr>
   </tbody>
 </table>
+<h3 id="tls">TLS</h3>
+<p>The same settings as upstream. gRPC TLS runs on the JDK TLS provider instead of OpenSSL
+(<code>netty_tcnative</code>): the distro replaces <code>DynamicSslContext</code> with a <code>SslProvider.JDK</code> copy.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Endpoint</th>
+          <th>Settings</th>
+          <th>Status</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Agent gRPC (<code>11800</code>)</td>
+          <td><code>SW_CORE_GRPC_SSL_*</code></td>
+          <td>TLS (<code>ssl</code> e2e). As upstream, no client certificate is asked for: <code>SW_CORE_GRPC_SSL_TRUSTED_CA_PATH</code> is the CA OAP nodes trust when they call each other</td>
+      </tr>
+      <tr>
+          <td>Receiver gRPC (<code>SW_RECEIVER_GRPC_PORT</code>)</td>
+          <td><code>SW_RECEIVER_GRPC_SSL_*</code></td>
+          <td>TLS; mTLS with <code>SW_RECEIVER_GRPC_SSL_TRUSTED_CAS_PATH</code> (<code>mtls</code> e2e)</td>
+      </tr>
+      <tr>
+          <td>REST servers</td>
+          <td><code>SW_*_REST_SSL_*</code></td>
+          <td>HTTPS</td>
+      </tr>
+      <tr>
+          <td>OAP → BanyanDB</td>
+          <td><code>SW_STORAGE_BANYANDB_SSL_TRUST_CA_PATH</code></td>
+          <td>TLS, CA reloaded on rotation (<code>banyandb-ca-rotation</code> e2e)</td>
+      </tr>
+  </tbody>
+</table>
 <h2 id="optional-modules">Optional Modules</h2>
 <p>These modules are disabled by default. Enable them with environment variables:</p>
 <table>
@@ -1654,32 +1713,26 @@ runtime SPI discovery or dynamic module loading.</p>
           <td>Exporter</td>
           <td><code>SW_EXPORTER=default</code></td>
       </tr>
+      <tr>
+          <td>TraceQL</td>
+          <td><code>SW_TRACEQL=default</code> (plus <code>SW_TRACEQL_ENABLE_DATASOURCE_OTLP=true</code> etc. per datasource)</td>
+      </tr>
+      <tr>
+          <td>AI Evaluation</td>
+          <td><code>SW_AI_EVALUATION=default</code></td>
+      </tr>
   </tbody>
 </table>
+<p>The Trace Analyzer (TAL) is on by default; <code>SW_TRACE_ANALYZER=-</code> removes it, and OTLP spans are then stored without
+analysis.</p>
 <h2 id="known-limitations">Known Limitations</h2>
-<h3 id="no-tlsssl-support-for-grpc">No TLS/SSL Support for gRPC</h3>
-<p>The native image does <strong>not</strong> support TLS-encrypted gRPC communication. This affects:</p>
-<ul>
-<li>Agent-to-OAP gRPC connections (<code>SW_CORE_GRPC_SSL_ENABLED</code>)</li>
-<li>Receiver gRPC SSL (<code>SW_RECEIVER_GRPC_SSL_ENABLED</code>)</li>
-<li>Any mTLS (mutual TLS) configuration between agents and OAP</li>
-</ul>
-<p><strong>Root cause</strong>: The Netty TLS implementation requires <code>netty_tcnative</code> platform-specific native
-libraries (<code>.so</code> files) that are not bundled in the GraalVM native image.</p>
-<p>The <code>restSSL*</code> options that 11.0.0 added to every HTTP/REST server (<code>SW_*_REST_SSL_ENABLED</code>) are
-present in <code>application.yml</code> for configuration parity, but they sit on the same Netty TLS stack and
-have not been verified in the native image; treat them as unsupported.</p>
-<p><strong>Workaround</strong>: Use a service mesh (e.g., <strong>Istio</strong>, <strong>Linkerd</strong>) to handle mTLS at the
-infrastructure layer. The mesh transparently encrypts all pod-to-pod traffic, including
-agent-to-OAP gRPC connections, without requiring application-level TLS configuration.</p>
-<pre tabindex="0"><code>Agent Pod ──(plaintext gRPC)──► Istio Sidecar ══(mTLS)══► Istio Sidecar ──► OAP Pod
-</code></pre><p>This is the recommended approach for Kubernetes deployments and provides stronger security
-guarantees than application-level TLS (automatic certificate rotation, policy enforcement).</p>
 <h3 id="dsl-rules-are-read-only-live-debugger-yes-hot-update-no">DSL Rules Are Read-Only (Live Debugger Yes, Hot-Update No)</h3>
-<p>All MAL / LAL / OAL rules are pre-compiled at build time. The precompiler compiles the SWIP-13
-debug probes into every rule class (the same codegen switch the upstream OAP flips at boot), so
+<p>All MAL / LAL / OAL / TAL rules are pre-compiled at build time. The precompiler compiles the SWIP-13
+debug probes into every MAL / LAL / OAL rule class (the same codegen switch the upstream OAP flips at boot), so
 the live debugger works on the bundled rules; only runtime-rule hot-update, which generates
-bytecode at runtime, is unavailable:</p>
+bytecode at runtime, is unavailable. TAL rules have no debug probes upstream either, and upstream has no
+runtime-rule catalog for them; to change them, edit the files under <code>tal/</code> and rebuild (see
+<a href="../configuration#trace-analyzer">Configuration</a>):</p>
 <table>
   <thead>
       <tr>
@@ -1762,16 +1815,17 @@ distribution if you need hot-update.</p>
       </tr>
       <tr>
           <td>TLS/SSL</td>
-          <td>Supported (gRPC SSL, mTLS)</td>
-          <td>Not supported (use service mesh)</td>
+          <td>gRPC TLS on OpenSSL (<code>netty_tcnative</code>)</td>
+          <td>Same settings; gRPC TLS on the JDK TLS provider</td>
       </tr>
   </tbody>
 </table>
 <h2 id="compatibility">Compatibility</h2>
 <ul>
 <li><strong>SkyWalking agents</strong>: All official SkyWalking agents are compatible (Java, .NET, Go, Python, Node.js, PHP, Rust, Ruby, C++, Satellite)</li>
-<li><strong>SkyWalking UI</strong>: Fully compatible — use the standard SkyWalking Booster UI</li>
-<li><strong>OpenTelemetry</strong>: OTLP metrics and logs via gRPC</li>
+<li><strong>SkyWalking UI</strong>: Fully compatible — use the Horizon UI, the official UI since SkyWalking 11.0.0</li>
+<li><strong>OpenTelemetry</strong>: OTLP traces, metrics and logs via gRPC and HTTP; traces analyzed by TAL</li>
+<li><strong>Grafana</strong>: TraceQL (Tempo) datasource when <code>traceQL</code> is enabled</li>
 <li><strong>Zipkin</strong>: Zipkin v2 API (receiver + query) when enabled</li>
 <li><strong>Prometheus</strong>: PromQL query API for Grafana integration</li>
 <li><strong>BanyanDB</strong>: Requires BanyanDB as the storage backend</li>
@@ -1780,7 +1834,7 @@ distribution if you need hot-update.</p>
 <pre tabindex="0"><code>                    ┌──────────────────────────────────┐
                     │   SkyWalking GraalVM Native OAP  │
 Agents ──gRPC──────►│                                  │
-OTLP ──gRPC────────►│  Receivers → Analyzers → Storage │──► BanyanDB
+OTLP ──gRPC/HTTP───►│  Receivers → Analyzers → Storage │──► BanyanDB
 Zipkin ──HTTP──────►│                                  │
                     │  Query APIs (GraphQL/PromQL/...)  │◄── SkyWalking UI
                     │  Alarm → Webhooks                │
@@ -1828,12 +1882,12 @@ Zipkin ──HTTP──────►│                                  │
             <li><a href="#query-apis">Query APIs</a></li>
             <li><a href="#analyzers">Analyzers</a></li>
             <li><a href="#other-modules">Other Modules</a></li>
+            <li><a href="#tls">TLS</a></li>
           </ul>
         </li>
         <li><a href="#optional-modules">Optional Modules</a></li>
         <li><a href="#known-limitations">Known Limitations</a>
           <ul>
-            <li><a href="#no-tlsssl-support-for-grpc">No TLS/SSL Support for gRPC</a></li>
             <li><a href="#dsl-rules-are-read-only-live-debugger-yes-hot-update-no">DSL Rules Are Read-Only (Live Debugger Yes, Hot-Update No)</a></li>
           </ul>
         </li>
@@ -1953,6 +2007,16 @@ Zipkin ──HTTP──────►│                                  │
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
 
 
 
