@@ -35,7 +35,7 @@ VERSION=$(asz version | cut -d &#39; &#39; -f 2) curl -fsSL -o asz.yaml &#34;htt
   <meta itemprop="description" content="Configuration One YAML file. asz reads the file given with -config, else asz.yaml in the working directory, else the built-in defaults. A file may leave keys out; anything unset takes its default. A file that lists one or more adapters replaces the whole default list; adapters: [] keeps the defaults.
 asz.yaml in the repository holds every default, written out. Download the one of your version to start from it:
 VERSION=$(asz version | cut -d &#39; &#39; -f 2) curl -fsSL -o asz.yaml &#34;https://raw.githubusercontent.com/apache/skywalking-ai-sessionizer/v$VERSION/asz.yaml&#34; storage Key Default Meaning root ./data Where collected data lands and conversations are assembled. A relative path is resolved from the working directory. retention.metadata_only_after -1 How long a conversation may be idle, with nothing new landed for it, before the root keeps only its metadata, to save disk: what was said and run is removed, and who did what, when, in what order and at what cost stays. New activity continues the same conversation. The removed content cannot be restored from the root; only a receiver that accepted it still has it. A duration such as 72h, or days such as 30d. It applies whether the conversation was sent or not, and whether an endpoint is set or not. -1 is off. See Retention. retention.retire_after -1 How long a conversation may be idle before everything of it is removed, its metadata too, and it is retired. A retired conversation is never collected again, even when its runtime resumes it. Set this longer than the runtime keeps its own history. It uses the same clock as metadata_only_after and must be at least as long. Equal values retire a conversation with no metadata-only step first. Setting it with metadata_only_after off or shorter than that value is a configuration error. When this is set, asz reports what it could inspect in Claude Code’s settings. It says that effective retention was not determined. It warns when this duration is shorter than the inspected cleanupPeriodDays or the reported default of 30 days. Kiro always warns when this is set. -1 is off. Only both off keeps everything. See Retirement. adapters A list of the sources asz collects from.">
-  <meta itemprop="wordCount" content="3006">
+  <meta itemprop="wordCount" content="3190">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Configuration">
   <meta name="twitter:description" content="Configuration One YAML file. asz reads the file given with -config, else asz.yaml in the working directory, else the built-in defaults. A file may leave keys out; anything unset takes its default. A file that lists one or more adapters replaces the whole default list; adapters: [] keeps the defaults.
@@ -1613,7 +1613,7 @@ VERSION=$(asz version | cut -d &#39; &#39; -f 2) curl -fsSL -o asz.yaml &#34;htt
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 07a2d95</div>
+                  <div class="commit-id">Commit Id: 19c5a89</div>
                 
 
 
@@ -1899,6 +1899,7 @@ data later.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">max_bytes_per_minute</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">0</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">logs</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">metrics</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">judgments</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">false</span><span style="color:#fff">
 </span></span></span></code></pre></div><table>
   <thead>
       <tr>
@@ -1962,6 +1963,11 @@ data later.</p>
           <td><code>metrics</code></td>
           <td><code>true</code></td>
           <td>Send the metrics. <code>logs</code> or <code>metrics</code> must be on.</td>
+      </tr>
+      <tr>
+          <td><code>judgments</code></td>
+          <td><code>false</code></td>
+          <td>Send the closed <a href="../judge">judge runs</a>, with the logs and only while <code>logs</code> is on. A run not sent while it is off is sent once it is on.</td>
       </tr>
   </tbody>
 </table>
@@ -2028,6 +2034,16 @@ nothing: collect its source again into a new root to withhold there.</p>
           <td><code>timeout</code></td>
           <td><code>30m</code></td>
           <td>How long one evaluator call may take. A stage cut into calls runs several, and a call that fails, a timeout included, is tried once more.</td>
+      </tr>
+      <tr>
+          <td><code>run_timeout</code></td>
+          <td><code>0</code></td>
+          <td>How long one whole run may take, all its stages together, such as <code>2h</code>. Past it the run keeps the stages that finished and closes, within two minutes. <code>-run-timeout</code> sets it for one command. <code>0</code> is no bound</td>
+      </tr>
+      <tr>
+          <td><code>max_steps</code></td>
+          <td><code>0</code></td>
+          <td>The most steps one run judges, the sub-tasks its main talks started included. A larger window is refused before anything is made or any model is called. <code>-max-steps</code> sets it for one command. <code>0</code> is no bound</td>
       </tr>
       <tr>
           <td><code>evaluators</code></td>
@@ -2220,6 +2236,10 @@ sessions, so neither does asz.</p>
 name. A filter ending in <code>/**</code> matches that path and everything beneath it; any other filter is a
 glob over the whole path. A session is left out only when every one of its paths is. Kiro records
 the real path, so on macOS a session started in <code>/tmp</code> is under <code>/private/tmp</code>.</p>
+<p>Whatever the filters say, a session with any workspace path inside the storage root is never
+collected: it is a judge evaluator&rsquo;s, which <code>kiro-cli</code> keeps while it works in a stage directory. Links
+are followed on both sides, and a path that no longer exists is resolved through the part that does.
+A session whose path cannot be resolved is left for the next pass, and a pass says how many it left.</p>
 
 </div>
 
@@ -2390,6 +2410,8 @@ the real path, so on macOS a session started in <code>/tmp</code> is under <code
 
     </div>
     
+
+
 
 
 

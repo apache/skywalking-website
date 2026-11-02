@@ -33,7 +33,7 @@ This document specifies how a measure query turns storage blocks into batches on
   <meta itemprop="name" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
   <meta itemprop="description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
 This document specifies how a measure query turns storage blocks into batches on a data node: partIter / tstIter, block decoding, blockCursor, and the scan orchestration in banyand/measure/query.go and query_batch.go. It is the companion of Measure batch v2, which defines the batch, the reference-counted cursor and the frame this scan produces and consumes.">
-  <meta itemprop="wordCount" content="4630">
+  <meta itemprop="wordCount" content="4902">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
   <meta name="twitter:description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
@@ -2095,7 +2095,7 @@ This document specifies how a measure query turns storage blocks into batches on
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: df26a73</div>
+                  <div class="commit-id">Commit Id: f8c5f5a</div>
                 
 
 
@@ -2337,6 +2337,32 @@ disjoint and overlapping blocks; W13-W15 are the entity-group and time-bucket sh
 <p>Peak decoded blocks of a time-ordered scan drop from every matching block to about one per series.
 The soak ran 5,488 queries in 70 s with every scan resource returning to baseline.</p>
 <hr>
+<h3 id="24-ql-count-scans-and-reusable-decoded-storage">2.4 QL count scans and reusable decoded storage</h3>
+<p>A local QL plan may consume complete series when <code>RawPlan.CanScanSeries</code> proves
+that row order cannot affect its result. The initial proof covers COUNT and
+COUNT DISTINCT, nonfallible row expressions, and grouped counts only when the
+existing final ORDER BY covers every grouping key. Hidden aggregate calls are
+checked too. SUM/AVG, MIN/MAX, time buckets, outer DISTINCT, and incomplete group
+ordering retain their existing scan order.</p>
+<p>The liaison carries this proof in the in-process <code>BatchQueryRequest.SeriesOrder</code>
+flag. Local dispatch accepts it only for a complete, single-group raw input,
+without native ordering, pagination, aggregation or partial output. It selects
+the existing series-order scan; it does not sort source rows in memory. The flag
+is not serialized. Distributed queries, multi-group queries and index-mode
+requests keep their current dispatch path. Within each series, existing segment
+merging and newest-version deduplication still apply.</p>
+<p>Series scans with a shared tracker can reuse query-owned decoded storage slots.
+Each slot retains its conservative reservation while idle. Reuse transfers actual
+timestamp/version, column, decoder and byte-arena backing to the next cursor;
+it does not refund or recycle cumulative admission credit. A slot must cover the
+next block&rsquo;s row and uncompressed-byte bounds independently. If no idle slot fits,
+allocating another slot requires another reservation. Duplicate source
+projections use ordinary decoding to avoid undercounting copied payloads.</p>
+<p>A slot becomes idle only after the cursor&rsquo;s final borrowing batch releases it.
+The existing tracked <code>measure-blockCursor</code> pool accounts for held cursors.
+Closing the scan releases idle slots; slots pinned by outstanding batches remain
+charged until those batches release. Per-active-block native/node reservations,
+shared query limits and monotonic admission lease semantics remain in force.</p>
 <h2 id="3-relationship-to-batch-v2">3. Relationship to batch v2</h2>
 <table>
   <thead>
@@ -2879,6 +2905,7 @@ per-cursor reservations), <code>scan_resources.go</code> (leak snapshots), <code
             <li><a href="#21-what-shipped">2.1 What shipped</a></li>
             <li><a href="#22-deviations-from-the-proposal">2.2 Deviations from the proposal</a></li>
             <li><a href="#23-measured-results">2.3 Measured results</a></li>
+            <li><a href="#24-ql-count-scans-and-reusable-decoded-storage">2.4 QL count scans and reusable decoded storage</a></li>
           </ul>
         </li>
         <li><a href="#3-relationship-to-batch-v2">3. Relationship to batch v2</a></li>
@@ -3016,6 +3043,8 @@ per-cursor reservations), <code>scan_resources.go</code> (leak snapshots), <code
 
     </div>
     
+
+
 
 
 

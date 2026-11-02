@@ -33,7 +33,7 @@ A stage file One stage file is one file of JSON lines, framed as a round is. Eve
   <meta itemprop="name" content="Session Judgment">
   <meta itemprop="description" content="Session Judgment Session Judgment is the record of a judge run: one file per stage of the run, written once. A file has the extension .sj, and the schema is sj/1. Package pkg/sessionjudge defines it. It is public: the exporter reads it to send a run, and a receiver reads it to store and list one, so nothing in it depends on how a run is made.
 A stage file One stage file is one file of JSON lines, framed as a round is. Every line carries t, its frame type. The first line is the header, then any number of body frames, then one commit.">
-  <meta itemprop="wordCount" content="3273">
+  <meta itemprop="wordCount" content="3535">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Session Judgment">
   <meta name="twitter:description" content="Session Judgment Session Judgment is the record of a judge run: one file per stage of the run, written once. A file has the extension .sj, and the schema is sj/1. Package pkg/sessionjudge defines it. It is public: the exporter reads it to send a run, and a receiver reads it to store and list one, so nothing in it depends on how a run is made.
@@ -1610,7 +1610,7 @@ A stage file One stage file is one file of JSON lines, framed as a round is. Eve
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 07a2d95</div>
+                  <div class="commit-id">Commit Id: 19c5a89</div>
                 
 
 
@@ -1979,6 +1979,8 @@ detects a truncated file.</p>
 <h2 id="on-disk">On disk</h2>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>&lt;session&gt;/judgments/
 </span></span><span style="display:flex;"><span>  j000001/                          one run
+</span></span><span style="display:flex;"><span>    admission.json                  why the run was admitted, written before its first stage
+</span></span><span style="display:flex;"><span>    .active                         its activity lock, held while the run or a regroup of it works
 </span></span><span style="display:flex;"><span>    s1-ledger-&lt;digest12&gt;.sj
 </span></span><span style="display:flex;"><span>    s2-targets-&lt;digest12&gt;.sj
 </span></span><span style="display:flex;"><span>    s3-achievement-&lt;digest12&gt;.sj
@@ -1995,6 +1997,79 @@ rebuilt from landed files. In the session&rsquo;s directory a run goes wherever 
 new run. <code>metadata_only_after</code> leaves runs as they are. A stage file is written once and made
 read-only, as a landed file is. Its name ends in <code>.sj</code>, never in a landed file&rsquo;s <code>-NNNNNN.sd</code>, so
 nothing that reads landed files takes it for one.</p>
+<h3 id="admission">Admission</h3>
+<p>A run is admitted in one decision, under the root lock: it is refused for a retired session, for one
+whose files a removal has not finished with, and while another run or regroup of the conversation is
+active. Its directory is then made, its activity lock taken and <code>admission.json</code> written, read-only,
+before the lock is released:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>id</code></td>
+          <td>the admission&rsquo;s own identifier</td>
+      </tr>
+      <tr>
+          <td><code>conversation</code>, <code>session</code></td>
+          <td>as in the header</td>
+      </tr>
+      <tr>
+          <td><code>trigger</code></td>
+          <td><code>command</code> for <code>asz judge</code>, <code>server</code> for asz server</td>
+      </tr>
+      <tr>
+          <td><code>round</code>, <code>digest</code></td>
+          <td>the head the run judges, as its header&rsquo;s <code>head</code></td>
+      </tr>
+      <tr>
+          <td><code>window</code></td>
+          <td>the window as the header carries it, absent for the whole conversation</td>
+      </tr>
+      <tr>
+          <td><code>hide</code></td>
+          <td>the flags whose records the evaluators were never shown, <code>judge.hide</code></td>
+      </tr>
+      <tr>
+          <td><code>admitted</code></td>
+          <td>when, RFC 3339</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>.active</code> is an empty file. Its holder keeps it locked for the whole life of the run, and of a regroup
+over the closed run, until every worker has returned and the cleanup has ended. Its contents are never
+read. Retention probes it, without waiting and without making it, and removes nothing of a session
+while one is held. A run is in one of four states:</p>
+<table>
+  <thead>
+      <tr>
+          <th>State</th>
+          <th>What the directory holds</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>closed</code></td>
+          <td>the close file</td>
+      </tr>
+      <tr>
+          <td><code>running</code></td>
+          <td>no close file, and <code>.active</code> held</td>
+      </tr>
+      <tr>
+          <td><code>stopped</code></td>
+          <td>no close file, <code>admission.json</code>, and <code>.active</code> free: the run ended before it closed, and nothing resumes or closes it</td>
+      </tr>
+      <tr>
+          <td><code>unknown</code></td>
+          <td>neither the close file nor <code>admission.json</code>: a run with no record of its admission</td>
+      </tr>
+  </tbody>
+</table>
 <h2 id="a-regroup">A regroup</h2>
 <p>A regroup is made over a closed run from a person&rsquo;s goals, a plain list in their own words. It is not
 a stage of the run: it has a file of its own beside the run&rsquo;s, named by its version,
@@ -2088,7 +2163,11 @@ earlier reader. A run is complete to a reader once its close file is there. The
             <li><a href="#commit">Commit</a></li>
           </ul>
         </li>
-        <li><a href="#on-disk">On disk</a></li>
+        <li><a href="#on-disk">On disk</a>
+          <ul>
+            <li><a href="#admission">Admission</a></li>
+          </ul>
+        </li>
         <li><a href="#a-regroup">A regroup</a></li>
         <li><a href="#reading-it">Reading it</a></li>
       </ul>
@@ -2204,6 +2283,8 @@ earlier reader. A run is complete to a reader once its close file is there. The
 
     </div>
     
+
+
 
 
 
