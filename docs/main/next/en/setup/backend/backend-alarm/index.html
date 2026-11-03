@@ -35,7 +35,7 @@ alerting rules. They define how metrics alerting should be triggered and what co
   <meta itemprop="description" content="Alerting Alerting mechanism measures system performance according to the metrics of services/instances/endpoints from different layers. Alerting kernel is an in-memory, time-window based queue.
 The alerting core is driven by a collection of rules defined in config/alarm-settings.yml. There are three parts to alerting rule definitions.
 alerting rules. They define how metrics alerting should be triggered and what conditions should be considered. hooks. The list of hooks, which should be called after an alerting is triggered. Entity name Defines the relation between scope and entity name.">
-  <meta itemprop="wordCount" content="3324">
+  <meta itemprop="wordCount" content="3698">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Alerting">
   <meta name="twitter:description" content="Alerting Alerting mechanism measures system performance according to the metrics of services/instances/endpoints from different layers. Alerting kernel is an in-memory, time-window based queue.
@@ -3974,7 +3974,7 @@ alerting rules. They define how metrics alerting should be triggered and what co
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 208cf57</div>
+                  <div class="commit-id">Commit Id: 12ff461</div>
                 
 
 
@@ -4533,6 +4533,95 @@ before sending the message. The gRPC hook does not use it.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">httpTimeout</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_ALARM_HTTP_TIMEOUT:12}<span style="color:#fff"> </span><span style="color:#57606a"># seconds</span><span style="color:#fff">
 </span></span></span></code></pre></div><p>The default is <code>12</code> seconds. Values <code>&lt;= 0</code> fall back to <code>12</code>.</p>
+<h3 id="http-delivery-so11y-metrics">HTTP delivery so11y metrics</h3>
+<p>When the OAP <a href="../backend-telemetry">telemetry</a> selector is <code>prometheus</code> (process-local scrape, default port <code>:1234</code>),
+each finished HTTP hook delivery records three metric families:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>alarm_http_delivery_total</code></td>
+          <td><code>hook_type</code>, <code>result</code></td>
+          <td>One increment per finished delivery attempt</td>
+      </tr>
+      <tr>
+          <td><code>alarm_http_delivery_status_total</code></td>
+          <td><code>hook_type</code>, <code>status_class</code></td>
+          <td>One increment per response, by its HTTP status class</td>
+      </tr>
+      <tr>
+          <td><code>alarm_http_delivery_latency_seconds</code></td>
+          <td><code>hook_type</code></td>
+          <td>Histogram of delivery wall time in seconds (<code>_bucket</code> / <code>_count</code> / <code>_sum</code>)</td>
+      </tr>
+  </tbody>
+</table>
+<p>Every series also carries <code>sw_backend_instance</code>.
+<code>hook_type</code> is one of <code>webhook</code> / <code>slack</code> / <code>wechat</code> / <code>dingtalk</code> / <code>feishu</code> / <code>welink</code> / <code>pagerduty</code> / <code>discord</code>.
+<code>status_class</code> is one of <code>2xx</code> / <code>3xx</code> / <code>4xx</code> / <code>5xx</code> / <code>other</code>. It is recorded only after the whole response body has
+been read; after a redirect it describes the final response. <code>result</code> says why a delivery succeeded or failed:</p>
+<table>
+  <thead>
+      <tr>
+          <th><code>result</code></th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>success</code></td>
+          <td>A 2xx response whose body reports no platform error</td>
+      </tr>
+      <tr>
+          <td><code>auth_failed</code></td>
+          <td>HTTP 401 / 403, or a platform error code for a bad token, key, signature or IP whitelist</td>
+      </tr>
+      <tr>
+          <td><code>rate_limited</code></td>
+          <td>HTTP 429, or a platform error code for frequency control</td>
+      </tr>
+      <tr>
+          <td><code>rejected</code></td>
+          <td>Any other response below 500 that is not a success, or any other platform error code, such as a missing keyword</td>
+      </tr>
+      <tr>
+          <td><code>server_error</code></td>
+          <td>HTTP 5xx, or a platform error code for a server-side failure</td>
+      </tr>
+      <tr>
+          <td><code>token_error</code></td>
+          <td>The WeLink access-token request got no response, or a response that could not be read</td>
+      </tr>
+      <tr>
+          <td><code>timeout</code></td>
+          <td>No complete response within <code>httpTimeout</code></td>
+      </tr>
+      <tr>
+          <td><code>io_error</code></td>
+          <td>The request failed without a response, for example a refused or reset connection, or a DNS or TLS failure</td>
+      </tr>
+      <tr>
+          <td><code>interrupted</code></td>
+          <td>The delivery thread was interrupted</td>
+      </tr>
+  </tbody>
+</table>
+<p>DingTalk, WeCom (<code>wechat</code>), Feishu and WeLink answer a message they refuse with an error code in the body, often with
+HTTP 200. Such a response counts by its error code, with the <code>status_class</code> of its HTTP status, and is logged as a
+failure like a non-2xx response.</p>
+<p>WeLink fetches an access token before it sends the messages of a webhook URL. A successful token request is not a
+delivery and is not counted. A failed one is counted once, with the result its response gives, such as <code>auth_failed</code>
+for rejected credentials, and the messages of that URL are not sent.</p>
+<p>The <a href="../dashboards-so11y">OAP self observability dashboard</a> charts these metrics as
+<code>meter_oap_instance_alarm_http_delivery_count</code>, <code>meter_oap_instance_alarm_http_delivery_status_count</code> and
+<code>meter_oap_instance_alarm_http_delivery_latency_percentile</code>, and the OAP
+<a href="../backend-telemetry#grafana-visualization">Grafana dashboards</a> chart the raw series.</p>
 <h2 id="update-the-settings-dynamically">Update the settings dynamically</h2>
 <p>Since 6.5.0, the alerting settings can be updated dynamically at runtime by <a href="../dynamic-config">Dynamic Configuration</a>,
 which will override the settings in <code>alarm-settings.yml</code>.</p>
@@ -4691,6 +4780,7 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
             <li><a href="#pagerduty">PagerDuty</a></li>
             <li><a href="#discord">Discord</a></li>
             <li><a href="#http-delivery-timeout">HTTP delivery timeout</a></li>
+            <li><a href="#http-delivery-so11y-metrics">HTTP delivery so11y metrics</a></li>
           </ul>
         </li>
         <li><a href="#update-the-settings-dynamically">Update the settings dynamically</a>

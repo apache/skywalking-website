@@ -37,7 +37,7 @@ asz judge 0438c73b-2367-4ed5-9de3-13ef9a17ed01 It runs judge.plan and prints eac
 What an evaluator reads goes to the model behind it.
 Run it The conversation must be collected and parsed, as asz collect or asz server does.
 asz judge 0438c73b-2367-4ed5-9de3-13ef9a17ed01 It runs judge.plan and prints each target’s outcome and cost when the run closes. -round N judges the conversation as it was at round N of its chain. To give every stage to one evaluator, or each stage to its own:">
-  <meta itemprop="wordCount" content="2196">
+  <meta itemprop="wordCount" content="2617">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Judge a Conversation">
   <meta name="twitter:description" content="Judge a Conversation asz judge measures one collected conversation: the targets the person set, whether each was achieved, what each cost in tokens, money and time, and how much went to avoidable work. The Conversation Judge page explains what it answers.
@@ -1616,7 +1616,7 @@ asz judge 0438c73b-2367-4ed5-9de3-13ef9a17ed01 It runs judge.plan and prints eac
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 19c5a89</div>
+                  <div class="commit-id">Commit Id: 8c0a876</div>
                 
 
 
@@ -1821,6 +1821,39 @@ removed, and <code>R1.txt</code>, the text the evaluators read.</p>
 <p>When <code>export.otlp.endpoint</code> is set and <code>export.otlp.judgments</code> is on, <code>asz collect</code>, <code>asz server</code> and
 <code>asz push</code> send each run once it has closed. A run of a pulled snapshot is not sent: it stays in the snapshot, and expires with it. See
 <a href="../export-otlp">Export over OpenTelemetry</a>.</p>
+<h2 id="judge-in-asz-server">Judge in asz server</h2>
+<p><code>asz server</code> can judge on its own, after its passes. Turn it on, and set both limits, since nobody
+watches a run it starts:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">judge</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">run_timeout</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>2h<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">max_steps</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">3000</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">server</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">enabled</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">idle_after</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>2h<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">runs_per_day</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">10</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>A conversation is judged once nothing has been collected for it for <code>idle_after</code>, at least 10 minutes,
+and the server&rsquo;s last pass collected and parsed all of it. It is judged again each time it goes on and
+goes quiet. A run judges the main talks a run would now be shown differently from what the last
+automatic run that judged them was shown, from the first such talk to the last, with the talks before
+them as context. A window larger than <code>max_steps</code> is judged in parts, one run each. A single talk larger
+than it is skipped, and the status lists it; judge it with <code>asz judge -from-id T -to-id T</code>.</p>
+<p>Only talks with work recorded at or after <code>since</code> are judged. Empty, it is the moment the policy was
+first turned on for the root, so turning it on never judges history. One automatic run goes at a time,
+and at most <code>runs_per_day</code> are admitted in any 24 hours, failed and stopped ones included. A run that did
+not close <code>complete</code> is judged again only after something new is collected for its conversation.</p>
+<p>The server judges what <code>claude-code-local</code> and <code>kiro-local</code> collect, with <code>judge.plan</code>. It does not
+start when <code>idle_after</code> is under 10 minutes, when <code>max_steps</code> or <code>run_timeout</code> is 0, when the plan has a
+<code>reference</code> or <code>divergence</code> stage or gives a stage to <code>kiro-cli</code>, or over a scenario root. A server that
+makes one pass judges nothing on its own.</p>
+<p>The status line of the page says how many conversations are due and which one is being judged.
+<code>/api/status</code> holds the details under <code>judge</code>, including how many conversations are not due and why.
+<code>asz judge -list</code> shows a run the server started as <code>by server</code>, with how many talks it judged and the
+last record time it was shown.</p>
+<p>A run started with <code>asz judge</code> is never taken as judging a conversation, and while one is going the
+server does not judge that conversation. Automatic runs judge only main talks and what they started; a
+run of the whole conversation with <code>asz judge</code> also judges the steps outside them.</p>
+<p>Ctrl-C stops admitting runs. The run going keeps the stages that finished and closes within two minutes,
+and a pass that is running finishes. Ctrl-C again stops at once.</p>
 <h2 id="evaluators">Evaluators</h2>
 <p><code>judge.evaluators</code> names the evaluators a stage can be given to. The defaults are three agents'
 command-line programs:</p>
@@ -1953,6 +1986,7 @@ page: <code>system_prompt</code>, <code>tool_schemas</code>.</p>
       <ul>
         <li><a href="#run-it">Run it</a></li>
         <li><a href="#read-the-results">Read the results</a></li>
+        <li><a href="#judge-in-asz-server">Judge in asz server</a></li>
         <li><a href="#evaluators">Evaluators</a></li>
         <li><a href="#prices">Prices</a></li>
         <li><a href="#keep-things-from-the-evaluators">Keep things from the evaluators</a></li>
