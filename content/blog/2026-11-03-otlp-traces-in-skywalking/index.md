@@ -2,7 +2,6 @@
 title: "OpenTelemetry Traces in SkyWalking: Native Storage, Metrics and Topology"
 author: "Kai Wan"
 date: 2026-11-03
-draft: true
 description: "SkyWalking now stores OTLP traces as they arrive and turns them into service metrics, topology and database, cache and MQ dashboards through the new Trace Analysis Language. This quick start runs the OpenTelemetry Astronomy Shop against SkyWalking with one command, and shows what to set in your own applications."
 tags:
   - Tracing
