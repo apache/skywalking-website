@@ -33,7 +33,7 @@ Every shipped BanyanDB binary accepts the same four logging flags: the server (s
   <meta itemprop="name" content="Logging">
   <meta itemprop="description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the logging-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
 Every shipped BanyanDB binary accepts the same four logging flags: the server (standalone, data, liaison), backup, restore, lifecycle, migration, the FODC proxy and the FODC agent. Each flag is also bound to an environment variable named after it, prefixed with BYDB_ and upper-cased with dashes replaced by underscores, which is the usual way to configure them in a container:">
-  <meta itemprop="wordCount" content="2178">
+  <meta itemprop="wordCount" content="2339">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Logging">
   <meta name="twitter:description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the logging-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
@@ -2095,7 +2095,7 @@ Every shipped BanyanDB binary accepts the same four logging flags: the server (s
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 525b69e</div>
+                  <div class="commit-id">Commit Id: 27349fd</div>
                 
 
 
@@ -2191,7 +2191,8 @@ so no level silences it.</p>
 </span></span></code></pre></div><h2 id="native-self-storage">Native Self-Storage</h2>
 <p>BanyanDB can store its own log events in BanyanDB, alongside the measures native observability already writes into <code>_monitoring</code>. It is off by default and adds a second destination rather than replacing the normal one, which stays enabled and is never degraded by it.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>banyand standalone --logging-native-enabled --logging-native-level<span style="color:#0550ae">=</span>info
-</span></span></code></pre></div><p>Events land in the <code>_monitoring_log</code> group as elements of a stream named <code>log</code>, queryable through the ordinary stream API:</p>
+</span></span></code></pre></div><p>The <code>standalone</code>, <code>data</code> and <code>liaison</code> roles support it. A standalone or data node stores its own events locally. A liaison has no storage, so it writes its events as a stream write: over its liaison client to the write queue of a liaison, which syncs them to the data node of shard 0 of <code>_monitoring_log</code>. While no data node can take them, the write queue keeps them on the liaison&rsquo;s disk, as it does every stream write.</p>
+<p>Events land in the <code>_monitoring_log</code> group as elements of a stream named <code>log</code>, queryable through the ordinary stream API:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>bydbctl stream query -f - <span style="color:#0a3069">&lt;&lt;EOF
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">name: &#34;log&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">groups: [&#34;_monitoring_log&#34;]
@@ -2308,7 +2309,7 @@ so no level silences it.</p>
   </tbody>
 </table>
 <p>Note the consequence: an <code>info</code> event dropped by the buffer has no copy on stderr. Losses are counted rather than silent, under <code>banyandb_logging_native_log_dropped_total{reason}</code>, with <code>banyandb_logging_native_log_written_total</code> and the buffer gauges alongside. <code>banyandb_logging_native_log_buffer_bytes</code> has a <code>state</code> label: <code>queued</code> is waiting to be written and <code>in_flight</code> is being written, so a stalled write shows as <code>in_flight</code> that does not fall. Those counters travel the same transport as the events they count, so keeping <code>--observability-modes=prometheus</code> enabled is what makes a loss visible during an outage.</p>
-<p>The <code>reason</code> label takes one of nine values, so a loss is always attributable to a stage:</p>
+<p>The <code>reason</code> label takes one of ten values, so a loss is always attributable to a stage:</p>
 <table>
   <thead>
       <tr>
@@ -2340,7 +2341,7 @@ so no level silences it.</p>
       </tr>
       <tr>
           <td><code>publish_failed</code></td>
-          <td>the batch did not reach storage</td>
+          <td>the batch did not reach storage, or on a liaison the write queue</td>
           <td>look at the write path — the whole batch is lost, never re-queued</td>
       </tr>
       <tr>
@@ -2359,6 +2360,11 @@ so no level silences it.</p>
           <td>expected only at startup; if it persists, the stream service did not start</td>
       </tr>
       <tr>
+          <td><code>locate_failed</code></td>
+          <td>a liaison found no liaison to write <code>_monitoring_log</code> to after 10 retries, one per flush interval</td>
+          <td>expected only at startup; if it persists, check that the liaison sees itself in its liaison route table</td>
+      </tr>
+      <tr>
           <td><code>shutdown_deadline</code></td>
           <td>still buffered, or in a stuck write, when the drain deadline passed, or logged after shutdown began</td>
           <td>expected on a busy node during shutdown</td>
@@ -2367,11 +2373,11 @@ so no level silences it.</p>
 </table>
 <p>Logging caused by storing native logs is never stored, or one stored line could produce the next. That logging still reaches the console. Two modules are reserved for it, and <code>--logging-native-exclude-modules</code> cannot remove them:</p>
 <ul>
-<li><code>NATIVE-LOG</code> is the native log service. While the write path handles a native write, it logs as a child of <code>NATIVE-LOG</code>, for example <code>NATIVE-LOG.STREAM</code>. The same write path logs as before for every other write, so ordinary <code>STREAM</code> and <code>STORAGE</code> logs are collected.</li>
+<li><code>NATIVE-LOG</code> is the native log service. While the write path handles a native write, it logs as a child of <code>NATIVE-LOG</code>, for example <code>NATIVE-LOG.STREAM</code>. The same write path logs as before for every other write, so ordinary <code>STREAM</code> and <code>STORAGE</code> logs are collected. A liaison&rsquo;s client logs about a native log batch as <code>NATIVE-LOG.QUEUE-PUB</code>, and the liaison&rsquo;s write queue logs about the <code>_monitoring_log</code> events it received as a child of <code>NATIVE-LOG</code> too.</li>
 <li><code>_MONITORING_LOG</code> is the log group&rsquo;s own storage. A storage logger is named after its group, so its segments, shards, flushes and merges log under it.</li>
 </ul>
 <p>A blank entry in <code>--logging-native-exclude-modules</code> is ignored.</p>
-<p>An event logged without a level is stored with the level <code>none</code>, because the level is half the series key and an empty one cannot be queried. Such an event arrives with no severity at all — a library writing through a standard <code>log.Logger</code> produces one — so it is admitted as an informational event and obeys <code>--logging-native-level</code> like any other. The buffer is bounded and in-memory only &ndash; no queue files, no write-ahead log, no disk fallback &ndash; and it never blocks the caller: at its bound the newest event is dropped and counted, so a burst keeps the head that explains it.</p>
+<p>An event logged without a level is stored with the level <code>none</code>, because the level is half the series key and an empty one cannot be queried. Such an event arrives with no severity at all — a library writing through a standard <code>log.Logger</code> produces one — so it is admitted as an informational event and obeys <code>--logging-native-level</code> like any other. The buffer is bounded and in-memory only &ndash; no queue files, no write-ahead log, no disk fallback; on a liaison, the write queue past it is the normal stream path &ndash; and it never blocks the caller: at its bound the newest event is dropped and counted, so a burst keeps the head that explains it.</p>
 <p><code>restore</code> and <code>migration</code> do not offer these flags at all. Both run when the data tier is unavailable, and a tool that runs while the database is down cannot log into it.</p>
 <h2 id="slow-query-logging">Slow Query Logging</h2>
 <p>BanyanDB supports slow query logging. The <code>slow-query</code> flag is used to set the slow query threshold. If a query takes longer than the threshold, it will be logged as a slow query. The default value is <code>0</code>, which means no slow query logging. This flag is only used for the data and standalone servers.</p>
