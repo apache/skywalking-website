@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # Default values for SkyWalking versions
-$SW_VERSION = "11.0.0"
+$SW_VERSION = "11.1.0"
 $SW_HORIZON_UI_VERSION = "1.0.0"
 $SW_BANYANDB_VERSION = "0.11.1"
 
