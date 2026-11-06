@@ -33,7 +33,7 @@ A traced gateway that dials each version at its own address needs nothing: gatew
   <meta itemprop="name" content="Canary Releases">
   <meta itemprop="description" content="Canary Releases b has a canary, b-canary, which reports service.name=b-canary; requests carrying x-canary: v2 go to it, the others to b. How the topology tells the two apart depends on what routes the requests.
 A traced gateway that dials each version at its own address needs nothing: gateway-&gt;10.0.1.5:8080 → b and gateway-&gt;10.0.2.7:8080 → b-canary are two rows learned from the gateway’s own spans, so the topology reads a → gateway, gateway → b and gateway → b-canary, whether the split is by header, weight or blue/green. This is the setup to prefer: instrument the gateway.">
-  <meta itemprop="wordCount" content="478">
+  <meta itemprop="wordCount" content="528">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Canary Releases">
   <meta name="twitter:description" content="Canary Releases b has a canary, b-canary, which reports service.name=b-canary; requests carrying x-canary: v2 go to it, the others to b. How the topology tells the two apart depends on what routes the requests.
@@ -3979,7 +3979,7 @@ A traced gateway that dials each version at its own address needs nothing: gatew
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 0b519a6</div>
+                  <div class="commit-id">Commit Id: bc4b92a</div>
                 
 
 
@@ -4063,13 +4063,15 @@ the setup to prefer: <a href="../gateway-overview#instrumenting-a-gateway">instr
 pairs write one row, and the edge flips between <code>b</code> and <code>b-canary</code>. Make the version part of the peer on the gateway&rsquo;s
 own CLIENT spans, in the CLIENT block of your copy of <code>otlp-general.yaml</code>, after the peer is named and before
 <code>prepareNetworkAlias</code>:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>if (peer &amp;&amp; meta.service == &#34;&lt;gateway&gt;&#34; &amp;&amp; attr(&#34;http.request.header.x-canary&#34;) == &#34;v2&#34;) {
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>if (peer &amp;&amp; meta.service == &#34;&lt;gateway&gt;&#34;
+</span></span><span style="display:flex;"><span>    &amp;&amp; attr(&#34;http.request.header.x-canary&#34;, &#34;http.request.header.x_canary&#34;) == &#34;v2&#34;) {
 </span></span><span style="display:flex;"><span>  def peer = peer + &#34;(v2)&#34;
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p><strong>A router that emits no spans and is not a listed gateway</strong>, such as Istio routing on the header with the sidecars'
 tracing off, leaves the callers&rsquo; CLIENT spans as the only ones that dialed the address. Put the version on their
 peer:</p>
-<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>if (peer &amp;&amp; !isGateway(peer) &amp;&amp; attr(&#34;http.request.header.x-canary&#34;) == &#34;v2&#34;) {
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>if (peer &amp;&amp; !isGateway(peer)
+</span></span><span style="display:flex;"><span>    &amp;&amp; attr(&#34;http.request.header.x-canary&#34;, &#34;http.request.header.x_canary&#34;) == &#34;v2&#34;) {
 </span></span><span style="display:flex;"><span>  def peer = peer + &#34;(v2)&#34;
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>The canary&rsquo;s calls are then <code>a-&gt;b:8080(v2) → b-canary</code>, the others <code>a-&gt;b:8080 → b</code>, and each edge lands on its own
@@ -4080,8 +4082,11 @@ Without Instrumentation</a>.</p>
 <li><code>!isGateway(peer)</code> keeps a call to a gateway listed in <code>gateways.yml</code> as it is: <code>ingress:80(v2)</code> would no longer
 match the file, so the canary&rsquo;s calls would skip the gateway node the others end on.</li>
 <li>The header has to be on the CLIENT span the rule reads, which the SDKs capture only when asked, for example
-<code>OTEL_INSTRUMENTATION_HTTP_CLIENT_CAPTURE_REQUEST_HEADERS=x-canary</code> for the OpenTelemetry Java agent. The attribute
-is <code>http.request.header.x-canary</code>.</li>
+<code>OTEL_INSTRUMENTATION_HTTP_CLIENT_CAPTURE_REQUEST_HEADERS=x-canary</code> for the OpenTelemetry Java agent, or
+<code>OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_CLIENT_REQUEST=x-canary</code> for the OpenTelemetry Python <code>requests</code>
+instrumentation. The semantic conventions name the attribute <code>http.request.header.x-canary</code>; the Python
+instrumentation turns the dashes into underscores, <code>http.request.header.x_canary</code>, so the rules read both. The value
+is a list, <code>[&quot;v2&quot;]</code>, which the OAP joins with <code>,</code>, so a request that carries the header once reads as <code>v2</code>.</li>
 <li>Match the values you route on. Appending any header value as it comes makes a new peer, and a new pair to learn,
 per value.</li>
 <li>With a rule on the CLIENT span, a split by weight, or by anything that span does not carry, such as a header the
