@@ -17,7 +17,7 @@
 # Default values for SkyWalking versions
 $SW_VERSION = "11.1.0"
 $SW_HORIZON_UI_VERSION = "1.1.0"
-$SW_BANYANDB_VERSION = "0.11.1"
+$SW_BANYANDB_VERSION = "0.11.2"
 
 $COMPOSE_FILE_PATH = ".\docker-compose.yml"
 $HORIZON_CONFIG_PATH = ".\horizon.yaml"
