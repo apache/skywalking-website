@@ -1,7 +1,7 @@
 ---
 title: "Getting the Topology Right with OpenTelemetry Traces: Gateways, Queues and Databases"
 author: "Kai Wan"
-date: 2026-11-06
+date: 2026-11-09
 description: "SkyWalking draws its topology from OTLP spans alone. Gateways, message brokers and databases reached at several addresses are where that gets hard. This post runs each case on a laptop, shows the topology before and after, and the one change that fixes it."
 tags:
   - Tracing
