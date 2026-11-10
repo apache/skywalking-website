@@ -33,7 +33,7 @@ Every shipped BanyanDB binary accepts the same four logging flags: the server (s
   <meta itemprop="name" content="Logging">
   <meta itemprop="description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the logging-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
 Every shipped BanyanDB binary accepts the same four logging flags: the server (standalone, data, liaison), backup, restore, lifecycle, migration, the FODC proxy and the FODC agent. Each flag is also bound to an environment variable named after it, prefixed with BYDB_ and upper-cased with dashes replaced by underscores, which is the usual way to configure them in a container:">
-  <meta itemprop="wordCount" content="2339">
+  <meta itemprop="wordCount" content="2826">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Logging">
   <meta name="twitter:description" content="Logging BanyanDB uses the zerolog library for logging. The log level can be set using the logging-level flag. The supported log levels are debug, info, warn, error, and fatal. The default log level is info.
@@ -2105,7 +2105,7 @@ Every shipped BanyanDB binary accepts the same four logging flags: the server (s
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 5202a92</div>
+                  <div class="commit-id">Commit Id: 2b59473</div>
                 
 
 
@@ -2203,6 +2203,75 @@ so no level silences it.</p>
 <p>BanyanDB can store its own log events in BanyanDB, alongside the measures native observability already writes into <code>_monitoring</code>. It is off by default and adds a second destination rather than replacing the normal one, which stays enabled and is never degraded by it.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>banyand standalone --logging-native-enabled --logging-native-level<span style="color:#0550ae">=</span>info
 </span></span></code></pre></div><p>The <code>standalone</code>, <code>data</code> and <code>liaison</code> roles support it. A standalone or data node stores its own events locally. A liaison has no storage, so it writes its events as a stream write: over its liaison client to the write queue of a liaison, which syncs them to the data node of shard 0 of <code>_monitoring_log</code>. While no data node can take them, the write queue keeps them on the liaison&rsquo;s disk, as it does every stream write.</p>
+<h3 id="processes-with-no-storage">Processes with no storage</h3>
+<p><code>backup</code>, <code>lifecycle</code>, the FODC agent and the FODC proxy support it too. They have no storage engine and no way to create the schema, so each writes to one BanyanDB node, and that node keeps the schema:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Producer</th>
+          <th>Writes to</th>
+          <th>Connection</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>backup</code>, <code>lifecycle</code></td>
+          <td>the data node they serve, its cluster server</td>
+          <td>their <code>--grpc-addr</code>, <code>--enable-tls</code>, <code>--insecure</code> and <code>--cert</code></td>
+      </tr>
+      <tr>
+          <td>FODC agent beside a data node</td>
+          <td>that data node&rsquo;s cluster server</td>
+          <td><code>--logging-native-addr</code>, for example <code>127.0.0.1:17912</code>, with <code>--logging-native-route=cluster</code>, the default</td>
+      </tr>
+      <tr>
+          <td>FODC agent beside a liaison, FODC proxy</td>
+          <td>a liaison&rsquo;s gRPC port, through the public write API, as any client writes</td>
+          <td><code>--logging-native-addr</code>, for example <code>liaison:17912</code>; the agent beside a liaison also needs <code>--logging-native-route=public</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>The node they write to needs <code>--logging-native-receiver-enabled</code>. It creates the <code>_monitoring_log</code> group and stream and keeps checking them, as a node with <code>--logging-native-enabled</code> does, but it collects none of its own logs unless <code>--logging-native-enabled</code> is set too:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>banyand data --logging-native-receiver-enabled
+</span></span><span style="display:flex;"><span>lifecycle --grpc-addr<span style="color:#0550ae">=</span>127.0.0.1:17912 --logging-native-enabled
+</span></span><span style="display:flex;"><span>fodc-agent --logging-native-enabled --logging-native-addr<span style="color:#0550ae">=</span>127.0.0.1:17912
+</span></span></code></pre></div><p>A row carries the producer&rsquo;s identity: <code>node_type</code> is <code>backup</code>, <code>lifecycle</code>, <code>fodc-agent</code> or <code>fodc-proxy</code>, and <code>node_id</code> is <code>POD_NAME</code>, else the host name; the FODC agent uses <code>--pod-name</code>. The receiving node applies no level or module filter of its own: each producer filters with its own <code>--logging-native-*</code> flags.</p>
+<p>The FODC binaries have no other connection to reuse, so they take their own:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Flag</th>
+          <th>Default</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--logging-native-addr</code></td>
+          <td>–</td>
+          <td>where to write; needed by <code>--logging-native-enabled</code>, which is refused at startup without it</td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-route</code></td>
+          <td><code>cluster</code></td>
+          <td>FODC agent only: <code>cluster</code> writes to a data node&rsquo;s cluster server, <code>public</code> through a liaison&rsquo;s public write API. A liaison refuses the cluster route, so an agent beside a liaison drops every event as <code>publish_failed</code> without <code>public</code></td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-tls</code> / <code>--logging-native-ca-cert</code></td>
+          <td><code>false</code> / –</td>
+          <td>TLS for that connection only; without a CA file the system roots verify the server</td>
+      </tr>
+      <tr>
+          <td><code>--logging-native-username</code> / <code>--logging-native-password</code></td>
+          <td>–</td>
+          <td>the credentials sent to a liaison whose authentication is on; the user needs write permission on <code>_monitoring_log</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>Their counters are where the process serves metrics: <code>lifecycle</code> and the FODC agent on their <code>/metrics</code>, the FODC proxy on its <code>/metrics</code> after the metrics collected from the agents. <code>backup</code> serves none: it writes each loss to stderr as it happens, and a summary of what it dropped when it exits.</p>
+<blockquote>
+<p>A data node without <code>--logging-native-receiver-enabled</code> refuses these writes as writes to a missing stream, but its write path reports success to the sender, so <code>backup</code>, <code>lifecycle</code> and an FODC agent beside a data node count the events as written (apache/skywalking#14158). A liaison reports the missing stream per event, so the FODC proxy and an agent beside a liaison count them as <code>schema_unavailable</code>.</p>
+</blockquote>
 <p>Events land in the <code>_monitoring_log</code> group as elements of a stream named <code>log</code>, queryable through the ordinary stream API:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>bydbctl stream query -f - <span style="color:#0a3069">&lt;&lt;EOF
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">name: &#34;log&#34;
@@ -2352,7 +2421,7 @@ so no level silences it.</p>
       </tr>
       <tr>
           <td><code>publish_failed</code></td>
-          <td>the batch did not reach storage, or on a liaison the write queue</td>
+          <td>the batch did not reach storage, or on a liaison the write queue; for a process with no storage, the node refused it, did not answer in time, or refused its credentials</td>
           <td>look at the write path — the whole batch is lost, never re-queued</td>
       </tr>
       <tr>
@@ -2367,8 +2436,8 @@ so no level silences it.</p>
       </tr>
       <tr>
           <td><code>destination_unready</code></td>
-          <td>the local write path still had no subscriber after 10 retries, one per flush interval</td>
-          <td>expected only at startup; if it persists, the stream service did not start</td>
+          <td>the local write path still had no subscriber, or a process with no storage had no connection to its node, after 10 retries, one per flush interval</td>
+          <td>expected only at startup; if it persists, the stream service did not start, or the producer cannot reach its node</td>
       </tr>
       <tr>
           <td><code>locate_failed</code></td>
@@ -2384,7 +2453,7 @@ so no level silences it.</p>
 </table>
 <p>Logging caused by storing native logs is never stored, or one stored line could produce the next. That logging still reaches the console. Two modules are reserved for it, and <code>--logging-native-exclude-modules</code> cannot remove them:</p>
 <ul>
-<li><code>NATIVE-LOG</code> is the native log service. While the write path handles a native write, it logs as a child of <code>NATIVE-LOG</code>, for example <code>NATIVE-LOG.STREAM</code>. The same write path logs as before for every other write, so ordinary <code>STREAM</code> and <code>STORAGE</code> logs are collected. A liaison&rsquo;s client logs about a native log batch as <code>NATIVE-LOG.QUEUE-PUB</code>, and the liaison&rsquo;s write queue logs about the <code>_monitoring_log</code> events it received as a child of <code>NATIVE-LOG</code> too.</li>
+<li><code>NATIVE-LOG</code> is the native log service. While the write path handles a native write, it logs as a child of <code>NATIVE-LOG</code>, for example <code>NATIVE-LOG.STREAM</code>. The same write path logs as before for every other write, so ordinary <code>STREAM</code> and <code>STORAGE</code> logs are collected. A liaison&rsquo;s client logs about a native log batch as <code>NATIVE-LOG.QUEUE-PUB</code>, and the liaison&rsquo;s write queue and a data node&rsquo;s write path log about the <code>_monitoring_log</code> events they received as children of <code>NATIVE-LOG</code> too. A process with no storage logs about its connection to its node as <code>NATIVE-LOG.CLIENT</code>.</li>
 <li><code>_MONITORING_LOG</code> is the log group&rsquo;s own storage. A storage logger is named after its group, so its segments, shards, flushes and merges log under it.</li>
 </ul>
 <p>A blank entry in <code>--logging-native-exclude-modules</code> is ignored.</p>
@@ -2465,6 +2534,7 @@ so no level silences it.</p>
       <ul>
         <li><a href="#native-self-storage">Native Self-Storage</a>
           <ul>
+            <li><a href="#processes-with-no-storage">Processes with no storage</a></li>
             <li><a href="#what-is-stored-where">What is stored where</a></li>
             <li><a href="#filtering">Filtering</a></li>
           </ul>
@@ -2587,6 +2657,20 @@ so no level silences it.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
