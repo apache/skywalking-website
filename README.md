@@ -31,6 +31,13 @@ featured cards and menu shortcuts; the top-level `menu` list configures shortcut
 groups. Project shortcuts open the matching catalog card, where visitors can
 choose documentation or downloads.
 
+An entry with `partOf: <repo>` instead of `repo` and `user` is one capability of
+that project, such as OpenTelemetry (OTLP) of the main repository. Its card links
+to that project's GitHub repository and to a single `docs.link`: a page inside that
+project's documentation, or an HTTP(S) URL. It has no releases, images or doc
+pins of its own, and counts no stars, contributors, documentation builds or
+downloads. It can have a `menu` shortcut.
+
 Development documentation belongs in the project's `docs.link`, and `docs.latest`
 is where the Latest tree is served. Released versions belong in `releases`, with
 exactly one `latest: true` when the list is nonempty. Projects

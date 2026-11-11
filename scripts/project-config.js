@@ -28,6 +28,7 @@ function validateProjectConfig(config) {
   const catalogIds = new Set();
   const repos = new Set();
   const localDocs = new Set();
+  const parts = new Map();
 
   function validateDocs(docs, project, version, where) {
     check(isObject(docs), `${where} must be an object`);
@@ -45,8 +46,27 @@ function validateProjectConfig(config) {
     if (docs.label !== undefined) check(isText(docs.label), `${where}.label must be a nonempty string`);
   }
 
+  // An entry that is part of another project (`partOf`), such as one capability of the main
+  // repository, has a card and a single docs link. It links to that project's repository and has
+  // no repository, releases or images of its own, so stars, contributors, documentation builds
+  // and downloads never count it twice.
+  function validatePart(project, where) {
+    ['name', 'description'].forEach(field => check(isText(project[field]), `${where}.${field} must be a nonempty string`));
+    check(isText(project.partOf) && /^[a-z0-9_.-]+$/i.test(project.partOf), `${where}.partOf must be a repository name`);
+    ['user', 'repo', 'repoUrl', 'archive', 'extraContributors', 'featured', 'releases', 'dockerImages', 'downloadAliases'].forEach(field =>
+      check(project[field] === undefined, `${where}.${field} is not allowed on an entry that is part of ${project.partOf}`));
+    const key = `${project.partOf}/${project.name}`.toLowerCase();
+    check(!parts.has(key), `duplicate entry ${project.name} in ${project.partOf}`);
+    parts.set(key, {project, where});
+    check(isObject(project.docs), `${where}.docs must be an object`);
+    const link = project.docs.link;
+    check(isWebLink(link) || (typeof link === 'string' && /^\/docs\/[^/?#\s]+\/[^?#\s]*\/$/.test(link)), `${where}.docs.link must be a /docs/ path ending in / or an HTTP(S) URL`);
+    ['latest', 'commitId', 'label'].forEach(field => check(project.docs[field] === undefined, `${where}.docs.${field} is not allowed: the entry has one docs link`));
+  }
+
   function validateProject(project, where) {
     check(isObject(project), `${where} must be an object`);
+    if (project.partOf !== undefined) return validatePart(project, where);
     ['name', 'repo', 'user', 'description'].forEach(field => check(isText(project[field]), `${where}.${field} must be a nonempty string`));
     check(/^[a-z0-9_.-]+$/i.test(project.repo), `${where}.repo must be a repository name`);
     check(/^[a-z0-9_-]+$/i.test(project.user), `${where}.user must be a GitHub owner`);
@@ -123,6 +143,18 @@ function validateProjectConfig(config) {
     catalogIds.add(catalog.id);
     check(Array.isArray(catalog.projects), `${where}.projects must be an array`);
     catalog.projects.forEach((project, projectIndex) => validateProject(project, `${where}.projects[${projectIndex}]`));
+  });
+  const owners = config.catalogs.flatMap(catalog => catalog.projects).filter(project => project.partOf === undefined);
+  parts.forEach(({project, where}) => {
+    // Exact spelling: the site looks the parent up by its repo, case-sensitively.
+    const parent = owners.find(owner => owner.repo === project.partOf);
+    check(parent, `${where}.partOf names no project with repo ${project.partOf}`);
+    if (project.docs.link.startsWith('/')) {
+      const parentLink = parent.docs && typeof parent.docs.link === 'string' ? parent.docs.link : '';
+      // Normalized, so a `..` segment cannot leave the parent's documentation.
+      const partPath = new URL(project.docs.link, 'https://skywalking.apache.org').pathname;
+      check(parentLink.startsWith('/docs/') && partPath.startsWith(`/docs/${parentLink.split('/')[2]}/`), `${where}.docs.link must be in the documentation of ${project.partOf}`);
+    }
   });
   validateProject(config.showcase, 'showcase');
   if (config.website) validateProject(config.website, 'website');
@@ -212,7 +244,8 @@ function deriveDocsList(config) {
   const quickStart = {type: 'Quick Start', buttonText: 'Showcase', list: [docsProject(config.showcase)]};
   if (config.website) quickStart.list.push(docsProject(config.website));
   return [quickStart, ...config.catalogs.map(catalog => {
-    const group = {type: catalog.name, list: catalog.projects.map(docsProject)};
+    // An entry that is part of another project builds no docs and counts no repository.
+    const group = {type: catalog.name, list: catalog.projects.filter(project => project.partOf === undefined).map(docsProject)};
     if (catalog.description !== undefined) group.description = catalog.description;
     if (catalog.buttonText !== undefined) group.buttonText = catalog.buttonText;
     if (catalog.note) group.list.unshift({name: null, descriptionItem: catalog.note});
