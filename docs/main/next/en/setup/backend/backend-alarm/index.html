@@ -35,7 +35,7 @@ alerting rules. They define how metrics alerting should be triggered and what co
   <meta itemprop="description" content="Alerting Alerting mechanism measures system performance according to the metrics of services/instances/endpoints from different layers. Alerting kernel is an in-memory, time-window based queue.
 The alerting core is driven by a collection of rules defined in config/alarm-settings.yml. There are three parts to alerting rule definitions.
 alerting rules. They define how metrics alerting should be triggered and what conditions should be considered. hooks. The list of hooks, which should be called after an alerting is triggered. Entity name Defines the relation between scope and entity name.">
-  <meta itemprop="wordCount" content="3698">
+  <meta itemprop="wordCount" content="3832">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Alerting">
   <meta name="twitter:description" content="Alerting Alerting mechanism measures system performance according to the metrics of services/instances/endpoints from different layers. Alerting kernel is an in-memory, time-window based queue.
@@ -4074,7 +4074,7 @@ alerting rules. They define how metrics alerting should be triggered and what co
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 06fb9ae</div>
+                  <div class="commit-id">Commit Id: b0a3065</div>
                 
 
 
@@ -4637,9 +4637,15 @@ before sending the message. The gRPC hook does not use it.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">httpTimeout</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_ALARM_HTTP_TIMEOUT:12}<span style="color:#fff"> </span><span style="color:#57606a"># seconds</span><span style="color:#fff">
 </span></span></span></code></pre></div><p>The default is <code>12</code> seconds. Values <code>&lt;= 0</code> fall back to <code>12</code>.</p>
-<h3 id="http-delivery-so11y-metrics">HTTP delivery so11y metrics</h3>
+<h3 id="grpc-delivery-timeout">gRPC delivery timeout</h3>
+<p>Each gRPC alarm/recovery stream uses one deadline (connect + wait for the peer). It does not use <code>httpTimeout</code>.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">alarm</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">grpcTimeout</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_ALARM_GRPC_TIMEOUT:10}<span style="color:#fff"> </span><span style="color:#57606a"># seconds</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>Default <code>10</code> seconds; <code>&lt;= 0</code> falls back to <code>10</code>. Set in <code>config/application.yml</code> (not <code>alarm-settings.yml</code>), so it is not dynamic.</p>
+<h3 id="alarm-delivery-so11y-metrics">Alarm delivery so11y metrics</h3>
 <p>When the OAP <a href="../backend-telemetry">telemetry</a> selector is <code>prometheus</code> (process-local scrape, default port <code>:1234</code>),
-each finished HTTP hook delivery records three metric families:</p>
+each finished alarm hook delivery records up to three metric families:</p>
 <table>
   <thead>
       <tr>
@@ -4667,9 +4673,10 @@ each finished HTTP hook delivery records three metric families:</p>
   </tbody>
 </table>
 <p>Every series also carries <code>sw_backend_instance</code>.
-<code>hook_type</code> is one of <code>webhook</code> / <code>slack</code> / <code>wechat</code> / <code>dingtalk</code> / <code>feishu</code> / <code>welink</code> / <code>pagerduty</code> / <code>discord</code>.
-<code>status_class</code> is one of <code>2xx</code> / <code>3xx</code> / <code>4xx</code> / <code>5xx</code> / <code>other</code>. It is recorded only after the whole response body has
-been read; after a redirect it describes the final response. <code>result</code> says why a delivery succeeded or failed:</p>
+<code>hook_type</code> is one of <code>webhook</code> / <code>slack</code> / <code>wechat</code> / <code>dingtalk</code> / <code>feishu</code> / <code>welink</code> / <code>pagerduty</code> / <code>discord</code> / <code>gRPC</code>.
+<code>status_class</code> is one of <code>2xx</code> / <code>3xx</code> / <code>4xx</code> / <code>5xx</code> / <code>other</code>. HTTP hooks record it after the whole response body has
+been read; after a redirect it describes the final response. gRPC hooks do not record <code>alarm_http_delivery_status_total</code>.
+<code>result</code> says why a delivery succeeded or failed:</p>
 <table>
   <thead>
       <tr>
@@ -4716,6 +4723,12 @@ been read; after a redirect it describes the final response. <code>result</code>
       </tr>
   </tbody>
 </table>
+<p>For <code>hook_type=gRPC</code>, each finished alarm or recovery stream is one delivery attempt (alarms and recoveries share the
+same <code>hook_type</code>). A failed stream maps gRPC status codes to the same <code>result</code> labels: <code>DEADLINE_EXCEEDED</code> → <code>timeout</code>;
+<code>UNAVAILABLE</code> → <code>io_error</code>; <code>UNAUTHENTICATED</code> / <code>PERMISSION_DENIED</code> → <code>auth_failed</code>; <code>RESOURCE_EXHAUSTED</code> →
+<code>rate_limited</code>; <code>UNKNOWN</code> / <code>INTERNAL</code> / <code>DATA_LOSS</code> / <code>UNIMPLEMENTED</code> → <code>server_error</code>; any other code (including peer
+<code>CANCELLED</code>) → <code>rejected</code>. An OAP wait interrupted is <code>interrupted</code> and wins over a concurrent stream status such as
+<code>DEADLINE_EXCEEDED</code>.</p>
 <p>DingTalk, WeCom (<code>wechat</code>), Feishu and WeLink answer a message they refuse with an error code in the body, often with
 HTTP 200. Such a response counts by its error code, with the <code>status_class</code> of its HTTP status, and is logged as a
 failure like a non-2xx response.</p>
@@ -4884,7 +4897,8 @@ the sliding window will be destroyed and re-created, causing the Alarm of this s
             <li><a href="#pagerduty">PagerDuty</a></li>
             <li><a href="#discord">Discord</a></li>
             <li><a href="#http-delivery-timeout">HTTP delivery timeout</a></li>
-            <li><a href="#http-delivery-so11y-metrics">HTTP delivery so11y metrics</a></li>
+            <li><a href="#grpc-delivery-timeout">gRPC delivery timeout</a></li>
+            <li><a href="#alarm-delivery-so11y-metrics">Alarm delivery so11y metrics</a></li>
           </ul>
         </li>
         <li><a href="#update-the-settings-dynamically">Update the settings dynamically</a>
