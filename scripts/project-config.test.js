@@ -163,6 +163,29 @@ test('includes Showcase and package-derived Website in the team/stars repository
   });
 });
 
+test('an entry that is part of another project links into its docs and is not counted as a repository', () => {
+  const config = fixture();
+  const part = {name: 'Example Feature', partOf: 'example', description: 'One capability of Example.', docs: {link: '/docs/example/latest/en/feature/'}};
+  config.catalogs.push({id: 'features', name: 'Features', projects: [part]});
+  validateProjectConfig(config);
+  assert.deepEqual(collectRepos(config), [{user: 'apache', repo: 'example-showcase'}, {user: 'apache', repo: 'example'}]);
+  assert.deepEqual(deriveDocsList(config)[2].list, []);
+  const variant = change => { const c = fixture(); c.catalogs.push({id: 'features', name: 'Features', projects: [{...part, ...change}]}); return c; };
+  validateProjectConfig(variant({docs: {link: 'https://example.org/feature'}}));
+  assert.throws(() => validateProjectConfig(variant({partOf: 'missing'})), /names no project with repo missing/);
+  assert.throws(() => validateProjectConfig(variant({partOf: 'Example'})), /names no project with repo Example/);
+  assert.throws(() => validateProjectConfig(variant({docs: {link: '/docs/example/../other/latest/readme/'}})), /in the documentation of example/);
+  assert.throws(() => validateProjectConfig(variant({docs: {link: '/docs/example/../../blog/example/feature/'}})), /in the documentation of example/);
+  assert.throws(() => validateProjectConfig(variant({repo: 'example'})), /repo is not allowed on an entry that is part of example/);
+  assert.throws(() => validateProjectConfig(variant({releases: []})), /releases is not allowed/);
+  assert.throws(() => validateProjectConfig(variant({docs: {link: '/docs/other/latest/en/feature/'}})), /in the documentation of example/);
+  assert.throws(() => validateProjectConfig(variant({docs: {link: '/docs/example/latest/en/feature'}})), /ending in \//);
+  assert.throws(() => validateProjectConfig(variant({docs: {link: '/docs/example/latest/en/feature/', commitId: 'pin'}})), /docs\.commitId is not allowed/);
+  const twice = fixture();
+  twice.catalogs.push({id: 'features', name: 'Features', projects: [part, {...part}]});
+  assert.throws(() => validateProjectConfig(twice), /duplicate entry Example Feature in example/);
+});
+
 test('the repository catalog lists every repository of the site exactly once', () => {
   const config = validateProjectConfig(fixture());
   const catalog = repos => ({categories: [{id: 'main', name: 'Main', repos}]});

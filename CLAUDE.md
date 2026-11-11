@@ -32,7 +32,11 @@ downloads, and container images. Its structure is `catalogs[]` → `projects[]` 
 `docs` / `releases[]` / `dockerImages[]`. Catalogs have `id`, `name`, `description`, and optional
 `note`; project `featured` and `menu` metadata control cards and shortcuts, with
 shortcut groups in the top-level `menu` list. Keep repository identities and
-existing `downloadAliases` stable.
+existing `downloadAliases` stable. An entry with `partOf: <repo>` (no `repo`,
+`user`, releases or images) is a capability of that project, such as OpenTelemetry
+(OTLP) of `skywalking`: one card with a single `docs.link` into that project's
+documentation or an HTTP(S) URL, linking to its repository, counted in no
+repository inventory.
 
 `dockerImages` belongs to the project, alongside `releases`. Each item has `name`
 and `link`, with optional presentation metadata. These links point to Docker Hub
