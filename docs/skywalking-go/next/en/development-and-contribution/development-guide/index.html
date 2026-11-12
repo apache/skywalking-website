@@ -35,7 +35,7 @@ Create a new plugin module: Create a new project in the specified directory and 
   <meta itemprop="description" content="Plugin Development Guide This documentation introduces how developers can create a plugin.
 All plugins must follow these steps:
 Create a new plugin module: Create a new project in the specified directory and import the plugin API module. Define the enhancement object: Define the description for the plugin. Invoke the plugin API: Call the API provided by the core to complete the core invocation. Import the plugin module: Import the plugin into the management module for users to use. Create a new plugin module The plugin must create a new module, which is currently stored in the project’s plugins directory.">
-  <meta itemprop="wordCount" content="3111">
+  <meta itemprop="wordCount" content="3350">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Plugin Development Guide">
   <meta name="twitter:description" content="Plugin Development Guide This documentation introduces how developers can create a plugin.
@@ -1665,7 +1665,7 @@ Create a new plugin module: Create a new project in the specified directory and 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: bdef1b2</div>
+                  <div class="commit-id">Commit Id: 5d7175f</div>
                 
 
 
@@ -1706,7 +1706,7 @@ Create a new plugin module: Create a new project in the specified directory and 
 <li><strong>Import the plugin module</strong>: Import the plugin into the management module for users to use.</li>
 </ol>
 <h2 id="create-a-new-plugin-module">Create a new plugin module</h2>
-<p>The plugin must create a new module, which is currently stored in the project&rsquo;s <a href="https://github.com/apache/skywalking-go/tree/bdef1b287bc6b9b98cbe615678e4e088a6666779/plugins">plugins directory</a>.</p>
+<p>The plugin must create a new module, which is currently stored in the project&rsquo;s <a href="https://github.com/apache/skywalking-go/tree/5d7175f2635cf40a03f8b00b13c30d36e7d599b7/plugins">plugins directory</a>.</p>
 <p>Plugins can import the following two modules:</p>
 <ol>
 <li><strong>Agent core</strong>: This module provides all the dependencies needed for the plugin, including the plugin API, enhancement declaration objects, etc.
@@ -1716,7 +1716,7 @@ Agent core plugin should be <code>github.com/apache/skywalking-go/plugins/core</
 <p>Note: Plugins should <strong>NOT</strong> import and use any other modules, as this may cause compilation issues for users. If certain tools are needed, they should be provided by the agent core.</p>
 <h2 id="define-the-enhancement-object">Define the enhancement object</h2>
 <p>In the root directory of the project, <strong>create a new go file</strong> to define the basic information of the plugin.
-The basic information includes the following methods, corresponding to the <a href="https://github.com/apache/skywalking-go/tree/bdef1b287bc6b9b98cbe615678e4e088a6666779/plugins/core/instrument/declare.go">Instrument interface</a>:</p>
+The basic information includes the following methods, corresponding to the <a href="https://github.com/apache/skywalking-go/tree/5d7175f2635cf40a03f8b00b13c30d36e7d599b7/plugins/core/instrument/declare.go">Instrument interface</a>:</p>
 <ol>
 <li><strong>Name</strong>: The name of the plugin. Please keep this name consistent with the newly created project name. The reason will be explained later.</li>
 <li><strong>Base Package</strong>: Declare which package this plugin intercepts. For example, if you want to intercept gin, you can write: &ldquo;github.com/gin-gonic/gin&rdquo;.</li>
@@ -1858,6 +1858,14 @@ allowing you to access data from before and after method execution and interact 
 <p>The <code>Interceptor</code> instance would <strong>define new instance at the current package level</strong>,
 rather than creating a new instance each time a method is intercepted.</p>
 <p>Therefore, do not declare objects in the interceptor, and instead use <code>Invocation.Context</code> to pass data.</p>
+<h5 id="span-lifecycle">Span lifecycle</h5>
+<p>A span that an interceptor creates must be ended by the same interception, usually in <code>AfterInvoke</code>. Store it with <code>invocation.SetContext</code> right after creating it, before anything that can fail, so that <code>AfterInvoke</code> gets it.</p>
+<p>The agent protects the goroutine from a span that is not ended:</p>
+<ul>
+<li>A span stored with <code>SetContext</code> belongs to that interception. If it is still active when a later span starts on the goroutine after the interception has finished, the agent ends it and counts it in <code>sw_go_possible_leaked_context_counter</code>. Only the span itself is bound: a value that wraps the span, such as a struct stored with <code>SetContext</code>, is not.</li>
+<li>If <code>BeforeInvoke</code> returns an error or panics after creating spans and before storing anything with <code>SetContext</code>, the agent ends the spans it created and counts them the same way. A context that the hook continued with <code>ContinueContext</code> is kept. Nothing is ended when the hook stored any value with <code>SetContext</code>, because <code>AfterInvoke</code> still runs and ends it, or when the hook changed the active span in another way, for example by ending a span that was active before it.</li>
+</ul>
+<p>A span that must stay active after its interception has finished, such as a span that a later call ends, must not be stored directly with <code>SetContext</code>: store it in a wrapper value. A span ended with <code>PrepareAsync</code> is not active anymore once <code>End</code> is called in the interception, and is finished later with <code>AsyncFinish</code>.</p>
 <h5 id="package-path">Package Path</h5>
 <p>If the method you want to intercept is not located in the root directory of the framework,
 place your interceptor code in the relative location within the plugin. <strong>The Agent would only copy files from the same package directory</strong>.</p>
@@ -2073,7 +2081,7 @@ However, in some cases, goroutine would be context sharing due to be scheduled b
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">	</span><span style="color:#6639ba">ObserveWithCount</span><span style="color:#1f2328">(</span><span style="color:#1f2328">val</span><span style="color:#fff"> </span><span style="color:#cf222e">float64</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#1f2328">count</span><span style="color:#fff"> </span><span style="color:#cf222e">int64</span><span style="color:#1f2328">)</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
 </span></span></span></code></pre></div><h2 id="import-plugin">Import Plugin</h2>
-<p>Once you have finished developing the plugin, you need to import the completed module into the Agent program and <a href="https://github.com/apache/skywalking-go/tree/bdef1b287bc6b9b98cbe615678e4e088a6666779/tools/go-agent/instrument/plugins/register.go">define it in the corresponding file</a>.</p>
+<p>Once you have finished developing the plugin, you need to import the completed module into the Agent program and <a href="https://github.com/apache/skywalking-go/tree/5d7175f2635cf40a03f8b00b13c30d36e7d599b7/tools/go-agent/instrument/plugins/register.go">define it in the corresponding file</a>.</p>
 <p>At this point, your plugin development process is complete. When the Agent performs hybrid compilation on the target program, your plugin will be executed as expected.</p>
 
 </div>
