@@ -33,7 +33,7 @@ All telemetry data are trusted. The OAP server would not validate any field of t
   <meta itemprop="name" content="Security Notice">
   <meta itemprop="description" content="Security Notice The SkyWalking OAP server, UI, and agent deployments should run in a secure environment, such as only inside your data center. OAP server, UI, and agent deployments should only be reachable by the operation team on default deployment.
 All telemetry data are trusted. The OAP server would not validate any field of the telemetry data to avoid extra load for the server. Every field of every telemetry category should be validated by the operator before it reaches OAP — none are inherently safer than the others.">
-  <meta itemprop="wordCount" content="975">
+  <meta itemprop="wordCount" content="1685">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Security Notice">
   <meta name="twitter:description" content="Security Notice The SkyWalking OAP server, UI, and agent deployments should run in a secure environment, such as only inside your data center. OAP server, UI, and agent deployments should only be reachable by the operation team on default deployment.
@@ -4288,7 +4288,7 @@ All telemetry data are trusted. The OAP server would not validate any field of t
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: b0a3065</div>
+                  <div class="commit-id">Commit Id: 56fe1cd</div>
                 
 
 
@@ -4381,7 +4381,7 @@ endpoint and peer identifiers.</li>
 <li><strong>Logs</strong>: log body, structured fields.</li>
 <li><strong>Profiling</strong>: profiling results (eBPF / async-profiler / JFR samples), captured stack
 frames, symbol names.</li>
-<li>**HTTP capture **: HTTP request and response bodies, headers, query
+<li><strong>HTTP capture</strong>: HTTP request and response bodies, headers, query
 strings, and dumps collected by agent-side body-capture profiling plugins.</li>
 </ul>
 <p>A request URI, a header value, an exception message from poisoned input, or any other
@@ -4413,14 +4413,74 @@ those fields, causing XSS or even Remote Code Execution (RCE) issues.</p>
 <p>For some sensitive environment, consider to limit the telemetry report frequency in case of DoS/DDoS for exposed OAP
 and UI services.</p>
 <h2 id="admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</h2>
-<p>The <code>admin-server</code> module hosts a shared HTTP port (default <code>17128</code>) for admin / on-demand
-write APIs. Today this includes the <strong>Runtime Rule Hot-Update API</strong> (add, override, inactivate,
-delete MAL/LAL rule files at runtime — rules are compiled and loaded into the OAP JVM on the
-fly) and the <strong>DSL Debug API</strong> (sampling debugger that captures live MAL/LAL/OAL rule
-executions, including the raw payloads each rule processed). This surface is <strong>far more
-powerful than the telemetry receiver ports</strong> — a request can register new Javassist-compiled
-bytecode, mutate <code>MeterSystem</code> state, drop backend schema (BanyanDB measures), or inspect
-operationally-sensitive payloads (raw log bodies, parsed maps, metric source events).</p>
+<p>The <code>admin-server</code> module hosts a shared HTTP port (default <code>17128</code>) for the admin, status,
+and debugging REST APIs of the OAP server. Every route on this port must be reachable only by
+the operator team. The feature modules mounted on it serve these routes:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Routes</th>
+          <th>Module</th>
+          <th>What a caller can do</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>/status/*</code></td>
+          <td><code>status</code></td>
+          <td>Read the cluster node list, the alarm rules and alarm runtime state, and the TTL settings.</td>
+      </tr>
+      <tr>
+          <td><code>/debugging/config/dump</code></td>
+          <td><code>status</code></td>
+          <td>Read the boot-time configuration of the loaded modules, including the storage, cluster, and Kafka client settings. See <a href="#configuration-dump-and-secrets">Configuration dump and secrets</a>.</td>
+      </tr>
+      <tr>
+          <td><code>/debugging/query/*</code></td>
+          <td><code>status</code></td>
+          <td>Run trace, log, topology, and MQE queries with debug tracing, and read their results.</td>
+      </tr>
+      <tr>
+          <td><code>/inspect/*</code></td>
+          <td><code>inspect</code></td>
+          <td>Browse the metric catalog, the entities holding values, and the metric values.</td>
+      </tr>
+      <tr>
+          <td><code>/ui-management/*</code></td>
+          <td><code>ui-management</code></td>
+          <td>Read, add, update, and disable UI dashboard templates.</td>
+      </tr>
+      <tr>
+          <td><code>/runtime/rule</code>, <code>/runtime/rule/*</code>, <code>/runtime/mal/*</code>, <code>/runtime/lal/*</code></td>
+          <td><code>receiver-runtime-rule</code></td>
+          <td>List, dump, add, override, inactivate, and delete MAL/LAL rule files, which are compiled and loaded into the OAP JVM on the fly.</td>
+      </tr>
+      <tr>
+          <td><code>/dsl-debugging/*</code></td>
+          <td><code>dsl-debugging</code></td>
+          <td>Start, read, and stop sampling sessions that capture live MAL/LAL/OAL rule executions, including the payloads each sampled rule processed.</td>
+      </tr>
+      <tr>
+          <td><code>/runtime/oal/*</code></td>
+          <td><code>dsl-debugging</code></td>
+          <td>List the loaded OAL files and read their rules.</td>
+      </tr>
+  </tbody>
+</table>
+<p>Of these routes, only <code>/status/config/ttl</code> is also served on the public REST port
+(<code>core.restPort</code>, default <code>12800</code>), and it returns the TTL settings only. The admin port also
+serves Armeria&rsquo;s <code>/docs</code> page, which describes the services registered on that port.</p>
+<p>This surface is <strong>far more powerful than the telemetry receiver ports</strong> — a request can
+register new Javassist-compiled bytecode, mutate <code>MeterSystem</code> state, drop backend schema
+(BanyanDB measures), inspect operationally-sensitive payloads (raw log bodies, parsed maps,
+metric source events), or read the server&rsquo;s effective configuration.</p>
+<p>Before 11.0.0, the status and debugging APIs were served on the core REST port
+(<code>core.restPort</code>, default <code>12800</code>), next to the GraphQL query API. The configuration dump was
+added in 9.7.0 by the <code>debugging-query</code> module (<code>SW_DEBUGGING_QUERY</code>), and the
+<code>/debugging/query/*</code> routes in 10.1.0. In 10.2.0 the module became <code>status-query</code>
+(<code>SW_STATUS_QUERY</code>) and added the <code>/status/*</code> routes. On those versions, block <code>/status/*</code> and
+<code>/debugging/*</code> at the gateway in front of port <code>12800</code>, or remove the module by setting its
+variable to <code>-</code> if it is not needed.</p>
 <p><code>admin-server</code> also opens an <strong>admin-internal gRPC bus</strong> (default <code>17129</code>) for peer-to-peer
 cluster RPCs between OAP nodes — runtime-rule <code>Suspend / Resume / Forward</code>, DSL debug
 <code>install / collect / stop</code>. This is intentionally a <strong>separate transport</strong> from the public
@@ -4429,8 +4489,15 @@ to submit telemetry MUST NOT be able to invoke privileged admin RPCs.</p>
 <p><code>admin-server</code> is <strong>enabled by default</strong> so the bundled <code>status</code> and <code>inspect</code> feature
 modules are reachable out of the box. Both ports open with <strong>no built-in authentication</strong>
 — the design goal is a simple admin socket that a gateway / service mesh wraps with the
-operator&rsquo;s existing auth story. Set <code>SW_ADMIN_SERVER=</code> (empty) to keep the host closed
-if no admin-side API is needed.</p>
+operator&rsquo;s existing auth story.</p>
+<p>To remove a feature, set its module variable to <code>-</code>, such as <code>SW_STATUS=-</code> for the status and
+debugging routes (including <code>/status/config/ttl</code> on port <code>12800</code>). An empty value does not
+remove a module: OAP fails to start with a <code>ProviderNotFoundException</code>. To close the admin
+port entirely, set <code>SW_ADMIN_SERVER=-</code> together with <code>SW_STATUS=-</code>, <code>SW_INSPECT=-</code>,
+<code>SW_UI_MANAGEMENT=-</code>, <code>SW_RECEIVER_RUNTIME_RULE=-</code>, and <code>SW_DSL_DEBUGGING=-</code>, as a feature
+module left on without <code>admin-server</code> stops OAP from starting. Horizon UI reads <code>/status/*</code>
+and the configuration dump, so keep <code>status</code> when Horizon UI is deployed, and restrict the
+port instead.</p>
 <p>Required operator actions:</p>
 <ol>
 <li><strong>Never expose port 17128 (HTTP) to the public internet.</strong> Bind to a private network
@@ -4446,9 +4513,49 @@ collisions. Captured DSL-debug payloads include sensitive operational state. Tre
 <code>POST /runtime/rule/*</code> and <code>POST /dsl-debugging/*</code> as equivalent to shell access on the
 OAP host.</li>
 </ol>
-<p>Without these protections an attacker with network reach to port 17128 or 17129 can execute
-arbitrary code inside the OAP JVM. See <code>docs/en/setup/backend/admin-api/readme.md</code> for the
-full security notice and per-feature API surface.</p>
+<p>Without these protections, an attacker with network reach to port 17128 can submit MAL/LAL
+rules that are compiled and run inside the OAP JVM, and read the configuration, captured
+payloads, and other operational data that the status, debugging, inspect, and DSL debug APIs
+return. An attacker who reaches port 17129 can submit rules the same way through the
+runtime-rule <code>Forward</code> RPC, and install DSL debug sessions on the OAP nodes and collect their
+samples. See the
+<a href="../../setup/backend/admin-api/readme">Admin API</a> doc for the full security notice and
+per-feature API surface.</p>
+<h3 id="configuration-dump-and-secrets">Configuration dump and secrets</h3>
+<p><code>GET /debugging/config/dump</code> returns the boot-time settings of the loaded modules, as resolved
+from <code>application.yml</code> and the environment, plus the BanyanDB settings from <code>bydb.yml</code> and
+<code>bydb-topn.yml</code> when BanyanDB is the storage. A value is replaced by <code>******</code> only when its key
+contains one of the keywords listed in <code>status.default.keywords4MaskingSecretsOfConfig</code>
+(case-insensitive):</p>
+<ul>
+<li>A module setting is matched by its own name, such as <code>password</code> in
+<code>storage.elasticsearch.password</code>.</li>
+<li>A setting inside a map, such as a Kafka client property under the Kafka fetcher&rsquo;s
+<code>kafkaConsumerConfig</code>, is matched by its own name inside the map, such as <code>sasl.jaas.config</code>,
+not by the name of the map.</li>
+<li>A BanyanDB setting is matched by its full key, such as <code>storage.banyandb.global.password</code>.</li>
+</ul>
+<p>The value itself is never inspected, so a credential stored under a key that contains no
+keyword is returned in clear text. Settings that can carry a credential under such a key include:</p>
+<ul>
+<li>The Kafka fetcher&rsquo;s client properties (<code>kafka-fetcher.default.kafkaConsumerConfig.*</code>), such as
+<code>sasl.jaas.config</code>, which carries the SASL username and password or the OAuth client secret,
+and <code>ssl.keystore.key</code>, which carries a private key.</li>
+<li>The Kafka client settings written as one JSON string: the Zipkin receiver&rsquo;s
+<code>kafkaConsumerConfig</code> and the exporter&rsquo;s <code>kafkaProducerConfig</code>. A keyword that matches
+<code>kafkaConsumerConfig</code> or <code>kafkaProducerConfig</code> masks the whole string.</li>
+<li>The ZooKeeper cluster coordinator&rsquo;s ACL <code>expression</code> (<code>SW_ZK_EXPRESSION</code>), which holds
+<code>user:password</code> when <code>enableACL</code> is on.</li>
+<li>A JDBC URL (<code>jdbcUrl</code>) that includes credentials.</li>
+</ul>
+<p>When a configuration carries credentials, add keywords that match its keys. A keyword for a
+JSON-string setting or for <code>jdbcUrl</code> hides the whole value, including the parts that are not
+secret. <code>SW_DEBUGGING_QUERY_KEYWORDS_FOR_MASKING_SECRETS</code> replaces the whole list, so keep the
+default keywords when you set it, and separate the keywords with commas only, without spaces:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#6639ba">export</span> <span style="color:#953800">SW_DEBUGGING_QUERY_KEYWORDS_FOR_MASKING_SECRETS</span><span style="color:#0550ae">=</span>user,password,trustStorePass,keyStorePass,token,accessKey,secretKey,authentication,jaas,keystore.key,expression,kafkaConsumerConfig,kafkaProducerConfig,jdbcUrl
+</span></span></code></pre></div><p>Masking hides only the values whose keys match a keyword, so review a dump before sharing it.
+It is not an access control: anyone who can reach the admin port can read every value the
+keywords miss, so restricting the port, as required above, is what protects the dump.</p>
 <h2 id="client-side-monitoring">Client-Side Monitoring</h2>
 <p>Client-side applications — iOS/iPadOS apps (via OpenTelemetry Swift SDK), browser web apps
 (via <a href="https://github.com/apache/skywalking-client-js">client-js</a>), and WeChat/Alipay
@@ -4493,7 +4600,11 @@ client-side sources.</p>
   <ul>
     <li><a href="#security-notice">Security Notice</a>
       <ul>
-        <li><a href="#admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</a></li>
+        <li><a href="#admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</a>
+          <ul>
+            <li><a href="#configuration-dump-and-secrets">Configuration dump and secrets</a></li>
+          </ul>
+        </li>
         <li><a href="#client-side-monitoring">Client-Side Monitoring</a></li>
       </ul>
     </li>
