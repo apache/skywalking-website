@@ -35,7 +35,7 @@ bydbctl measure query --start -30m -f - &lt;&lt;EOF name: &#34;service_cpm_minut
   <meta itemprop="description" content="Query Tracing BanyanDB supports query tracing, which allows you to trace the execution of a query. The tracing data includes the query plan, execution time, and other useful information. You can enable query tracing by setting the QueryRequest.trace field to true when sending a query request.
 The below command could query data in the last 30 minutes with trace enabled:
 bydbctl measure query --start -30m -f - &lt;&lt;EOF name: &#34;service_cpm_minute&#34; groups: [&#34;measure-minute&#34;] tagProjection: tagFamilies: - name: &#34;storage-only&#34; tags: [&#34;entity_id&#34;] fieldProjection: names: [&#34;total&#34;, &#34;value&#34;] trace: true EOF The result will include the tracing data in the response. The duration time unit is in nano seconds.">
-  <meta itemprop="wordCount" content="1342">
+  <meta itemprop="wordCount" content="1678">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Query Tracing">
   <meta name="twitter:description" content="Query Tracing BanyanDB supports query tracing, which allows you to trace the execution of a query. The tracing data includes the query plan, execution time, and other useful information. You can enable query tracing by setting the QueryRequest.trace field to true when sending a query request.
@@ -2326,7 +2326,7 @@ bydbctl measure query --start -30m -f - &lt;&lt;EOF name: &#34;service_cpm_minut
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: aa8c827</div>
+                  <div class="commit-id">Commit Id: 88245d3</div>
                 
 
 
@@ -2426,7 +2426,58 @@ bydbctl measure query --start -30m -f - &lt;&lt;EOF name: &#34;service_cpm_minut
 </span></span><span style="display:flex;"><span>├── broadcast-per-group-{group}
 </span></span><span style="display:flex;"><span>├── merge-distributed-rows-multi
 </span></span><span style="display:flex;"><span>└── build-iterator
-</span></span></code></pre></div><h3 id="vocabulary">Vocabulary</h3>
+</span></span></code></pre></div><h3 id="storage-scan-span">Storage scan span</h3>
+<p>A data node adds a <code>scan-storage</code> span for the storage scan of each traced query. It sits beside the <code>scan</code>
+operator span: <code>scan</code> counts the rows the pipeline pulled, <code>scan-storage</code> says how the blocks behind them were
+read and how the query&rsquo;s memory budget held up. Its duration is the life of the scan, from the first batch to
+the release of the result. The tags are aggregates for the whole scan, never one per block.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Question</th>
+          <th>Tags</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>What did the scan read?</td>
+          <td><code>scan_blocks</code>, <code>scan_blocks_decoded</code>, <code>scan_blocks_no_rows</code>, <code>scan_windows</code>, <code>merge_units</code>, <code>merge_cursors</code>, <code>merge_peak_live</code></td>
+      </tr>
+      <tr>
+          <td>Where did the time go?</td>
+          <td><code>plan_ns</code>, <code>scan_ns</code>, <code>decode_wait_ns</code>, <code>merge_ns</code> (= <code>scan_ns</code> − <code>decode_wait_ns</code>), <code>decode_ns_total</code>, <code>decode_ns_max</code>, <code>decode_queue_ns</code></td>
+      </tr>
+      <tr>
+          <td>Did the decode pool help?</td>
+          <td><code>pool_workers</code>, <code>pool_queued_at_start</code>, <code>prefetch_peak</code>, <code>prefetch_hits</code>, <code>prefetch_waits</code></td>
+      </tr>
+      <tr>
+          <td>How close to its limit was the query?</td>
+          <td><code>budget_lease_limit</code>, <code>budget_lease_peak</code>, <code>budget_shared_limit</code>, <code>budget_shared_peak</code></td>
+      </tr>
+      <tr>
+          <td>Is the memory estimate sound?</td>
+          <td><code>budget_estimate_bytes</code> (before decode), <code>budget_estimate_kept_bytes</code> (after the refund), <code>budget_retained_bytes</code> (measured; traced queries only), <code>compacted_cursors</code></td>
+      </tr>
+      <tr>
+          <td>What was refused, and by what?</td>
+          <td><code>budget_rejects</code> (<code>reason=count</code> pairs), <code>budget_reject_reason</code> (the last one, with limit, used and requested bytes)</td>
+      </tr>
+      <tr>
+          <td>Was the merge cut into time slices?</td>
+          <td><code>slice_need_bytes</code>, <code>slice_target_bytes</code>, <code>slices</code>, <code>sliced_units</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>Rejection reasons: <code>per_query_limit</code> (the query&rsquo;s own assignment), <code>shared_pool</code> (the pool shared by all
+queries), <code>node_headroom</code> (the protector&rsquo;s available memory), <code>result_window</code>, <code>released</code>, <code>shared_tracker</code> (the
+query&rsquo;s memory tracker limit) and <code>raw_quota</code> (the per-cursor byte quota).</p>
+<p>Reading it: <code>prefetch_waits</code> close to <code>scan_blocks_decoded</code> with a large <code>decode_wait_ns</code> means the scan is
+decode-bound and the pool (or its queue, <code>decode_queue_ns</code>) is the place to look; a large <code>merge_ns</code> means the
+time is in merging and batch assembly. <code>budget_estimate_kept_bytes</code> should stay above <code>budget_retained_bytes</code>; if
+it does not, the envelope under-reserves. <code>budget_lease_peak</code> over <code>budget_lease_limit</code> is how near the query came
+to <code>per_query_limit</code>.</p>
+<h3 id="vocabulary">Vocabulary</h3>
 <p>Trace tag keys are exported from <code>pkg/query/tracelabels</code> and should be used instead of string literals.</p>
 <table>
   <thead>
@@ -2740,6 +2791,130 @@ bydbctl measure query --start -30m -f - &lt;&lt;EOF name: &#34;service_cpm_minut
           <td><code>TagIgnoredChildSpans</code></td>
           <td><code>ignored_child_spans</code></td>
       </tr>
+      <tr>
+          <td><code>TagScanBlocks</code></td>
+          <td><code>scan_blocks</code></td>
+      </tr>
+      <tr>
+          <td><code>TagScanBlocksDecoded</code></td>
+          <td><code>scan_blocks_decoded</code></td>
+      </tr>
+      <tr>
+          <td><code>TagScanBlocksNoRows</code></td>
+          <td><code>scan_blocks_no_rows</code></td>
+      </tr>
+      <tr>
+          <td><code>TagScanWindows</code></td>
+          <td><code>scan_windows</code></td>
+      </tr>
+      <tr>
+          <td><code>TagMergeUnits</code></td>
+          <td><code>merge_units</code></td>
+      </tr>
+      <tr>
+          <td><code>TagMergeCursors</code></td>
+          <td><code>merge_cursors</code></td>
+      </tr>
+      <tr>
+          <td><code>TagMergePeakLive</code></td>
+          <td><code>merge_peak_live</code></td>
+      </tr>
+      <tr>
+          <td><code>TagPrefetchPeak</code></td>
+          <td><code>prefetch_peak</code></td>
+      </tr>
+      <tr>
+          <td><code>TagPrefetchHits</code></td>
+          <td><code>prefetch_hits</code></td>
+      </tr>
+      <tr>
+          <td><code>TagPrefetchWaits</code></td>
+          <td><code>prefetch_waits</code></td>
+      </tr>
+      <tr>
+          <td><code>TagDecodeWaitNS</code></td>
+          <td><code>decode_wait_ns</code></td>
+      </tr>
+      <tr>
+          <td><code>TagDecodeQueueNS</code></td>
+          <td><code>decode_queue_ns</code></td>
+      </tr>
+      <tr>
+          <td><code>TagPlanNS</code></td>
+          <td><code>plan_ns</code></td>
+      </tr>
+      <tr>
+          <td><code>TagScanNS</code></td>
+          <td><code>scan_ns</code></td>
+      </tr>
+      <tr>
+          <td><code>TagMergeNS</code></td>
+          <td><code>merge_ns</code></td>
+      </tr>
+      <tr>
+          <td><code>TagPoolWorkers</code></td>
+          <td><code>pool_workers</code></td>
+      </tr>
+      <tr>
+          <td><code>TagPoolQueued</code></td>
+          <td><code>pool_queued_at_start</code></td>
+      </tr>
+      <tr>
+          <td><code>TagCompactedCursors</code></td>
+          <td><code>compacted_cursors</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetLeaseLimit</code></td>
+          <td><code>budget_lease_limit</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetLeasePeak</code></td>
+          <td><code>budget_lease_peak</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetSharedLimit</code></td>
+          <td><code>budget_shared_limit</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetSharedPeak</code></td>
+          <td><code>budget_shared_peak</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetEstimate</code></td>
+          <td><code>budget_estimate_bytes</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetEstimateKept</code></td>
+          <td><code>budget_estimate_kept_bytes</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetRetained</code></td>
+          <td><code>budget_retained_bytes</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetRejects</code></td>
+          <td><code>budget_rejects</code></td>
+      </tr>
+      <tr>
+          <td><code>TagBudgetRejectReason</code></td>
+          <td><code>budget_reject_reason</code></td>
+      </tr>
+      <tr>
+          <td><code>TagSliceNeed</code></td>
+          <td><code>slice_need_bytes</code></td>
+      </tr>
+      <tr>
+          <td><code>TagSliceTarget</code></td>
+          <td><code>slice_target_bytes</code></td>
+      </tr>
+      <tr>
+          <td><code>TagSlices</code></td>
+          <td><code>slices</code></td>
+      </tr>
+      <tr>
+          <td><code>TagSlicedUnits</code></td>
+          <td><code>sliced_units</code></td>
+      </tr>
   </tbody>
 </table>
 <h3 id="empty-result-diagnosis-runbook">Empty-result diagnosis runbook</h3>
@@ -2903,6 +3078,7 @@ bydbctl measure query --start -30m -f - &lt;&lt;EOF name: &#34;service_cpm_minut
         <li><a href="#vectorized-measure-query-tracing">Vectorized Measure Query Tracing</a>
           <ul>
             <li><a href="#span-shape">Span shape</a></li>
+            <li><a href="#storage-scan-span">Storage scan span</a></li>
             <li><a href="#vocabulary">Vocabulary</a></li>
             <li><a href="#empty-result-diagnosis-runbook">Empty-result diagnosis runbook</a></li>
             <li><a href="#examples">Examples</a></li>
