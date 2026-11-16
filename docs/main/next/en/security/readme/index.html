@@ -33,7 +33,7 @@ All telemetry data are trusted. The OAP server would not validate any field of t
   <meta itemprop="name" content="Security Notice">
   <meta itemprop="description" content="Security Notice The SkyWalking OAP server, UI, and agent deployments should run in a secure environment, such as only inside your data center. OAP server, UI, and agent deployments should only be reachable by the operation team on default deployment.
 All telemetry data are trusted. The OAP server would not validate any field of the telemetry data to avoid extra load for the server. Every field of every telemetry category should be validated by the operator before it reaches OAP — none are inherently safer than the others.">
-  <meta itemprop="wordCount" content="1685">
+  <meta itemprop="wordCount" content="1877">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Security Notice">
   <meta name="twitter:description" content="Security Notice The SkyWalking OAP server, UI, and agent deployments should run in a secure environment, such as only inside your data center. OAP server, UI, and agent deployments should only be reachable by the operation team on default deployment.
@@ -4288,7 +4288,7 @@ All telemetry data are trusted. The OAP server would not validate any field of t
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 2dbb6da</div>
+                  <div class="commit-id">Commit Id: 6566fec</div>
                 
 
 
@@ -4412,6 +4412,37 @@ implementations of this layer; the OAP itself does not perform that validation.<
 those fields, causing XSS or even Remote Code Execution (RCE) issues.</p>
 <p>For some sensitive environment, consider to limit the telemetry report frequency in case of DoS/DDoS for exposed OAP
 and UI services.</p>
+<h2 id="query-and-receiver-ports">Query and Receiver Ports</h2>
+<p>By default, the core servers carry the receiver, query and cluster traffic. The core REST port (<code>core.restPort</code>,
+default <code>12800</code>) serves the GraphQL query API next to the HTTP receivers, and the core gRPC port
+(<code>core.gRPCPort</code>, default <code>11800</code>) serves the gRPC receivers next to the cluster traffic between
+OAP nodes. A client that reports over HTTP, such as the browser monitoring SDK running in end
+users&rsquo; browsers, then reaches the same port as the query API.</p>
+<p>Two modules split them, so each port can be bound, firewalled, and given TLS on its own:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Module</th>
+          <th>Setting</th>
+          <th>What moves to the new port</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>receiver-sharing-server</code></td>
+          <td><code>SW_RECEIVER_GRPC_PORT</code>, <code>SW_RECEIVER_SHARING_REST_PORT</code></td>
+          <td>The gRPC and HTTP receivers agents, Envoy, and OpenTelemetry report to. See <a href="../../setup/backend/backend-expose">Setup External Communication Channels</a>.</td>
+      </tr>
+      <tr>
+          <td><code>query-server</code></td>
+          <td><code>SW_QUERY_SERVER_REST_PORT</code></td>
+          <td>GraphQL, the AI agent conversation view and files, and <code>/status/config/ttl</code>. See <a href="../../setup/backend/backend-expose#query-server">Query server</a>.</td>
+      </tr>
+  </tbody>
+</table>
+<p>With the receiver ports and the query port all set, no receiver or query traffic is left on the core
+ports: the core gRPC port carries the cluster traffic between OAP nodes and the gRPC health check, and
+the core REST port the HTTP health check (<code>/healthcheck</code>).</p>
 <h2 id="admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</h2>
 <p>The <code>admin-server</code> module hosts a shared HTTP port (default <code>17128</code>) for the admin, status,
 and debugging REST APIs of the OAP server. Every route on this port must be reachable only by
@@ -4467,8 +4498,8 @@ the operator team. The feature modules mounted on it serve these routes:</p>
       </tr>
   </tbody>
 </table>
-<p>Of these routes, only <code>/status/config/ttl</code> is also served on the public REST port
-(<code>core.restPort</code>, default <code>12800</code>), and it returns the TTL settings only. The admin port also
+<p>Of these routes, only <code>/status/config/ttl</code> is also served next to the GraphQL API on the query
+port (see <a href="#query-and-receiver-ports">Query and Receiver Ports</a>), and it returns the TTL settings only. The admin port also
 serves Armeria&rsquo;s <code>/docs</code> page, which describes the services registered on that port.</p>
 <p>This surface is <strong>far more powerful than the telemetry receiver ports</strong> — a request can
 register new Javassist-compiled bytecode, mutate <code>MeterSystem</code> state, drop backend schema
@@ -4491,7 +4522,7 @@ modules are reachable out of the box. Both ports open with <strong>no built-in a
 — the design goal is a simple admin socket that a gateway / service mesh wraps with the
 operator&rsquo;s existing auth story.</p>
 <p>To remove a feature, set its module variable to <code>-</code>, such as <code>SW_STATUS=-</code> for the status and
-debugging routes (including <code>/status/config/ttl</code> on port <code>12800</code>). An empty value does not
+debugging routes (including <code>/status/config/ttl</code> on the query port). An empty value does not
 remove a module: OAP fails to start with a <code>ProviderNotFoundException</code>. To close the admin
 port entirely, set <code>SW_ADMIN_SERVER=-</code> together with <code>SW_STATUS=-</code>, <code>SW_INSPECT=-</code>,
 <code>SW_UI_MANAGEMENT=-</code>, <code>SW_RECEIVER_RUNTIME_RULE=-</code>, and <code>SW_DSL_DEBUGGING=-</code>, as a feature
@@ -4600,6 +4631,7 @@ client-side sources.</p>
   <ul>
     <li><a href="#security-notice">Security Notice</a>
       <ul>
+        <li><a href="#query-and-receiver-ports">Query and Receiver Ports</a></li>
         <li><a href="#admin-api-surface-ports-17128--17129">Admin API Surface (ports 17128 + 17129)</a>
           <ul>
             <li><a href="#configuration-dump-and-secrets">Configuration dump and secrets</a></li>

@@ -35,7 +35,7 @@ ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name:
   <meta itemprop="description" content="OAP Endpoints for Agents Which OAP ports this chart opens, how to open more (Zipkin, PromQL, LogQL, TraceQL, self-telemetry), and what agents, swctl and Grafana should point at.
 One map drives everything chart/skywalking/templates/oap-svc.yaml turns every key in oap.ports into a Service port:
 ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name: {{ $key }} {{- end }} oap-deployment.yaml ranges over the same map for containerPort. So adding a key to oap.ports is how you expose a port — there is no separate switch. The Service has no targetPort, so the Service port and the container port are always the same number.">
-  <meta itemprop="wordCount" content="1049">
+  <meta itemprop="wordCount" content="1388">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="OAP Endpoints for Agents">
   <meta name="twitter:description" content="OAP Endpoints for Agents Which OAP ports this chart opens, how to open more (Zipkin, PromQL, LogQL, TraceQL, self-telemetry), and what agents, swctl and Grafana should point at.
@@ -1797,7 +1797,7 @@ ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name:
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 7e0d6a3</div>
+                  <div class="commit-id">Commit Id: 024767f</div>
                 
 
 
@@ -1855,9 +1855,30 @@ ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name:
       <tr>
           <td><code>rest</code></td>
           <td><code>12800</code></td>
-          <td>GraphQL query API at <code>/graphql</code> (Horizon&rsquo;s <code>oap.queryUrl</code>, <code>swctl</code>). HTTP receivers share it for the same reason (<code>SW_RECEIVER_SHARING_REST_PORT:0</code>). All three pod probes <code>tcpSocket</code> this port</td>
+          <td>GraphQL query API at <code>/graphql</code> (Horizon&rsquo;s <code>oap.queryUrl</code>, <code>swctl</code>), unless <code>query</code> is set. HTTP receivers share it for the same reason (<code>SW_RECEIVER_SHARING_REST_PORT:0</code>). All three pod probes <code>tcpSocket</code> this port</td>
           <td>yes</td>
           <td>no</td>
+      </tr>
+      <tr>
+          <td><code>receiver-grpc</code></td>
+          <td><code>11811</code> in the commented example</td>
+          <td>The gRPC receivers moved off <code>grpc</code> — see <a href="#separate-the-receiver-and-query-ports">Separate the receiver and query ports</a>. Satellite forwards here when it is set</td>
+          <td>no</td>
+          <td>no — the chart sets <code>SW_RECEIVER_GRPC_PORT</code></td>
+      </tr>
+      <tr>
+          <td><code>receiver-rest</code></td>
+          <td><code>12811</code> in the commented example</td>
+          <td>The HTTP receivers moved off <code>rest</code></td>
+          <td>no</td>
+          <td>no — the chart sets <code>SW_RECEIVER_SHARING_REST_PORT</code></td>
+      </tr>
+      <tr>
+          <td><code>query</code></td>
+          <td><code>12810</code> in the commented example</td>
+          <td>The GraphQL query API, the AI agent conversation API and <code>/status/config/ttl</code>, moved off <code>rest</code>. Horizon&rsquo;s <code>oap.queryUrl</code> follows it. Needs OAP 11.2.0 or later</td>
+          <td>no</td>
+          <td>no — the chart sets <code>SW_QUERY_SERVER_REST_PORT</code></td>
       </tr>
       <tr>
           <td><code>admin</code></td>
@@ -1962,7 +1983,30 @@ ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name:
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">tcpSocket</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>{<span style="color:#fff"> </span><span style="color:#0550ae">port</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">12801</span><span style="color:#fff"> </span>}<span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">failureThreshold</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">30</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">periodSeconds</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">10</span><span style="color:#fff">
-</span></span></span></code></pre></div><p>The default probes hardcode <code>12800</code>; leaving them behind makes the pod restart-loop. Horizon needs no change either way — the UI ConfigMap renders <code>oap.queryUrl</code> / <code>oap.adminUrl</code> from <code>oap.ports.rest</code> / <code>oap.ports.admin</code>. <code>zipkin-receiver</code> and <code>zipkin-query</code> have no such problem — the chart derives their env from the value.</p>
+</span></span></span></code></pre></div><p>The default probes hardcode <code>12800</code>; leaving them behind makes the pod restart-loop. Horizon needs no change either way — the UI ConfigMap renders <code>oap.queryUrl</code> / <code>oap.adminUrl</code> from <code>oap.ports.rest</code> (or <code>oap.ports.query</code> when set) / <code>oap.ports.admin</code>. <code>zipkin-receiver</code> and <code>zipkin-query</code> have no such problem — the chart derives their env from the value.</p>
+<h2 id="separate-the-receiver-and-query-ports">Separate the receiver and query ports</h2>
+<p>By default <code>grpc</code> and <code>rest</code> carry both the agent and the query traffic: agents report on the same
+ports that the UI queries, and <code>grpc</code> also carries the cluster traffic between OAP nodes.
+Three keys split them, so each port can be published, firewalled and given TLS on its own:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">oap</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">ports</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">grpc</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">11800</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">rest</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">12800</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">admin</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">17128</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">receiver-grpc</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">11811</span><span style="color:#fff">   </span><span style="color:#57606a"># agents, Envoy, OTLP gRPC, Satellite</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">receiver-rest</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">12811</span><span style="color:#fff">   </span><span style="color:#57606a"># browser SDK, HTTP agents, OTLP HTTP</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">query</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">12810</span><span style="color:#fff">           </span><span style="color:#57606a"># GraphQL, AI agent conversations, /status/config/ttl</span><span style="color:#fff">
+</span></span></span></code></pre></div><p>For each key that is set, the chart publishes the port and sets the OAP variable that starts the
+server (<code>SW_RECEIVER_GRPC_PORT</code>, <code>SW_RECEIVER_SHARING_REST_PORT</code>, <code>SW_QUERY_SERVER_REST_PORT</code>). It
+also points its own clients at the new ports: Horizon&rsquo;s <code>oap.queryUrl</code> uses <code>query</code>, and Satellite
+forwards to <code>receiver-grpc</code>. With all three set, no agent or query traffic is left on <code>grpc</code> and
+<code>rest</code>: <code>grpc</code> carries the cluster traffic between OAP nodes, and <code>rest</code> the probes, which keep
+checking <code>12800</code>. The keys are independent; set only the ones you need.</p>
+<p><code>receiver-grpc</code> and <code>receiver-rest</code> work on every OAP release this chart supports. <code>query</code> needs OAP
+11.2.0 or later: an older OAP ignores the variable and keeps GraphQL on <code>12800</code>, while Horizon would
+query the closed <code>query</code> port.</p>
+<p>Repoint the clients outside the chart yourself: agents to <code>receiver-grpc</code>, browser and other HTTP
+reporters to <code>receiver-rest</code>, and <code>swctl --base-url</code> or any other GraphQL client to <code>query</code>.</p>
 <h2 id="what-to-point-at-what">What to point at what</h2>
 <p>Assuming release <code>skywalking</code> in namespace <code>skywalking</code>, installed with <code>--set fullnameOverride=skywalking</code> so the Service is <code>skywalking-oap</code>. Without that override the name is <code>skywalking-skywalking-helm-oap</code> — substitute it everywhere below.</p>
 <table>
@@ -2022,7 +2066,7 @@ ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name:
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">annotations</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span><span style="color:#0550ae">service.beta.kubernetes.io/aws-load-balancer-type</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>nlb<span style="color:#fff">
 </span></span></span></code></pre></div><p><code>oap.service.type</code> accepts any Service type (<code>ClusterIP</code>, <code>NodePort</code>, <code>LoadBalancer</code>) and <code>oap.service.annotations</code> is passed straight through to the Service metadata. The agent protocol on <code>11800</code> is gRPC over HTTP/2, so an L7 HTTP ingress will not do — use an L4 / NLB Service or a gRPC-aware gateway.</p>
-<p>A public OAP Service publishes <strong>every</strong> key in <code>oap.ports</code>, and <code>admin: 17128</code> is one of them by default — it serves <code>/status/*</code>, <code>/debugging/*</code>, inspect and the runtime-rule write APIs. Front the public address with something that forwards only <code>11800</code> / <code>12800</code> rather than dropping <code>admin</code> from <code>oap.ports</code>: the UI ConfigMap still renders <code>oap.adminUrl</code> as <code>:17128</code>, so removing the port breaks Horizon. See <a href="../tls">TLS</a> before putting any of these on the internet.</p>
+<p>A public OAP Service publishes <strong>every</strong> key in <code>oap.ports</code>, and <code>admin: 17128</code> is one of them by default — it serves <code>/status/*</code>, <code>/debugging/*</code>, inspect and the runtime-rule write APIs. Front the public address with something that forwards only <code>11800</code> / <code>12800</code> (or only the receiver ports, when <a href="#separate-the-receiver-and-query-ports">separated</a>) rather than dropping <code>admin</code> from <code>oap.ports</code>: the UI ConfigMap still renders <code>oap.adminUrl</code> as <code>:17128</code>, so removing the port breaks Horizon. See <a href="../tls">TLS</a> before putting any of these on the internet.</p>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="../../operate/oap-configuration">Configure OAP</a> — <code>oap.env</code>, <code>oap.config</code>, dynamic configuration</li>
@@ -2071,6 +2115,7 @@ ports: {{- range $key, $value := .Values.oap.ports }} - port: {{ $value }} name:
             <li><a href="#do-not-renumber-grpc--rest--admin-on-their-own">Do not renumber <code>grpc</code> / <code>rest</code> / <code>admin</code> on their own</a></li>
           </ul>
         </li>
+        <li><a href="#separate-the-receiver-and-query-ports">Separate the receiver and query ports</a></li>
         <li><a href="#what-to-point-at-what">What to point at what</a></li>
         <li><a href="#reaching-oap-from-outside-the-cluster">Reaching OAP from outside the cluster</a></li>
         <li><a href="#related">Related</a></li>

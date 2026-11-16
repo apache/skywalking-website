@@ -35,7 +35,7 @@ These are several ways to install:">
   <meta itemprop="description" content="bydbctl bydbctl is the command line tool for interacting with BanyanDB. It is a powerful tool that can be used to create, update, read, and delete schemas. It can also be used to query data stored in streams, measures, traces, and properties.
 bydbctl agent opens an interactive BYDBQL agent TUI. It helps users generate, edit, validate, approve, and execute BYDBQL queries. See BYDBQL Agent TUI for details.
 These are several ways to install:">
-  <meta itemprop="wordCount" content="4248">
+  <meta itemprop="wordCount" content="4616">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="bydbctl">
   <meta name="twitter:description" content="bydbctl bydbctl is the command line tool for interacting with BanyanDB. It is a powerful tool that can be used to create, update, read, and delete schemas. It can also be used to query data stored in streams, measures, traces, and properties.
@@ -2326,7 +2326,7 @@ These are several ways to install:">
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 88245d3</div>
+                  <div class="commit-id">Commit Id: 438cce3</div>
                 
 
 
@@ -2420,7 +2420,7 @@ instant; part-based snapshots (stream, measure and trace) contain flushed data o
 </span></span><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --plan plan.yaml --output ./schema-20261010 --schema-only
 </span></span></code></pre></div><p>The command:</p>
 <ol>
-<li>checks that <code>--output</code> does not exist or is empty (anything else is exit <code>1</code>; there is no resume yet);</li>
+<li>checks that <code>--output</code> does not exist or is empty (anything else is exit <code>1</code>);</li>
 <li>connects to the liaisons, lists the groups and validates the selectors;</li>
 <li>writes the schema of the selected groups to <code>schema/</code>; with <code>--schema-only</code> it writes <code>manifest.json</code> and stops here, without a
 session or any data. With <code>--include-schema=false</code> it writes no schema at all and skips the schema revision check below;</li>
@@ -2432,8 +2432,8 @@ as <code>--preempt</code> does, anything else (Enter included) leaves them as th
 exits <code>2</code>;</li>
 <li>exports every node over its own stream, <code>--parallelism</code> nodes at a time, heartbeating the session every 5 minutes. Node <code>i</code>
 (nodes sorted by id) streams through liaison <code>i mod L</code>; a stream
-refused as unavailable, busy or not found moves on to the next liaison (see <code>--send-retry-timeout</code>). Each file is written as <code>&lt;file&gt;.tmp</code>, checked against the size, CRC32 and schema
-revision the node announces, then renamed;</li>
+refused as unavailable, busy or not found moves on to the next liaison (see <code>--send-retry-timeout</code>). Each file is written as <code>&lt;file&gt;.tmp</code>, checked against the size and CRC32 the node announces
+(CSV files also against the schema revision), then renamed;</li>
 <li>writes <code>manifest.json</code>, releases the session and prints what was written — a <code>NODE CATALOG GROUP STAGE UNITS FILES ROWS SIZE TIME</code>
 table, <code>TIME</code> adding up the time the row&rsquo;s units took — followed by
 <code>export written to &lt;dir&gt;: &lt;units&gt; unit(s), &lt;files&gt; file(s), &lt;size&gt;, &lt;n&gt; warning(s) in &lt;time&gt;</code>.</li>
@@ -2445,8 +2445,8 @@ error is printed when the run exits:</p>
 </span></span><span style="display:flex;"><span>✓ data-hot1:17912  [3/7] measure/sw_metricsDay seg-20261004  1 file(s)  180 rows  4.3 KiB  0.4s
 </span></span><span style="display:flex;"><span>✓ data-hot1:17912  done: 7 unit(s), 8 file(s), 526 rows, 93.0 KiB in 3.3s
 </span></span></code></pre></div><p>When stdout is a terminal, each exporting node also has a live line below them, redrawn in place as the data arrives: the unit, the
-shard being written (its position among the unit&rsquo;s shards and the unit&rsquo;s part count, or <code>segment index</code> for the segment-level file
-of an index-mode measure), the rows and bytes so far, the unit&rsquo;s average transfer rate and the unit&rsquo;s time. The live lines stay
+shard being written (its position among the unit&rsquo;s shards and the unit&rsquo;s part count, or <code>segment-level</code> for a segment-level file:
+the rows of an index-mode measure, or a native segment&rsquo;s metadata and series index), the rows (CSV only) and bytes so far, the unit&rsquo;s average transfer rate and the unit&rsquo;s time. The live lines stay
 below the terminal height; the nodes that do not fit are counted on one line. When stdout is not a terminal there is no live
 line; the start of every unit is printed as a line of its own instead
 (<code>  data-hot1:17912  [3/7] measure/sw_metricsDay seg-20261004 started: 1 shard(s), 2 part(s)</code>).</p>
@@ -2538,8 +2538,42 @@ and <code>_span</code> are standard base64 with padding; string arrays are JSON 
 cell); timestamps are Unix nanoseconds. <code>--csv-annotations</code> adds a <code>#datatype</code> line before each header naming every column&rsquo;s type
 (<code>string</code>, <code>long</code>, <code>double</code>, <code>base64Binary</code>, <code>stringArray</code>, <code>longArray</code>, <code>timestamp</code>); it has one field more than the header.</p>
 <h4 id="native">Native</h4>
-<p><code>--format native</code> is reserved for a format that carries the data nodes&rsquo; own part files; it is not implemented yet (exit <code>1</code>). The
-design, including the manifest fields, is in <a href="../../../design/0.12.0/data-export-import/readme">Data export and import</a>.</p>
+<p><code>--format native</code> carries the data nodes&rsquo; own engine files byte for byte, packed into <code>.bnc</code> containers: per segment its <code>metadata</code>
+file, <code>sidx-NNNNN.bnc</code> (the series index) and one <code>shard-&lt;N&gt;-NNNNN.bnc</code> per shard (its live parts, their trace secondary index parts and
+the stream element index); per property shard one <code>shard-&lt;N&gt;-NNNNN.bnc</code>. It is much faster than CSV in both directions and reproduces
+the stored data exactly, but <code>bydbctl data import</code> accepts it only into a target whose shard numbers, segment intervals, time zone,
+segment file format and index rule ids match the source&rsquo;s. A native artifact is never compressed (<code>--compress</code> defaults to <code>none</code>, <code>gzip</code> is exit <code>1</code>);
+<code>--max-file-size</code> splits a container into volumes and must be <code>0</code> or at least <code>64KiB</code>. The format, including the manifest fields, is
+described in <a href="../../../design/0.12.0/data-export-import/readme">Data export and import</a>.</p>
+<p>Importing a native artifact refuses the whole import (exit <code>2</code>, the gate and its reason listed under <code>PROBLEMS</code>) when one of these
+differs: <code>TOPOLOGY</code> (the shard number or segment interval of the target stage or group), <code>TZ</code> (a target data node&rsquo;s time zone),
+<code>VERSION</code> (a segment file format a target data node cannot read) or <code>INDEX_RULE</code> (an index rule that exists on the target with another
+id; index rules the import creates keep the artifact&rsquo;s ids, so let the import create the schema rather than creating it beforehand).
+Two options apply to the native import only. A native import copies whole segments into a cluster that usually serves live
+traffic, and the liaison writes every byte to each replica; set <code>--part-rate-limit</code> so the copy does not saturate the target&rsquo;s
+network and disks. Raise <code>--part-chunk-size</code> over a high-latency link to cut acknowledgement round trips, or lower it to reduce the
+memory the liaison and receivers hold per in-flight frame:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Flag</th>
+          <th>Default</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--part-rate-limit</code></td>
+          <td><code>import.partRateLimit</code>, else <code>BYDBCTL_IMPORT_PART_RATE_LIMIT</code>, else <code>0</code></td>
+          <td>total byte rate of the part files the import sends, e.g. <code>50MiB/s</code>; <code>0</code> = unlimited. <code>--write-rate-limit</code>, <code>--liaison-rate-limit</code>, <code>--node-rate-limit</code> and <code>--node-row-rate-limit</code> do not apply to native</td>
+      </tr>
+      <tr>
+          <td><code>--part-chunk-size</code></td>
+          <td><code>import.partChunkSize</code>, else <code>BYDBCTL_IMPORT_PART_CHUNK_SIZE</code>, else <code>1MiB</code></td>
+          <td>bytes of part files sent in one frame, <code>64KiB</code> to <code>4MiB</code>; out of range is exit <code>1</code></td>
+      </tr>
+  </tbody>
+</table>
 <h3 id="flags">Flags</h3>
 <p>Flags of <code>data export</code>:</p>
 <table>
@@ -2579,27 +2613,27 @@ design, including the manifest fields, is in <a href="../../../design/0.12.0/dat
       <tr>
           <td><code>--format</code></td>
           <td><code>export.format</code>, else <code>BYDBCTL_FORMAT</code>, else <code>csv</code></td>
-          <td>artifact format, see <a href="#formats">Formats</a>: <code>csv</code>; <code>native</code> is reserved and not implemented yet (exit <code>1</code>)</td>
+          <td>artifact format, see <a href="#formats">Formats</a>: <code>csv</code> or <code>native</code></td>
       </tr>
       <tr>
           <td><code>--compress</code></td>
-          <td><code>export.compress</code>, else <code>BYDBCTL_COMPRESS</code>, else <code>gzip</code></td>
-          <td><code>none</code> or <code>gzip</code></td>
+          <td><code>export.compress</code>, else <code>BYDBCTL_COMPRESS</code>, else <code>gzip</code> (<code>none</code> for native)</td>
+          <td><code>none</code> or <code>gzip</code>; native accepts only <code>none</code> (a <code>BYDBCTL_COMPRESS</code> value is ignored for native)</td>
       </tr>
       <tr>
           <td><code>--max-file-size</code></td>
           <td><code>export.maxFileSize</code>, else <code>BYDBCTL_MAX_FILE_SIZE</code>, else <code>512MiB</code></td>
-          <td>soft limit of one file&rsquo;s on-disk (compressed) size; a file rolls after the row that reaches it; <code>0</code> never rolls. Bare bytes or a unit (<code>KB</code>, <code>KiB</code>, <code>MB</code>, <code>MiB</code>, <code>GB</code>, <code>GiB</code>, &hellip;)</td>
+          <td>CSV: soft limit of one file&rsquo;s on-disk (compressed) size; a file rolls after the row that reaches it. Native: hard cap on every <code>.bnc</code> volume, footer and trailer included; must be <code>0</code> or at least <code>64KiB</code>, otherwise exit <code>1</code>. <code>0</code> never rolls. Bare bytes or a unit (<code>KB</code>, <code>KiB</code>, <code>MB</code>, <code>MiB</code>, <code>GB</code>, <code>GiB</code>, &hellip;)</td>
       </tr>
       <tr>
           <td><code>--csv-annotations</code></td>
           <td><code>export.csvAnnotations</code>, else <code>BYDBCTL_CSV_ANNOTATIONS</code>, else <code>false</code></td>
-          <td>CSV only: write a <code>#datatype</code> line before every CSV header</td>
+          <td>CSV only: write a <code>#datatype</code> line before every CSV header; refused with <code>--format native</code> when set as a flag or in <code>plan.yaml</code></td>
       </tr>
       <tr>
           <td><code>--include-schema</code></td>
           <td><code>export.includeSchema</code>, else <code>BYDBCTL_INCLUDE_SCHEMA</code>, else <code>true</code></td>
-          <td><code>false</code> exports no schema and skips the schema revision check; <code>groups[].indexMode</code> is then recorded as <code>false</code> with a warning. Cannot be combined with <code>--schema-only</code></td>
+          <td><code>false</code> exports no schema and skips the schema revision check (CSV only; a native export never runs it); <code>groups[].indexMode</code> is then recorded as <code>false</code> with a warning. Cannot be combined with <code>--schema-only</code></td>
       </tr>
       <tr>
           <td><code>--schema-only</code></td>
@@ -2619,7 +2653,7 @@ design, including the manifest fields, is in <a href="../../../design/0.12.0/dat
       <tr>
           <td><code>--node-row-rate-limit</code></td>
           <td><code>export.nodeRowRateLimit</code>, else <code>BYDBCTL_NODE_ROW_RATE_LIMIT</code>, else <code>0</code></td>
-          <td>CSV only: rows each data node may encode per period, enforced by the node; <code>0</code> = unlimited</td>
+          <td>CSV only: rows each data node may encode per period, enforced by the node; <code>0</code> = unlimited; refused with <code>--format native</code></td>
       </tr>
       <tr>
           <td><code>--liaison-rate-limit</code></td>
@@ -2672,8 +2706,8 @@ once before the streams start.</p>
 stream may go without a single frame, however long the whole export takes. Connecting to the liaisons, listing the groups and checking the selectors run
 under a 3-minute deadline, a dry run under 10 minutes and <code>release-session</code> under 3 minutes. Under any rate limit a node stream
 delivers a frame about every second (see above), so only a node that stalls hits the idle timeout.</p>
-<p><code>plan.yaml</code> accepts only the keys below; any other key (<code>export.checkpoint</code> and the <code>import:</code> section included, which arrive with resume
-and the import) is rejected so a typo never falls back to a default silently. Its selectors get the same checks as <code>--selector</code> (a group
+<p><code>plan.yaml</code> accepts only the keys below plus the <code>import.*</code> keys of <code>data import</code> (such as <code>import.partRateLimit</code> and <code>import.partChunkSize</code>); any other key
+is rejected so a typo never falls back to a default silently. Its selectors get the same checks as <code>--selector</code> (a group
 name must not be empty or repeated), and <code>--selector</code> replaces them entirely. Explicit flags override the file, which overrides the
 <code>BYDBCTL_*</code> environment. <code>--dry-run</code>, <code>--preempt</code>, <code>--strict-coverage</code> and <code>--output-format</code> are one-shot switches with no plan field.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">connection</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -2685,7 +2719,7 @@ name must not be empty or repeated), and <code>--selector</code> replaces them e
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">rateLimit</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>800MiB/s   <span style="color:#fff"> </span><span style="color:#57606a"># --liaison-rate-limit; 0 = unlimited</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#0550ae">export</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">output</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>./backup-20261010<span style="color:#fff">
-</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">format</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>csv           <span style="color:#fff"> </span><span style="color:#57606a"># csv; native is reserved</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">format</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>csv           <span style="color:#fff"> </span><span style="color:#57606a"># csv | native</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">compress</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>gzip        <span style="color:#fff"> </span><span style="color:#57606a"># none | gzip</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">maxFileSize</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>512MiB   <span style="color:#fff"> </span><span style="color:#57606a"># 0 = never roll</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">includeSchema</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
@@ -2715,7 +2749,7 @@ name must not be empty or repeated), and <code>--selector</code> replaces them e
       </tr>
       <tr>
           <td><code>1</code></td>
-          <td>usage error: a bad flag or <code>plan.yaml</code>, an unknown selector group, a non-empty <code>--output</code>, <code>--format native</code></td>
+          <td>usage error: a bad flag or <code>plan.yaml</code>, an unknown selector group, a non-empty <code>--output</code>, or with <code>--format native</code> any of <code>--compress gzip</code>, a non-zero <code>--max-file-size</code> below 64KiB, a <code>--node-row-rate-limit</code> above 0 or <code>--csv-annotations</code> (set as a flag or in <code>plan.yaml</code>)</td>
       </tr>
       <tr>
           <td><code>2</code></td>
@@ -2778,12 +2812,12 @@ dry run and are refused (exit <code>1</code>): leave them out of a plan used for
           <td>the sum of the parts&rsquo; row counts. For an index-mode measure it is the document count of the segment series index, an upper bound because it also holds the series of the group&rsquo;s regular measures. For property it counts every stored revision, tombstones included</td>
       </tr>
       <tr>
-          <td><code>EST-SIZE(comp/raw)</code></td>
-          <td>compressed on-disk bytes / uncompressed bytes. comp includes the per-shard and segment-level indexes; raw includes the per-shard indexes, and the segment-level index only for an index-mode measure (where it holds the rows; otherwise it is rebuilt from the parts). For trace, raw counts the span payload only (tags excluded), so it can be smaller than comp; comp is a lower bound. Property stores one form, so both are equal</td>
+          <td><code>EST-SIZE</code></td>
+          <td>estimated on-disk size of the parts and their indexes, what a native export transfers. <code>-o json</code> and <code>-o yaml</code> also carry the uncompressed size</td>
       </tr>
       <tr>
           <td><code>TIME-RANGE</code></td>
-          <td>earliest ~ latest timestamp of the parts, UTC, as <code>MM-DD</code> (with the year when the bounds fall in different years); <code>-</code> when unknown</td>
+          <td>earliest ~ latest timestamp of the parts and, for an index-mode measure group, of its series index, UTC, as <code>MM-DD</code> (with the year when the bounds fall in different years); <code>-</code> when unknown</td>
       </tr>
       <tr>
           <td><code>SNAPSHOT</code></td>
@@ -2836,7 +2870,8 @@ only <code>ExportService.Plan</code>; <code>--schema-only</code> needs no <code>
 <p>Pass <code>-u/-p</code> or <code>BYDBCTL_USERNAME</code>/<code>BYDBCTL_PASSWORD</code>, and enable TLS (<code>--enable-tls</code>, or <code>connection.nodesTLS</code> in <code>plan.yaml</code>) so the
 credentials are not sent in clear text. The liaison forwards these calls to the data nodes over the internal cluster port, which carries
 no authentication of its own and must stay unreachable from outside the cluster. An end-to-end example with one hot and one warm data
-node behind a liaison, covering the dry run, <code>release-session</code> and the CSV export, lives in <code>test/e2e-v2/cases/transfer/export/</code>.</p>
+node behind a liaison, covering the dry run, <code>release-session</code>, the export and the import, lives in <code>test/e2e-v2/cases/transfer/csv/</code>
+(CSV) and <code>test/e2e-v2/cases/transfer/native/</code> (native).</p>
 
 </div>
 
