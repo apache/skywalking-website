@@ -33,7 +33,7 @@ The LAL config files are in YAML format, and are located under directory lal. Yo
   <meta itemprop="name" content="Log Analysis Language">
   <meta itemprop="description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
 The LAL config files are in YAML format, and are located under directory lal. You can set log-analyzer/default/lalFiles in the application.yml file or set environment variable SW_LOG_LAL_FILES to activate specific LAL config files.">
-  <meta itemprop="wordCount" content="3859">
+  <meta itemprop="wordCount" content="4231">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Log Analysis Language">
   <meta name="twitter:description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
@@ -4288,7 +4288,7 @@ The LAL config files are in YAML format, and are located under directory lal. Yo
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 6566fec</div>
+                  <div class="commit-id">Commit Id: ae9ea84</div>
                 
 
 
@@ -4408,7 +4408,28 @@ from non-persistent source context — the values are available during LAL proce
 Use <code>tag 'key': sourceAttribute(&quot;attr&quot;)</code> in the extractor to selectively persist specific attributes.</p>
 <h2 id="layer">Layer</h2>
 <p>Layer should be declared in the LAL script to represent the analysis scope of the logs.
-LAL rules are routed by layer — only rules matching the incoming log&rsquo;s layer are evaluated.</p>
+LAL rules are routed by layer — only rules matching the incoming log&rsquo;s layer are evaluated.
+A rule&rsquo;s <code>layer</code> must be a registered layer name (case-sensitive) or <code>auto</code>. A rule declaring an unregistered or
+missing layer is skipped with a warning at boot, and rejected when applied as a runtime rule.</p>
+<p>A log is routed as follows:</p>
+<ol>
+<li>A log whose layer is set, by the agent&rsquo;s <code>LogData.layer</code> or the OTLP <code>service.layer</code> resource attribute,
+runs the rules declared for that layer. A log whose layer is not registered is dropped.</li>
+<li>A log without a layer runs the <code>layer: auto</code> rules, see <a href="#auto-layer">Auto layer</a>.</li>
+<li>When no <code>layer: auto</code> rule claims it, it runs the <code>layer: auto</code> rules declared <code>fallback: true</code>.</li>
+<li>When no fallback rule claims it either, it is dropped.</li>
+</ol>
+<p>The shipped <code>lal/default.yaml</code> declares:</p>
+<ul>
+<li><code>default</code> (<code>layer: GENERAL</code>), saving the logs that arrive with the <code>GENERAL</code> layer;</li>
+<li><code>default-fallback</code> (<code>layer: auto</code>, <code>fallback: true</code>), saving the logs without a layer under <code>GENERAL</code>. Edit
+its extractor to file them under another layer, for example by <code>sourceAttribute(...)</code> or <code>tag(...)</code>;</li>
+<li><code>otlp-general</code> (<code>layer: OTLP_GENERAL</code>), saving the logs of the OpenTelemetry services that set
+<code>service.layer=OTLP_GENERAL</code>, the layer their spans are analyzed under.</li>
+</ul>
+<p>A rule written for the logs without a layer declares <code>layer: auto</code>, with <code>fallback: true</code> when it is to take
+only what the other auto rules leave, and sets the layer in its extractor, e.g. <code>extractor { layer &quot;GENERAL&quot; }</code>.
+A <code>layer: GENERAL</code> rule sees only the logs that arrive with the <code>GENERAL</code> layer.</p>
 <h3 id="inline-layer-declarations-layerdefinitions">Inline layer declarations (<code>layerDefinitions:</code>)</h3>
 <p>A LAL file may declare its own custom layers with a top-level <code>layerDefinitions:</code> block.
 Each entry is funneled through <code>Layer.register(name, ordinal, normal)</code> <strong>before</strong>
@@ -4447,8 +4468,9 @@ collisions.</li>
 <p>Three other registration paths exist for layers that are <strong>not</strong> specific to a LAL file: an
 operator-managed <code>layer-extensions.yml</code>, a <code>LayerExtension</code> Java SPI for plugin jars, and
 the built-in static fields in <code>Layer.java</code> for distribution layers. See
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
 javadoc for the full picture.</p>
+<h3 id="auto-layer">Auto layer</h3>
 <p>When <code>layer: auto</code> is declared, the rule matches logs where <code>service.layer</code> is absent (common for OTLP
 sources that don&rsquo;t set this attribute). The script is expected to set the layer in the extractor:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">rules</span><span style="color:#1f2328">:</span><span style="color:#fff">
@@ -4468,15 +4490,32 @@ sources that don&rsquo;t set this attribute). The script is expected to set the 
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
 </span></span></span></code></pre></div><p>In <code>layer: auto</code> mode, <code>abort</code> and <code>drop</code> have distinct meanings:</p>
 <ul>
-<li><strong><code>abort {}</code></strong> — &ldquo;not mine, let others try.&rdquo; If all auto rules abort, the log falls back to
-<code>GENERAL</code> layer processing automatically.</li>
-<li><strong><code>drop {}</code></strong> — &ldquo;mine, but sampled out.&rdquo; The rule claimed the log (no GENERAL fallback) but
+<li><strong><code>abort {}</code></strong> — &ldquo;not mine, let others try.&rdquo; If all auto rules abort, the log runs the fallback auto rules.</li>
+<li><strong><code>drop {}</code></strong> — &ldquo;mine, but sampled out.&rdquo; The rule claimed the log (the fallback auto rules do not run) but
 chose not to persist it (e.g., sampling). Use this for rate limiting or conditional dropping
 within a recognized log type.</li>
 </ul>
 <p>If an auto rule claims the log (doesn&rsquo;t abort) but doesn&rsquo;t set a layer, the log is warned and
 dropped at persistence time.</p>
-<h2 id="filter">Filter</h2>
+<p>All the auto rules run on such a log, in no defined order, and each one that claims it saves a copy of
+its own, so an auto rule should claim only the logs it recognizes and <code>abort {}</code> on the others.</p>
+<p>A rule declaring <code>fallback: true</code> (allowed only with <code>layer: auto</code>) runs after the other auto rules, only when
+none of them claimed the log. It is the catch-all for the logs without a layer: <code>default-fallback</code> in
+<code>lal/default.yaml</code> files them under <code>GENERAL</code>. A fallback rule follows the same rules as any auto rule: it
+must set the layer, and <code>abort {}</code> leaves the log unclaimed, which drops it. Auto and fallback rule names
+share one name space.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">rules</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>default-fallback<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">layer</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>auto<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">fallback</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">dsl</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">|</span><span style="color:#0a3069">
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      filter {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        extractor {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          layer &#34;GENERAL&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink {}
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
+</span></span></span></code></pre></div><h2 id="filter">Filter</h2>
 <p>A filter is a group of <a href="#parser">parser</a>, <a href="#extractor">extractor</a> and <a href="#sink">sink</a>. Users can use one or more filters
 to organize their processing logic. Every piece of log will be sent to all filters in an LAL rule. A piece of log
 sent to the filter is available as property <code>log</code> in the LAL, therefore you can access the log service name
@@ -4750,7 +4789,7 @@ not dropped) and is used to associate with traces / metrics.</p>
 </code></pre><ul>
 <li><code>layer</code></li>
 </ul>
-<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
+<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
 not dropped) and is used to associate with service.</p>
 <ul>
 <li><code>tag</code></li>
@@ -4982,18 +5021,18 @@ by the extractor as usual and pre-populated via <code>init()</code> from <code>L
 <p><strong>Note</strong>, slow SQL sampling would only flag this SQL in the candidate list. The OAP server would run statistic per service
 and only persistent the top 50 every 10(controlled by <code>topNReportPeriod: ${SW_CORE_TOPN_REPORT_PERIOD:10}</code>) minutes by default.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
 <h4 id="sampled-trace-network-profiling">Sampled Trace (Network Profiling)</h4>
 <p>SkyWalking converts network profiling sampled trace logs into <code>SampledTraceRecord</code> for process-level network analysis.</p>
 <p>Use <code>outputType: SampledTrace</code> in your rule config.
 The available output fields are: <code>latency</code>, <code>uri</code>, <code>reason</code>, <code>processId</code>, <code>destProcessId</code>, <code>detectPoint</code>, <code>componentId</code>.</p>
 <p>We require a log tag <code>&quot;LOG_KIND&quot; = &quot;NET_PROFILING_SAMPLED_TRACE&quot;</code> to make OAP distinguish sampled trace logs from other log reports.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/6566fec4b4f7a177e3163e310c10bdef800e7f7c/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/ae9ea846362b1c75b643a4962bf46a65a8fe890d/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
 <h3 id="extending-custom-output-types">Extending: custom output types</h3>
 <p>For developers who need to create custom output types (implementing <code>LALOutputBuilder</code>, extending
 <code>AbstractLog</code>, registering <code>LALSourceTypeProvider</code> SPI, or defining custom input types), see the
@@ -5144,6 +5183,7 @@ Register it in `META-INF/services/org.apache.skywalking.oap.log.analyzer.v2.spi.
         <li><a href="#layer">Layer</a>
           <ul>
             <li><a href="#inline-layer-declarations-layerdefinitions">Inline layer declarations (<code>layerDefinitions:</code>)</a></li>
+            <li><a href="#auto-layer">Auto layer</a></li>
           </ul>
         </li>
         <li><a href="#filter">Filter</a>

@@ -33,7 +33,7 @@ OTLP logs — JS errors, promise rejections, AJAX failures, and pageNotFound eve
   <meta itemprop="name" content="WeChat Mini Program Monitoring">
   <meta itemprop="description" content="WeChat Mini Program Monitoring SkyWalking supports WeChat Mini Program monitoring via the SkyAPM mini-program-monitor SDK. The SDK emits three data streams over standard protocols:
 OTLP logs — JS errors, promise rejections, AJAX failures, and pageNotFound events OTLP metrics — app launch, first render, route, script, and sub-package load durations; a first_paint.time epoch-ms timestamp; and a delta histogram of outbound request durations SkyWalking native trace segments (opt-in) — one SegmentObject per sampled outbound wx.request, with an sw8 header injected on the wire so downstream backend services join the same trace No new receiver is required — the SDK speaks OTLP/HTTP and the SkyWalking native v3 protocol.">
-  <meta itemprop="wordCount" content="1053">
+  <meta itemprop="wordCount" content="1122">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="WeChat Mini Program Monitoring">
   <meta name="twitter:description" content="WeChat Mini Program Monitoring SkyWalking supports WeChat Mini Program monitoring via the SkyAPM mini-program-monitor SDK. The SDK emits three data streams over standard protocols:
@@ -4288,7 +4288,7 @@ OTLP logs — JS errors, promise rejections, AJAX failures, and pageNotFound eve
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 6566fec</div>
+                  <div class="commit-id">Commit Id: ae9ea84</div>
                 
 
 
@@ -4496,11 +4496,12 @@ created by MAL (OTLP metrics) and LAL (OTLP logs) instead. All request-load / la
 metrics on the dashboard come from the <code>miniprogram.request.duration</code> histogram&rsquo;s
 <code>_count</code> + bucket families.</p>
 <h2 id="error-logs">Error Logs</h2>
-<p>The LAL rule <code>lal/miniprogram.yaml</code> uses <code>layer: auto</code> mode. It dispatches on the
-<code>miniprogram.platform</code> resource attribute — one rule file produces both the <code>WECHAT_MINI_PROGRAM</code>
-and <code>ALIPAY_MINI_PROGRAM</code> layers. For each error log, the extractor also emits a
-<code>miniprogram_error_count</code> counter sample, which the log-MAL rule in <code>log-mal-rules/miniprogram.yaml</code>
-aggregates into the per-layer <code>error_count</code> metric.</p>
+<p>The LAL rules in <code>lal/miniprogram.yaml</code> handle the error logs. The SDK sets the <code>service.layer</code>
+resource attribute, so its logs reach the <code>miniprogram-errors-wechat</code> and <code>miniprogram-errors-alipay</code>
+rules, declared for the <code>WECHAT_MINI_PROGRAM</code> and <code>ALIPAY_MINI_PROGRAM</code> layers. For each error log,
+the extractor also emits a <code>miniprogram_error_count</code> counter sample, which the log-MAL rules in
+<code>log-mal-rules/miniprogram-wechat.yaml</code> and <code>log-mal-rules/miniprogram-alipay.yaml</code> aggregate into the
+per-layer <code>error_count</code> metric.</p>
 <p>Error categories (<code>exception.type</code> tag):</p>
 <table>
   <thead>
@@ -4566,8 +4567,8 @@ no longer auto-generates a device id; operators set <code>serviceInstance</code>
 <ul>
 <li><strong>SDK ≤ v0.2.x</strong> emits <code>componentId = 10001</code> (ajax-inherited). Its segments resolve to
 <code>Layer.GENERAL</code> and do not benefit from this integration&rsquo;s layer / topology work. OTLP
-metrics + logs still flow through MAL / LAL because they key on the <code>miniprogram.platform</code>
-resource attribute, which v0.2 already emits.</li>
+metrics still flow through MAL because it keys on the <code>miniprogram.platform</code> resource
+attribute, which v0.2 already emits.</li>
 <li><strong>SDK ≤ v0.3.x</strong> auto-generates <code>service.instance.id = mp-{random}</code> per session, creating
 one OAP instance entity per device — usually undesirable. Operators on v0.3.x can avoid this
 by passing <code>init({ serviceInstance: serviceVersion })</code> explicitly.</li>
@@ -4575,6 +4576,10 @@ by passing <code>init({ serviceInstance: serviceVersion })</code> explicitly.</l
 then handle absence differently: native segments produce a literal <code>-</code> instance entity; OTLP
 logs and metrics create no instance entity at all. Per-instance dashboards are meaningful
 only when the operator sets <code>serviceInstance</code>.</li>
+<li><strong>SDK ≥ v0.5.0 is required.</strong> It sets the <code>service.layer</code> resource attribute, which routes its
+error logs to the LAL rules of the mini-program layers. An older SDK sets none, so its error logs
+are filed under <code>GENERAL</code> and produce no <code>error_count</code> metric. Conversely, an OAP older than this
+version has no LAL rule for these layers and drops the error logs of SDK ≥ v0.5.0.</li>
 <li>The recommended pattern (SDK docs + e2e CI) is to set <code>serviceInstance</code> to a version-scoped
 value (mirroring <code>service.version</code> or a release tag). Then all three signal pipelines
 aggregate under the same OAP instance entity.</li>

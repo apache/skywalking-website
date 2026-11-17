@@ -33,7 +33,7 @@ This document specifies how a measure query turns storage blocks into batches on
   <meta itemprop="name" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
   <meta itemprop="description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
 This document specifies how a measure query turns storage blocks into batches on a data node: partIter / tstIter, block decoding, blockCursor, and the scan orchestration in banyand/measure/query.go and query_batch.go. It is the companion of Measure batch v2, which defines the batch, the reference-counted cursor and the frame this scan produces and consumes.">
-  <meta itemprop="wordCount" content="4944">
+  <meta itemprop="wordCount" content="5368">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Measure Scan Path v2： Streaming Series Windows and a Time-Ordered Merge">
   <meta name="twitter:description" content="Measure Scan Path v2: Streaming Series Windows and a Time-Ordered Merge Status: implemented in 0.12.0 (see “As built” in each document).
@@ -2323,7 +2323,7 @@ This document specifies how a measure query turns storage blocks into batches on
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 438cce3</div>
+                  <div class="commit-id">Commit Id: 8efdf0c</div>
                 
 
 
@@ -2533,6 +2533,30 @@ measurements is the <code>scan-storage</code> trace span (docs/operation/observa
       <tr>
           <td>A cheap overlap counter read on a real cluster before optimizing</td>
           <td>The counters shipped; reading them on a real cluster has not happened.</td>
+      </tr>
+  </tbody>
+</table>
+<p>A later change fits the scan&rsquo;s memory reservations to what blocks hold. It departs from three
+<a href="../../measure-batch-v2/readme#4-goals-and-non-goals">batch-v2 goals</a> on purpose:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Batch-v2 goal</th>
+          <th>As built, and why</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Decode each stored value at most once</td>
+          <td>A time-ordered merge whose cursors would exceed the query&rsquo;s whole allowance is cut into consecutive time slices, and a block is decoded once per slice it overlaps, at most 64 times (<code>maxMergeSlices</code>). A block cannot be decoded in part, so this is the only way such a merge (many series over blocks much wider than the window, as after a merge) runs instead of failing with <code>query memory pool exhausted</code>. A merge that fits is not sliced; <code>total_scan_slices</code> and the span&rsquo;s <code>slices</code> tag show the extra decodes. Known limit: every slice&rsquo;s cursor clones are made up front and charged to the query&rsquo;s allowance until released, so a merge whose clones do not fit fails with RESOURCE_EXHAUSTED instead of being sliced; cloning each slice only when the scan reaches it would lift this.</td>
+      </tr>
+      <tr>
+          <td>Copy a value only when it must outlive the cursor</td>
+          <td>A cursor that keeps under half its block copies its values into a buffer of their own (compaction), so the rest of the decoded block can be freed instead of staying live as long as the cursor.</td>
+      </tr>
+      <tr>
+          <td>Exact memory accounting</td>
+          <td>A cursor is reserved before its decode for the rows its block metadata puts in the query range, assuming they are spread evenly over the block&rsquo;s time span, instead of for the whole block. After the decode the reservation is lowered, never raised, to what the cursor keeps; a compacted cursor is charged the bytes it measured, and any other cursor at least the capacity of the decoder backing it views. Raising would mean a refusal in the middle of a decode. Rows bunched inside the window can therefore keep more than the reservation; the 6x decode-expansion term usually covers it, and a traced query shows it as <code>budget_retained_bytes</code> above <code>budget_estimate_kept_bytes</code>. Known limit, measured on four days of real SkyWalking data (about 63M rows in merged parts): the estimate fell short in about one of every 2,000 to 5,000 block and window pairs, never in a 15-minute window, by at most about 27 KB per cursor, mostly where a small block&rsquo;s kept rows cross the compaction threshold; no rebuilt worst case retained more than its reservation. An overrun of several times the reservation needs a dense burst inside a wide, sparse block with a projection far wider per row than the block stores, which only a crafted block showed.</td>
       </tr>
   </tbody>
 </table>
