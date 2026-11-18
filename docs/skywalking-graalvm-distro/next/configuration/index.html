@@ -35,7 +35,7 @@ Differences from Upstream This distro selects a fixed subset of modules/provider
   <meta itemprop="description" content="Configuration The SkyWalking GraalVM Distro uses a simplified application.yml with a fixed set of modules and providers. All settings are configurable via system environment variables at runtime, following the same ${SW_ENV_VAR:default} pattern as upstream SkyWalking.
 For the full upstream configuration reference, see the SkyWalking Configuration Vocabulary.
 Differences from Upstream This distro selects a fixed subset of modules/providers at build time. Modules and providers not listed below are not available — they are not compiled into the distro binary.">
-  <meta itemprop="wordCount" content="2112">
+  <meta itemprop="wordCount" content="2372">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Configuration">
   <meta name="twitter:description" content="Configuration The SkyWalking GraalVM Distro uses a simplified application.yml with a fixed set of modules and providers. All settings are configurable via system environment variables at runtime, following the same ${SW_ENV_VAR:default} pattern as upstream SkyWalking.
@@ -1498,7 +1498,7 @@ Differences from Upstream This distro selects a fixed subset of modules/provider
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 6b9f172</div>
+                  <div class="commit-id">Commit Id: 346d70c</div>
                 
 
 
@@ -2072,17 +2072,25 @@ for details on those files.</p>
 </table>
 <hr>
 <h3 id="trace-analyzer">trace-analyzer</h3>
-<p><strong>Selector</strong>: <code>SW_TRACE_ANALYZER</code> (default: <code>default</code>; <code>-</code> removes the module)</p>
-<p>TAL (Trace Analysis Language) rules over OTLP spans. A span is analyzed only by the rules of the layer its
-resource declares in <code>service.layer</code>; the bundled <code>tal/otlp-general.yaml</code> rules serve <code>OTLP_GENERAL</code>, so a
-service must send <code>service.layer=OTLP_GENERAL</code> to get its metrics, topology and slow statements, and a span
-without a registered layer is stored but not analyzed. The rules are compiled at build time; <code>talFiles</code>
-selects among pre-compiled files only, and an empty value keeps the module but analyzes nothing.</p>
-<p>Upstream reads the rule files from <code>config/tal/</code> at boot. This distro has no <code>config/tal/</code>: to change what is
-measured, edit or add files under <code>skywalking/oap-server/server-starter/src/main/resources/tal/</code> and rebuild. The
+<p><strong>Selector</strong>: <code>SW_TRACE_ANALYZER</code> (default: <code>default</code>; <code>-</code> removes the module, which fails the boot while the native
+trace receiver or the Kafka fetcher is loaded, as both require it)</p>
+<p>TAL (Trace Analysis Language) rules over OTLP spans (<code>talFiles</code>) and over the segments SkyWalking agents send
+(<code>nativeTalFiles</code>, since SWIP-17 the whole agent trace analysis: RPC and endpoint traffic, segments, virtual
+database / cache / MQ / GenAI services, network aliases, AI evaluation samples). An OTLP span is analyzed only by the
+rules of the layer its resource declares in <code>service.layer</code>; the bundled <code>otlp-general</code> rules serve <code>OTLP_GENERAL</code>,
+so a service must send <code>service.layer=OTLP_GENERAL</code> to get its metrics, topology and slow statements, and a span
+without a registered layer is stored but not analyzed. The native rules run in the order <code>nativeTalFiles</code> lists
+them, which decides the order sources reach OAL. The rules are compiled at build time; both settings select among
+pre-compiled files only. An empty <code>talFiles</code> keeps the module but analyzes no OTLP span; a <code>nativeTalFiles</code> entry
+that was not compiled fails the boot, as upstream&rsquo;s missing file does. A file whose <code>requiredModules</code> are not all
+loaded (<code>ai-evaluation</code>, <code>gen-ai-analyzer</code>) is skipped, as upstream skips it.</p>
+<p>Upstream reads the rule files from <code>config/tal/</code> at boot. This distro reads no rule file at runtime, and a rule file
+under <code>config/</code> (<code>tal/</code>, <code>otel-rules/</code>, <code>lal/</code>, <code>oal/</code>, <code>hierarchy-definition.yml</code>, <code>layer-extensions.yml</code>, …) fails the
+boot, as it would be ignored: to change what is measured, edit or add files under
+<code>skywalking/oap-server/server-starter/src/main/resources/tal/</code> and rebuild. The
 precompiler compiles every file there, whatever it contains, as long as the <a href="https://skywalking.apache.org/docs/main/next/en/concepts-and-designs/tal/">TAL grammar</a>
-accepts it, and fails the build on a rule upstream would refuse at boot (an unknown layer, input or output type, or
-conflicting metric shapes). The scripts in upstream&rsquo;s TAL reference and its trace-analyzer practice pages (nginx as a
+accepts it, and fails the build on a rule upstream would refuse at boot (an unknown layer or input type, a construct or
+function of another input, or conflicting metric shapes). The scripts in upstream&rsquo;s TAL reference and its trace-analyzer practice pages (nginx as a
 one-span proxy, gateway peers, canaries, server clusters by kind) are compiled and run by the distro&rsquo;s own pipeline in
 <code>TALDocScriptsTest</code>.</p>
 <ul>
@@ -2104,9 +2112,14 @@ neither <code>.yaml</code> nor <code>.yml</code>.</li>
   </thead>
   <tbody>
       <tr>
+          <td>nativeTalFiles</td>
+          <td><code>SW_TRACE_NATIVE_TAL_FILES</code></td>
+          <td><code>native-rpc,native-endpoint-cross-thread,native-network-alias,native-segment,native-virtual-service,native-virtual-genai,native-ai-evaluation</code></td>
+      </tr>
+      <tr>
           <td>talFiles</td>
           <td><code>SW_TRACE_TAL_FILES</code></td>
-          <td><code>otlp-general</code></td>
+          <td><code>otlp-general,otlp-ai-evaluation</code></td>
       </tr>
       <tr>
           <td>dedupWindow</td>
@@ -2824,6 +2837,69 @@ stays inactive.</p>
 <p><strong>Selector</strong>: <code>SW_RECEIVER_LOG</code> (default: <code>default</code>)</p>
 <p>No additional settings.</p>
 <hr>
+<h3 id="query-server">query-server</h3>
+<p><strong>Selector</strong>: <code>SW_QUERY_SERVER</code> (default: <code>default</code>)</p>
+<p>The HTTP server of the native query APIs: GraphQL (<code>/graphql</code>), the AI agent conversation view and files
+(<code>/ai-agent/conversations/*</code>) and <code>/status/config/ttl</code>. With <code>restPort</code> 0 they stay on the core REST server
+(<code>core/restPort</code>, 12800); a port above 0 moves them to a server of their own, so the query APIs can be bound,
+firewalled and given TLS apart from the ports agents report to.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Setting</th>
+          <th>Environment Variable</th>
+          <th>Default</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>restHost</td>
+          <td><code>SW_QUERY_SERVER_REST_HOST</code></td>
+          <td><code>0.0.0.0</code></td>
+      </tr>
+      <tr>
+          <td>restPort</td>
+          <td><code>SW_QUERY_SERVER_REST_PORT</code></td>
+          <td><code>0</code> (the core REST server)</td>
+      </tr>
+      <tr>
+          <td>restContextPath</td>
+          <td><code>SW_QUERY_SERVER_REST_CONTEXT_PATH</code></td>
+          <td><code>/</code></td>
+      </tr>
+      <tr>
+          <td>restIdleTimeOut</td>
+          <td><code>SW_QUERY_SERVER_REST_IDLE_TIMEOUT</code></td>
+          <td><code>30000</code></td>
+      </tr>
+      <tr>
+          <td>restAcceptQueueSize</td>
+          <td><code>SW_QUERY_SERVER_REST_QUEUE_SIZE</code></td>
+          <td><code>0</code></td>
+      </tr>
+      <tr>
+          <td>httpMaxRequestHeaderSize</td>
+          <td><code>SW_QUERY_SERVER_HTTP_MAX_REQUEST_HEADER_SIZE</code></td>
+          <td><code>8192</code></td>
+      </tr>
+      <tr>
+          <td>restSSLEnabled</td>
+          <td><code>SW_QUERY_SERVER_REST_SSL_ENABLED</code></td>
+          <td><code>false</code> (cert and key reloaded on rotation)</td>
+      </tr>
+      <tr>
+          <td>restSSLKeyPath</td>
+          <td><code>SW_QUERY_SERVER_REST_SSL_KEY_PATH</code></td>
+          <td><code>&quot;&quot;</code></td>
+      </tr>
+      <tr>
+          <td>restSSLCertChainPath</td>
+          <td><code>SW_QUERY_SERVER_REST_SSL_CERT_CHAIN_PATH</code></td>
+          <td><code>&quot;&quot;</code></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
 <h3 id="query">query</h3>
 <p><strong>Selector</strong>: <code>SW_QUERY</code> (default: <code>graphql</code>)</p>
 <table>
@@ -3160,6 +3236,11 @@ stays inactive.</p>
           <td>httpTimeout</td>
           <td><code>SW_ALARM_HTTP_TIMEOUT</code></td>
           <td><code>12</code> (seconds per HTTP hook request; <code>&lt;= 0</code> falls back to 12)</td>
+      </tr>
+      <tr>
+          <td>grpcTimeout</td>
+          <td><code>SW_ALARM_GRPC_TIMEOUT</code></td>
+          <td><code>10</code> (seconds per gRPC alarm/recovery stream; <code>&lt;= 0</code> falls back to 10)</td>
       </tr>
   </tbody>
 </table>
@@ -3756,6 +3837,7 @@ Horizon UI. No settings.</p>
             <li><a href="#receiver-zipkin-disabled-by-default">receiver-zipkin (disabled by default)</a></li>
             <li><a href="#receiver-browser">receiver-browser</a></li>
             <li><a href="#receiver-log">receiver-log</a></li>
+            <li><a href="#query-server">query-server</a></li>
             <li><a href="#query">query</a></li>
             <li><a href="#query-zipkin-disabled-by-default">query-zipkin (disabled by default)</a></li>
             <li><a href="#promql">promql</a></li>

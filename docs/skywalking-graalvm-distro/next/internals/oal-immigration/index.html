@@ -33,7 +33,7 @@ Solution: Run OAL engine at build time, export .class files &#43; manifests. Rep
   <meta itemprop="name" content="OAL Build-Time Pre-Compilation">
   <meta itemprop="description" content="OAL Build-Time Pre-Compilation Context OAL engine generates metrics, builder, and dispatcher classes at runtime via Javassist (ClassPool.makeClass() → CtClass.toClass()). GraalVM native image doesn’t support runtime bytecode generation. Additionally, Guava’s ClassPath.from() — used by AnnotationScan.scan() and SourceReceiverImpl.scan() — doesn’t work in native image (no JAR-based classpath).
 Solution: Run OAL engine at build time, export .class files &#43; manifests. Replace upstream classes with same-FQCN versions that load from manifests instead of scanning or generating code.">
-  <meta itemprop="wordCount" content="887">
+  <meta itemprop="wordCount" content="926">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="OAL Build-Time Pre-Compilation">
   <meta name="twitter:description" content="OAL Build-Time Pre-Compilation Context OAL engine generates metrics, builder, and dispatcher classes at runtime via Javassist (ClassPool.makeClass() → CtClass.toClass()). GraalVM native image doesn’t support runtime bytecode generation. Additionally, Guava’s ClassPath.from() — used by AnnotationScan.scan() and SourceReceiverImpl.scan() — doesn’t work in native image (no JAR-based classpath).
@@ -1495,7 +1495,7 @@ Solution: Run OAL engine at build time, export .class files &#43; manifests. Rep
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 6b9f172</div>
+                  <div class="commit-id">Commit Id: 346d70c</div>
                 
 
 
@@ -1574,7 +1574,8 @@ Solution: Run OAL engine at build time, export .class files &#43; manifests. Rep
 <li>Validates all 9 OAL script files are on the classpath</li>
 <li>Initializes <code>DefaultScopeDefine</code> by scanning <code>@ScopeDeclaration</code> annotations (OAL enricher needs scope metadata)</li>
 <li>For each of the 9 <code>OALDefine</code> configs: instantiates <code>OALEngineV2</code>, enables debug output (<code>setOpenEngineDebug(true)</code> + <code>setGeneratedFilePath()</code>), calls <code>engine.start()</code> which parses OAL → enriches → generates <code>.class</code> files via Javassist</li>
-<li>Scans the output directory for generated <code>.class</code> files and writes OAL manifests:
+<li>Scans the output directory for generated <code>.class</code> files and writes OAL manifests (build intermediates the rule
+registry is generated from; the generated jar leaves them out):
 <ul>
 <li><code>META-INF/oal-metrics-classes.txt</code> — ~620 fully-qualified class names</li>
 <li><code>META-INF/oal-dispatcher-classes.txt</code> — ~45 fully-qualified class names</li>
@@ -1671,11 +1672,13 @@ Solution: Run OAL engine at build time, export .class files &#43; manifests. Rep
 <p>Instead of extending upstream classes or hooking via <code>ModuleWiringBridge</code>, we use <strong>same-FQCN replacement</strong>: create classes in <code>oap-graalvm-server</code> with the exact same fully-qualified class name as the upstream class. Maven classpath precedence ensures our version is loaded instead of the upstream version.</p>
 <h3 id="3-replacement-classes-created">3 replacement classes created:</h3>
 <p><strong>1. <code>OALEngineLoaderService</code></strong> (<code>oap-graalvm-server/.../core/oal/rt/OALEngineLoaderService.java</code>)</p>
-<p>Same FQCN as upstream <code>org.apache.skywalking.oap.server.core.oal.rt.OALEngineLoaderService</code>. On first <code>load()</code> call:</p>
+<p>Same FQCN as upstream <code>org.apache.skywalking.oap.server.core.oal.rt.OALEngineLoaderService</code>. On first <code>load()</code> call,
+from the generated rule registry (<code>CompiledRules</code>, see <a href="../dsl-immigration">dsl-immigration.md</a>), which the precompiler
+generates from the OAL manifests below:</p>
 <ul>
-<li>Reads <code>META-INF/oal-disabled-sources.txt</code> → registers with <code>DisableRegister</code></li>
-<li>Reads <code>META-INF/oal-metrics-classes.txt</code> → <code>Class.forName()</code> → <code>StreamAnnotationListener.notify()</code></li>
-<li>Reads <code>META-INF/oal-dispatcher-classes.txt</code> → <code>Class.forName()</code> → <code>DispatcherDetectorListener.addIfAsSourceDispatcher()</code></li>
+<li>the disabled sources → registers with <code>DisableRegister</code></li>
+<li>the metrics class literals → <code>StreamAnnotationListener.notify()</code></li>
+<li>the dispatcher class literals → <code>DispatcherDetectorListener.addIfAsSourceDispatcher()</code></li>
 <li>All subsequent <code>load()</code> calls are no-ops (all classes registered on first call regardless of which <code>OALDefine</code> triggered it)</li>
 </ul>
 <p><strong>2. <code>AnnotationScan</code></strong> (<code>oap-graalvm-server/.../core/annotation/AnnotationScan.java</code>)</p>
@@ -1785,9 +1788,10 @@ Solution: Run OAL engine at build time, export .class files &#43; manifests. Rep
 </span></span><span style="display:flex;"><span>ls build-tools/precompiler/target/generated-classes/org/apache/skywalking/oap/server/core/source/oal/rt/metrics/
 </span></span><span style="display:flex;"><span>ls build-tools/precompiler/target/generated-classes/org/apache/skywalking/oap/server/core/source/oal/rt/dispatcher/
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#57606a"># 3. Check manifest files</span>
+</span></span><span style="display:flex;"><span><span style="color:#57606a"># 3. Check the build manifests and the generated registry</span>
 </span></span><span style="display:flex;"><span>cat build-tools/precompiler/target/generated-classes/META-INF/oal-metrics-classes.txt
 </span></span><span style="display:flex;"><span>cat build-tools/precompiler/target/generated-classes/META-INF/oal-dispatcher-classes.txt
+</span></span><span style="display:flex;"><span>less build-tools/precompiler/target/generated-registry/org/apache/skywalking/oap/server/graalvm/rules/OalRegistry.java
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#57606a"># 4. Check annotation scan manifests</span>
 </span></span><span style="display:flex;"><span>ls build-tools/precompiler/target/generated-classes/META-INF/annotation-scan/
