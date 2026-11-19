@@ -25,22 +25,19 @@
   <meta property="og:site_name" content="Apache SkyWalking">
   <meta property="og:title" content="Config Initialization — Eliminate Reflection in Config Loading">
   <meta property="og:description" content="Config Initialization — Eliminate Reflection in Config Loading Context YamlConfigLoaderUtils.copyProperties() uses Field.setAccessible(true) &#43; field.set() to populate ModuleConfig objects from YAML properties. This reflection pattern is problematic for GraalVM native image — every config field would require reflect-config.json entries, and setAccessible() is restricted.
-Since our module/provider set is fixed (37 modules, see distro-policy.md), we can generate hardcoded field-setting code at build time that eliminates all config-related reflection.
-Problem In ModuleDefine.prepare() and in BanyanDBConfigLoader, copyProperties() iterates property names, looks up fields by name via reflection, and sets them:">
+Since the image ships a known module/provider set (the accepted providers, see distro-policy.md), we can generate hardcoded field-setting code at build time that eliminates field reflection in config loading. Upstream’s ModuleDefine.prepare still creates each config object through its no-arg constructor reflectively; the precompiler registers those constructors from module-config-classes.txt.">
   <meta property="og:locale" content="en">
   <meta property="og:type" content="article">
     <meta property="article:section" content="docs">
 
   <meta itemprop="name" content="Config Initialization — Eliminate Reflection in Config Loading">
   <meta itemprop="description" content="Config Initialization — Eliminate Reflection in Config Loading Context YamlConfigLoaderUtils.copyProperties() uses Field.setAccessible(true) &#43; field.set() to populate ModuleConfig objects from YAML properties. This reflection pattern is problematic for GraalVM native image — every config field would require reflect-config.json entries, and setAccessible() is restricted.
-Since our module/provider set is fixed (37 modules, see distro-policy.md), we can generate hardcoded field-setting code at build time that eliminates all config-related reflection.
-Problem In ModuleDefine.prepare() and in BanyanDBConfigLoader, copyProperties() iterates property names, looks up fields by name via reflection, and sets them:">
-  <meta itemprop="wordCount" content="1113">
+Since the image ships a known module/provider set (the accepted providers, see distro-policy.md), we can generate hardcoded field-setting code at build time that eliminates field reflection in config loading. Upstream’s ModuleDefine.prepare still creates each config object through its no-arg constructor reflectively; the precompiler registers those constructors from module-config-classes.txt.">
+  <meta itemprop="wordCount" content="1170">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Config Initialization — Eliminate Reflection in Config Loading">
   <meta name="twitter:description" content="Config Initialization — Eliminate Reflection in Config Loading Context YamlConfigLoaderUtils.copyProperties() uses Field.setAccessible(true) &#43; field.set() to populate ModuleConfig objects from YAML properties. This reflection pattern is problematic for GraalVM native image — every config field would require reflect-config.json entries, and setAccessible() is restricted.
-Since our module/provider set is fixed (37 modules, see distro-policy.md), we can generate hardcoded field-setting code at build time that eliminates all config-related reflection.
-Problem In ModuleDefine.prepare() and in BanyanDBConfigLoader, copyProperties() iterates property names, looks up fields by name via reflection, and sets them:">
+Since the image ships a known module/provider set (the accepted providers, see distro-policy.md), we can generate hardcoded field-setting code at build time that eliminates field reflection in config loading. Upstream’s ModuleDefine.prepare still creates each config object through its no-arg constructor reflectively; the precompiler registers those constructors from module-config-classes.txt.">
 
 
 
@@ -1412,6 +1409,14 @@ Problem In ModuleDefine.prepare() and in BanyanDBConfigLoader, copyProperties() 
 
     
 
+    <li>
+        
+            <a href="/docs/skywalking-graalvm-distro/next/rules-overlay">Compiling Your Own Rules</a>
+        
+    </li>
+
+    
+
 </ul>
 
         
@@ -1498,7 +1503,7 @@ Problem In ModuleDefine.prepare() and in BanyanDBConfigLoader, copyProperties() 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 346d70c</div>
+                  <div class="commit-id">Commit Id: f78c20f</div>
                 
 
 
@@ -1571,9 +1576,11 @@ Problem In ModuleDefine.prepare() and in BanyanDBConfigLoader, copyProperties() 
 <code>field.set()</code> to populate <code>ModuleConfig</code> objects from YAML properties. This
 reflection pattern is problematic for GraalVM native image — every config field
 would require <code>reflect-config.json</code> entries, and <code>setAccessible()</code> is restricted.</p>
-<p>Since our module/provider set is fixed (37 modules, see distro-policy.md), we
-can generate hardcoded field-setting code at build time that eliminates all
-config-related reflection.</p>
+<p>Since the image ships a known module/provider set (the accepted providers, see
+distro-policy.md), we can generate hardcoded field-setting code at build time that
+eliminates field reflection in config loading. Upstream&rsquo;s <code>ModuleDefine.prepare</code> still
+creates each config object through its no-arg constructor reflectively; the precompiler
+registers those constructors from <code>module-config-classes.txt</code>.</p>
 <hr>
 <h2 id="problem">Problem</h2>
 <p>In <code>ModuleDefine.prepare()</code> and in <code>BanyanDBConfigLoader</code>,
@@ -1675,7 +1682,7 @@ lacks a setter.</p>
 <h3 id="input">Input</h3>
 <ul>
 <li>Classpath with all SkyWalking module JARs (same dependencies as <code>oap-graalvm-server</code>)</li>
-<li>Provider class list — derived from the fixed module table in <code>GraalVMOAPServerStartUp</code></li>
+<li>Provider class list — the <code>ModuleProvider</code> SPI entries on the classpath that <code>AcceptedModules</code> (build-common) accepts</li>
 <li>Extra config class list — BanyanDB nested configs used by <code>BanyanDBConfigLoader</code></li>
 </ul>
 <h3 id="process">Process</h3>
@@ -1694,15 +1701,18 @@ config classes with <code>@Setter</code> added. Original upstream JARs are force
 <ul>
 <li><code>oap-graalvm-server/src/main/java/org/apache/skywalking/oap/server/library/util/YamlConfigLoaderUtils.java</code>
 (same-FQCN replacement)</li>
+<li><code>build-tools/precompiler/src/main/resources/META-INF/module-config-classes.txt</code> — the config classes, from which the
+precompiler generates their reflection metadata (<code>ModuleDefine.prepare</code> instantiates them reflectively)</li>
 </ul>
 <h3 id="running-the-generator">Running the generator</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#953800">JAVA_HOME</span><span style="color:#0550ae">=</span>/Users/wusheng/.sdkman/candidates/java/25-graal <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  mvn -pl build-tools/config-generator exec:java <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  -Dexec.args<span style="color:#0550ae">=</span><span style="color:#0a3069">&#34;oap-graalvm-server/src/main/java/org/apache/skywalking/oap/server/library/util/YamlConfigLoaderUtils.java&#34;</span>
+</span></span></span><span style="display:flex;"><span>  -Dexec.args<span style="color:#0550ae">=</span><span style="color:#0a3069">&#34;oap-graalvm-server/src/main/java/org/apache/skywalking/oap/server/library/util/YamlConfigLoaderUtils.java build-tools/precompiler/src/main/resources/META-INF/module-config-classes.txt&#34;</span>
 </span></span></code></pre></div><hr>
 <h2 id="config-classes-inventory">Config Classes Inventory</h2>
-<p>37 modules registered in <code>GraalVMOAPServerStartUp</code>. 1 (<code>AlarmModule</code>) has null
-ConfigCreator. The rest need coverage.</p>
+<p>The accepted providers (<code>AcceptedModules</code>, matching the module SPI entries on the classpath — see
+<code>provider-inventory.properties</code> and <code>ApplicationYmlModulesTest</code>). Providers whose <code>newConfigCreator()</code> returns null
+need no coverage.</p>
 <h3 id="provider-config-classes">Provider Config Classes</h3>
 <table>
   <thead>
@@ -2020,7 +2030,7 @@ currently call <code>copyProperties()</code> on them.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#57606a"># Run generator</span>
 </span></span><span style="display:flex;"><span><span style="color:#953800">JAVA_HOME</span><span style="color:#0550ae">=</span>/Users/wusheng/.sdkman/candidates/java/25-graal <span style="color:#0a3069">\
 </span></span></span><span style="display:flex;"><span>  mvn -pl build-tools/config-generator exec:java <span style="color:#0a3069">\
-</span></span></span><span style="display:flex;"><span>  -Dexec.args<span style="color:#0550ae">=</span><span style="color:#0a3069">&#34;oap-graalvm-server/src/main/java/org/apache/skywalking/oap/server/library/util/YamlConfigLoaderUtils.java&#34;</span>
+</span></span></span><span style="display:flex;"><span>  -Dexec.args<span style="color:#0550ae">=</span><span style="color:#0a3069">&#34;oap-graalvm-server/src/main/java/org/apache/skywalking/oap/server/library/util/YamlConfigLoaderUtils.java build-tools/precompiler/src/main/resources/META-INF/module-config-classes.txt&#34;</span>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#57606a"># Full build (compile + test + package)</span>
 </span></span><span style="display:flex;"><span><span style="color:#953800">JAVA_HOME</span><span style="color:#0550ae">=</span>/Users/wusheng/.sdkman/candidates/java/25-graal make build-distro
@@ -2196,6 +2206,8 @@ currently call <code>copyProperties()</code> on them.</p>
 
     </div>
     
+
+
 
 
 
