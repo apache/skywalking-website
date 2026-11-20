@@ -33,7 +33,7 @@ graph LR B[OpenTelemetry SDK 1] C[FluentBit/FluentD, etc.] K[Other sources that 
   <meta itemprop="name" content="OpenTelemetry Logging Format">
   <meta itemprop="description" content="OpenTelemetry Logging Format SkyWalking can receive logs exported from OpenTelemetry collector, the data flow is:
 graph LR B[OpenTelemetry SDK 1] C[FluentBit/FluentD, etc.] K[Other sources that OpenTelemetry supports ...] D[OpenTelemetry Collector] E[SkyWalking OAP Server] B --&gt; D C --&gt; D K --&gt; D D -- exporter --&gt; E Recommend to use OpenTelemetry OTLP Exporter to forward collected logs to OAP server in OTLP format, and SkyWalking OAP is responsible for transforming the data format into native log format with analysis support powered by LAL script.">
-  <meta itemprop="wordCount" content="537">
+  <meta itemprop="wordCount" content="788">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="OpenTelemetry Logging Format">
   <meta name="twitter:description" content="OpenTelemetry Logging Format SkyWalking can receive logs exported from OpenTelemetry collector, the data flow is:
@@ -4288,7 +4288,7 @@ graph LR B[OpenTelemetry SDK 1] C[FluentBit/FluentD, etc.] K[Other sources that 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 11eb86d</div>
+                  <div class="commit-id">Commit Id: cfb3d7e</div>
                 
 
 
@@ -4408,6 +4408,32 @@ SkyWalking is not able to consume them:</p>
 </ul>
 <p>Note, that these attributes should be set manually through OpenTelemetry SDK or through <a href="https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/attributesprocessor/README.md">attribute#insert in OpenTelemetry Collector</a>.</p>
 <p>The OTLP log record body is delivered to <a href="../../../concepts-and-designs/lal">LAL</a> as a plain-text body, even when the string content is JSON-shaped. A LAL rule can still parse such content with the <code>json {}</code> parser — when the JSON body is empty and a text body is present, <code>json {}</code> tries the text as JSON. On a successful parse the log is normalized to a JSON body, so it is stored and rendered as JSON. See <a href="../../../concepts-and-designs/lal#json"><code>json</code></a> for details.</p>
+<p>A log record&rsquo;s attributes become the log&rsquo;s tags. Its <code>severity_number</code> adds two more:</p>
+<ul>
+<li><code>severity</code>: the <code>SeverityNumber</code> enum constant, such as <code>SEVERITY_NUMBER_INFO</code>, <code>SEVERITY_NUMBER_INFO2</code> or
+<code>SEVERITY_NUMBER_ERROR</code>.</li>
+<li><code>level</code>: the name of the number&rsquo;s range, <code>TRACE</code> (1-4), <code>DEBUG</code> (5-8), <code>INFO</code> (9-12), <code>WARN</code> (13-16), <code>ERROR</code> (17-20)
+or <code>FATAL</code> (21-24), so <code>SEVERITY_NUMBER_INFO2</code> is <code>INFO</code> and <code>SEVERITY_NUMBER_ERROR3</code> is <code>ERROR</code>.</li>
+</ul>
+<p>The number is used rather than the free-form <code>severity_text</code>, which differs between SDKs (<code>INFO</code>, <code>info</code>,
+<code>Information</code>). A record with no severity number, such as an Envoy access log, gets neither tag, and a record attribute
+named <code>severity</code> or <code>level</code> is kept instead.</p>
+<h3 id="searchable-tags">Searchable tags</h3>
+<p>The tags OTLP logs can be searched by, and that tag autocomplete offers, are set by <code>otlpLogSearchableTags</code>, apart from
+core&rsquo;s <code>searchableLogsTags</code>, which the logs of the SkyWalking native protocols keep:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">receiver-otel</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">otlpLogSearchableTags</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>${SW_OTEL_LOG_SEARCHABLE_TAG_KEYS:level,severity,ai_route_type}<span style="color:#fff">
+</span></span></span></code></pre></div><ul>
+<li>A key is a log record attribute, such as <code>http.response.status_code</code>, the <code>severity</code> or <code>level</code> tag, or a tag a LAL rule
+adds, such as the Envoy AI Gateway rule&rsquo;s <code>ai_route_type</code>.</li>
+<li>Resource attributes are not stored with a log. To search by one, copy it to a tag in a LAL rule, for example
+<code>tag 'deployment.environment.name': sourceAttribute(&quot;deployment.environment.name&quot;)</code>, and list that tag.</li>
+<li>List low-cardinality keys only: every distinct value of a searchable tag is stored for tag autocomplete.</li>
+<li>A tag whose <code>key=value</code> is longer than 256 characters is not made searchable, though it is still stored with the log.</li>
+<li>An empty list makes OTLP logs use core&rsquo;s <code>searchableLogsTags</code>.</li>
+</ul>
+<p>The log query accepts a key of either list, since all logs are stored together.</p>
 <p>A log record written inside a span carries that span&rsquo;s <code>trace_id</code> and <code>span_id</code>. Both are stored with the log, as
 lowercase hex: the trace ID as the log&rsquo;s trace ID, and the span ID as its OTLP span ID — not the <code>spanId</code>, which is a
 SkyWalking span&rsquo;s number within its segment. So the log can be queried by the trace that wrote it, through
@@ -4449,7 +4475,11 @@ SkyWalking span&rsquo;s number within its segment. So the log can be queried by 
   <ul>
     <li><a href="#opentelemetry-logging-format">OpenTelemetry Logging Format</a>
       <ul>
-        <li><a href="#opentelemetry-otlp-exporter">OpenTelemetry OTLP Exporter</a></li>
+        <li><a href="#opentelemetry-otlp-exporter">OpenTelemetry OTLP Exporter</a>
+          <ul>
+            <li><a href="#searchable-tags">Searchable tags</a></li>
+          </ul>
+        </li>
       </ul>
     </li>
   </ul>
