@@ -33,7 +33,7 @@ BanyanDB self-stores its metrics into the _monitoring group but has no equivalen
   <meta itemprop="name" content="Self-Stored Logs">
   <meta itemprop="description" content="Self-Stored Logs Status: phase 1 (standalone and data nodes) implemented, with its buffering in the queue module (section 3.5); phase 2 (the liaison route, section 3.6) is implemented; phases 3 and 4 (the other producers, section 3.7) are implemented.
 BanyanDB self-stores its metrics into the _monitoring group but has no equivalent for its own logs: pkg/logger writes to a single io.Writer fixed at logger.Init time, so logs leave the process on stderr and are gone when a pod recycles. This document specifies a second, optional destination for logs — native self-storage into a _monitoring_log stream group — alongside normal logging, which is never disabled.">
-  <meta itemprop="wordCount" content="7518">
+  <meta itemprop="wordCount" content="7540">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Self-Stored Logs">
   <meta name="twitter:description" content="Self-Stored Logs Status: phase 1 (standalone and data nodes) implemented, with its buffering in the queue module (section 3.5); phase 2 (the liaison route, section 3.6) is implemented; phases 3 and 4 (the other producers, section 3.7) are implemented.
@@ -2323,7 +2323,7 @@ BanyanDB self-stores its metrics into the _monitoring group but has no equivalen
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 3c4844f</div>
+                  <div class="commit-id">Commit Id: cb1ce2a</div>
                 
 
 
@@ -3409,8 +3409,8 @@ departures here.</p>
       <tr>
           <td>destination</td>
           <td>the <code>log</code> stream is dropped at runtime</td>
-          <td><strong>known gap</strong>: the stream write callback logs <code>cannot handle write event</code> and reports success, so the batch is counted as written. The schema check recreates the stream within 10s. The fix is in the shared write callback, where a wrong status makes the liaison fail over the data node, so it lands in its own PR, tracked in <a href="https://github.com/apache/skywalking/issues/14158">apache/skywalking#14158</a></td>
-          <td>–</td>
+          <td>the stream write callback logs <code>cannot handle write event</code> and reports success, so the sink counts the batch as written; the callback counts each skipped row instead, without changing its reply, which would make the liaison fail over the data node. The schema check recreates the stream within 10s. A per-row status in the reply is the final fix, tracked in <a href="https://github.com/apache/skywalking/issues/14158">apache/skywalking#14158</a></td>
+          <td><code>stream_write_dropped_total{group=&quot;_monitoring_log&quot;}</code>, reason <code>schema_not_found</code> or <code>group_not_found</code></td>
       </tr>
       <tr>
           <td>read path</td>
@@ -3439,7 +3439,7 @@ departures here.</p>
   </tbody>
 </table>
 <blockquote>
-<p>No row blocks or retries forever, and the buffer never falls back to disk; a liaison&rsquo;s write queue is the normal stream path, not a fallback. Loss is bounded, and counted everywhere except the known gap above.</p>
+<p>No row blocks or retries forever, and the buffer never falls back to disk; a liaison&rsquo;s write queue is the normal stream path, not a fallback. Loss is bounded and counted everywhere: by the sink in <code>native_log_dropped_total</code>, and for rows the write callback skips after the sink handed them over, in <code>stream_write_dropped_total</code>.</p>
 </blockquote>
 <h3 id="51-memory">5.1 Memory</h3>
 <p>The sink follows the memory protector&rsquo;s own policy rather than a second one. On each admission it calls <code>State()</code>, the protector&rsquo;s nonblocking pressure check: it reads counters and never waits, so it is safe on every goroutine that logs. While <code>State()</code> is high, the newest event is dropped and counted as <code>memory_pressure</code>. The blocking <code>AcquireResource</code> is never called from the logging path. Where no protector is registered, <code>State()</code> reports low pressure and the buffer&rsquo;s own bounds hold.</p>

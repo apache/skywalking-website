@@ -35,7 +35,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   <meta itemprop="description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
 Scrape source — the FODC proxy. In a cluster deployment, metrics are collected by scraping the FODC proxy /metrics endpoint (see FODC overview), which is the single Prometheus scrape target. The proxy aggregates every BanyanDB node’s metrics and adds per-node identity labels, so all the PromQL below is written for that scheme:
 $job — the Prometheus scrape job for the FODC proxy. $role — the node role, matched via the container_name label (liaison or data). $pod — a BanyanDB node, matched via the pod_name label (the full node identity, e.g. banyandb-data-hot-0). Because the proxy is the only target, the Prometheus-synthesized instance, job, and up labels describe the proxy, not individual BanyanDB nodes — use $role / $pod to scope a query to a node. Original BanyanDB labels (group, kind, method, service, path, operation, remote_node, …) are preserved on every sample. $__rate_interval is the Grafana rate-interval variable. Every expression below carries the {job=~&#34;$job&#34;, container_name=~&#34;$role&#34;, pod_name=~&#34;$pod&#34;} selector; a few liaison-only metrics (the write queue and its sync loop) are pinned with the literal container_name=&#34;liaison&#34; instead.">
-  <meta itemprop="wordCount" content="4516">
+  <meta itemprop="wordCount" content="5019">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Metrics">
   <meta name="twitter:description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
@@ -2326,7 +2326,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 3c4844f</div>
+                  <div class="commit-id">Commit Id: cb1ce2a</div>
                 
 
 
@@ -2506,6 +2506,56 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <p><strong>Expression1</strong>: <code>sum(rate(banyandb_measure_total_written{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression2</strong>: <code>sum(rate(banyandb_stream_tst_total_written{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression3</strong>: <code>sum(rate(banyandb_trace_tst_total_written{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
+<h3 id="dropped-writes-reference">Dropped Writes (reference)</h3>
+<p>A write listener that cannot store a row of a batch logs it and goes on with the rest; the batch is still acknowledged, because the acknowledgement covers the batch and means the rows were applied, not that each one was (see the <a href="../../../design/0.12.0/streaming-api/readme">0.12.0 write contract</a>). These counters make that loss visible. Each liaison and data node counts the rows its own write listener skipped, before anything was stored:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_stream_write_dropped_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>reason</code></td>
+          <td>Stream elements a write listener skipped.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_measure_write_dropped_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>reason</code></td>
+          <td>Measure data points a write listener skipped.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_trace_write_dropped_total</code></td>
+          <td>Counter</td>
+          <td><code>group</code>, <code>reason</code></td>
+          <td>Trace spans a write listener skipped.</td>
+      </tr>
+  </tbody>
+</table>
+<p><code>reason</code> is one of:</p>
+<ul>
+<li><code>group_not_found</code>: the node does not hold the group, for example because the group was deleted or has not reached the node yet.</li>
+<li><code>schema_not_found</code>: the node holds the group but has no schema for the stream, measure or trace.</li>
+<li><code>invalid_timestamp</code>: the timestamp is outside the supported range or finer than a millisecond.</li>
+<li><code>invalid_element</code>: the row does not match its schema, for example it has more tag families than the schema declares.</li>
+<li><code>decode</code>: the row&rsquo;s bytes are not a write request.</li>
+<li><code>invalid_type</code>: the row, or a whole message, is of a type the listener does not take. <code>group</code> is empty for this reason and for <code>decode</code>, because the row was never read.</li>
+</ul>
+<p><code>group</code> is the row&rsquo;s group only when the node holds that group; otherwise it is empty. A row for a deleted or unknown group (<code>group_not_found</code>), or one that names a group the node never held, is counted with an empty <code>group</code>, so the label is bounded by the groups a node holds, whatever a writer sends. The log line of the drop still names the group.</p>
+<p><strong>Aggregating across nodes.</strong> A row is counted at most once, by the node whose listener skipped it:</p>
+<ul>
+<li>A write the liaison drops never reaches a data node, and a write a data node drops was not dropped by the liaison, so the liaison and data-node counts are disjoint and can be summed across roles.</li>
+<li>A write that tells its caller which rows failed is not counted: <code>bydbctl data import</code> writes failed rows again within its retry budget and reports those it could not write, so those rows are neither lost silently nor counted once per attempt.</li>
+</ul>
+<p>So <code>sum</code> over every node is the number of rows lost silently; <code>sum by (container_name)</code> shows where.</p>
+<p>A failure after the rows were stored, such as an index write, is logged but not counted here: the rows themselves are kept. In the native self-observability mode these counters are stored in the <code>_monitoring</code> group under the same names without the <code>banyandb_</code> prefix; a row of BanyanDB&rsquo;s own logs that a stream write listener skips is counted in <code>stream_write_dropped_total</code>, not in <code>native_log_dropped_total</code>, which counts what the log sink lost before the write.</p>
+<p><strong>Expression (dropped rows per second by model, group and reason)</strong>: <code>(sum(rate(banyandb_stream_write_dropped_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, reason)) or (sum(rate(banyandb_measure_write_dropped_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, reason)) or (sum(rate(banyandb_trace_write_dropped_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, reason))</code></p>
 <h3 id="publish-throughput--success">Publish Throughput &amp; Success</h3>
 <p>The tier-2 publisher&rsquo;s success throughput by <code>operation</code>, alongside file-sync bytes sent by <code>group</code>. See the <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">queue reference</a> for the full model.</p>
 <p><strong>Expression1 (success)</strong>: <code>sum(rate(banyandb_queue_pub_total_finished{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (operation)</code>
@@ -3155,6 +3205,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
             <li><a href="#grpc-error-rate">gRPC Error Rate</a></li>
             <li><a href="#registry-operation-rate">Registry Operation Rate</a></li>
             <li><a href="#write-rate-by-group">Write Rate by Group</a></li>
+            <li><a href="#dropped-writes-reference">Dropped Writes (reference)</a></li>
             <li><a href="#publish-throughput--success">Publish Throughput &amp; Success</a></li>
             <li><a href="#write-queue-length-wqueue">Write Queue Length (wqueue)</a></li>
             <li><a href="#publish--wqueue-to-data-latency-p99">Publish &amp; Wqueue-to-data Latency p99</a></li>

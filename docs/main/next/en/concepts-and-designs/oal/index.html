@@ -33,7 +33,7 @@ The spans of traces relative with RPC, such as HTTP, gRPC, Dubbo, RocketMQ, Kafk
   <meta itemprop="name" content="Analysis Native Streaming Traces and Service Mesh Traffic">
   <meta itemprop="description" content="Analysis Native Streaming Traces and Service Mesh Traffic The traces in SkyWalking native format and Service Mesh Traffic(Access Log in gRPC) are able to be analyzed by OAL, to build metrics of services, service instances and endpoints, and to build topology/dependency of services, service instances and endpoints(traces-oriented analysis only).
 The spans of traces relative with RPC, such as HTTP, gRPC, Dubbo, RocketMQ, Kafka, would be converted to service input/output traffic, like access logs collected from service mesh. Both of those traffic would be cataloged as the defined sources in the Observability Analysis Language engine.">
-  <meta itemprop="wordCount" content="1521">
+  <meta itemprop="wordCount" content="3216">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Analysis Native Streaming Traces and Service Mesh Traffic">
   <meta name="twitter:description" content="Analysis Native Streaming Traces and Service Mesh Traffic The traces in SkyWalking native format and Service Mesh Traffic(Access Log in gRPC) are able to be analyzed by OAL, to build metrics of services, service instances and endpoints, and to build topology/dependency of services, service instances and endpoints(traces-oriented analysis only).
@@ -4288,7 +4288,7 @@ The spans of traces relative with RPC, such as HTTP, gRPC, Dubbo, RocketMQ, Kafk
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 0a862ab</div>
+                  <div class="commit-id">Commit Id: 4bb9a61</div>
                 
 
 
@@ -4388,47 +4388,233 @@ See <a href="../../operation/dynamic-code-generation-debugging">Dynamic Code Gen
 <h2 id="grammar">Grammar</h2>
 <p>Scripts should be named <code>*.oal</code></p>
 <pre tabindex="0"><code>// Declare the metrics.
-METRICS_NAME = from(CAST SCOPE.(* | [FIELD][,FIELD ...]))
-[.filter(CAST FIELD OP [INT | STRING])]
-.FUNCTION([PARAM][, PARAM ...])
+METRICS_NAME = from([CAST] SCOPE.(* | FIELD[.FIELD ...]))
+[.filter(FIELD OP VALUE)]...
+.FUNCTION([PARAM[, PARAM]])
+[.decorator(&#34;DECORATOR&#34;)];
 
 // Disable hard code 
 disable(METRICS_NAME);
-</code></pre><h2 id="from">From</h2>
+</code></pre><p>OAL has no arithmetic, no math or string functions and no method calls: a filter compares a field with a literal or a
+constant, and filters combine with AND only (no <code>||</code>, <code>!</code> or parentheses). A number is a non-negative integer, without a
+sign, a decimal point or a hex prefix.</p>
+<p>Comments are <code>// ...</code> to the end of the line, and <code>/* ... */</code>, which nest: a block of rules holding <code>/* notes */</code> can be
+commented out whole. Each <code>/*</code> needs its own <code>*/</code>, so an unclosed one, or a <code>*/</code> outside a comment, fails the compile.
+Anything the grammar does not accept, anywhere in the file, fails the compile.</p>
+<h2 id="from">From</h2>
 <p>The <strong>from</strong> statement defines the data source of this OAL expression.</p>
 <p>Primary <strong>SCOPE</strong>s are <code>Service</code>, <code>ServiceInstance</code>, <code>Endpoint</code>, <code>ServiceRelation</code>, <code>ServiceInstanceRelation</code>, and <code>EndpointRelation</code>.
 There are also some secondary scopes which belong to a primary scope.</p>
 <p>See <a href="../scope-definitions">Scope Definitions</a>, where you can find all existing Scopes and Fields.</p>
+<p>A function that aggregates a field&rsquo;s value, such as <code>longAvg</code>, reads the field named in <strong>from</strong>, e.g. <code>from(Service.latency)</code>.
+A function that does not, such as <code>cpm</code>, <code>count</code>, <code>percent</code>, <code>rate</code>, <code>labelCount</code> and <code>labelAvg</code>, takes <code>from(SCOPE.*)</code>;
+a field there has no effect, and the compile logs a warning. <code>*</code> with a function that reads a field fails the compile, unless the
+function takes the whole source, as a custom one may.</p>
 <h2 id="filter">Filter</h2>
 <p>Use filter to build conditions for the value of fields by using field name and expression.</p>
 <p>The filter expressions run as a chain, generally connected with <code>logic AND</code>.
-Type detection is based on field type. In the event of incompatibility, compile or code generation errors may be triggered.</p>
-<p>Supported operators:</p>
-<ul>
-<li>Comparison: <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code></li>
-<li>Collection: <code>in [...]</code> (e.g., <code>name in (&quot;Endpoint1&quot;, &quot;Endpoint2&quot;)</code>)</li>
-<li>String matching: <code>like %...</code>, <code>like ...%</code>, <code>like %...%</code> (e.g., <code>name like &quot;serv%&quot;</code>)</li>
-<li>Tag matching: <code>contain</code>, <code>not contain</code> (e.g., <code>tags contain &quot;http.method:GET&quot;</code>)</li>
-</ul>
-<p>With <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code> and <code>&lt;=</code>, a number is compared in the type of a <code>long</code> or <code>double</code> field, and with <code>==</code> in the type of a <code>long</code> field, e.g. <code>filter(sideCar.internalRequestLatencyNanos &gt;= 0)</code>.</p>
+The value is of the field&rsquo;s type: a string for a <code>String</code> field, a constant of the field&rsquo;s own enum for an enum field (e.g.
+<code>detectPoint == DetectPoint.SERVER</code>, not <code>&quot;SERVER&quot;</code>), <code>true</code> or <code>false</code> for a boolean field, and <code>null</code> for a field that is not a
+primitive. An enum field compared with a string, and a string in <code>in [...]</code> with a field that cannot hold one, such as <code>layer in [&quot;Layer.MESH&quot;]</code>, fail the compile, as the comparison never holds; so does a comparison the generated code cannot make. A string with a
+dot in <code>in [...]</code>, which named a constant before, is compared only with a field whose type the compile sees through its public getter,
+not with a keyed attribute. <code>TYPE.NAME</code> names a static field of a class <code>TYPE</code> in the script&rsquo;s source package,
+<code>org.apache.skywalking.oap.server.core.source</code> (<code>DetectPoint</code>, <code>RequestType</code>, <code>MQOperation</code>, <code>MemoryPoolType</code>, <code>GCPhase</code>,
+<code>VirtualCacheOperation</code>, &hellip;), or <code>org.apache.skywalking.oap.server.core.browser.source</code> for <code>browser.oal</code>
+(<code>BrowserAppTrafficCategory</code>, <code>BrowserErrorCategory</code>). <code>Layer</code> is not in it. A field path <code>a.b</code> reads <code>getA().getB()</code>, <code>tag[&quot;key&quot;]</code>
+reads <code>getTag(&quot;key&quot;)</code>, and a boolean in a filter reads <code>isX()</code>. A path reads the source&rsquo;s attributes and their nested
+ones only: a JDK value on the way (a <code>String</code>, a number, a collection, a map, an enum) has none, so <code>name.bytes</code> fails
+the compile, also in a <code>from()</code> its function does not read.</p>
+<p>A string takes Java&rsquo;s escapes, such as <code>&quot;caf\u00e9&quot;</code> and <code>&quot;say \&quot;hi\&quot;&quot;</code>. A string literal is compared as written, quotes included:
+<code>tag[&quot;etag&quot;] == &quot;v1&quot;</code> matches <code>v1</code>, not the quoted ETag <code>&quot;v1&quot;</code>, which <code>tag[&quot;etag&quot;] == &quot;\&quot;v1\&quot;&quot;</code> matches; <code>in [...]</code> compares its
+strings the same way, and its constants too with a public getter of a type that may hold a string. A string constant compares as
+before: under <code>==</code>, when Javassist picks <code>StringMatch#match(String, String)</code>, that is when both the field and the constant are
+declared <code>String</code>, a pair of quotes is taken off both values; otherwise, and under <code>!=</code>, they compare as written. A field declared as
+<code>Object</code> or <code>CharSequence</code> may be compared with a string too, and a <code>byte</code>, <code>short</code> or <code>char</code> field compares as an <code>int</code>. The type
+checks here read a field&rsquo;s type from its public getter; a keyed attribute, such as <code>tag[&quot;key&quot;]</code>, is left to the compiled code.</p>
+<p>Supported operators, by the value and the field type:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Operator</th>
+          <th>Value</th>
+          <th>Field types</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>==</code>, <code>!=</code></td>
+          <td><code>true</code>, <code>false</code></td>
+          <td><code>boolean</code>, read through <code>isX()</code></td>
+      </tr>
+      <tr>
+          <td><code>==</code></td>
+          <td>number</td>
+          <td><code>int</code>, <code>long</code> (and <code>byte</code>, <code>short</code>, <code>char</code> as <code>int</code>)</td>
+      </tr>
+      <tr>
+          <td><code>!=</code></td>
+          <td>number</td>
+          <td><code>int</code> (and <code>byte</code>, <code>short</code>, <code>char</code>)</td>
+      </tr>
+      <tr>
+          <td><code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code></td>
+          <td>number</td>
+          <td><code>int</code>, <code>long</code>, <code>double</code> (and <code>byte</code>, <code>short</code>, <code>char</code> as <code>int</code>)</td>
+      </tr>
+      <tr>
+          <td><code>==</code>, <code>!=</code></td>
+          <td>string</td>
+          <td><code>String</code>; <code>Object</code>, <code>CharSequence</code></td>
+      </tr>
+      <tr>
+          <td><code>==</code></td>
+          <td><code>TYPE.NAME</code></td>
+          <td>a field that is not a primitive, with a constant that is not one, e.g. an enum field with its enum&rsquo;s constant</td>
+      </tr>
+      <tr>
+          <td><code>!=</code></td>
+          <td><code>TYPE.NAME</code></td>
+          <td>as <code>==</code>, and an <code>int</code> field (and <code>byte</code>, <code>short</code>, <code>char</code>) with an <code>int</code> constant</td>
+      </tr>
+      <tr>
+          <td><code>==</code>, <code>!=</code></td>
+          <td><code>null</code></td>
+          <td>any field that is not a primitive</td>
+      </tr>
+      <tr>
+          <td><code>in [...]</code></td>
+          <td>numbers</td>
+          <td><code>int</code>, <code>long</code> (and <code>byte</code>, <code>short</code>, <code>char</code>), e.g. <code>httpResponseStatusCode in [404, 500]</code></td>
+      </tr>
+      <tr>
+          <td><code>in [...]</code></td>
+          <td>strings, or <code>TYPE.NAME</code> constants that are not primitives</td>
+          <td>a field that may hold them, e.g. <code>name in [&quot;Endpoint1&quot;, &quot;Endpoint2&quot;]</code>; a list field, such as <code>tags</code>, uses <code>contain</code></td>
+      </tr>
+      <tr>
+          <td><code>like</code></td>
+          <td>string that, with one pair of enclosing quotes taken off, starts and/or ends with <code>%</code>, other than <code>%</code> alone; <code>%%</code> matches every string that is not null</td>
+          <td><code>String</code>, e.g. <code>name like &quot;serv%&quot;</code></td>
+      </tr>
+      <tr>
+          <td><code>contain</code>, <code>not contain</code></td>
+          <td>string</td>
+          <td><code>List&lt;String&gt;</code>, e.g. <code>tags contain &quot;http.method:GET&quot;</code>; a list of other elements never matches</td>
+      </tr>
+  </tbody>
+</table>
+<p>A list in <code>in [...]</code> holds one kind of value. With <code>==</code>, <code>!=</code> and <code>in</code>, a combination this table does not list fails the compile,
+or compares the values as objects (<code>Objects.equals</code>) when the event comes: for types that never hold equal values, as
+<code>layer != &quot;MESH&quot;</code> for a <code>Layer</code> field, <code>==</code> is always false and <code>!=</code> always true. With any other operator, a field type it does not
+list fails the compile. This is the set this release supports; it grows as rules need more (propose an addition in an issue or PR).</p>
+<p>The table describes the stock matchers. A class annotated <code>@FilterMatcher</code> with an operator&rsquo;s name, such as <code>inMatch</code>, replaces the
+stock one, and receives the value as written, with none of the checks or encodings described here.</p>
+<p>A number in a filter may use <code>_</code> separators and an <code>L</code> suffix, e.g. <code>1_000L</code>, but then no leading <code>0</code>, which Java would read as octal.
+It is compared in the field&rsquo;s type, e.g. <code>filter(sideCar.internalRequestLatencyNanos &gt;= 0)</code>. A number out of an <code>int</code> field&rsquo;s range
+fails the compile, and one out of the <code>int</code> range is compared as a <code>long</code> with a field that is not a <code>double</code>, or whose type the
+compile does not see, as a keyed one.</p>
+<p>A filter reads a keyed attribute as its whole attribute, such as <code>tag[&quot;http.method&quot;]</code>, or before the last segment of a dotted path,
+with a key holding no dot and not as a boolean; any other keyed form fails the compile.</p>
 <h2 id="aggregation-function">Aggregation Function</h2>
 <p>The default functions are provided by the SkyWalking OAP core, and it is possible to implement additional functions.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Function</th>
+          <th>Reads from <strong>from</strong></th>
+          <th>Arguments</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>count</code>, <code>cpm</code></td>
+          <td>nothing (<code>*</code>)</td>
+          <td>none</td>
+      </tr>
+      <tr>
+          <td><code>sum</code>, <code>max</code>, <code>min</code>, <code>longAvg</code></td>
+          <td>an <code>int</code> or <code>long</code> field</td>
+          <td>none</td>
+      </tr>
+      <tr>
+          <td><code>doubleAvg</code>, <code>maxDouble</code>, <code>minDouble</code></td>
+          <td>a number field</td>
+          <td>none</td>
+      </tr>
+      <tr>
+          <td><code>percent</code></td>
+          <td>nothing (<code>*</code>)</td>
+          <td>a condition</td>
+      </tr>
+      <tr>
+          <td><code>rate</code></td>
+          <td>nothing (<code>*</code>)</td>
+          <td>two conditions: numerator, denominator</td>
+      </tr>
+      <tr>
+          <td><code>apdex</code></td>
+          <td>an <code>int</code> latency</td>
+          <td>the service name field, the status field</td>
+      </tr>
+      <tr>
+          <td><code>percentile2</code>, <code>percentile</code></td>
+          <td>an <code>int</code> latency</td>
+          <td>the precision, a number of at least 1</td>
+      </tr>
+      <tr>
+          <td><code>histogram</code></td>
+          <td>an <code>int</code></td>
+          <td>the step, at least 1, and the number of steps, at least 0</td>
+      </tr>
+      <tr>
+          <td><code>labelCount</code></td>
+          <td>nothing (<code>*</code>)</td>
+          <td>the label field; optionally the maximum label count, a number (default 50)</td>
+      </tr>
+      <tr>
+          <td><code>labelAvg</code></td>
+          <td>nothing (<code>*</code>)</td>
+          <td>the label field, the value field; at most 50 labels</td>
+      </tr>
+  </tbody>
+</table>
+<p>This is the set this release supports; it grows as rules need more (propose an addition in an issue or PR). A positive maximum label count bounds the labels of a metric as one OAP aggregates its
+minute data; the hour and day downsampling, and the merge of metrics from other OAP nodes, may keep more, and <code>0</code> keeps every label.</p>
+<p>An argument is a field, a number or <code>true</code>/<code>false</code>, or a condition where the function takes one. A number argument is an
+<code>int</code>, or a <code>long</code> with an <code>L</code>. A string argument fails the compile.</p>
+<p>A function takes at most two arguments, those it declares, in order; only a trailing optional one, such as the maximum label count of
+<code>labelCount</code>, may be left out. A missing argument, a surplus one, or one of the wrong kind or type fails the compile.
+The optional maximum label count is a number literal. A number literal for the precision of <code>percentile2</code> and <code>percentile</code> or the step
+of <code>histogram</code> is at least 1, the number of steps at least 0, and the last bucket of <code>histogram</code>, their product, fits in an <code>int</code>.
+A field may give them as well, when it is the same for every event of an entity: one metric merges its observations in a single width.
+A number argument is written without <code>_</code> separators: without an <code>L</code> it is an <code>int</code>, and one out of the <code>int</code> range fails; with an <code>L</code> it is passed
+to Javassist as written, with no check of its value or range (<code>0644L</code> is octal, <code>098L</code> reads as 98), for a function that takes a
+<code>long</code>, such as the count of <code>labelAvg</code>. A condition passes to a function that takes one, such as <code>percent</code>. A
+string argument, which was pasted into the generated code as Java code, fails the compile.
+A function argument reads a keyed attribute only in a dotted path, such as <code>origin.label[&quot;region&quot;]</code>, with a key holding no dot and not
+as a boolean; <code>tag[&quot;key&quot;]</code> alone fails the compile.
+A field passes to a number parameter through a cast, as a <code>long</code> field does to the <code>int</code> of <code>percentile2</code>, and a <code>boolean</code> field read
+through a <code>getX()</code> getter as 1 or 0; a <code>double</code> field, whose fraction the cast would cut off, does not pass to a <code>long</code> or <code>int</code>
+parameter, when the compile sees its type through a public getter (a keyed one, such as <code>usage[&quot;cpu&quot;]</code>, is cast, as the compile cannot see its type). A field of
+a boxed type, such as <code>Integer</code>, does not pass to a primitive parameter.</p>
 <p>Functions provided</p>
 <ul>
-<li><code>longAvg</code>. The avg of all input per scope entity. The input field must be a long.</li>
+<li><code>longAvg</code>. The avg of all input per scope entity. The input field is an <code>int</code> or a <code>long</code>.</li>
 </ul>
 <blockquote>
 <p>instance_jvm_memory_max = from(ServiceInstanceJVMMemory.max).longAvg();</p>
 </blockquote>
 <p>In this case, the input represents the request of each ServiceInstanceJVMMemory scope, and avg is based on field <code>max</code>.</p>
 <ul>
-<li><code>doubleAvg</code>. The avg of all input per scope entity. The input field must be a double.</li>
+<li><code>doubleAvg</code>. The avg of all input per scope entity. The input field is a number.</li>
 </ul>
 <blockquote>
 <p>instance_jvm_cpu = from(ServiceInstanceJVMCPU.usePercent).doubleAvg();</p>
 </blockquote>
 <p>In this case, the input represents the request of each ServiceInstanceJVMCPU scope, and avg is based on field <code>usePercent</code>.</p>
 <ul>
+<li><code>sum</code>, <code>max</code>, <code>min</code>. The sum, the largest and the smallest input per scope entity, of an <code>int</code> or <code>long</code> field; <code>maxDouble</code> and
+<code>minDouble</code> the largest and the smallest of a number field.</li>
 <li><code>percent</code>. The number or ratio is expressed as a fraction of 100, where the input matches with the condition.</li>
 </ul>
 <blockquote>
@@ -4465,8 +4651,9 @@ Parameter (2) is the <code>denominator</code> condition.</p>
 <p>service_heatmap = from(Service.latency).histogram(100, 20);</p>
 </blockquote>
 <p>In this case, the thermodynamic heatmap of all incoming requests.
-Parameter (1) is the precision of latency calculation, such as in the above case, where 113ms and 193ms are considered the same in the 101-200ms group.
-Parameter (2) is the group amount. In the above case, 21(param value + 1) groups are 0-100ms, 101-200ms, &hellip; 1901-2000ms, 2000+ms</p>
+Parameter (1) is the step of the buckets, such as in the above case, where 113ms and 193ms are counted in the same bucket, <code>100</code>.
+Parameter (2) is the number of steps. In the above case, the 21 (param value + 1) buckets, keyed <code>0</code>, <code>100</code>, &hellip;, <code>2000</code>, hold
+0-99ms, 100-199ms, &hellip; 1900-1999ms, and 2000ms and over.</p>
 <ul>
 <li><code>apdex</code>. See <a href="https://en.wikipedia.org/wiki/Apdex">Apdex in WIKI</a>.</li>
 </ul>
@@ -4477,7 +4664,7 @@ Parameter (2) is the group amount. In the above case, 21(param value + 1) groups
 Parameter (1) is the service name, which reflects the Apdex threshold value loaded from service-apdex-threshold.yml in the config folder.
 Parameter (2) is the status of this request. The status(success/failure) reflects the Apdex calculation.</p>
 <ul>
-<li><code>p99</code>, <code>p95</code>, <code>p90</code>, <code>p75</code>, <code>p50</code>. See <a href="https://en.wikipedia.org/wiki/Percentile">percentile in WIKI</a>.</li>
+<li><code>percentile2</code>, <code>percentile</code>. Their outputs are <code>p50</code>, <code>p75</code>, <code>p90</code>, <code>p95</code> and <code>p99</code>. See <a href="https://en.wikipedia.org/wiki/Percentile">percentile in WIKI</a>.</li>
 </ul>
 <blockquote>
 <p>service_percentile = from(Service.latency).percentile2(10);</p>
@@ -4485,7 +4672,6 @@ Parameter (2) is the status of this request. The status(success/failure) reflect
 <p><strong>percentile (deprecated since 10.0.0)</strong> is the first multiple-value metric, which has been introduced since 7.0.0. As a metric with multiple values, it could be queried through the <code>getMultipleLinearIntValues</code> GraphQL query.
 <strong>percentile2</strong> Since 10.0.0, the <code>percentile</code> function has been instead by <code>percentile2</code>. The <code>percentile2</code> function is a labeled-value metric with default label name <code>p</code> and label values <code>50</code>,<code>75</code>,<code>90</code>,<code>95</code>,<code>99</code>.
 In this case, see <code>p99</code>, <code>p95</code>, <code>p90</code>, <code>p75</code>, and <code>p50</code> of all incoming requests. The parameter is precise to a latency at p99, such as in the above case, and 120ms and 124ms are considered to produce the same response time.</p>
-<p>In this case, the p99 value of all incoming requests. The parameter is precise to a latency at p99, such as in the above case, and 120ms and 124ms are considered to produce the same response time.</p>
 <ul>
 <li><code>labelCount</code>. The count of the label value.</li>
 </ul>
@@ -4497,9 +4683,9 @@ In this case, see <code>p99</code>, <code>p95</code>, <code>p90</code>, <code>p7
 <li><code>labelAvg</code>. The avg of the label value.</li>
 </ul>
 <blockquote>
-<p>drop_reason_avg = from(BrowserResourcePerf.*).labelAvg(name, duration, 100);</p>
+<p>browser_resource_duration_avg = from(BrowserAppResourcePerf.*).labelAvg(name, duration);</p>
 </blockquote>
-<p>In this case, the avg of the duration of each browser resource file, max support calculate <code>100</code> resource file(optional configuration).</p>
+<p>In this case, the avg of the duration of each browser resource file, for at most 50 of them.</p>
 <h2 id="metrics-name">Metrics name</h2>
 <p>The metrics name for storage implementor, alarm and query modules. The type inference is supported by core.</p>
 <h2 id="group">Group</h2>
@@ -4517,12 +4703,11 @@ match the type in the source, such as tag value in the source is String type, mo
 <li><code>(str-&gt;int)</code> or <code>(int)</code>, cast string type into int.</li>
 </ul>
 <pre tabindex="0"><code>mq_consume_latency = from((str-&gt;long)Service.tag[&#34;transmission.latency&#34;]).longAvg(); // the value of tag is string type.
-</code></pre><p>Cast statement is supported in</p>
-<ol>
-<li><strong>From statement</strong>. <code>from((cast)source.attre)</code>.</li>
-<li><strong>Filter expression</strong>. <code>.filter((cast)tag[&quot;transmission.latency&quot;] &gt; 0)</code></li>
-<li><strong>Aggregation function parameter</strong>. <code>.longAvg((cast)strField1== 1,  (cast)strField2)</code></li>
-</ol>
+</code></pre><p>A cast reads a <code>String</code> field; on a field of another type it fails the compile of a function that reads the value, such as
+<code>longAvg</code>, while <code>count</code> reads none.</p>
+<p>A cast is supported in the <strong>from</strong> statement, <code>from((cast)source.attre)</code>, only. In a filter or a function argument it fails the compile:
+a value it cannot parse would stop the event for the other metrics of the source. Guard the value it reads, as <code>core.oal</code> does with
+<code>.filter(tag[&quot;transmission.latency&quot;] != null)</code>: that guards a missing tag, and every value present has to parse as a decimal integer.</p>
 <h2 id="decorator">Decorator</h2>
 <p><code>decorator</code> is to select a specific decorator to decorate the source for the metrics.</p>
 <blockquote>
@@ -4530,50 +4715,56 @@ match the type in the source, such as tag value in the source is String type, mo
 </blockquote>
 <p>In this case, the <code>ServiceDecorator</code> is the <code>Java Class simple name</code> which used to decorate the source of <code>Service</code> before the aggregation function.
 This function is used to add additional attributes to the metrics. More details, see <a href="../metrics-additional-attributes">Metrics Additional Attributes</a>.</p>
+<p>The OAP provides <code>ServiceDecorator</code> (for <code>Service</code>), <code>EndpointDecorator</code> (for <code>Endpoint</code>) and <code>K8SServiceDecorator</code> (for
+<code>K8SService</code>); only these sources can be decorated. A name the OAP does not register fails each event. This is the set this release supports; it grows as rules need more (propose an addition in an issue or PR).</p>
 <h2 id="disable">Disable</h2>
 <p><code>Disable</code> is an advanced statement in OAL, which is only used in certain cases.
 Some of the aggregation and metrics are defined through core hard codes. Examples include <code>segment</code> and <code>top_n_database_statement</code>.
 This <code>disable</code> statement is designed to render them inactive.
 By default, none of them are disabled.</p>
-<p><strong>NOTICE</strong>, all disable statements should be in <code>oal/disable.oal</code> script file.</p>
+<p><strong>NOTICE</strong>, all disable statements should be in <code>oal/disable.oal</code> script file, which loads before any stream is defined.
+A disable in another script of a stream already defined, as <code>browser_error_log</code> is when <code>oal/browser.oal</code> loads, has no effect, and the
+compile logs a warning; repeating a disable that took effect is fine. A disabled OAL metric is still evaluated for each event, so a decorator it names still decorates the source, but its stream
+does not run. A name that no stream of the OAP carries, a hard-coded one or a metric of a loaded OAL script, has no effect,
+and the OAP logs a warning when it has started: a disable does not apply to a MAL metric, nor to one of a script the OAP does not load.</p>
 <h2 id="examples">Examples</h2>
 <pre tabindex="0"><code>// Calculate percentile(s) of both Endpoint1 and Endpoint2
-endpoint_p99 = from(Endpoint.latency).filter(name in (&#34;Endpoint1&#34;, &#34;Endpoint2&#34;)).percentile2(10)
+endpoint_p99 = from(Endpoint.latency).filter(name in [&#34;Endpoint1&#34;, &#34;Endpoint2&#34;]).percentile2(10);
 
 // Calculate percentile(s) of Endpoint name started with `serv`
-serv_Endpoint_p99 = from(Endpoint.latency).filter(name like &#34;serv%&#34;).percentile2(10)
+serv_Endpoint_p99 = from(Endpoint.latency).filter(name like &#34;serv%&#34;).percentile2(10);
 
 // Calculate the avg response time of each Endpoint
-endpoint_resp_time = from(Endpoint.latency).longAvg()
+endpoint_resp_time = from(Endpoint.latency).longAvg();
 
-// Calculate the p50, p75, p90, p95 and p99 of each Endpoint by 50 ms steps.
-endpoint_percentile = from(Endpoint.latency).percentile2(10)
+// Calculate the p50, p75, p90, p95 and p99 of each Endpoint by 10 ms steps.
+endpoint_percentile = from(Endpoint.latency).percentile2(10);
 
 // Calculate the percent of response status is true, for each service.
-endpoint_success = from(Endpoint.*).filter(status == true).percent()
+endpoint_success = from(Endpoint.*).percent(status == true);
 
 // Calculate the sum of response code in [404, 500, 503], for each service.
-endpoint_abnormal = from(Endpoint.*).filter(httpResponseStatusCode in [404, 500, 503]).count()
+endpoint_abnormal = from(Endpoint.*).filter(httpResponseStatusCode in [404, 500, 503]).count();
 
 // Calculate the sum of request type in [RequestType.RPC, RequestType.gRPC], for each service.
-endpoint_rpc_calls_sum = from(Endpoint.*).filter(type in [RequestType.RPC, RequestType.gRPC]).count()
+endpoint_rpc_calls_sum = from(Endpoint.*).filter(type in [RequestType.RPC, RequestType.gRPC]).count();
 
 // Calculate the sum of endpoint name in [&#34;/v1&#34;, &#34;/v2&#34;], for each service.
-endpoint_url_sum = from(Endpoint.*).filter(name in [&#34;/v1&#34;, &#34;/v2&#34;]).count()
+endpoint_url_sum = from(Endpoint.*).filter(name in [&#34;/v1&#34;, &#34;/v2&#34;]).count();
 
 // Calculate the sum of calls for each service.
-endpoint_calls = from(Endpoint.*).count()
+endpoint_calls = from(Endpoint.*).count();
 
 // Calculate the CPM with the GET method for each service.The value is made up with `tagKey:tagValue`.
 // Option 1, use `tags contain`.
-service_cpm_http_get = from(Service.*).filter(tags contain &#34;http.method:GET&#34;).cpm()
+service_cpm_http_get = from(Service.*).filter(tags contain &#34;http.method:GET&#34;).cpm();
 // Option 2, use `tag[key]`.
-service_cpm_http_get = from(Service.*).filter(tag[&#34;http.method&#34;] == &#34;GET&#34;).cpm();
+// service_cpm_http_get = from(Service.*).filter(tag[&#34;http.method&#34;] == &#34;GET&#34;).cpm();
 
 // Calculate the CPM with the HTTP method except for the GET method for each service.The value is made up with `tagKey:tagValue`.
-service_cpm_http_other = from(Service.*).filter(tags not contain &#34;http.method:GET&#34;).cpm()
-
-disable(segment);
+service_cpm_http_other = from(Service.*).filter(tags not contain &#34;http.method:GET&#34;).cpm();
+</code></pre><p>In <code>oal/disable.oal</code>:</p>
+<pre tabindex="0"><code>disable(segment);
 disable(endpoint_relation_server_side);
 disable(top_n_database_statement);
 </code></pre>

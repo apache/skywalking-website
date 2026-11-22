@@ -31,7 +31,7 @@
 
   <meta itemprop="name" content="Trace Analysis Language">
   <meta itemprop="description" content="Trace Analysis Language Trace Analysis Language (TAL) in SkyWalking is a Domain-Specific Language (DSL) to analyze spans. A TAL rule reads one span at a time and decides what it is, which service, instance and endpoint it belongs to, and which metrics and records it produces. A metric a rule declares goes through the meter system, so it is stored, downsampled, queried and alerted on like every meter metric; a rule over SkyWalking agents’ segments also hands the OAL engine the sources the .oal files compute from.">
-  <meta itemprop="wordCount" content="4800">
+  <meta itemprop="wordCount" content="6878">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Trace Analysis Language">
   <meta name="twitter:description" content="Trace Analysis Language Trace Analysis Language (TAL) in SkyWalking is a Domain-Specific Language (DSL) to analyze spans. A TAL rule reads one span at a time and decides what it is, which service, instance and endpoint it belongs to, and which metrics and records it produces. A metric a rule declares goes through the meter system, so it is stored, downsampled, queried and alerted on like every meter metric; a rule over SkyWalking agents’ segments also hands the OAL engine the sources the .oal files compute from.">
@@ -4285,7 +4285,7 @@
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 0a862ab</div>
+                  <div class="commit-id">Commit Id: 4bb9a61</div>
                 
 
 
@@ -4444,9 +4444,14 @@ a page of its own for what only it reads and builds:</p>
 <p>The TAL config files are in YAML format, and are located under directory <code>tal</code>. The <code>trace-analyzer</code> module lists the
 files for OpenTelemetry spans in <code>trace-analyzer/default/talFiles</code> and those for SkyWalking agents&rsquo; segments in
 <code>trace-analyzer/default/nativeTalFiles</code>, in the <code>application.yml</code> file or through the environment variables above. The
-files are read when the OAP starts. See <a href="../../setup/backend/trace-analyzer">OpenTelemetry Trace Analysis</a> and
-<a href="../../setup/backend/native-trace-analysis">Native Trace Analysis</a> for the module&rsquo;s settings and for what the shipped
-rule files produce.</p>
+files are read when the OAP starts. A listed name reads its file, <code>&lt;name&gt;.yaml</code> by convention; beside another file of
+that name, such as an editor&rsquo;s <code>&lt;name&gt;.yaml~</code>, its <code>.yaml</code> or <code>.yml</code> file is read and the others are logged, and two
+candidates otherwise, such as <code>&lt;name&gt;.yaml</code> and <code>&lt;name&gt;.yml</code>, fail the boot; a rule names the file it came from as it is
+named. Every listed file of both lists, the native one when the native rules run and a file whose <code>requiredModules</code> are
+loaded, is read, its <code>layerDefinitions</code> registered, a file of definitions alone included, before a rule of either list
+compiles, so a rule may name a layer a file of the other list declares. See <a href="../../setup/backend/trace-analyzer">OpenTelemetry Trace
+Analysis</a> and <a href="../../setup/backend/native-trace-analysis">Native Trace Analysis</a> for
+the module&rsquo;s settings and for what the shipped rule files produce.</p>
 <p>Anyone who has written a <a href="../lal">LAL</a> rule can read a TAL rule: the grammar is LAL&rsquo;s, with the log-specific parts
 removed and span-specific parts added. The differences are listed at the end of this page.</p>
 <h2 id="rule-file">Rule file</h2>
@@ -4465,7 +4470,8 @@ removed and span-specific parts added. The differences are listed at the end of 
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">dsl</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">|</span><span style="color:#0a3069">
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      filter { ... }</span><span style="color:#fff">
 </span></span></span></code></pre></div><p>A rule names exactly one <code>inputType</code>. The OAP refuses to start on a rule whose <code>layer</code> is not registered, naming the
-rule and the layer; declare the layer under <code>layerDefinitions</code> or use a built-in one.</p>
+rule and the layer; declare the layer under <code>layerDefinitions</code> or use a built-in one. It also refuses two rules of one
+name in one layer, and two native rules of one name, across the listed files, naming both files.</p>
 <p><code>requiredModules</code> names the modules a file&rsquo;s rules need, such as a module whose functions or sources they use.
 A file whose modules are not all loaded is not compiled, and so not checked, and its rules do not run. Every module a
 listed file names is a required module of <code>trace-analyzer</code> whenever it is loaded, so it starts before the rules are
@@ -4492,7 +4498,7 @@ is a value that does not fit the variable&rsquo;s type, the type of the value it
 declared name assigns it too.</li>
 <li><strong>Declaring before the branches.</strong> A variable the branches of an <code>if</code> assign is declared before them. A <code>String</code>, a
 <code>Layer</code> or an enum is declared with a typed <code>null</code>, <code>def owner = null as String</code>, <code>def callerLayer = null as Layer</code>;
-it stays <code>null</code> on the paths that do not assign it. A number or a boolean is declared with a literal, <code>def logicLatency = 0</code>, since <code>as Integer</code>, <code>as Long</code> and <code>as Boolean</code> turn <code>null</code> into <code>0</code> and <code>false</code>.</li>
+it stays <code>null</code> on the paths that do not assign it. A number or a boolean is declared with a literal, <code>def logicLatency = 0</code>, or with a typed <code>null</code>, <code>def latency = null as Integer</code>, since a cast keeps a <code>null</code>.</li>
 <li><strong>Scopes.</strong> A filter-level <code>def</code> is in scope inside the <code>extractor</code>. A <code>def</code> in a <code>foreach</code> body, in a native rule&rsquo;s
 <code>build {}</code> block or in its <code>first {}</code> run declares a variable of that iteration, block or run; <code>=</code> assigns it there,
 or assigns a variable of an enclosing scope. A <code>def</code> first given a value inside an <code>if</code> branch is <code>null</code> after it on
@@ -4500,16 +4506,21 @@ the paths that did not give it one.</li>
 <li><strong><code>foreach</code>.</strong> <code>&lt;list&gt;</code> is a <code>java.util.List</code>, such as the native <code>span.refsList</code> or a list a function returns. The loop
 variable is typed to the list&rsquo;s element type when the rule compiles, so <code>ref.parentService</code> is a compile-checked
 chain. A <code>def</code> inside the body is declared again at each iteration and is not visible after the loop; a variable
-declared before the loop and assigned inside it with <code>=</code> keeps its value across iterations. <code>foreach</code> is allowed
-wherever <code>if</code> is. Indexing such as <code>span.refsList[0]</code> is not supported.</li>
+declared before the loop and assigned inside it with <code>=</code> keeps its value across iterations, so the body compiles for
+what any iteration can start with: a <code>put</code> on a map the rule made, or a quotient narrowing into a whole number, is a
+compile error when an earlier iteration may have given the variable another value. <code>foreach</code> is allowed
+wherever <code>if</code> is. A list or an array also reads an element by its index, <code>span.refsList[0]</code>.</li>
 <li><strong><code>abort {}</code></strong> is allowed anywhere, and stops the whole run of the rule, the statements after the block it sits in
 included. A statement after it in the same block could never run and is a compile error.</li>
 <li><strong><code>log</code></strong> writes the message through SLF4J under the logger <code>org.apache.skywalking.trace.analysis.script.&lt;script&gt;</code>,
 the script being the rule file without its extension, such as
 <code>org.apache.skywalking.trace.analysis.script.native-rpc</code>. Each <code>{}</code> is replaced by the next argument as SLF4J formats
-it, and the arguments are evaluated only when the level is enabled. A function that logs, such as <code>parseStatusCode</code>,
-logs under the calling rule&rsquo;s script logger; a function that calls other Java, such as the native naming functions,
-logs as that Java logs, under its own class name.</li>
+it, and the arguments are evaluated only when the level is enabled. An argument beyond the placeholders is a compile
+error, as SLF4J would drop it, but for one last argument that can be a <code>Throwable</code>, which SLF4J logs as the exception;
+one whose type is known only when the rule runs, such as a map&rsquo;s value, fails the rule when it is neither a
+<code>Throwable</code> nor null there, a null logging no exception. A placeholder no argument fills prints as it is. A <code>{}</code> after an odd run of backslashes, <code>\{}</code>, is a literal
+<code>{}</code>. A function that logs, such as <code>parseStatusCode</code>, logs under the calling rule&rsquo;s script logger; a function that
+calls other Java, such as the native naming functions, logs as that Java logs, under its own class name.</li>
 </ul>
 <p>Statements may be separated by <code>;</code> as well as by newlines.</p>
 <h3 id="expressions">Expressions</h3>
@@ -4517,10 +4528,104 @@ logs as that Java logs, under its own class name.</li>
 any other first name, such as a misspelled <code>mta.kind</code>, is a compile error. <code>span</code> is typed to the input&rsquo;s span when the
 rule compiles, so every getter chain after it is checked then. A string literal is plain text in <code>&quot;</code> or <code>'</code>: a
 backslash escapes only the quote, <code>'</code> and itself, so <code>&quot;a\&quot;b&quot;</code> is the three characters <code>a&quot;b</code> and <code>&quot;C:\temp&quot;</code> keeps its
-backslash, and there is no <code>\n</code> or <code>\t</code>. Numbers are Java&rsquo;s, <code>1</code>, <code>10L</code>, <code>1.5</code>; and <code>true</code>, <code>false</code> and <code>null</code> are
-literals. A numeric field, such as the OTLP <code>meta.latency</code>, is a number, so <code>meta.latency + 1</code> adds.</p>
-<p>A comparison is decided by the types of its two sides when the rule compiles. There is no implicit parse and no
-implicit <code>toString</code>; <code>as T</code> is the only conversion:</p>
+backslash, and there is no <code>\n</code> or <code>\t</code>. <code>${...}</code> is text, except in a <code>rateLimit</code> id, where <code>\${</code> keeps it text.
+Numbers are Java&rsquo;s, <code>1</code>, <code>10L</code>, <code>1.5</code>; and <code>true</code>, <code>false</code> and <code>null</code> are
+literals. An integer written with a leading 0 is octal, as in Groovy, so <code>010</code> is 8 in a value, a comparison, an
+argument, <code>buckets</code>, <code>ranks</code>, <code>labelLimit</code>, <code>rpm</code> and an <code>[index]</code> alike, and <code>08</code> is a compile error; a leading 0
+before a fraction, an exponent or an <code>F</code> / <code>D</code> suffix, <code>00.5</code> or <code>010F</code>, is decimal, as in Java. A numeric field,
+such as the OTLP <code>meta.latency</code>, is a number, so <code>meta.latency + 1</code> adds. A method after a numeric field,
+<code>meta.latency.doubleValue()</code>, is the boxed number&rsquo;s. A method&rsquo;s overload is chosen as LAL chooses it,
+when the rule compiles: of the methods of the name and the arguments&rsquo; count, the one the arguments fit best, an
+argument of the parameter&rsquo;s own type before one widened or boxed to it, and that before a value whose type is known
+only when the rule runs, such as a map&rsquo;s value, converted or cast then; the most specific of several that fit alike.
+No string is read as a number nor a number as a string, so <code>span.name.concat(42)</code> and <code>substring(attr(&quot;n&quot;))</code> are
+compile errors; write <code>concat(&quot;42&quot;)</code> or <code>substring(attr(&quot;n&quot;) as Integer)</code>. A value of unknown type that two overloads
+take, <code>span.name.indexOf(m.get(&quot;d&quot;))</code>, is a compile error asking for <code>as String</code> or <code>as Integer</code>. A literal takes no method, field or index, so <code>&quot;x&quot;.trim()</code> is
+a compile error; <code>(&quot;x&quot;).trim()</code>, or a <code>def</code> holding the literal, calls it.</p>
+<h4 id="what-a-rule-can-call">What a rule can call</h4>
+<p>A rule calls the functions its input and the loaded modules provide, reads a field of the input, of <code>meta</code> or of an
+object a function returns by its getter (<code>span.name</code>, <code>ref.parentEndpoint</code>, or written as <code>getX()</code>, <code>isX()</code>,
+<code>hasX()</code> or <code>containsX(key)</code>), and calls these Java methods, read as a property too (<code>span.name.length</code> calls <code>length()</code>); the String
+methods are the ones LAL calls:</p>
+<ul>
+<li><strong>String:</strong> <code>length</code>, <code>isEmpty</code>, <code>trim</code>, <code>toLowerCase</code>, <code>toUpperCase</code>, <code>startsWith</code>, <code>endsWith</code>, <code>contains</code>,
+<code>indexOf</code>, <code>lastIndexOf</code>, <code>substring</code>, <code>replace</code>, <code>replaceAll</code>, <code>replaceFirst</code>, <code>split</code>, <code>charAt</code>, <code>equals</code>,
+<code>equalsIgnoreCase</code>, <code>matches</code>, <code>concat</code>, <code>toString</code>.</li>
+<li><strong>Numbers:</strong> <code>intValue</code>, <code>longValue</code>, <code>doubleValue</code>, <code>floatValue</code>, <code>toString</code>, and <code>toPlainString</code> on a decimal. There
+is no <code>Math</code>: arithmetic uses the operators and the <code>round</code> and <code>floorMod</code> functions.</li>
+<li><strong>JSON</strong>, from <code>parseJsonObject</code>: on an element, a primitive included, <code>getAsString</code>, <code>getAsInt</code>, <code>getAsLong</code>,
+<code>getAsShort</code>, <code>getAsByte</code>, <code>getAsDouble</code>, <code>getAsFloat</code>, <code>getAsBoolean</code>, <code>getAsCharacter</code>, <code>getAsNumber</code>,
+<code>getAsBigDecimal</code>, <code>getAsBigInteger</code>, <code>getAsJsonObject</code>, <code>getAsJsonArray</code>, <code>getAsJsonPrimitive</code>, <code>getAsJsonNull</code>,
+<code>isJsonNull</code>, <code>isJsonObject</code>, <code>isJsonArray</code> and <code>isJsonPrimitive</code>; on an object, these and <code>get</code>, <code>has</code>, <code>size</code>, <code>keySet</code>, and <code>getAsJsonObject</code>,
+<code>getAsJsonArray</code> and <code>getAsJsonPrimitive</code> of a member; on an array, these and <code>get</code>, <code>size</code> and <code>isEmpty</code>.</li>
+<li><strong>Maps:</strong> <code>get</code>, <code>getOrDefault</code>, <code>containsKey</code>, <code>isEmpty</code>, <code>size</code>, <code>keySet</code>, and <code>put</code>. <strong>Lists and sets</strong>, a map&rsquo;s
+<code>keySet()</code> included: <code>size</code>, <code>isEmpty</code>, <code>contains</code>, <code>add</code>, and <code>get</code> on a list. <code>put</code> and <code>add</code> change only a map or
+list the rule made with <code>emptyMap()</code> or <code>emptyList()</code> and holds in a <code>def</code>, as every path to the call leaves it: a
+<code>def</code> assigned one, grouped or from another <code>def</code> holding one, or null, also through a <code>foreach</code> whose body assigns
+it one again.</li>
+<li><strong>Layer and enums:</strong> <code>name</code>, and <code>isNormal</code> on a layer. <strong>Any value:</strong> <code>toString</code> and <code>equals</code>, the only methods a
+value whose type is known only when the rule runs calls. A value&rsquo;s methods are its class&rsquo;s and its supertypes&rsquo;, so
+a <code>BigDecimal</code> calls the numbers&rsquo; methods too.</li>
+</ul>
+<p>Any other method is a compile error naming the methods its value has, and so is a static method called through a value
+(<code>amount.valueOf(n)</code>), a variable-length one (<code>format</code>), <code>getClass()</code>, and a method of an input&rsquo;s object other than its
+getters (<code>getX()</code>, <code>isX()</code>, <code>hasX()</code> and <code>containsX(key)</code> with an uppercase letter after the prefix, so <code>hashCode()</code>
+is none). A
+primitive result takes its box&rsquo;s methods: <code>round(x).toString()</code>.</p>
+<p>This is the set this release supports, and it grows as rules need more: propose an addition in an issue or a pull
+request.</p>
+<p>TAL evaluates values as <a href="../lal">LAL</a> does, except where noted here:</p>
+<ul>
+<li>A bare condition, <code>if (x)</code>, uses Groovy truth: <code>null</code>, <code>false</code>, <code>0</code>, <code>NaN</code>, an empty string and an empty collection,
+map or array are false. <code>as Boolean</code> converts as LAL&rsquo;s: a boolean, the text <code>true</code> or <code>false</code> in any case, and a
+number or a text holding one by zero (<code>0</code> is false, any other number true); any other value, such as <code>&quot;yes&quot;</code>, fails
+the span.</li>
+<li><code>+</code> joins as soon as one side is a string, a missing boxed number joining as <code>&quot;null&quot;</code>: a string joins onto a
+string, a number, a character or <code>null</code> on its left, and any value but an array, a collection or a map on its right
+(<code>&quot;x&quot; + true</code>); any other value on the left (a boolean, an enum, a JSON value, any other object), and an array, a
+collection or a map on either side, fails, the compile where its type is known, else the span (<code>true + &quot;x&quot;</code>,
+<code>span.name.split(&quot;,&quot;) + &quot;x&quot;</code>, <code>&quot;x&quot; + span.refsList</code>), and so does a boolean beside a number. Where
+neither side is a string nor both are numbers when the rule compiles, such as a map&rsquo;s value beside a number, numbers
+add (<code>Integer + Long</code> is a <code>Long</code>, a <code>BigDecimal</code> stays exact, a <code>BigInteger</code> beside a whole number stays whole, a
+float or a double makes a <code>Double</code>) and a string, a number, a character or a <code>null</code> on the left joins, two characters
+included (<code>(&quot;/cart&quot;).charAt(1) + (&quot;/cart&quot;).charAt(2)</code> is
+<code>&quot;ca&quot;</code>, as TAL always joined them). A float computes in double, even with another float. <code>-</code>, <code>*</code> and <code>/</code> take numbers only, so a
+string is never multiplied.</li>
+<li><code>/</code> on two whole numbers is the exact decimal, as Groovy divides: <code>7 / 2</code> is <code>3.5</code>, and one that does not terminate
+is rounded half up to the larger of its operands&rsquo; scales and ten decimals (<code>7 / 3</code> is <code>2.3333333333</code>). It stays that decimal until where it goes converts it:
+an int or long target, a setter&rsquo;s or a function&rsquo;s parameter, a metric&rsquo;s value, an <code>as Integer</code> or <code>as Long</code> cast or a
+<code>def</code> that holds a whole number, truncates it (only a quotient narrows into such a <code>def</code>), so <code>span.startTimeUnixNano / 1000000</code> is the whole milliseconds; a
+double target reads its double value; text its digits; and a comparison its exact value. <code>+</code>, <code>-</code>, <code>*</code> and <code>/</code> beside it
+compute exactly, or in double beside a float or a double. A Java method takes it as a decimal, so <code>substring((5 / 2) as Integer)</code> converts it, and a number typed only as <code>java.lang.Number</code> divides beside a float or a double, and else once
+converted <code>as Long</code> or <code>as Double</code>. A division in double divides as Java does, <code>1.0 / 0</code> giving an infinity and <code>0 / 0.0</code> a NaN; any other zero divisor fails the span.</li>
+<li>A character is the one-character string it is. A string or a character against a number reads as the number it
+reads as, trimmed: <code>&quot;3&quot; &lt; 5</code> and <code>&quot;3&quot; == 3</code> are true, and <code>span.name.charAt(0) == 1</code> is true for <code>&quot;1x&quot;</code>. In an
+ordering, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> or <code>&gt;=</code>, one that reads as no number fails the span, or the compile for a literal; in an
+equality it is unequal. Two strings order as numbers when both read as one (<code>&quot;10&quot; &gt; &quot;2&quot;</code>), else as text, and equal
+as text.</li>
+<li>Numbers compare as Java compares them, as TAL always did: in double when either is a float or a double, a NaN
+comparing false in every comparison but <code>!=</code> and -0.0 equal to 0, else exactly. A null equals only a null and orders
+below every value.</li>
+<li>A cast keeps a null: <code>labels().get(&quot;missing&quot;) as Integer</code> is null. A blank text casts to null too in a numeric cast and in
+<code>as Boolean</code>, and a bare <code>if (x as Boolean)</code> reads it as false, while <code>as String</code> keeps the text as it is: <code>attr()</code> reads an absent attribute as <code>&quot;&quot;</code>, and this keeps
+it the missing value LAL&rsquo;s <code>null</code> is. A number orders above a <code>null</code>. A value that does not convert fails the span, as LAL fails the log: <code>&quot;abc&quot; as Integer</code>,
+<code>&quot;1.5&quot; as Long</code>, a boolean, a map or a character as a number, a class-name <code>as</code> on a value of another class, and
+<code>as Layer</code> or <code>as &lt;Enum&gt;</code> on a name that is none. A null fails in arithmetic and as a primitive argument. A
+numeric cast, and a primitive argument it converts, trims a text first, as LAL and Groovy do: <code>&quot; 42 &quot; as Long</code> is
+42, where the Java analyzer that native trace analysis replaced failed the segment on a padded
+<code>transmission.latency</code> tag. So the
+shipped <code>otlp-general</code> rule&rsquo;s <code>attr(&quot;http.response.status_code&quot;, &quot;http.status_code&quot;) as Double &gt;= 400</code> fails a span
+whose status code is text that is no number, and does not take the error branch for <code>NaN</code> (a NaN compares false);
+an absent code is null, below 400.</li>
+</ul>
+<p><code>as</code> converts to <code>String</code>, <code>Long</code>, <code>Integer</code>, <code>Double</code>, <code>Float</code> or <code>Boolean</code>, to <code>Layer</code> or one of the enums listed
+under <a href="#typed-layer-and-enum-values">Typed Layer and enum values</a>, or, as a Java cast, to a class named by its full
+name, such as <code>java.util.List</code>, <code>java.lang.Long</code> or the member class <code>io.opentelemetry.proto.trace.v1.Span.Event</code>;
+any other name, such as <code>as Bool</code>, is a compile error; <code>as boolean</code> reads as <code>as Boolean</code>. A class-name <code>as</code> that no
+value of the expression&rsquo;s type can pass, <code>&quot;7&quot; as java.lang.Long</code>, is a compile error, and so is an argument of such a
+type for a method&rsquo;s parameter, <code>span.name.contains(42)</code>.</p>
+<p>A comparison is decided by the types of its two sides when the rule compiles; a string or a character beside a
+number reads as the number it is, and <code>as T</code> converts anything else:</p>
 <table>
   <thead>
       <tr>
@@ -4533,12 +4638,17 @@ implicit <code>toString</code>; <code>as T</code> is the only conversion:</p>
       <tr>
           <td>number and number</td>
           <td>every operator</td>
-          <td>numbers, so <code>110 == 110.0</code> is true and an <code>int</code> compares with a <code>long</code></td>
+          <td>numbers, so <code>110 == 110.0</code> is true and an <code>int</code> compares with a <code>long</code>; as Java&rsquo;s primitives (in double beside a float or a double, a NaN false but in <code>!=</code>, -0.0 equal to 0), else exactly; a null below every value</td>
       </tr>
       <tr>
           <td>boolean and boolean, String and String, two values of one type</td>
           <td><code>==</code>, <code>!=</code></td>
           <td>equal values</td>
+      </tr>
+      <tr>
+          <td>two lists, arrays, sets or maps, of one kind or not (a list against an array)</td>
+          <td><code>==</code>, <code>!=</code></td>
+          <td>by content, as every DSL compares them: lists and arrays element by element in order (a list against an array too), sets by their elements in any order, and maps by their keys and each key&rsquo;s value, each element as a value; a JSON value compares as what it holds (an array as a list, an object as a map, a primitive as its value)</td>
       </tr>
       <tr>
           <td>a value that can be absent and <code>null</code></td>
@@ -4556,25 +4666,34 @@ implicit <code>toString</code>; <code>as T</code> is the only conversion:</p>
           <td>equal values; an event never equals a string, so compare <code>event(...)</code> with <code>null</code></td>
       </tr>
       <tr>
-          <td>anything else, such as <code>attr(&quot;x&quot;) &gt; 400</code> or <code>meta.latency == &quot;5&quot;</code></td>
+          <td>a string, a character or a value whose type is known only when the rule runs, and a number</td>
+          <td>every operator</td>
+          <td>as the number the string reads as; in an ordering one that reads as none fails the span, in an equality it is unequal</td>
+      </tr>
+      <tr>
+          <td>a string, a character or a value whose type is known only when the rule runs, and a string</td>
+          <td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td>
+          <td>as numbers when both read as one, else as text</td>
+      </tr>
+      <tr>
+          <td>anything else, such as <code>meta.root == 1</code></td>
           <td></td>
           <td>a compile error naming both types</td>
       </tr>
   </tbody>
 </table>
-<p>A function that returns a String is ordered as a number with <code>as</code>: <code>attr(&quot;http.response.status_code&quot;) as Integer &gt;= 400</code>. An <code>as T</code> that cannot convert its value, <code>&quot;abc&quot; as Integer</code> or an absent attribute, makes that comparison false
-whatever the operator, so <code>!(attr(&quot;code&quot;) as Integer &gt;= 400)</code> is true for a value that is not a number. A method can
-follow a function that returns a string, <code>attr(&quot;x&quot;).trim()</code>. <code>!</code> binds tighter than <code>&amp;&amp;</code> and <code>||</code>, as in Java.</p>
+<p>A function that returns a String may also be ordered as a number with <code>as</code>: <code>attr(&quot;http.response.status_code&quot;) as Integer &gt;= 400</code>. A method can
+follow a function that returns a string, <code>attr(&quot;x&quot;).trim()</code>. A comparison compares
+two values, so <code>(a == b) == true</code> is a compile error. <code>!</code> binds tighter than <code>&amp;&amp;</code> and <code>||</code>, as in Java.</p>
 <h4 id="typed-layer-and-enum-values">Typed <code>Layer</code> and enum values</h4>
 <p><code>as</code> converts a string to a <code>Layer</code>, or to an enum a source takes, such as <code>RequestType</code>, <code>DetectPoint</code>,
 <code>MQOperation</code>, <code>VirtualCacheOperation</code>, <code>TagType</code> and <code>GenAITraceRefType</code>:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>def calleeLayer = &#34;VIRTUAL_CACHE&#34; as Layer
 </span></span><span style="display:flex;"><span>def type = &#34;HTTP&#34; as RequestType
-</span></span></code></pre></div><p><code>as Layer</code> looks the name up among the registered layers and fails on an unknown one; a literal is checked when the
-rule compiles, against the layers registered by then, those a file&rsquo;s <code>layerDefinitions</code> registers included. An enum
-literal is checked against the enum&rsquo;s constants. A <code>def</code> given a typed value has that type, so a misspelt name is a
-compile error where it is written, not a failure when its branch runs. <code>as Layer</code> and <code>as &lt;Enum&gt;</code> keep a literal <code>null</code>
-and give it the type.</p>
+</span></span></code></pre></div><p><code>as Layer</code> looks the name up among the registered layers and fails on an unknown one. A literal, a string, a number or <code>true</code> / <code>false</code>, is checked when the rule compiles,
+against the layers the listed files register, their <code>layerDefinitions</code> included. An enum literal is checked against
+the enum&rsquo;s constants. A <code>def</code> given a typed value has that type, so a misspelt name is a compile error where it is
+written, not a failure when its branch runs. <code>as Layer</code> and <code>as &lt;Enum&gt;</code> keep a literal <code>null</code> and give it the type.</p>
 <h3 id="extractor">Extractor</h3>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>extractor {
 </span></span><span style="display:flex;"><span>  &lt;def / assignment / if / foreach / abort / log&gt;
@@ -4710,8 +4829,9 @@ then. In an <code>otlp</code> rule it sits in the <code>extractor</code>; in a <
 </span></span><span style="display:flex;"><span>  [ranks [50, 75, 90, 95, 99]]       // percentile only; whole numbers in 1..100, ascending; this is the default
 </span></span><span style="display:flex;"><span>  [timestamp &lt;expr&gt; [as &lt;Type&gt;]]     // milliseconds; default the span&#39;s start, as the agent path buckets a call
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>A numeric cast on <code>value</code> or <code>timestamp</code> converts before the number is taken, so <code>value attr(&quot;amount&quot;) as Double</code>
-reads <code>&quot;1.7&quot;</code> as 1 rather than failing to parse it. Two blocks may feed one metric, from two branches of an <code>if</code>
+</span></span></code></pre></div><p>Each clause other than <code>labels</code> is written once, and each label key once; a repeated one is a compile error. A
+numeric cast on <code>value</code> or <code>timestamp</code> converts before the number is taken, so <code>value attr(&quot;amount&quot;) as Double</code> reads
+<code>&quot;1.7&quot;</code> as 1 rather than failing to parse it. Two blocks may feed one metric, from two branches of an <code>if</code>
 for instance, when they agree on its function, scope, buckets, ranks and <code>labelLimit</code>, an omitted <code>labelLimit</code>
 counting as its default of 50; any difference is a compile error. The same
 holds across rules and files, two files sharing a <code>metricPrefix</code> included: blocks of one stored name that disagree
@@ -4753,11 +4873,15 @@ rules, as a meter entity&rsquo;s does:</p>
       </tr>
   </tbody>
 </table>
-<p>A <code>layer</code> argument is a string expression. A name that is not registered skips the block, with one warning per
-name; a <code>value</code> that does not parse as a number, or any other failure inside a block, skips that block alone, with one
-warning per metric, and the rule&rsquo;s later blocks still run. The value is read and the metric built before the block
-registers its entity, so a skipped block, one whose metric the meter system could not create included, writes no
-traffic. An entity held in a <code>def</code> has one shape: reassigning it with a different constructor is a compile error.</p>
+<p>A <code>layer</code> argument is a string expression. A name the rule spells out in literals, in parentheses or joined with <code>+</code>,
+such as <code>&quot;TEAM_&quot; + 2</code> or a number, is checked when the rule compiles, against the layers the listed files register,
+their <code>layerDefinitions</code> included, and one that is not registered is a compile error. A name computed when the rule runs
+that is not registered skips the block, with one warning per name; a <code>value</code> that does not parse as a number, or any
+other failure inside a block, skips that block alone, with one warning per metric, and the rule&rsquo;s later blocks still
+run. The value is read and the metric built before the block registers its entity, so a skipped block, one whose metric
+the meter system could not create included, writes no traffic. An entity held in a <code>def</code> has one shape: reassigning it
+with a different constructor is a compile error. An entity is used as its constructor builds it: a method, a field or an
+<code>as</code> after the constructor, or after the <code>def</code> that <code>scope</code> names, is a compile error.</p>
 <p>The functions are the meter system&rsquo;s, named for what they do to the values of one minute:</p>
 <table>
   <thead>

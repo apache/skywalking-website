@@ -33,7 +33,7 @@ The LAL config files are in YAML format, and are located under directory lal. Yo
   <meta itemprop="name" content="Log Analysis Language">
   <meta itemprop="description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
 The LAL config files are in YAML format, and are located under directory lal. You can set log-analyzer/default/lalFiles in the application.yml file or set environment variable SW_LOG_LAL_FILES to activate specific LAL config files.">
-  <meta itemprop="wordCount" content="4433">
+  <meta itemprop="wordCount" content="6840">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Log Analysis Language">
   <meta name="twitter:description" content="Log Analysis Language Log Analysis Language (LAL) in SkyWalking is essentially a Domain-Specific Language (DSL) to analyze logs. You can use LAL to parse, extract, and save the logs, as well as collaborate the logs with traces (by extracting the trace ID, segment ID and span ID) and metrics (by generating metrics from the logs and sending them to the meter system).
@@ -4288,7 +4288,7 @@ The LAL config files are in YAML format, and are located under directory lal. Yo
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 0a862ab</div>
+                  <div class="commit-id">Commit Id: 4bb9a61</div>
                 
 
 
@@ -4447,7 +4447,7 @@ source.</p>
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">dsl</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">|</span><span style="color:#0a3069">
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      filter {
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        text { regexp $/(?&lt;status&gt;\d+)\s+(?&lt;path&gt;\S+)/$ }
-</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink { sampler { rateLimit { rpm 1800 } } }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink { sampler { rateLimit(&#34;iot-fleet&#34;) { rpm 1800 } } }
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
 </span></span></span></code></pre></div><p>Notes:</p>
 <ul>
@@ -4468,7 +4468,7 @@ collisions.</li>
 <p>Three other registration paths exist for layers that are <strong>not</strong> specific to a LAL file: an
 operator-managed <code>layer-extensions.yml</code>, a <code>LayerExtension</code> Java SPI for plugin jars, and
 the built-in static fields in <code>Layer.java</code> for distribution layers. See
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
 javadoc for the full picture.</p>
 <h3 id="auto-layer">Auto layer</h3>
 <p>When <code>layer: auto</code> is declared, the rule matches logs where <code>service.layer</code> is absent (common for OTLP
@@ -4526,8 +4526,8 @@ change removes the last one, since the logs without a layer that no auto rule cl
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink {}
 </span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
 </span></span></span></code></pre></div><h2 id="filter">Filter</h2>
-<p>A filter is a group of <a href="#parser">parser</a>, <a href="#extractor">extractor</a> and <a href="#sink">sink</a>. Users can use one or more filters
-to organize their processing logic. Every piece of log will be sent to all filters in an LAL rule. A piece of log
+<p>A filter is a group of <a href="#parser">parser</a>, <a href="#extractor">extractor</a> and <a href="#sink">sink</a>. Each LAL rule holds one filter;
+use more rules to organize the processing logic. A piece of log
 sent to the filter is available as property <code>log</code> in the LAL, therefore you can access the log service name
 via <code>log.service</code>. For all available fields of <code>log</code>, please refer to <a href="https://github.com/apache/skywalking-data-collect-protocol/blob/master/logging/Logging.proto#L41">the protocol definition</a>.</p>
 <p>All components are executed sequentially in the orders they are declared.</p>
@@ -4546,8 +4546,8 @@ the remaining filter chain from where it&rsquo;s declared, and all the remaining
     }
     // ... parsers, extractors, sinks
 }
-</code></pre><p>Note that when you put <code>regexp</code> in an <code>if</code> statement, you need to surround the expression with <code>()</code>
-like <code>regexp(&lt;the expression&gt;)</code>, instead of <code>regexp &lt;the expression&gt;</code>.</p>
+</code></pre><p><code>regexp</code> is a statement of a <a href="#text"><code>text</code></a> parser, not a condition: to stop on a log it does not match, rely on
+<code>abortOnFailure</code>, which is <code>true</code> by default.</p>
 <ul>
 <li><code>tag</code></li>
 </ul>
@@ -4591,6 +4591,147 @@ values are NOT persisted in <code>tagsRawData</code> — they are only available
     sink {}
 }
 </code></pre><p>Returns empty string if the key is not found.</p>
+<h3 id="values-casts-and-conditions">Values, casts and conditions</h3>
+<p>LAL evaluates values as the Groovy-based LAL did, with the differences noted below. That LAL compiled rules
+statically (<code>parsed.*</code> read at run time), so where an expression&rsquo;s types are known when compiled, they decide.</p>
+<ul>
+<li>A bare condition, <code>if (parsed.flag)</code>, uses Groovy truth: <code>null</code>, <code>false</code>, <code>0</code>, <code>NaN</code>, an empty string and an empty
+collection are false.</li>
+<li><code>as Boolean</code> converts a boolean, the text <code>true</code> or <code>false</code> in any case, and a number, or a text holding one
+(trimmed), by zero: <code>0</code> is <code>false</code>, any other number <code>true</code> (<code>2</code>, <code>&quot;-1&quot;</code>); any other value, such as <code>&quot;yes&quot;</code>, <code>NaN</code> or a
+list, fails the log. A blank text is <code>false</code>, and a <code>null</code> stays <code>null</code> (false in a condition). A bare condition
+parses nothing: <code>if (parsed.flag)</code> tests the value as it is, so a text <code>&quot;false&quot;</code> is <code>true</code> there.</li>
+<li>A cast keeps a <code>null</code>: <code>parsed.missing as Integer</code> is <code>null</code>, not <code>0</code>. In a comparison a <code>null</code> equals only a <code>null</code> and
+orders below every value, so <code>parsed.missing as Integer == 0</code> is false, <code>parsed.missing as Integer &lt; 1</code> is true and
+<code>parsed.n as Integer &gt; null</code> is true for any number. Arithmetic on a <code>null</code>, or passing one where a number is required
+(a metric&rsquo;s value, a primitive method argument), fails the log&rsquo;s processing; concatenated, it reads <code>&quot;null&quot;</code>. A tag or
+label whose value is <code>null</code> is not added, and a statement that sets a number or enum field (such as an output type&rsquo;s
+<code>latency</code>) leaves the field unset. <code>timestamp</code> leaves the log&rsquo;s timestamp unset when its value is empty, not a number
+(without a pattern), or not matched by the pattern. A numeric cast of a string trims it first: <code>&quot; 42 &quot; as Long</code> is
+<code>42</code>, and a blank one fails the log (a missing <code>tag(&quot;k&quot;)</code> is <code>&quot;&quot;</code>). A primitive cast (<code>as long</code>, <code>as int</code>,
+<code>as double</code>, <code>as float</code>, <code>as boolean</code>) converts the same way, but a <code>null</code> fails it, and is <code>false</code> as a <code>boolean</code>.</li>
+<li><code>==</code> compares numbers by value whatever their types (<code>3 == 3L</code>, <code>1.9 != 1</code>), and, as every DSL does, lists and arrays
+element by element in order (a list against an array too), sets by their elements in any order and maps by their
+keys and each key&rsquo;s value, the elements the same way (<code>[1] == [1.0]</code>); a JSON value (<code>toJson(...)</code>) compares as what
+it holds, an array as a list, an object as a map, a primitive as its number, text or boolean. A string against a number equals the number it holds, trimmed (<code>&quot;3&quot; == 3</code> and
+<code>&quot;200&quot; == 200</code> are true), and a string that holds no number equals no number; Groovy compared a one-character
+string by its character code (<code>&quot;A&quot; == 65</code>) and never equated a longer one. Two strings compare as text
+(<code>&quot;3&quot; != &quot;3.0&quot;</code>). <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> and <code>&gt;=</code> order numbers by value, and a string against a number as the number it
+holds (<code>&quot;3&quot; &lt; 5</code> is true); a string that holds no number fails the compile when it is a literal (<code>&quot;abc&quot; &lt; 5</code>), and
+the log otherwise. Two strings order as numbers when both hold one (<code>&quot;10&quot; &gt; &quot;2&quot;</code>), and as text otherwise. A
+character (<code>charAt(0)</code>) is the one-character string it is in <code>==</code> and in an ordering (<code>&quot;1a&quot;.charAt(0) == 1</code>,
+<code>&quot;ERROR&quot;.charAt(0) == &quot;E&quot;</code>). A character or a boolean is not cast as a number, which fails the compile (Groovy read a
+character as its code); <code>c.toString() as Integer</code> is the number a digit is. A string cannot be multiplied (Groovy
+repeated it, <code>'b' * 2</code> is <code>bb</code>).</li>
+<li>Numbers compare as Java compares them, as LAL always did: a <code>NaN</code> compares false in every comparison but <code>!=</code>, held
+in a <code>def</code> or written inline alike, and <code>-0.0</code> equals <code>0.0</code>, so <code>parsed.x as Double &gt; 1</code> is false for <code>NaN</code> and
+<code>parsed.x as Double == 0</code> is true for <code>-0.0</code>. A float literal compares by its float value: <code>0.1f</code> is not <code>0.1</code>.</li>
+<li><code>+</code> concatenates as soon as one side is a string, onto a string, a number, a character or <code>null</code> on its left, and
+any value but an array, a collection or a map on its right (<code>&quot;x&quot; + true</code>); any other value on the left (a boolean,
+an enum, any other object), and an array, a collection or a map on either side, fails, the compile where its type is
+known, else the log (<code>true + &quot;x&quot;</code>, <code>tag(&quot;a&quot;).split(&quot;,&quot;) + &quot;x&quot;</code>, <code>&quot;x&quot; + parsed.items</code>), and so does a boolean beside
+a number. On two values whose types are known only at run time, which the
+Groovy-based LAL did not compile, numbers add (<code>1 + parsed.n</code> is <code>6</code> for a JSON <code>5</code>) and a string, a number, a
+character or a <code>null</code> on the left concatenates. A <code>float</code> computes in <code>double</code>, even with another <code>float</code>, as in Groovy. <code>/</code> on two whole
+numbers is Groovy&rsquo;s <code>BigDecimal</code> (<code>7 / 2</code> is <code>3.5</code>): exact where the quotient ends, else rounded half up to ten
+decimals, or to an operand&rsquo;s scale when larger (<code>1 / 3</code> is <code>0.3333333333</code>), and it stays one in <code>+</code>, <code>-</code>, <code>*</code> and <code>/</code> with whole numbers (<code>7 / 1</code> is <code>7</code>); with a
+<code>float</code> or <code>double</code> it computes in <code>double</code>. Cast to <code>Integer</code> or <code>Long</code>, or set to a whole-number field, it truncates
+toward zero (<code>((0 - 7) / 2) as Integer</code> is <code>-3</code>) and an <code>Integer</code> wraps as Groovy&rsquo;s did; a zero divisor fails the
+log&rsquo;s processing.</li>
+<li><code>parsed.&lt;key&gt;</code> reads the regexp&rsquo;s group of that name (a name the regexp has no group of fails the log&rsquo;s processing, a
+group that did not take part reads on), else the parsed body&rsquo;s value, else a typed input&rsquo;s field (an Envoy access
+log a json parser did not parse), else the log&rsquo;s own field (<code>service</code>, <code>serviceInstance</code>, <code>endpoint</code>, <code>layer</code>,
+<code>timestamp</code>, <code>traceContext</code>, <code>body</code>, <code>tags</code>) as the rule left it, as <code>log.&lt;field&gt;</code> reads it. So a key the body does
+not have, or a parser that did not run (in an <code>if</code> branch), reads the log, and a rule may use both a <code>text</code> and a
+<code>json</code> parser. With only a <code>text</code> parser, <code>parsed.&lt;group&gt;</code> is a string: a group the match did not set reads only the
+log&rsquo;s string fields (<code>service</code>, <code>serviceInstance</code>, <code>endpoint</code>, <code>layer</code>), <code>null</code> otherwise. After a <code>text</code> and a
+<code>json</code> branch rejoin, <code>toString()</code> takes the value as it is, and a string method (<code>toLowerCase()</code>) takes it as a
+string, failing the log for a json value that is not one. <code>parsed.getMap()</code> is the parsed body with the log&rsquo;s fields
+copied in when it was parsed, read only.</li>
+<li>A property after <code>.</code> fails on a <code>null</code>, as in Groovy: <code>parsed.a.b</code> fails the log&rsquo;s processing when <code>a</code> is missing,
+while <code>parsed?.a?.b</code> is <code>null</code>. A property of a map reads its key, so <code>m.size</code> is the <code>size</code> key of a map <code>m</code> and
+<code>m.size()</code> its number of entries; a property of a list is the list&rsquo;s own (<code>parsed.items.empty</code>, and on a list
+known when compiled <code>xs.size</code> or <code>xs.isEmpty</code>), or else each element&rsquo;s (<code>parsed.backends.name</code>); any other value&rsquo;s
+property is its getter&rsquo;s (<code>parsed.body.json.json</code>), among those the next section lists.</li>
+<li>A subscript of a list past its end, <code>xs[5]</code>, is <code>null</code>; of a string, an array or a <code>toJsonArray(...)</code> past its end, or
+of a <code>null</code>, it fails.
+An array&rsquo;s <code>length</code> reads its length.</li>
+<li>A method is resolved by the type the value has when compiled, among those the next section lists: on a value of
+unknown type, such as a JSON field, only <code>toString()</code>, and the null-safe <code>?.toString()</code> and <code>?.trim()</code>. Give the value
+a type first, such as <code>parsed.x as String</code>, or <code>def id = parsed.id as java.math.BigInteger</code> to call <code>id?.toString(16)</code>.
+What a typed method returns as an <code>Object</code> (<code>m.get(&quot;k&quot;)</code> of a map) takes <code>?.trim()</code> only cast <code>as String</code>.</li>
+<li>A class cast in a <code>def</code> converts as Groovy&rsquo;s <code>as</code> does: a list cast <code>as java.util.Set</code> becomes a set, a numeric
+string cast <code>as java.math.BigInteger</code> a number, a name cast to an enum its constant; a conversion Groovy could not
+make fails the log&rsquo;s processing, as does a string cast to a list or a set (Groovy split it into characters). The
+classes are those the next section lists.</li>
+<li>A whole number literal must fit a <code>long</code>; Groovy read a larger one as a <code>BigInteger</code>. One with a leading <code>0</code> is
+octal, as in Groovy and Java (<code>010</code> is <code>8</code>), anywhere a whole number is written (an index, an argument, <code>rpm</code>), and
+<code>08</code> or <code>09</code> is refused; a decimal such as <code>010.5</code> is not octal.</li>
+<li>A <code>def</code> is visible only after its declaration, within the <code>if</code> branch, extractor, or filter level that declares it;
+a filter-level <code>def</code> is also visible in the <code>extractor</code> and <code>sink</code> blocks that follow it. A <code>def</code> of a name that is
+visible there fails the compile, as in Groovy LAL; sibling <code>if</code> branches may each declare one.</li>
+<li>A standard field statement (<code>service</code>, <code>instance</code>, <code>endpoint</code>, <code>traceId</code>, <code>segmentId</code>, <code>spanId</code>, <code>timestamp</code>, as
+<code>layer</code> already did) sets the field of the log itself, for the rest of the rule: a later <code>log.service</code>,
+<code>log.getService()</code>, <code>log.traceContext</code> (the metadata&rsquo;s trace context), <code>log.getTraceContext()</code> (the log&rsquo;s protobuf
+one), <code>parsed.service</code> (when the body has no <code>service</code>) or <code>log.timestamp</code>
+(such as a metric&rsquo;s) reads the rule&rsquo;s value, and the service, instance and endpoint traffic of a saved log is built
+from it. Its value is converted by the rule&rsquo;s cast, then to the field&rsquo;s type, so <code>spanId parsed.span as Integer</code> is
+valid. A <code>null</code> value leaves the field as it was, except for <code>layer</code>: a <code>null</code>, empty or unregistered layer drops a
+saved log.</li>
+<li>A <code>tag</code> statement evaluates all its values, then adds its tags: <code>tag(&quot;key&quot;)</code> and <code>log.tags</code> read a tag added by an
+earlier statement, not one of the same statement.</li>
+<li>The statements of a <code>metrics</code> block run in the order written; a repeated statement keeps its last value.</li>
+<li>A decimal literal such as <code>1.5</code> or <code>1e6</code> is a <code>double</code>, and arithmetic with it computes in <code>double</code>. The
+Groovy-based LAL made it a <code>BigDecimal</code>; the two differ only in rare precision cases, such as <code>0.1 + 0.2</code>, which is
+<code>0.30000000000000004</code> here and <code>0.3</code> there, or a literal written <code>1.50</code>, which reads <code>1.5</code> here.</li>
+<li>Difference from the Groovy-based LAL: a protobuf message (a field of a typed input such as an Envoy access log) is true
+in a bare condition only when it has a field set. Groovy treated every message as true, and a protobuf getter never
+returns <code>null</code>, so a guard such as <code>if (parsed?.response?.responseCode)</code> could never be false; here it is false when the
+access log carries no response code.</li>
+<li>Differences from the Groovy-based LAL that v2 has always had, kept: a map in a string, by <code>${...}</code> or <code>as String</code>,
+reads as Java writes it (<code>{a=1}</code>, Groovy <code>[a:1]</code>), and <code>toString()</code> on a <code>null</code> fails the log (Groovy
+<code>&quot;null&quot;</code>); an array in <code>${...}</code> reads as Java writes it (<code>as String</code> and <code>toString()</code> write its elements, <code>[low, high]</code>, as
+Groovy); an iterator
+is true in a condition (Groovy: while it has a next element); <code>log.traceContext</code> is the metadata&rsquo;s trace context (<code>traceId</code>, <code>traceSegmentId</code>, <code>spanId</code>, <code>otlpSpanId</code>),
+not the protobuf; an unset standard string field reads <code>null</code> (Groovy <code>&quot;&quot;</code>); <code>parsed.map</code> is the parsed body&rsquo;s <code>map</code>
+key (Groovy: the whole body); and numbers compare as Java&rsquo;s primitives, so <code>NaN</code> equals nothing, <code>NaN</code> included, and
+<code>-0.0</code> equals <code>0.0</code> (Groovy ordered a <code>NaN</code> after every number).</li>
+</ul>
+<h3 id="supported-operators-and-functions">Supported operators and functions</h3>
+<p>A rule calls only what this section lists; anything else fails its compile, naming what is supported. A property read
+at run time (a JSON field&rsquo;s <code>.x</code>) reads only a map&rsquo;s key, a list&rsquo;s own property or its elements&rsquo;, and the getters
+listed here, else it fails the log&rsquo;s processing.</p>
+<ul>
+<li>Operators: <code>+ - * /</code>, <code>== != &lt; &gt; &lt;= &gt;=</code>, <code>&amp;&amp; || !</code>, <code>.key</code>, <code>?.key</code>, <code>[N]</code> and the casts <code>as String</code>, <code>Long</code>,
+<code>Integer</code>, <code>Double</code>, <code>Float</code>, <code>Boolean</code>, and <code>long</code>, <code>int</code>, <code>double</code>, <code>float</code>, <code>boolean</code>. A <code>def</code> may also be cast
+<code>as java.util.List</code>, <code>java.util.Set</code>, <code>java.util.Map</code>, <code>java.math.BigInteger</code>, <code>java.math.BigDecimal</code>, a protobuf
+message class (to read a typed input&rsquo;s field through its getters), or an enum one of the output type&rsquo;s setters
+takes. There is no <code>%</code> and no <code>Math</code>: a text is read as a number by a cast (<code>parsed.n as Long</code>).</li>
+<li>Functions: <code>tag(&quot;key&quot;)</code>, <code>sourceAttribute(&quot;key&quot;)</code>, <code>toJson(value)</code>, <code>toJsonArray(value)</code>, and
+<code>ProcessRegistry.generateVirtualLocalProcess(service, instance)</code>,
+<code>ProcessRegistry.generateVirtualRemoteProcess(service, instance, address)</code> and
+<code>ProcessRegistry.generateVirtualProcess(service, instance, name)</code>.</li>
+<li>On a string: <code>length()</code>, <code>isEmpty()</code>, <code>trim()</code>, <code>toLowerCase()</code>, <code>toUpperCase()</code>, <code>startsWith()</code>, <code>endsWith()</code>,
+<code>contains()</code>, <code>indexOf()</code>, <code>lastIndexOf()</code>, <code>substring()</code>, <code>replace()</code>, <code>replaceAll()</code>, <code>replaceFirst()</code>, <code>split()</code>,
+<code>charAt()</code>, <code>equals()</code>, <code>equalsIgnoreCase()</code>, <code>matches()</code>, <code>concat()</code> and <code>toString()</code>. A quoted string is the text
+between its quotes, so <code>&quot;42&quot;.matches(&quot;\d+&quot;)</code> passes the regexp <code>\d+</code>.</li>
+<li>On a map: <code>get()</code>, <code>containsKey()</code>, <code>getOrDefault()</code>, <code>isEmpty()</code>, <code>size()</code>, <code>keySet()</code>, <code>values()</code>; on a list or a
+set: <code>get()</code> (a list), <code>size()</code>, <code>isEmpty()</code>, <code>contains()</code>; on an array, <code>length</code>. They read only: <code>parsed.getMap()</code>
+is the one method of <code>parsed</code>, and the map it returns is read only too.</li>
+<li>On any JSON value: <code>getAsString()</code>, <code>getAsLong()</code>, <code>getAsInt()</code>, <code>getAsDouble()</code>, <code>getAsBoolean()</code>,
+<code>getAsJsonObject()</code>, <code>getAsJsonArray()</code>, <code>isJsonNull()</code>, <code>isJsonObject()</code>, <code>isJsonArray()</code> (on a <code>toJsonArray(...)</code>,
+the <code>getAs...</code> ones read its only element); on <code>toJson(...)</code> also <code>get()</code>, <code>has()</code>, <code>size()</code>; on <code>toJsonArray(...)</code>
+also <code>get()</code> and <code>size()</code>.</li>
+<li>On <code>log</code>, a typed input (a protobuf message, or an object implementing <code>ToJson</code>) and the protobuf messages they hold:
+their getters (<code>getX()</code>, <code>hasX()</code>, <code>getXCount()</code>, <code>getXList()</code>, <code>getXMap()</code>, <code>getXOrBuilder()</code>, and the indexed
+or keyed <code>getX(index)</code>, <code>getXOrDefault(key, default)</code>, <code>containsX(key)</code>), read only: the extractor&rsquo;s statements set
+the log, and <code>log.getX()</code> reads it as they left it. On the log&rsquo;s metadata (<code>log.traceContext</code>, <code>parsed.*</code> without a
+parser), its getters.</li>
+<li>On a number, a boolean or a character: <code>toString()</code> (a <code>BigInteger</code>&rsquo;s <code>toString(radix)</code> too); on an array,
+<code>toString()</code> writes its elements (<code>[low, high]</code>); on an enum, <code>name()</code>, and a protobuf enum&rsquo;s <code>getNumber()</code>.</li>
+</ul>
+<p>This is the set this release supports, and it grows as rules need more: propose an addition in an issue or a pull
+request.</p>
 <h3 id="parser">Parser</h3>
 <p>Parsers are responsible for parsing the raw logs into structured data in SkyWalking for further processing. There are 3
 types of parsers at the moment, namely <code>json</code>, <code>yaml</code>, and <code>text</code>.</p>
@@ -4626,7 +4767,7 @@ is <code>json</code> / <code>yaml</code>, <code>parsed</code> is a map containin
 }
 </code></pre><p><code>json</code> reads the JSON body of the <a href="../../api/log-data-protocol">native log protocol</a>. When the JSON body is empty but a plain-text body is present — for example, the <a href="../../setup/backend/log-otlp">OTLP log receiver</a> delivers every string body as text, even JSON-shaped ones — the parser tries the text body as JSON instead. A parse failure of either form follows <code>abortOnFailure</code>.</p>
 <p>When <code>json</code> parses successfully from a text body, the log is normalized to a JSON body for the matching rule: the rule persists it with content type <code>JSON</code> and <code>log.body</code> reads the JSON content within that rule. This makes a JSON-shaped log delivered over any transport persist and render as JSON once a <code>json {}</code> rule matches it. The normalization is scoped to the matching rule — other rules analyzing the same log still see the original text body.</p>
-<p>A parse failure that aborts the log is reported at WARN, rate-limited to one report per minute per parser with the number of suppressed failures included in the next report. With <code>abortOnFailure false</code>, a failure is expected control flow: it is only logged at DEBUG, the log continues through the filter chain, and <code>parsed.*</code> reads return the metadata fallback fields (or <code>null</code>).</p>
+<p>A parse failure that aborts the log is reported at WARN, rate-limited to one report per minute per parser with the number of suppressed failures included in the next report. With <code>abortOnFailure false</code>, a failure is expected control flow: it is only logged at DEBUG, the log continues through the filter chain, and <code>parsed.*</code> reads return the log&rsquo;s own fields (or <code>null</code>).</p>
 <h4 id="yaml"><code>yaml</code></h4>
 <pre tabindex="0"><code>filter {
     yaml {
@@ -4640,7 +4781,11 @@ is <code>json</code> / <code>yaml</code>, <code>parsed</code> is a map containin
 </ul>
 <p><code>regexp</code> parser uses a regular expression (<code>regexp</code>) to parse the logs. It leverages the captured groups of the regexp,
 all the captured groups can be used later in the extractors or sinks.
-<code>regexp</code> returns a <code>boolean</code> indicating whether the log matches the pattern or not.</p>
+A log the regexp does not match aborts the filter chain, unless the <code>text</code> block has <code>abortOnFailure false</code>, written
+before or after <code>regexp</code>. A <code>text</code> block takes one <code>regexp</code>.</p>
+<p>A quoted string is the text between its quotes, its backslashes kept, so <code>&quot;\d&quot;</code> is the regexp <code>\d</code> and <code>&quot;\s&quot;</code> any
+whitespace; a slashy string, <code>$/(?&lt;status&gt;\d+)/$</code>, keeps every backslash as written too. In a <code>rateLimit</code> id, <code>\${</code>
+keeps <code>${</code> as text.</p>
 <pre tabindex="0"><code>filter {
     text {
         abortOnFailure true // this is optional because it&#39;s default behaviour
@@ -4669,18 +4814,19 @@ with any value access expression whose type is resolvable on the classpath, incl
 <code>log.*</code> fields, and Gson JSON method chains. Subsequent method calls on the variable are validated at compile time
 against the inferred type.</p>
 <p>You can optionally add an explicit <code>as</code> type cast to narrow the variable type. The cast type can be a built-in
-type (<code>String</code>, <code>Long</code>, <code>Integer</code>, <code>Boolean</code>) or a fully qualified class name:</p>
+type (<code>String</code>, <code>Long</code>, <code>Integer</code>, <code>Double</code>, <code>Float</code>, <code>Boolean</code>, or a primitive such as <code>long</code>) or a fully qualified
+class name:</p>
 <pre tabindex="0"><code>def value = someExpression as com.example.MyType
 </code></pre><p>This is useful when the compiler infers a type that is too general (e.g., <code>Object</code> from a generic API return)
 and you know the concrete runtime type. The cast tells the compiler which type to use for subsequent method chain
-validation. Note that <code>as</code> performs a Java cast — it does <strong>not</strong> convert between types. For JSON conversion, use
-<code>toJson()</code> or <code>toJsonArray()</code> instead.</p>
+validation. A built-in type converts the value as in any other cast; a class converts it as Groovy&rsquo;s <code>as</code> does (see
+<a href="#values-casts-and-conditions">Values, casts and conditions</a>). For JSON conversion, use <code>toJson()</code> or <code>toJsonArray()</code>.</p>
 <p>The FQCN must be resolvable on the classpath at compile time. If the class is not found, the OAP server will fail
 to start.</p>
 <p>Two built-in conversion functions are provided for JSON interoperability:</p>
 <ul>
 <li><code>toJson(expr)</code> — converts a value to a Gson <code>JsonObject</code>. Works with JSON strings, <code>Map</code>, and protobuf <code>Struct</code>.</li>
-<li><code>toJsonArray(expr)</code> — converts a value to a Gson <code>JsonArray</code>. Works with JSON array strings.</li>
+<li><code>toJsonArray(expr)</code> — converts a value to a Gson <code>JsonArray</code>. Works with JSON array strings and <code>List</code>.</li>
 </ul>
 <p>After declaration, the variable can be used in subsequent expressions with full null-safe navigation support (<code>?.</code>).</p>
 <p>Def variables can also be used as method arguments. This is useful when you need to look up a dynamic key:</p>
@@ -4799,17 +4945,17 @@ not dropped) and is used to associate with traces / metrics.</p>
 </code></pre><ul>
 <li><code>layer</code></li>
 </ul>
-<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
+<p><code>layer</code> extracts the <a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> from the <code>parsed</code> result, and set it into the <code>LogData</code>, which will be persisted (if
 not dropped) and is used to associate with service.</p>
 <ul>
 <li><code>tag</code></li>
 </ul>
-<p><code>tag</code> extracts the tags from the <code>parsed</code> result, and set them into the <code>LogData</code>. The form of this extractor should look something like this: <code>tag key1: value, key2: value2</code>. You may use the properties of <code>parsed</code> as both keys and values.</p>
+<p><code>tag</code> extracts the tags from the <code>parsed</code> result, and set them into the <code>LogData</code>. The form of this extractor should look something like this: <code>tag key1: value, key2: value2</code>, or <code>tag 'a.key': value</code> for a key that is not a name. You may use the properties of <code>parsed</code> as values; a key is written as is. A <code>null</code> or blank value adds no tag, a list adds its non-null elements joined by commas, a key repeated within one <code>tag</code> statement keeps its last value, and <code>tag(&quot;key&quot;)</code> later in the rule reads a tag the rule added (the first one, when two statements add that key).</p>
 <pre tabindex="0"><code>filter {
     // ... parser
 
     extractor {
-        tag level: parsed.level, (parsed.statusCode): parsed.statusMsg
+        tag level: parsed.level, status: parsed.statusMsg
         tag anotherKey: &#34;anotherConstantValue&#34;
         layer &#39;GENERAL&#39;
     }
@@ -4878,12 +5024,15 @@ An empty <code>sink {}</code> block means all logs are saved unconditionally.</p
 <p>Sampler allows you to save the logs in a sampling manner. Currently, the following sampling strategies are supported:</p>
 <ul>
 <li><code>rateLimit</code>: samples <code>n</code> logs at a maximum rate of 1 minute. <code>rateLimit(&quot;SamplerID&quot;)</code> requires an ID for the sampler.
-Sampler declarations with the same ID share the same sampler instance, thus sharing the same <code>rpm</code> and resetting logic.</li>
-<li><code>possibility</code>: every piece of log has a pseudo possibility of <code>percentage</code> to be sampled, the possibility was generated by Java random number generator and compare to the given <code>percentage</code> option.</li>
+Sampler declarations with the same ID share the same sampler instance, thus sharing the same <code>rpm</code> and resetting logic.
+A double-quoted ID may interpolate values, such as <code>rateLimit(&quot;${log.service}:${parsed.code as Integer}&quot;)</code>, one sampler
+per value; each <code>${...}</code> holds one value, optionally with an <code>as</code> cast. This is the only place LAL interpolates: in any
+other string <code>${...}</code> is literal text, and a single-quoted ID holding <code>${...}</code> is refused.</li>
+<li>The Groovy-based LAL&rsquo;s <code>possibility(percentage)</code> sampler is not supported: a rule using it fails to compile.</li>
 </ul>
 <p>We welcome contributions on more sampling strategies. If multiple samplers are specified, the last one determines the
 final sampling result. See examples in <a href="#enforcer">Enforcer</a>.</p>
-<p>Examples 1, <code>rateLimit</code>:</p>
+<p>Example, <code>rateLimit</code>:</p>
 <pre tabindex="0"><code>filter {
     // ... parser
 
@@ -4896,22 +5045,6 @@ final sampling result. See examples in <a href="#enforcer">Enforcer</a>.</p>
             } else {
                 rateLimit(&#34;OtherSampler&#34;) {
                     rpm 180   // samples at most 180 logs per minute for other services than &#34;ImportantApp&#34;
-                }
-            }
-        }
-    }
-}
-</code></pre><p>Examples 2, <code>possibility</code>:</p>
-<pre tabindex="0"><code>filter {
-    // ... parser
-
-    sink {
-        sampler {
-            if (parsed.service == &#34;ImportantApp&#34;) {
-                possibility(80) { // samples 80% of the logs for service &#34;ImportantApp&#34;
-                }
-            } else {
-                possibility(30) { // samples 30% of the logs for other services than &#34;ImportantApp&#34;
                 }
             }
         }
@@ -4933,28 +5066,37 @@ drop debugging logs.</p>
         }
     }
 }
-</code></pre><p>Or if you have multiple filters, some of which are for extracting metrics, only one of them has to be persisted.</p>
-<pre tabindex="0"><code>filter { // filter A: this is for persistence
-    // ... parser
-
-    sink {
-        sampler {
-            // .. sampler configs
-        }
-    }
-}
-filter { // filter B:
-    // ... extractor to generate many metrics
-    extractor {
-        metrics {
-            // ... metrics
-        }
-    }
-    sink {
-        dropper {} // drop all logs because they have been saved in &#34;filter A&#34; above.
-    }
-}
-</code></pre><h4 id="enforcer">Enforcer</h4>
+</code></pre><p>Or if you have multiple rules, some of which are for extracting metrics, only one of them has to persist the log.</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">rules</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name: persist # rule A</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>this is for persistence<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">layer</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>GENERAL<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">dsl</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">|</span><span style="color:#0a3069">
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      filter {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        json {}
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          sampler {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">            rateLimit(&#34;persist&#34;) {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">              rpm 6000
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">            }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span>- <span style="color:#0550ae">name: metrics # rule B</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>generates metrics<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">layer</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>GENERAL<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">dsl</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">|</span><span style="color:#0a3069">
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      filter {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        json {}
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        extractor {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          metrics {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">            name &#34;log_count&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">            value 1
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        sink {
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">          dropper {} // drop all logs because they have been saved by rule A above.
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">        }
+</span></span></span><span style="display:flex;"><span><span style="color:#0a3069">      }</span><span style="color:#fff">
+</span></span></span></code></pre></div><h4 id="enforcer">Enforcer</h4>
 <p>Enforcer is another special sink that forcibly samples the log. A typical use case of enforcer is when you have
 configured a sampler and want to save some logs forcibly, such as to save error logs even if the sampling mechanism
 has been configured.</p>
@@ -5031,18 +5173,18 @@ by the extractor as usual and pre-populated via <code>init()</code> from <code>L
 <p><strong>Note</strong>, slow SQL sampling would only flag this SQL in the candidate list. The OAP server would run statistic per service
 and only persistent the top 50 every 10(controlled by <code>topNReportPeriod: ${SW_CORE_TOPN_REPORT_PERIOD:10}</code>) minutes by default.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/lal/mysql-slowsql.yaml">mysql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/lal/pgsql-slowsql.yaml">pgsql-slowsql.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/lal/redis-slowsql.yaml">redis-slowsql.yaml</a>.</p>
 <h4 id="sampled-trace-network-profiling">Sampled Trace (Network Profiling)</h4>
 <p>SkyWalking converts network profiling sampled trace logs into <code>SampledTraceRecord</code> for process-level network analysis.</p>
 <p>Use <code>outputType: SampledTrace</code> in your rule config.
 The available output fields are: <code>latency</code>, <code>uri</code>, <code>reason</code>, <code>processId</code>, <code>destProcessId</code>, <code>detectPoint</code>, <code>componentId</code>.</p>
 <p>We require a log tag <code>&quot;LOG_KIND&quot; = &quot;NET_PROFILING_SAMPLED_TRACE&quot;</code> to make OAP distinguish sampled trace logs from other log reports.</p>
 <p>See bundled LAL scripts for complete examples:
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/lal/envoy-als.yaml">envoy-als.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/lal/k8s-service.yaml">k8s-service.yaml</a>,
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/lal/mesh-dp.yaml">mesh-dp.yaml</a>.</p>
 <h3 id="extending-custom-output-types">Extending: custom output types</h3>
 <p>For developers who need to create custom output types (implementing <code>LALOutputBuilder</code>, extending
 <code>AbstractLog</code>, registering <code>LALSourceTypeProvider</code> SPI, or defining custom input types), see the
@@ -5199,6 +5341,8 @@ Register it in `META-INF/services/org.apache.skywalking.oap.log.analyzer.v2.spi.
         <li><a href="#filter">Filter</a>
           <ul>
             <li><a href="#global-functions">Global Functions</a></li>
+            <li><a href="#values-casts-and-conditions">Values, casts and conditions</a></li>
+            <li><a href="#supported-operators-and-functions">Supported operators and functions</a></li>
             <li><a href="#parser">Parser</a></li>
             <li><a href="#extractor">Extractor</a></li>
             <li><a href="#sink">Sink</a></li>

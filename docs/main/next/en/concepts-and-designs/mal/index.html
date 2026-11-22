@@ -33,7 +33,7 @@ Meter Analysis Language The meter system provides a functional analysis language
   <meta itemprop="name" content="Meter System -- Analysis Metrics and Meters">
   <meta itemprop="description" content="Meter System – Analysis Metrics and Meters Meter system is a metric streaming process system, which focus on processing and analyzing aggregated metrics data. Metrics from OpenTelemetry, Zabbix, Prometheus, SkyWalking meter APIs, etc., are all statistics, so they are processed by the meter system.
 Meter Analysis Language The meter system provides a functional analysis language called MAL (Meter Analysis Language) that lets users analyze and aggregate meter data in the OAP streaming system. The result of an expression can either be ingested by the agent analyzer, or the OpenTelemetry/Prometheus analyzer.">
-  <meta itemprop="wordCount" content="2536">
+  <meta itemprop="wordCount" content="3262">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Meter System -- Analysis Metrics and Meters">
   <meta name="twitter:description" content="Meter System – Analysis Metrics and Meters Meter system is a metric streaming process system, which focus on processing and analyzing aggregated metrics data. Metrics from OpenTelemetry, Zabbix, Prometheus, SkyWalking meter APIs, etc., are all statistics, so they are processed by the meter system.
@@ -4288,7 +4288,7 @@ Meter Analysis Language The meter system provides a functional analysis language
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 0a862ab</div>
+                  <div class="commit-id">Commit Id: 4bb9a61</div>
                 
 
 
@@ -4602,10 +4602,10 @@ method chain. Only the additional parameters need to be specified in the MAL exp
 <p>If users want to get the latest time from <code>last_server_state_sync_time_in_seconds</code>:</p>
 <pre tabindex="0"><code>last_server_state_sync_time_in_seconds.tagEqual(&#39;production&#39;, &#39;catalog&#39;).downsampling(LATEST)
 </code></pre><h2 id="metric-level-function">Metric level function</h2>
-<p>They extract level relevant labels from metric labels, then informs the meter-system the level and <a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> to which this metric belongs.</p>
+<p>They extract level relevant labels from metric labels, then informs the meter-system the level and <a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java">layer</a> to which this metric belongs.</p>
 <ul>
 <li><code>service([svc_label1, svc_label2...], Layer)</code> extracts service level labels from the array argument, extracts layer from <code>Layer</code> argument.</li>
-<li><code>instance([svc_label1, svc_label2...], [ins_label1, ins_label2...], Layer, Closure&lt;Map&lt;String, String&gt;&gt; propertiesExtractor)</code> extracts service level labels from the first array argument,
+<li><code>instance([svc_label1, svc_label2...], [ins_label1, ins_label2...], Layer)</code>, or with a properties extractor <code>instance([svc_label1...], '.', [ins_label1...], '.', Layer, Closure&lt;Map&lt;String, String&gt;&gt; propertiesExtractor)</code> (the two delimiters join the label values), extracts service level labels from the first array argument,
 extracts instance level labels from the second array argument, extracts layer from <code>Layer</code> argument, <code>propertiesExtractor</code> is an optional closure that extracts instance properties from <code>tags</code>, e.g. <code>{ tags -&gt; ['pod': tags.pod, 'namespace': tags.namespace] }</code>.</li>
 <li><code>endpoint([svc_label1, svc_label2...], [ep_label1, ep_label2...], Layer)</code> extracts service level labels from the first array argument,
 extracts endpoint level labels from the second array argument, extracts layer from <code>Layer</code> argument.</li>
@@ -4617,13 +4617,81 @@ extracts <code>sourceService</code> labels from the first array argument, extrac
 extracts <code>Service</code> labels from the first array argument, extracts <code>Instance</code> labels from the second array argument, extracts <code>ProcessID</code> labels from the fourth and fifth arguments of the source and destination.</li>
 </ul>
 <h2 id="decorate-function">Decorate function</h2>
-<p><code>decorate({ me -&gt; me.attr0 = ...})</code>: Decorate the <a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/meter/MeterEntity.java">MeterEntity</a> with additional attributes.
+<p><code>decorate({ me -&gt; me.attr0 = ...})</code>: Decorate the <a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/meter/MeterEntity.java">MeterEntity</a> with additional attributes.
 The closure takes the MeterEntity as an argument. This function is used to add additional attributes to the metrics. More details, see <a href="../metrics-additional-attributes">Metrics Additional Attributes</a>.</p>
+<h2 id="closures">Closures</h2>
+<p>A closure (<code>tag</code>, <code>filter</code>, <code>forEach</code>, <code>instance</code>, <code>decorate</code> and a file&rsquo;s <code>filter</code>) is a small Groovy-like language:
+<code>if</code> / <code>else if</code> / <code>else</code>, <code>return</code>, <code>def x = ...</code> and typed locals (<code>String</code>, <code>String[]</code>, <code>int</code>, <code>long</code>, <code>double</code>,
+<code>boolean</code>, <code>Map</code>, <code>List</code>), assignment, and labels read and written as <code>tags.x</code>, <code>tags['x']</code>, <code>tags.x = v</code>,
+<code>tags.put(k, v)</code> and <code>tags.remove(k)</code>. A number, boolean or character written to a label is written as its string. A
+filter (a rule file&rsquo;s <code>filter</code>, or <code>filter(...)</code> on an expression) only reads labels; labels are written in <code>tag</code>.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Operators</th>
+          <th>Semantics</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>==</code> <code>!=</code></td>
+          <td>by value across number types; a string or character against a number compares as the number it reads as (<code>&quot;3&quot; == 3</code>); lists and arrays element by element in order (a list against an array too), sets by their elements in any order, and maps by their keys and each key&rsquo;s value, as every DSL compares them</td>
+      </tr>
+      <tr>
+          <td><code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code></td>
+          <td>numbers by value; a string or character against a number reads as a number (one that is none fails the sample); two strings that both read as numbers compare as numbers (<code>&quot;10&quot; &gt; &quot;2&quot;</code>), otherwise as text; null lowest</td>
+      </tr>
+      <tr>
+          <td><code>&amp;&amp;</code> <code>||</code> <code>!</code>, <code>c ? a : b</code>, <code>a ?: b</code>, <code>?.</code>, <code>x in [...]</code></td>
+          <td>Groovy truth: null, false, an empty string, collection or map, and zero are false</td>
+      </tr>
+      <tr>
+          <td><code>+</code> <code>-</code> <code>*</code> <code>/</code>, unary <code>-</code></td>
+          <td>whole numbers stay whole (an <code>Integer</code> sum wraps, as in Groovy); <code>/</code> of two whole numbers is the exact decimal Groovy computes (<code>7 / 2</code> is 3.5; into an <code>int</code> or <code>long</code> it truncates); a decimal literal computes in double; whole numbers divided by zero fail the sample; <code>+</code> with a string concatenates onto a string, a number, a character or null on its left, and any value but an array, a collection or a map on its right (<code>&quot;x&quot; + true</code>); any other left value (<code>true + &quot;x&quot;</code>, an enum such as <code>me.scopeType + &quot;-x&quot;</code>), and an array, a collection or a map on either side, is refused; a string times a number is refused</td>
+      </tr>
+      <tr>
+          <td><code>label =~ /re/</code>, <code>m[i][j]</code></td>
+          <td>see Regex match in closures</td>
+      </tr>
+      <tr>
+          <td><code>a[i]</code></td>
+          <td>an array, list or string, negative from the end; the index is an <code>int</code>; a string&rsquo;s element is the one-character string</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="what-a-closure-can-call">What a closure can call</h3>
+<p>A closure calls only:</p>
+<ul>
+<li>the <code>String</code> methods <code>length</code>, <code>isEmpty</code>, <code>trim</code>, <code>toLowerCase</code>, <code>toUpperCase</code>, <code>startsWith</code>, <code>endsWith</code>, <code>contains</code>,
+<code>indexOf</code>, <code>lastIndexOf</code>, <code>substring</code>, <code>replace</code>, <code>replaceAll</code>, <code>replaceFirst</code>, <code>split</code>, <code>charAt</code>, <code>equals</code>,
+<code>equalsIgnoreCase</code>, <code>matches</code>, <code>concat</code>, <code>toString</code>;</li>
+<li><code>Integer.parseInt</code> / <code>valueOf</code>, <code>Long.parseLong</code> / <code>valueOf</code>, <code>Double.parseDouble</code> / <code>valueOf</code>, <code>String.valueOf</code>;</li>
+<li>an array&rsquo;s <code>length</code> and <code>size()</code> (<code>t.path.split('/').size()</code>);</li>
+<li><code>Arrays.asList</code>, a list&rsquo;s <code>get</code>, <code>size</code>, <code>isEmpty</code>, <code>contains</code>, <code>indexOf</code>, and a map&rsquo;s <code>get</code>, <code>getOrDefault</code>,
+<code>containsKey</code>, <code>size</code>, <code>isEmpty</code>, <code>keySet</code>, <code>values</code>, with <code>put</code> and <code>remove</code> on the labels or a map the closure
+built;</li>
+<li><code>ProcessRegistry.generateVirtualLocalProcess</code>, <code>generateVirtualRemoteProcess</code>, <code>generateVirtualProcess</code>, and the
+constants <code>ProcessRegistry.LOCAL_VIRTUAL_PROCESS</code> and <code>REMOTE_VIRTUAL_PROCESS</code> (no other static field);</li>
+<li>in <code>decorate</code>, the <code>MeterEntity</code> getters and setters (<code>me.serviceName</code>, <code>me.attr0 = ...</code>) and a layer&rsquo;s <code>name()</code>;</li>
+<li><code>toString()</code> and <code>equals()</code> on any value.</li>
+</ul>
+<p>Any other call (<code>Math</code>, other classes, other methods) fails the rule&rsquo;s compilation with a message listing these. Where
+an argument&rsquo;s type is known only at run time (a ternary of different types, a <code>def</code> that holds different types), the
+call compiles when every type it can take picks the same method, as Groovy would pick it. This is the set this release
+supports; it grows as rules need more (propose an addition in an issue or a pull request).</p>
+<h2 id="regex-match-in-closures">Regex match in closures</h2>
+<p>In a closure, <code>label =~ /pattern/</code> matches a label against a regular expression. <code>m[i][j]</code> is match <code>i</code>, group <code>j</code>,
+with group 0 the whole match (for a pattern without groups too). A match that is not there fails the sample, so check
+the match first: the match is true when the label matched. (A sample a rule file&rsquo;s <code>filter</code> fails on is dropped.)</p>
+<pre tabindex="0"><code>{ tags -&gt; def m = (tags.service =~ /^(.+)-v[0-9]+$/); if (m) { tags.service = m[0][1] } }
+{ tags -&gt; def m = (tags.service =~ /^(.+)-v[0-9]+$/); tags.base = m ? m[0][1] : tags.service }
+</code></pre><p>A group that takes no part in the match is <code>null</code> (<code>m[0][1] ?: 'none'</code>). To test a label without capturing, use the
+match itself in a filter (<code>{ tags -&gt; tags.job =~ /^prod-/ }</code>), or <code>startsWith(...)</code> / <code>matches(...)</code> on the label.</p>
 <h2 id="configuration-file">Configuration file</h2>
 <p>The OAP can load the configuration at bootstrap. If the new configuration is not well-formed, the OAP fails to start up. The files
 are located at <code>$CLASSPATH/otel-rules</code>, <code>$CLASSPATH/meter-analyzer-config</code>, <code>$CLASSPATH/envoy-metrics-rules</code> and <code>$CLASSPATH/zabbix-rules</code>.</p>
 <p>The file is written in YAML format, defined by the scheme described below. Brackets indicate that a parameter is optional.</p>
-<p>A full example can be found <a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/otel-rules/oap.yaml">here</a></p>
+<p>A full example can be found <a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/otel-rules/oap.yaml">here</a></p>
 <p>Generic placeholders are defined as follows:</p>
 <ul>
 <li><code>&lt;string&gt;</code>: A regular string.</li>
@@ -4681,10 +4749,10 @@ enforcement is not strict, but staying above the reserved band avoids upgrade-ti
 <p>Three other registration paths exist for layers that are <strong>not</strong> specific to a MAL file: an
 operator-managed <code>layer-extensions.yml</code>, a <code>LayerExtension</code> Java SPI for plugin jars, and the
 built-in static fields in <code>Layer.java</code> for distribution layers. See
-<a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
+<a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-core/src/main/java/org/apache/skywalking/oap/server/core/analysis/Layer.java"><code>Layer.java</code></a>
 javadoc for the full picture.</p>
 <h2 id="more-examples">More Examples</h2>
-<p>Please refer to <a href="https://github.com/apache/skywalking/tree/0a862ab9fedf245b9ce13930ea2d47cf3b9dfb78/oap-server/server-starter/src/main/resources/otel-rules/oap.yaml">OAP Self-Observability</a>.</p>
+<p>Please refer to <a href="https://github.com/apache/skywalking/tree/4bb9a6183954ffee022e81c783f08dad435ea2c0/oap-server/server-starter/src/main/resources/otel-rules/oap.yaml">OAP Self-Observability</a>.</p>
 
 </div>
 
@@ -4742,6 +4810,12 @@ javadoc for the full picture.</p>
         <li><a href="#down-sampling-operation">Down Sampling Operation</a></li>
         <li><a href="#metric-level-function">Metric level function</a></li>
         <li><a href="#decorate-function">Decorate function</a></li>
+        <li><a href="#closures">Closures</a>
+          <ul>
+            <li><a href="#what-a-closure-can-call">What a closure can call</a></li>
+          </ul>
+        </li>
+        <li><a href="#regex-match-in-closures">Regex match in closures</a></li>
         <li><a href="#configuration-file">Configuration file</a>
           <ul>
             <li><a href="#metric_rules">&lt;metric_rules&gt;</a></li>
