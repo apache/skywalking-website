@@ -33,7 +33,7 @@ Architecture Constraints Submodule: skywalking/ is a git submodule of apache/sky
   <meta itemprop="name" content="SkyWalking GraalVM Distro - Distribution Policy">
   <meta itemprop="description" content="SkyWalking GraalVM Distro - Distribution Policy Goal Build and package Apache SkyWalking OAP server as a GraalVM native image on JDK 25.
 Architecture Constraints Submodule: skywalking/ is a git submodule of apache/skywalking.git. All SkyWalking source changes go through upstream PRs. Minimize upstream changes. This repo: Maven &#43; Makefile to orchestrate building on top of the submodule. Pre-compilation, GraalVM config, native-image wiring, and the boot entry point live here. JDK 25: Already compiles and runs. Not an issue. Module Selection The image ships these modules and providers, and only these: they are the module SPI entries on its classpath. At boot, application.yml decides which of them run and picks each one’s provider, as upstream does.">
-  <meta itemprop="wordCount" content="3126">
+  <meta itemprop="wordCount" content="3638">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SkyWalking GraalVM Distro - Distribution Policy">
   <meta name="twitter:description" content="SkyWalking GraalVM Distro - Distribution Policy Goal Build and package Apache SkyWalking OAP server as a GraalVM native image on JDK 25.
@@ -1503,7 +1503,7 @@ Architecture Constraints Submodule: skywalking/ is a git submodule of apache/sky
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: f78c20f</div>
+                  <div class="commit-id">Commit Id: fd22029</div>
                 
 
 
@@ -1662,10 +1662,14 @@ the debug probes and the module only flips gates at runtime (upstream&rsquo;s TA
 probes yet, so TAL rules are not debuggable on either distro). <code>RuntimeRuleModule</code> (MAL/LAL hot-update) is
 <strong>not supported</strong>: it needs runtime Javassist code generation, which a closed-world native
 image cannot do. Its mutating endpoints return a friendly HTTP 501 via a stub module provider,
-while the read-only rule catalog (<code>/runtime/rule/list|bundled</code>, <code>GET /runtime/rule</code>) is served
-from <code>META-INF/rule-source/</code>, the raw rule files the precompiler exports at build time, so
-Horizon can list and review every bundled rule of upstream&rsquo;s runtime-rule catalogs (MAL and LAL;
-upstream has no TAL catalog, so TAL rules are not listed there either).</p>
+while the read-only rule catalog (<code>/runtime/rule/list|bundled|status</code>, <code>GET /runtime/rule</code>) is served,
+as upstream answers it on a node with no runtime rule (<code>BundledRuleCatalogParityTest</code> runs upstream&rsquo;s handler beside
+it), from upstream&rsquo;s <code>StaticRuleRegistry</code>, which records the files the rule loaders loaded at boot, as upstream&rsquo;s
+read routes do: the replacement loaders pass the files they load, the raw rule files the precompiler exports under
+<code>META-INF/rule-source/</code>, through upstream&rsquo;s <code>RuleSetMerger</code>, as upstream&rsquo;s loaders do, so Horizon can list and
+review every rule of upstream&rsquo;s runtime-rule catalogs the boot loaded (MAL and LAL; a module turned off loads no
+rule; upstream has no TAL catalog, so TAL rules are not listed there either). A <code>RuntimeRuleOverrideResolver</code> that
+would change or drop a compiled file fails the boot: the image runs the classes compiled from those bytes.</p>
 </blockquote>
 <hr>
 <h2 id="core-strategy">Core Strategy</h2>
@@ -1688,15 +1692,18 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
 <p><strong>Details</strong>: <a href="../internals/dsl-immigration">dsl-immigration.md</a> | <a href="../internals/oal-immigration">oal-immigration.md</a></p>
 <h3 id="oal">OAL</h3>
 <ul>
-<li><code>OALEngineV2.start()</code> processes all 9 OAL defines at build time.</li>
+<li><code>OALEngineV2.start()</code> processes every OAL define (the 10 bundled ones, plus one per script a rules overlay adds) at
+build time.</li>
 <li>Exports ~640 metrics classes, ~640 builder classes, ~47 dispatchers.</li>
-<li>Same-FQCN <code>OALEngineLoaderService</code> registers the pre-compiled classes and disabled sources the rule registry lists.</li>
+<li>Same-FQCN <code>OALEngineLoaderService</code> registers a define&rsquo;s pre-compiled script, as the rule registry lists it, when its
+provider loads the define, its disables first, as upstream; the overlay&rsquo;s own scripts, which no provider loads, at
+the first load, after its define (<code>oal/disable.oal</code> at boot, so its disables reach them).</li>
 </ul>
 <h3 id="mal">MAL</h3>
 <ul>
 <li><code>MALClassGenerator</code> compiles ~1570 MAL expressions from 96 YAML rule files at build time.</li>
 <li>Deterministic class naming via <code>DslSourceRef</code> (<code>{yaml}_L{line}_{metricName}</code>), the same names the JVM distro generates.</li>
-<li>Same-FQCN v2 <code>DSL.java</code> takes the pre-compiled <code>MalExpression</code> of an expression from the rule registry.</li>
+<li>Same-FQCN v2 <code>DSL.java</code> and <code>FilterExpression.java</code> take the pre-compiled <code>MalExpression</code> / <code>MalFilter</code> of a rule from the rule registry by the coordinates <code>MetricConvert</code> passes; Zabbix rules are compiled from upstream&rsquo;s <code>ZabbixConfigs</code>, as the Zabbix receiver compiles them.</li>
 <li><code>MeterSystem.create()</code> also runs at build time → exports ~1500 Javassist meter classes.</li>
 </ul>
 <h3 id="lal">LAL</h3>
@@ -1707,20 +1714,20 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
 </ul>
 <h3 id="tal">TAL</h3>
 <ul>
-<li><code>TALClassGenerator</code> compiles every <code>tal/*.yaml</code> at build time (shipped: 9 files, 14 rules — <code>otlp-general.yaml</code> and <code>otlp-ai-evaluation.yaml</code> for OTLP spans, the seven <code>native-*.yaml</code> files that analyze SkyWalking agent segments since SWIP-17), resolving input / layer exactly as upstream <code>SpanFilterListener.Factory</code> does, against a function registry bound as the factory binds its own; a rule that does not compile fails the build. Nothing is specific to the shipped rules: an operator&rsquo;s own TAL files, and the scripts in upstream&rsquo;s TAL docs, go through the same pass (<code>TALPrecompileTest</code>, <code>TALDocScriptsTest</code>).</li>
+<li><code>TALClassGenerator</code> compiles every <code>tal/*.yaml</code> whose <code>requiredModules</code> the image ships at build time (shipped: 9 files, 14 rules — <code>otlp-general.yaml</code> and <code>otlp-ai-evaluation.yaml</code> for OTLP spans, the seven <code>native-*.yaml</code> files that analyze SkyWalking agent segments since SWIP-17), resolving input / layer exactly as upstream <code>SpanFilterListener.Factory</code> does, against a function registry bound as the factory binds its own; a rule that does not compile fails the build. Nothing is specific to the shipped rules: an operator&rsquo;s own TAL files, and the scripts in upstream&rsquo;s TAL docs, go through the same pass (<code>TALPrecompileTest</code>, <code>TALDocScriptsTest</code>).</li>
 <li>Deterministic class naming via <code>DslSourceRef</code> (<code>{yaml}_L{line}_{ruleName}</code>).</li>
 <li>The precompiler runs <code>createMetrics</code> on the build-time <code>MeterSystem</code> it shares with MAL, so the 28 <code>otlp_*</code> meter classes are generated.</li>
-<li>Same-FQCN <code>TalDSL</code> takes the pre-compiled <code>TalExpression</code> by source coordinates from the rule registry, which also carries each rule&rsquo;s input type and alias, the function-registry key of every function object the class holds and its metric declarations; it sets those function objects from the factory&rsquo;s function registry, then claims and creates the metrics (incl. <code>limitLabels</code>) as upstream does. Same-FQCN <code>TALConfigs</code> takes the rule files from the same registry, honoring <code>requiredModules</code> and the <code>nativeTalFiles</code> order.</li>
+<li>Same-FQCN <code>TalDSL</code> takes the pre-compiled <code>TalExpression</code> by source coordinates from the rule registry, which also carries each rule&rsquo;s input type and alias, the function-registry key of every function object the class holds and its metric declarations; it sets those function objects from the factory&rsquo;s function registry, then claims and creates the metrics (incl. <code>limitLabels</code>) as upstream does. Same-FQCN <code>TALConfigs</code> takes the rule files from the same registry, in the order one upstream <code>TALConfigs.load</code> over the <code>talFiles</code> returned them at build time (the order their rules run on a span), honoring <code>requiredModules</code> and the <code>nativeTalFiles</code> order.</li>
 </ul>
 <h3 id="hierarchy">Hierarchy</h3>
 <ul>
 <li><code>HierarchyRuleClassGenerator</code> compiles 4 hierarchy matching rules at build time.</li>
-<li>Same-FQCN <code>HierarchyDefinitionService</code> takes the hierarchy, the layer levels and the pre-compiled <code>BiFunction</code> of each rule from the rule registry; <code>hierarchy-definition.yml</code> is not in <code>config/</code> (only in the <code>compiled-rules/</code> record).</li>
+<li>Same-FQCN <code>HierarchyDefinitionService</code> takes the hierarchy, the layer levels and the pre-compiled <code>BiFunction</code> of each rule from the rule registry, and builds upstream&rsquo;s <code>MatchingRule</code>s from them, so upstream&rsquo;s <code>HierarchyService</code> runs unchanged; <code>hierarchy-definition.yml</code> is not in <code>config/</code> (only in the <code>compiled-rules/</code> record).</li>
 </ul>
 <h3 id="static-rule-registry">Static rule registry</h3>
 <ul>
-<li>After the engine passes, the precompiler generates a Java class per rule file — what upstream&rsquo;s loader read from it, as code, constructing the classes compiled from it — plus the <code>CompiledRules</code> index, and compiles them into the generated jar. The runtime replacements (also <code>LayerExtensionLoader</code> and <code>ZabbixConfigs</code>) read only that: no rule YAML, JSON or manifest at runtime.</li>
-<li>A rule file where the configuration lookup would resolve it (<code>config/</code>, the working directory, the JVM distro class path) fails the boot: nothing would read it. Runtime configuration (<code>application.yml</code>, <code>alarm-settings.yml</code> …) is not a rule file and stays editable.</li>
+<li>After the engine passes, the precompiler generates a Java class per rule file — what upstream&rsquo;s loader read from it, as code, constructing the classes compiled from it — plus the <code>CompiledRules</code> index, and compiles them into the generated jar. The rules run from that alone (the runtime replacements, also <code>LayerExtensionLoader</code> and <code>ZabbixConfigs</code>): no rule YAML, JSON or manifest is compiled or bound at runtime. The replacement <code>Rules</code>, <code>LALConfigs</code> and <code>TALConfigs</code> also read the packaged sources of the files they load (<code>META-INF/rule-source/</code>), only to pass them through upstream&rsquo;s <code>RuleSetMerger</code>, which records them in <code>StaticRuleRegistry</code> for the read-only rule catalog, as upstream&rsquo;s loaders do.</li>
+<li>A rule file in the directory OAP reads its configuration from (the native image&rsquo;s <code>config/</code> next to its executable, on the JVM the directory <code>application.yml</code> is read from) fails the boot: rule files enter the image only at build time, and nothing would read it. Runtime configuration (<code>application.yml</code>, <code>alarm-settings.yml</code> …) is not a rule file and stays editable.</li>
 <li>Every compiled rule file is active. The settings upstream selects rule files with (<code>enabledOtelMetricsRules</code>, <code>meterAnalyzerActiveFiles</code>, <code>malFiles</code>, <code>lalFiles</code>, <code>talFiles</code>, <code>nativeTalFiles</code>, <code>enabledEnvoyMetricsRules</code>, the Telegraf and Zabbix <code>activeFiles</code>) are filled at boot from the registry (<code>CompiledRuleActivation</code>); one set in <code>application.yml</code>, by environment variable or by system property fails the boot. The image compiles every bundled rule file unless built with a rules overlay that adds, overrides or excludes files (<a href="../rules-overlay">Compiling Your Own Rules</a>); <code>compiled-rules/</code> in the distribution records what was compiled.</li>
 </ul>
 <h3 id="upstream-changes--simplification">Upstream Changes &amp; Simplification</h3>
@@ -1735,9 +1742,9 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
 <p><code>ClassPath.from()</code> used in <code>SourceReceiverImpl.scan()</code>, <code>AnnotationScan</code>, <code>MeterSystem</code>, <code>DefaultMetricsFunctionRegistry</code>, <code>FilterMatchers</code>, <code>MetricsHolder</code>.</p>
 <h3 id="what-was-solved">What Was Solved</h3>
 <ul>
-<li><code>AnnotationScan</code> and <code>SourceReceiverImpl</code> replaced with same-FQCN classes that read from build-time manifests. 6 annotation/interface manifests under <code>META-INF/annotation-scan/</code>: <code>ScopeDeclaration</code>, <code>Stream</code>, <code>Disable</code>, <code>MultipleDisable</code>, <code>SourceDispatcher</code>, <code>ISourceDecorator</code>.</li>
+<li><code>AnnotationScan</code> and <code>SourceReceiverImpl</code> replaced with same-FQCN classes that read from build-time manifests under <code>META-INF/annotation-scan/</code>: one per annotation an upstream <code>AnnotationListener</code> listens for (the precompiler asks each listener: today <code>ScopeDeclaration</code>, <code>Stream</code>, <code>Disable</code>, <code>MultipleDisable</code>), plus <code>SourceDispatcher</code> and <code>ISourceDecorator</code>. A missing manifest, or a class one lists that does not load, fails the boot, as upstream&rsquo;s scan fails on a class it cannot load.</li>
 <li><code>DefaultMetricsFunctionRegistry</code>, <code>FilterMatchers</code>, <code>MetricsHolder</code> — these only run inside the OAL engine at build time, not at runtime. Automatically solved.</li>
-<li><code>MeterSystem</code> replaced with same-FQCN class that reads from <code>META-INF/annotation-scan/MeterFunction.txt</code> manifest (16 meter function classes). Solved as part of MAL immigration.</li>
+<li><code>MeterSystem</code> replaced with a same-FQCN class that takes the meter function classes (18) and the pre-generated meter classes from the rule registry. Solved as part of MAL immigration.</li>
 </ul>
 <hr>
 <h2 id="module-system--configuration">Module System &amp; Configuration</h2>
@@ -1747,7 +1754,7 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
 <ol>
 <li><strong>Module loading as upstream</strong>: <code>GraalVMOAPServerStartUp</code> boots through upstream&rsquo;s <code>ModuleManager</code>, which loads the modules <code>application.yml</code> names via <code>ServiceLoader</code>; a module whose selector is <code>-</code> is not loaded. Native image registers every provider listed in <code>META-INF/services</code> on the build classpath, so the classpath carries only the shipped modules: <code>server-starter-for-graalvm</code> excludes all of <code>server-starter</code>&rsquo;s dependencies (every upstream plugin), and <code>oap-graalvm-server</code> declares the modules the distro ships. The distro&rsquo;s own <code>graalvm-unsupported-admin</code> module registers through the same SPI.</li>
 <li><strong>Simplified config file</strong>: Only knobs for the shipped providers</li>
-<li><strong>Config loading</strong>: <strong>No reflection.</strong> Build-time tool scans all <code>ModuleConfig</code> subclass fields → generates same-FQCN replacement of <code>YamlConfigLoaderUtils</code> that uses Lombok setters and VarHandle to set config fields directly. Eliminates <code>Field.setAccessible</code>/<code>field.set</code>; the config classes need reflection metadata only for the no-arg constructor upstream&rsquo;s <code>ModuleDefine.prepare</code> calls, which the precompiler generates from <code>module-config-classes.txt</code>.</li>
+<li><strong>Config loading</strong>: Build-time tool scans all <code>ModuleConfig</code> subclass fields → generates same-FQCN replacement of <code>YamlConfigLoaderUtils</code> that sets each non-final field through its Lombok setter, the value checked and converted as upstream&rsquo;s <code>Field.set</code> does (<code>ConfigFieldValues</code>), and writes each final or static field, which no setter writes, through <code>Field.set</code> itself as upstream does (<code>ConfigFieldValues.setByField</code>; a constant is refused with <code>IllegalAccessException</code>, as upstream). The precompiler generates the config classes&rsquo; reflection metadata from <code>module-config-classes.txt</code> (upstream&rsquo;s <code>ModuleDefine.prepare</code> calls their no-arg constructors) and registers the fields set through <code>Field.set</code> (a final instance one writable, <code>allowWrite</code>) from <code>module-config-field-set.txt</code>, both written by the config-generator.</li>
 </ol>
 <p><strong>Details</strong>: <a href="../internals/config-init-immigration">config-init-immigration.md</a></p>
 <h3 id="what-was-built">What Was Built</h3>
@@ -1756,7 +1763,7 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
 <li><code>ApplicationYmlModulesTest</code> — the classpath carries exactly the accepted providers, and every provider option of the shipped <code>application.yml</code> resolves to one of them</li>
 <li><code>application.yml</code> — simplified config for selected providers</li>
 <li><code>ConfigInitializerGenerator</code> — build-time tool that scans config classes and generates <code>YamlConfigLoaderUtils</code> replacement</li>
-<li><code>YamlConfigLoaderUtils</code> — same-FQCN replacement using type-dispatch + setter/VarHandle instead of reflection</li>
+<li><code>YamlConfigLoaderUtils</code> — same-FQCN replacement using type-dispatch + setters for non-final fields, and <code>Field.set</code> for final ones, as upstream</li>
 </ul>
 <hr>
 <h2 id="same-fqcn-packaging-repackaged-modules">Same-FQCN Packaging (Repackaged Modules)</h2>
@@ -1789,7 +1796,7 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
       <tr>
           <td><code>library-util-for-graalvm</code></td>
           <td><code>YamlConfigLoaderUtils</code></td>
-          <td>Set config fields via setter instead of reflection</td>
+          <td>Set non-final config fields via setter instead of reflection; final ones through <code>Field.set</code>, as upstream</td>
       </tr>
       <tr>
           <td><code>meter-analyzer-for-graalvm</code></td>
@@ -1818,7 +1825,7 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
       </tr>
   </tbody>
 </table>
-<p><strong>Config-only replacements (add <code>@Setter</code> for reflection-free config):</strong></p>
+<p><strong>Config-only replacements (add <code>@Setter</code>, so the config loader sets their non-final fields without reflection):</strong></p>
 <table>
   <thead>
       <tr>
@@ -1889,7 +1896,7 @@ upstream has no TAL catalog, so TAL rules are not listed there either).</p>
       <tr>
           <td><strong>Resource loading</strong> (<code>ResourceUtils</code>, config files)</td>
           <td>SOLVED</td>
-          <td><code>resource-config.json</code> via tracing agent</td>
+          <td>The <code>ResourceUtils</code> replacement reads the native image&rsquo;s <code>config/</code> next to its executable (the JVM: the class path, as upstream); other resources are embedded by resource globs</td>
       </tr>
       <tr>
           <td><strong>Log4j2</strong></td>
@@ -2032,7 +2039,14 @@ via the <code>ui-management</code> REST surface.)</p>
 <h3 id="pre-compiled-at-build-time-not-in-distro">Pre-compiled at Build Time (NOT in distro)</h3>
 <p>These files are consumed by <code>build-tools/precompiler</code> during the build. Their
 expressions, scripts, and metric definitions are compiled into <code>.class</code> files
-packaged in JARs. The YAML source files are not needed at runtime.</p>
+packaged in JARs; no rule file is read as configuration at runtime. Their sources still ship, for two uses:</p>
+<ul>
+<li>the generated jar embeds the MAL, LAL and TAL rule sources (<code>META-INF/rule-source/</code>, 117 in the default build), which
+the replacement loaders read only to pass them through upstream&rsquo;s <code>RuleSetMerger</code>, recording them for the read-only
+rule catalog, as upstream&rsquo;s loaders do;</li>
+<li>both distributions ship <code>compiled-rules/</code>, a record of every staged rule file (130 in the default build, with its
+<code>BUILD-INFO</code>), a TAL file the image skips for a module it does not ship included.</li>
+</ul>
 <table>
   <thead>
       <tr>
@@ -2136,14 +2150,14 @@ filesystem YAML.</p>
 <h3 id="build-time-pre-compilation">Build-Time Pre-Compilation</h3>
 <p>All five DSL compilers (OAL/MAL/LAL/TAL/Hierarchy) use ANTLR4 + Javassist v2 engines. The unified precompiler (<code>build-tools/precompiler</code>) runs them all at build time, capturing generated <code>.class</code> files into the output JAR.</p>
 <p><strong>OAL</strong>: OAL v2 engine exports <code>.class</code> files (10 defines, ~640 metrics, ~640 builders, ~47 dispatchers). 7 annotation/interface manifests. Same-FQCN <code>OALEngineLoaderService</code> registers the classes the rule registry lists.</p>
-<p><strong>MAL</strong>: MAL v2 compiler processes 96 YAML files → ~1570 <code>MalExpression</code> classes + ~1530 Javassist meter classes. Deterministic <code>DslSourceRef</code> class naming. Same-FQCN v2 <code>DSL.java</code> takes pre-compiled classes by expression text from the rule registry.</p>
+<p><strong>MAL</strong>: MAL v2 compiler processes 96 YAML files → ~1570 <code>MalExpression</code> classes + ~1530 Javassist meter classes. Deterministic <code>DslSourceRef</code> class naming. Same-FQCN v2 <code>DSL.java</code> takes pre-compiled classes by source coordinates from the rule registry.</p>
 <p><strong>LAL</strong>: LAL v2 compiler processes 12 YAML files → 19 <code>LalExpression</code> classes. Deterministic <code>DslSourceRef</code> class naming. Same-FQCN v2 <code>DSL.java</code> takes pre-compiled classes by source coordinates from the rule registry.</p>
 <p><strong>TAL</strong>: TAL v2 compiler processes 9 YAML files → 14 <code>TalExpression</code> classes + 28 meter classes. Same-FQCN <code>TalDSL</code> loads pre-compiled classes by source coordinates, wires their function objects by the recorded function-registry keys and creates the recorded metrics.</p>
 <p><strong>Hierarchy</strong>: Hierarchy v2 compiler processes 4 rules → 4 <code>BiFunction</code> classes. Same-FQCN <code>HierarchyDefinitionService</code> takes the definition and the pre-compiled rules from the rule registry.</p>
-<p><strong>Config initialization</strong>: <code>ConfigInitializerGenerator</code> generates same-FQCN <code>YamlConfigLoaderUtils</code> using Lombok setters — zero <code>Field.setAccessible</code> at runtime.</p>
+<p><strong>Config initialization</strong>: <code>ConfigInitializerGenerator</code> generates same-FQCN <code>YamlConfigLoaderUtils</code> using Lombok setters for the other fields; the final and static ones (<code>module-config-field-set.txt</code>) go through <code>Field.set</code>, as upstream, registered for the native image (a final instance one writable).</p>
 <p><strong>Static rule registry</strong>: the precompiler generates a Java class per rule file (what upstream&rsquo;s loader read from it, as code) plus the <code>CompiledRules</code> index and compiles them into the generated jar; the replacement loaders (<code>Rules</code>, <code>LALConfigs</code>, <code>TALConfigs</code>, <code>ZabbixConfigs</code>, <code>HierarchyDefinitionService</code>, <code>LayerExtensionLoader</code>) read it instead of filesystem YAML. The <code>config-data/*.json</code> and rule manifests the engine passes write are build intermediates, left out of the jar.</p>
 <p><strong>Module system</strong>: upstream&rsquo;s <code>ModuleManager</code> and <code>ModuleDefine</code>, unchanged: <code>application.yml</code> names the modules to load, found through the module SPI.</p>
-<p><strong>Distro resource packaging</strong>: 146 runtime files → distro <code>config/</code>, 90 pre-compiled files → JARs. Assembly descriptor (<code>distribution.xml</code>) packages runtime config files from upstream.</p>
+<p><strong>Distro resource packaging</strong>: 18 runtime files → distro <code>config/</code> (the runtime configuration table plus <code>version.properties</code>), 130 staged rule files compiled into the image, recorded in <code>compiled-rules/</code>, the MAL / LAL / TAL ones (117) also embedded as the sources the loaders pass through <code>RuleSetMerger</code>. Assembly descriptor (<code>distribution.xml</code>) packages runtime config files from upstream.</p>
 <h3 id="native-image-build">Native Image Build</h3>
 <ul>
 <li><code>native-maven-plugin</code> (GraalVM buildtools 0.10.4) in <code>oap-graalvm-native</code> with <code>-Pnative</code> profile</li>
