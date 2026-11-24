@@ -33,7 +33,7 @@ otlpTraceStorage What is stored Query API otlp (default) The span as it arrived,
   <meta itemprop="name" content="OpenTelemetry Trace Format">
   <meta itemprop="description" content="OpenTelemetry Trace Format SkyWalking receives traces in OTLP format through the otlp-traces handler of the OpenTelemetry receiver. The handler stores them in one of two ways, selected by receiver-otel.default.otlpTraceStorage:
 otlpTraceStorage What is stored Query API otlp (default) The span as it arrived, with its resource and instrumentation scope, in the otlp_span record; only the resource’s service.layer is set to the registered layer, UNDEFINED otherwise. The TraceQL /otlp datasource, served to Grafana Tempo as native OTLP. zipkin Spans converted to Zipkin v2 and handed to the Zipkin receiver, the only mode of earlier releases. Follows the Zipkin Exporter conversion rules. Zipkin query API, Lens UI, and the TraceQL /zipkin datasource. Span listeners such as the GenAI analyzer run in both modes. In otlp mode they read the OTLP span directly instead of its Zipkin conversion. AI evaluation samples a span through the otlp-ai-evaluation TAL rule in otlp mode, for the services that set service.layer=OTLP_GENERAL, and through its span listener, on the Zipkin conversion, in zipkin mode.">
-  <meta itemprop="wordCount" content="1463">
+  <meta itemprop="wordCount" content="1827">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="OpenTelemetry Trace Format">
   <meta name="twitter:description" content="OpenTelemetry Trace Format SkyWalking receives traces in OTLP format through the otlp-traces handler of the OpenTelemetry receiver. The handler stores them in one of two ways, selected by receiver-otel.default.otlpTraceStorage:
@@ -4288,7 +4288,7 @@ otlpTraceStorage What is stored Query API otlp (default) The span as it arrived,
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: da79bc2</div>
+                  <div class="commit-id">Commit Id: 3d54482</div>
                 
 
 
@@ -4499,7 +4499,7 @@ version are kept as <code>otel.library.name</code> and <code>otel.library.versio
       <tr>
           <td><code>otlpTraceMaxSpansPerSecond</code></td>
           <td><code>SW_OTEL_TRACE_MAX_SPANS_PER_SECOND</code></td>
-          <td>Spans per second accepted before the receiver drops the rest. <code>0</code> means no limit. Dropped spans are counted in the <code>otel_spans_dropped</code> self-observability metric.</td>
+          <td>Spans per second accepted before the receiver drops the rest. <code>0</code> means no limit. Dropped spans are counted in <code>spans_dropped_count</code> with <code>reason=rate_limited</code>, see <a href="#self-observability">Self-observability</a>.</td>
       </tr>
   </tbody>
 </table>
@@ -4591,6 +4591,60 @@ rule file analyzes the spans whose resource carries <code>service.layer=OTLP_GEN
 that layer with their metrics, topology and slow statements; every other span is only stored. See <a href="../trace-analyzer#enabling-the-analysis-for-an-application">OpenTelemetry
 Trace Analysis</a> for how an application enables it, the
 settings, and what it produces.</p>
+<h2 id="self-observability">Self-observability</h2>
+<p>The <code>otlp-traces</code> handler reports these metrics on the OAP&rsquo;s <a href="../backend-telemetry">telemetry</a> endpoint, in both
+storage modes. The <a href="../dashboards-so11y">OAP self-observability</a> MAL rules turn them into the <code>meter_oap_*</code> metrics
+named in the last column.</p>
+<p>Every metric counts spans, not export requests, as the OTLP log metrics count log records.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+          <th>Meter</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>trace_in_latency</code></td>
+          <td><code>protocol</code>: <code>otlp-grpc</code>, <code>otlp-http</code></td>
+          <td>Latency of processing 1,000 spans, observed for each span as its own latency × 1,000, because one span takes microseconds, below the smallest histogram bucket. A span&rsquo;s latency covers the span listeners, the TAL rules, and storing it natively or converting it to Zipkin. Its count is the spans received from resources with a service name. Shared with the agent (<code>grpc</code>, <code>http</code>, <code>kafka</code>) and Zipkin (<code>zipkin-http</code>, <code>zipkin-kafka</code>) receivers, in the same per-span unit</td>
+          <td><code>meter_oap_instance_trace_count</code>, <code>meter_oap_instance_trace_latency_percentile</code> (ms per 1,000 spans), by <code>protocol</code>; <code>meter_oap_otel_spans_received</code>, the two OTLP protocols summed</td>
+      </tr>
+      <tr>
+          <td><code>otel_spans_rejected</code></td>
+          <td></td>
+          <td>Spans rejected because their resource names no service, see <a href="#service-name">Service name</a></td>
+          <td><code>meter_oap_otel_spans_rejected</code></td>
+      </tr>
+      <tr>
+          <td><code>spans_dropped_count</code></td>
+          <td><code>protocol</code>: <code>otlp-grpc</code>, <code>otlp-http</code>; <code>reason</code></td>
+          <td>Spans received but not stored, by reason, see below. Shared with the Zipkin (<code>zipkin-http</code>, <code>zipkin-kafka</code>) receiver</td>
+          <td><code>meter_oap_instance_spans_dropped_count</code> by <code>protocol</code>, <code>meter_oap_instance_spans_dropped_by_reason</code> by <code>protocol</code> and <code>reason</code>; <code>meter_oap_otel_spans_dropped</code>, the two OTLP protocols summed</td>
+      </tr>
+      <tr>
+          <td><code>trace_analysis_error_count</code></td>
+          <td><code>protocol</code>: <code>otlp-grpc</code>, <code>otlp-http</code></td>
+          <td>Export requests that failed as a whole: an OTLP/HTTP body that does not parse, or an error that escaped the per-span handling. Shared with the agent (<code>grpc</code>) and Zipkin (<code>zipkin-http</code>, <code>zipkin-kafka</code>) receivers</td>
+          <td><code>meter_oap_instance_trace_analysis_error_count</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>In Zipkin mode the Zipkin receiver stores the converted spans of an export request as one batch, after their
+<code>trace_in_latency</code> observations, so the time spent storing them is not in the span latency.</p>
+<p>The <code>reason</code> of a dropped span is one of:</p>
+<ul>
+<li><code>sampled</code>: left out by the head sampling, <code>otlpTraceSampleRate</code> in native mode, the Zipkin receiver&rsquo;s <code>sampleRate</code>
+in Zipkin mode.</li>
+<li><code>rate_limited</code>: over the spans per second limit, <code>otlpTraceMaxSpansPerSecond</code> in native mode, the Zipkin
+receiver&rsquo;s <code>maxSpansPerSecond</code> in Zipkin mode.</li>
+<li><code>store_failed</code>: native mode, an error while storing the span.</li>
+<li><code>process_failed</code>: an error in the span listeners or, in Zipkin mode, while converting or processing the span. Only
+that span is lost; the rest of the export request is processed.</li>
+</ul>
+<p>A span that the span listeners or a TAL rule decide not to persist is not counted as dropped.</p>
 
 </div>
 
@@ -4636,6 +4690,7 @@ settings, and what it produces.</p>
           </ul>
         </li>
         <li><a href="#analysis">Analysis</a></li>
+        <li><a href="#self-observability">Self-observability</a></li>
       </ul>
     </li>
   </ul>
