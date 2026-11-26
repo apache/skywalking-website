@@ -35,7 +35,7 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
   <meta itemprop="description" content="Observability This document outlines the observability features of BanyanDB, which include metrics, profiling, and tracing. These features help monitor and understand the performance, behavior, and overall health of BanyanDB.
 This guide is split into:
 Logging — log levels, per-module levels, and slow-query logging. Metrics — the full metric catalog (stats, resource usage, storage, trace plugins, inverted index, internal queue) with PromQL. Metrics Providers — scraping metrics with Prometheus (through the FODC proxy), Grafana dashboards, and native self-observability. Profiling — pprof endpoints. Query Tracing — per-query execution traces. Key Signals to Watch If you watch nothing else, watch these. They are organized with the two canonical monitoring methods: RED (Rate, Errors, Duration) for the request paths — BanyanDB’s write and query paths — and USE (Utilization, Saturation, Errors) for resources [1][2][3]. The detailed metric definitions are in the Metrics page; the thresholds here are industry reference values to tune per cluster, except where a BanyanDB default is named.">
-  <meta itemprop="wordCount" content="861">
+  <meta itemprop="wordCount" content="917">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Observability">
   <meta name="twitter:description" content="Observability This document outlines the observability features of BanyanDB, which include metrics, profiling, and tracing. These features help monitor and understand the performance, behavior, and overall health of BanyanDB.
@@ -2326,7 +2326,7 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 62254e4</div>
+                  <div class="commit-id">Commit Id: 558f754</div>
                 
 
 
@@ -2405,7 +2405,7 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
       <tr>
           <td>1</td>
           <td><strong>Query latency, p99</strong> (RED · Duration)</td>
-          <td>Query Latency (<code>banyandb_liaison_grpc_total_latency</code> ÷ <code>_total_started</code>)</td>
+          <td>Query Latency (<code>banyandb_liaison_grpc_query_latency_seconds</code>)</td>
           <td>p99 over a short (~1 min) window trending up</td>
           <td>The <strong>earliest</strong> warning of saturation — latency degrades before requests start failing [1]. Track success vs. error latency separately (a slow error is worse than a fast one) [1].</td>
       </tr>
@@ -2419,14 +2419,14 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
       <tr>
           <td>3</td>
           <td><strong>Error rate</strong> (RED · Errors)</td>
-          <td>Error Rate — the dashboard combines <code>banyandb_liaison_grpc_total_err</code> + <code>_total_registry_err</code> + <code>_total_stream_msg_received_err</code>, the publisher&rsquo;s <code>banyandb_queue_pub_total_err</code>, and the liaison write-queue <code>banyandb_{measure,stream_tst,trace_tst}_total_sync_loop_err</code> (all <code>or vector(0)</code>, several lazily registered)</td>
+          <td>Error Rate — the dashboard combines <code>banyandb_liaison_grpc_total_err</code> + <code>_total_registry_err</code> + <code>_total_stream_msg_received_err</code>, the publisher&rsquo;s <code>banyandb_queue_pub_total_err</code> (excluding <code>canceled</code> / <code>stream_canceled</code>), and the liaison write-queue <code>banyandb_{measure,stream_tst,trace_tst}_total_sync_loop_err</code> (all <code>or vector(0)</code>, several lazily registered)</td>
           <td>any sustained non-zero rate</td>
           <td>failing writes/queries; correlate with the saturation signals below</td>
       </tr>
       <tr>
           <td>4</td>
           <td><strong>Disk utilization</strong> (USE · Saturation)</td>
-          <td>Disk Usage % (<code>banyandb_system_disk</code> used ÷ total, per <code>pod_name</code>)</td>
+          <td>Disk Usage % (<code>banyandb_system_disk{kind=&quot;used_percent&quot;}</code>, a 0–1 ratio, max per <code>pod_name</code>)</td>
           <td>alert at <strong>~80–85%</strong> [4]; BanyanDB <strong>rejects writes with <code>STATUS_DISK_FULL</code></strong> once usage crosses the disk-full threshold (<strong>default 95%</strong>): <code>{measure,stream,trace}-retention-high-watermark</code> on data/standalone nodes (which also drives forced retention cleanup down to the <code>-low-watermark</code>, default 85%), <code>{measure,stream,trace}-max-disk-usage-percent</code> on liaison nodes, and <code>property-max-disk-usage-percent</code> for property</td>
           <td>a write outage — affected components go read-only [4]</td>
       </tr>
@@ -2440,16 +2440,16 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
       <tr>
           <td>6</td>
           <td><strong>CPU utilization</strong> (USE · Utilization)</td>
-          <td>CPU Usage (<code>rate(process_cpu_seconds_total)</code> ÷ <code>banyandb_system_cpu_num</code>)</td>
+          <td>CPU Usage (<code>rate(process_cpu_seconds_total)</code> ÷ <code>banyandb_system_cpu_limit_cores</code>)</td>
           <td>sustained high utilization</td>
           <td>rising query/merge latency</td>
       </tr>
       <tr>
           <td>7</td>
           <td><strong>Cross-node queue backpressure</strong> (USE · Saturation)</td>
-          <td><code>banyandb_queue_pub_total_started</code>−<code>total_finished</code> gap, <code>banyandb_queue_pub_total_err{error_type=&quot;retry_exhausted&quot;}</code>; <strong>wqueue</strong> <code>banyandb_*_pending_data_count</code> / <code>*_total_file_parts</code> (liaison)</td>
-          <td>rising <strong>depth <em>and</em> duration</strong></td>
-          <td>a slow/unavailable data node. The liaison wqueue is <strong>on disk</strong>, so it accumulates (it does not drop data after a fixed window) and can eventually fill liaison disk → <code>STATUS_DISK_FULL</code> [5]</td>
+          <td><code>banyandb_queue_pub_total_started</code>−<code>total_finished</code> gap (not meaningful for <code>operation=&quot;batch-write&quot;</code> with <code>remote_role=&quot;liaison&quot;</code>), <code>banyandb_queue_pub_total_err{error_type=&quot;retry_exhausted&quot;}</code>; <strong>wqueue</strong> <code>banyandb_{measure,stream_tst,trace_tst}_unsynced_parts</code> / <code>_oldest_unsynced_part_age_seconds</code> / <code>increase(_total_sync_failed_parts)</code> (liaison)</td>
+          <td>rising <strong>depth <em>and</em> duration</strong>, or any dropped part</td>
+          <td>a slow/unavailable data node. The liaison wqueue is <strong>on disk</strong>, so when the shard has no data node to sync to (or the sync is stuck) it accumulates and can eventually fill liaison disk → <code>STATUS_DISK_FULL</code> [5]; a part that keeps failing to sync is dropped after about 7 seconds of retries: data may be at risk</td>
       </tr>
       <tr>
           <td>8</td>
@@ -2461,7 +2461,7 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
       <tr>
           <td>9</td>
           <td><strong>Cardinality / series growth</strong></td>
-          <td>Total Series (<code>banyandb_*_inverted_index_total_doc_count</code>), <code>_total_updates</code> (churn), <code>_total_term_searchers_started</code></td>
+          <td>Total Series (<code>banyandb_*_inverted_index_total_doc_count</code>), <code>banyandb_*_series_count</code> (current segment), <code>_total_updates</code> (churn), <code>_total_term_searchers_started</code></td>
           <td>rapid <code>doc_count</code> growth, high churn, or high term-search rate</td>
           <td>a cardinality explosion → memory pressure, inverted-index bloat, and slow queries</td>
       </tr>
@@ -2469,7 +2469,7 @@ Logging — log levels, per-module levels, and slow-query logging. Metrics — t
           <td>10</td>
           <td><strong>Node liveness / membership</strong></td>
           <td>Active Instances (<code>count(banyandb_system_up_time)</code> by <code>container_name</code>), per-node <code>banyandb_system_up_time</code></td>
-          <td>reporting-node count below expected; a node&rsquo;s uptime dropping to ~0 (restart) or its series disappearing (gone)</td>
+          <td>reporting-node count below expected; a node&rsquo;s uptime dropping to ~0 (restart), its value freezing, or its series disappearing (gone); <code>banyandb_metadata_{dns,file}_discovery_total_nodes_count</code> is the node count each process has discovered</td>
           <td>lost capacity, under-replication, and query gaps</td>
       </tr>
       <tr>
@@ -2669,6 +2669,20 @@ retention-safety, telemetry-host, finalization, and plugin-defined metrics.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

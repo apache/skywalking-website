@@ -35,7 +35,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   <meta itemprop="description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
 Scrape source — the FODC proxy. In a cluster deployment, metrics are collected by scraping the FODC proxy /metrics endpoint (see FODC overview), which is the single Prometheus scrape target. The proxy aggregates every BanyanDB node’s metrics and adds per-node identity labels, so all the PromQL below is written for that scheme:
 $job — the Prometheus scrape job for the FODC proxy. $role — the node role, matched via the container_name label (liaison or data). $pod — a BanyanDB node, matched via the pod_name label (the full node identity, e.g. banyandb-data-hot-0). Because the proxy is the only target, the Prometheus-synthesized instance, job, and up labels describe the proxy, not individual BanyanDB nodes — use $role / $pod to scope a query to a node. Original BanyanDB labels (group, kind, method, service, path, operation, remote_node, …) are preserved on every sample. $__rate_interval is the Grafana rate-interval variable. Every expression below carries the {job=~&#34;$job&#34;, container_name=~&#34;$role&#34;, pod_name=~&#34;$pod&#34;} selector; a few liaison-only metrics (the write queue and its sync loop) are pinned with the literal container_name=&#34;liaison&#34; instead.">
-  <meta itemprop="wordCount" content="5019">
+  <meta itemprop="wordCount" content="6359">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Metrics">
   <meta name="twitter:description" content="Metrics BanyanDB exposes metrics for monitoring and analysis.
@@ -2326,7 +2326,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 62254e4</div>
+                  <div class="commit-id">Commit Id: 558f754</div>
                 
 
 
@@ -2409,17 +2409,19 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <h3 id="nodes-by-role">Nodes by Role</h3>
 <p>The reporting-node count broken down by role (<code>liaison</code> / <code>data</code>), via the <code>container_name</code> label.</p>
 <p><strong>Expression</strong>: <code>count(banyandb_system_up_time{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}) by (container_name)</code></p>
+<h3 id="discovered-nodes">Discovered Nodes</h3>
+<p><code>banyandb_metadata_dns_discovery_total_nodes_count</code> (<code>--node-discovery-mode=dns</code>) and <code>banyandb_metadata_file_discovery_total_nodes_count</code> (<code>--node-discovery-mode=file</code>) report the number of nodes in the discovery cache of each liaison, data or lifecycle process running that mode: the nodes whose metadata was fetched successfully. In DNS mode only the nodes resolved from the configured <code>--node-discovery-dns-srv-addresses</code> are counted, so the value is what that process&rsquo;s SRV addresses cover, not necessarily the whole cluster. The count falls when DNS stops listing a node, but a dead node that DNS still lists stays counted. Neither metric exists with <code>--node-discovery-mode=none</code>, the default and the only mode for a standalone node.</p>
 <h3 id="total-cpu-cores">Total CPU Cores</h3>
-<p>The total number of CPU cores across the selected nodes.</p>
-<p><strong>Expression</strong>: <code>sum(banyandb_system_cpu_num{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;})</code></p>
+<p>The total number of CPU cores available to the selected nodes: the sum of each node&rsquo;s <code>banyandb_system_cpu_limit_cores</code>, which comes from <code>GOMAXPROCS</code>. It follows the container&rsquo;s cgroup CPU quota, but setting the <code>GOMAXPROCS</code> environment variable overrides the quota-derived value.</p>
+<p><strong>Expression</strong>: <code>sum(banyandb_system_cpu_limit_cores{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;})</code></p>
 <h3 id="total-memory-used">Total Memory Used</h3>
 <p>The total resident memory used across the selected nodes, in bytes.</p>
-<p><strong>Expression</strong>: <code>sum(banyandb_system_memory_state{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used&quot;})</code></p>
+<p><strong>Expression</strong>: <code>sum(process_resident_memory_bytes{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;})</code></p>
 <h3 id="total-disk-used">Total Disk Used</h3>
 <p>The total disk space used across the selected nodes, in bytes (summed over all storage paths). See <strong>Resources → Disk Usage %</strong> for the used/total percentage and <strong>Disk by Path</strong> for the per-path breakdown.</p>
 <p><strong>Expression</strong>: <code>sum(banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used&quot;})</code></p>
 <h3 id="node-uptime">Node Uptime</h3>
-<p>The per-node uptime gauge. A value dropping to ~0 indicates a restart; a series disappearing indicates a node that stopped reporting.</p>
+<p>The per-node uptime gauge, in seconds since the process started: it is monotonically increasing and starts again from 0 on a restart, so a value dropping to ~0 indicates a restart. When a node freezes but its FODC agent keeps running, the proxy keeps returning the last reported value, so the series stays and its value stops changing. Once the agent has been unreachable for about 5 minutes (<code>--agent-cleanup-timeout</code>), the proxy drops its series, so a series disappearing indicates a node that stopped reporting.</p>
 <p><strong>Expression</strong>: <code>banyandb_system_up_time{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}</code> (one series per <code>pod_name</code>)</p>
 <h2 id="per-node-health">Per-node Health</h2>
 <p>A single table joining the key per-node signals so an unhealthy node stands out at a glance. The columns are the metrics documented in <strong>Resources</strong> below, each reduced <code>by (pod_name)</code>:</p>
@@ -2428,22 +2430,22 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <li>CPU (cores) — <code>sum(rate(process_cpu_seconds_total{…}[$__rate_interval])) by (pod_name)</code></li>
 <li>RSS — <code>sum(process_resident_memory_bytes{…}) by (pod_name)</code></li>
 <li>Memory % — <code>max(banyandb_system_memory_state{…, kind=&quot;used_percent&quot;}) by (pod_name)</code></li>
-<li>Disk % — <code>sum(banyandb_system_disk{…, kind=&quot;used&quot;}) by (pod_name) / sum(banyandb_system_disk{…, kind=&quot;total&quot;}) by (pod_name)</code></li>
+<li>Disk % — <code>max by (pod_name) (banyandb_system_disk{…, kind=&quot;used_percent&quot;})</code></li>
 </ul>
 <h2 id="resources">Resources</h2>
 <p><code>Resources</code> metrics monitor per-node resource usage.</p>
 <h3 id="cpu-usage">CPU Usage</h3>
-<p>CPU cores consumed per node. Sustained high utilization correlates with rising query/merge latency.</p>
-<p><strong>Expression</strong>: <code>sum(rate(process_cpu_seconds_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (pod_name)</code></p>
+<p>CPU consumed per node as a fraction of its CPU limit (<code>banyandb_system_cpu_limit_cores</code>, the GOMAXPROCS value), so it can exceed 100% when the CPU quota is fractional and under-reports when the quota is below one core. Because the limit is read from <code>GOMAXPROCS</code>, setting the <code>GOMAXPROCS</code> environment variable overrides the cgroup quota. Sustained high utilization correlates with rising query/merge latency.</p>
+<p><strong>Expression</strong>: <code>sum(rate(process_cpu_seconds_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (pod_name) / max by (pod_name) (banyandb_system_cpu_limit_cores{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;})</code></p>
 <h3 id="rss-memory">RSS Memory</h3>
 <p>Resident set size per node, in bytes. The peak over the rate interval is used so transient spikes are not hidden.</p>
 <p><strong>Expression</strong>: <code>max by (pod_name) (max_over_time(process_resident_memory_bytes{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval]))</code></p>
 <h3 id="system-memory-">System Memory %</h3>
-<p>The percentage of system memory used per node. As it approaches the memory protector limit (<code>--allowed-percent</code>, default 75), query execution is throttled, so high memory surfaces as query slowdown first.</p>
+<p>The fraction of host memory used per node. As process memory approaches the memory protector limit (<code>--allowed-percent</code>, default 75% of the cgroup limit), query execution is throttled, so high memory surfaces as query slowdown first.</p>
 <p><strong>Expression</strong>: <code>max(banyandb_system_memory_state{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used_percent&quot;}) by (pod_name)</code></p>
 <h3 id="disk-usage-">Disk Usage %</h3>
-<p>The fraction of disk used per node (summed over all storage paths). BanyanDB rejects writes with <code>STATUS_DISK_FULL</code> once usage crosses the disk-full threshold (default 95%), so alert well before that — commonly at ~80–85%.</p>
-<p><strong>Expression</strong>: <code>sum(banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used&quot;}) by (pod_name) / sum(banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;total&quot;}) by (pod_name)</code></p>
+<p>The fraction of disk used per node (the fullest storage path). BanyanDB rejects writes with <code>STATUS_DISK_FULL</code> once usage crosses the disk-full threshold (default 95%), so alert well before that — commonly at ~80–85%. The threshold is configurable: a liaison uses <code>--measure-max-disk-usage-percent</code>, <code>--stream-max-disk-usage-percent</code> and <code>--trace-max-disk-usage-percent</code>, while a data or standalone node uses <code>--measure-retention-high-watermark</code>, <code>--stream-retention-high-watermark</code> and <code>--trace-retention-high-watermark</code> (forced retention starts deleting segments there).</p>
+<p><strong>Expression</strong>: <code>max by (pod_name) (banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used_percent&quot;})</code></p>
 <h3 id="network-usage">Network Usage</h3>
 <p>Bytes received and sent per second, per node and interface (<code>name</code>).</p>
 <p><strong>Expression1 (recv)</strong>: <code>sum(rate(banyandb_system_net_state{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;bytes_recv&quot;}[$__rate_interval])) by (pod_name, name)</code>
@@ -2455,7 +2457,7 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <h3 id="disk-total-by-path">Disk Total by Path</h3>
 <p><strong>Expression</strong>: <code>sum(banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;total&quot;}) by (pod_name, path)</code></p>
 <h3 id="disk-used--by-path">Disk Used % by Path</h3>
-<p><strong>Expression</strong>: <code>sum(banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used&quot;}) by (pod_name, path) / sum(banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;total&quot;}) by (pod_name, path)</code></p>
+<p><strong>Expression</strong>: <code>max by (pod_name, path) (banyandb_system_disk{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, kind=&quot;used_percent&quot;})</code></p>
 <h2 id="go-runtime">Go Runtime</h2>
 <p>Standard Go process metrics, per node. Rising goroutine counts, GC pause, or allocation rate are early indicators of memory pressure or a leak.</p>
 <h3 id="goroutines">Goroutines</h3>
@@ -2470,33 +2472,80 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <p>The heap size that will trigger the next GC, alongside the allocation rate.</p>
 <p><strong>Expression1 (next_gc)</strong>: <code>sum(go_memstats_next_gc_bytes{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name)</code>
 <strong>Expression2 (alloc_rate)</strong>: <code>sum(rate(go_memstats_alloc_bytes_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (pod_name)</code></p>
+<h2 id="process-health-reference">Process Health (reference)</h2>
+<table>
+  <thead>
+      <tr>
+          <th>Metric</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>banyandb_memory_protector_usage</code>, <code>banyandb_memory_protector_limit</code></td>
+          <td>Gauge</td>
+          <td>—</td>
+          <td>Bytes in use as tracked by the memory protector, and its limit (<code>--allowed-percent</code>). Query execution is throttled as usage approaches the limit.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_panic_total</code></td>
+          <td>Counter</td>
+          <td><code>component</code></td>
+          <td>Panics recovered in the process, by component. Lazily registered, so absent until the first panic.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_{measure,stream,trace}_metadata_total_panics</code></td>
+          <td>Counter</td>
+          <td>—</td>
+          <td>Panics in the schema-metadata handlers of each model. Created at <code>0</code>, so <code>increase()</code> sees the first panic.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_{observability,measure,stream_storage,trace_storage}_scheduler_tasks_panic</code></td>
+          <td>Gauge</td>
+          <td><code>job</code> (and <code>group</code> for the storage ones)</td>
+          <td>Cumulative number of scheduler tasks that panicked; it only grows, so use <code>increase()</code>.</td>
+      </tr>
+      <tr>
+          <td><code>banyandb_storage_retention_{measure,stream,trace}_forced_retention_segments_deleted_total</code></td>
+          <td>Counter</td>
+          <td><code>service</code></td>
+          <td>Segments deleted by forced retention after disk usage crossed the high watermark. Created at <code>0</code>.</td>
+      </tr>
+  </tbody>
+</table>
 <hr>
 <h1 id="workload-dashboard">Workload dashboard</h1>
 <p>Business- and data-level throughput and latency, aggregated per <code>group</code>. Use this dashboard to see which business group / operation is slow, erroring, or backlogged.</p>
 <h2 id="cluster-workload-summary">Cluster Workload Summary</h2>
 <p>Cluster-wide RED stats. Each summand is wrapped in <code>or vector(0)</code> so a not-yet-registered counter reports <code>0</code> rather than &ldquo;No Data&rdquo;.</p>
 <h3 id="cluster-write-rate">Cluster Write Rate</h3>
-<p>Total write operations per second across measures, streams and traces.</p>
+<p>Total points / elements / span rows written per second across measures, streams and traces. Only the liaison counts client writes; every node (liaison included) also counts its <code>_monitoring_log</code> stream and, in native mode, the <code>_monitoring</code> measure. A part a data node receives from a liaison through file sync is not counted again, so a client write is counted once, on the liaison. To alert on client writes, exclude the built-in groups with <code>group!~&quot;_monitoring|_monitoring_log&quot;</code>.</p>
 <p><strong>Expression</strong>: <code>(sum(rate(banyandb_measure_total_written{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) or vector(0)) + (sum(rate(banyandb_stream_tst_total_written{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) or vector(0)) + (sum(rate(banyandb_trace_tst_total_written{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) or vector(0))</code></p>
 <h3 id="cluster-query-rate">Cluster Query Rate</h3>
-<p>Query operations per second on the liaison servers.</p>
+<p>Query operations per second on the liaison servers. A measure, stream, trace or TopN query that spans several groups is counted once per group (a property or BydbQL query once), and a BydbQL request is also counted under the service it is dispatched to.</p>
 <p><strong>Expression</strong>: <code>sum(rate(banyandb_liaison_grpc_total_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, method=&quot;query&quot;}[$__rate_interval]))</code></p>
 <h3 id="error-rate">Error Rate</h3>
-<p>Cluster error rate per minute, combining liaison gRPC, registry, stream-receive, queue-publisher, and liaison write-queue sync-loop errors. Several of these counters are lazily registered (absent until the first error), hence the <code>or vector(0)</code> guards.</p>
-<p><strong>Expression</strong>: <code>(sum(rate(banyandb_liaison_grpc_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_liaison_grpc_total_registry_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_liaison_grpc_total_stream_msg_received_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_queue_pub_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_measure_total_sync_loop_err{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_stream_tst_total_sync_loop_err{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_trace_tst_total_sync_loop_err{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0))</code></p>
+<p>Cluster error rate per minute, combining liaison gRPC, registry (excluding <code>NotFound</code>), stream-receive, queue-publisher (excluding <code>canceled</code> / <code>stream_canceled</code>), and liaison write-queue sync-loop errors. Several of these counters are lazily registered (absent until the first error), hence the <code>or vector(0)</code> guards. Unlike <code>total_stream_err</code>, the liaison <code>total_err</code> also counts requests the client canceled or that hit their deadline.</p>
+<p><strong>Expression</strong>: <code>(sum(rate(banyandb_liaison_grpc_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_liaison_grpc_total_registry_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_liaison_grpc_total_stream_msg_received_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_queue_pub_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, error_type!~&quot;canceled|stream_canceled&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_measure_total_sync_loop_err{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_stream_tst_total_sync_loop_err{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0)) + (sum(rate(banyandb_trace_tst_total_sync_loop_err{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])*60) or vector(0))</code></p>
 <h2 id="liaison-ingestion-query--publish">Liaison: Ingestion, Query &amp; Publish</h2>
 <p>The liaison node&rsquo;s front door — gRPC ingestion/query, the schema registry, the on-disk write queue (wqueue), and the tier-2 publish pipeline to data nodes.</p>
 <h3 id="query-rate-by-service">Query Rate by Service</h3>
-<p>Query rate split by the <code>service</code> label (measure / stream / trace / property / topn).</p>
+<p>Query rate split by the <code>service</code> label (measure / stream / trace / property / topn / bydbql).</p>
 <p><strong>Expression</strong>: <code>sum(rate(banyandb_liaison_grpc_total_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, method=&quot;query&quot;}[$__rate_interval])) by (service)</code></p>
 <h3 id="query-latency-by-group">Query Latency by Group</h3>
 <p>Average query latency in seconds, per <code>group</code> — total latency divided by total started. Because a distributed query fans out to all nodes, the slowest group dominates the overall query latency.</p>
 <p><strong>Expression</strong>: <code>sum(rate(banyandb_liaison_grpc_total_latency{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, method=&quot;query&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_liaison_grpc_total_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, method=&quot;query&quot;}[$__rate_interval])) by (group)</code></p>
+<p><strong>Expression (p99)</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_liaison_grpc_query_latency_seconds_bucket{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, status!=&quot;canceled&quot;}[$__rate_interval])) by (le))</code></p>
+<p>The p99 is per request: <code>banyandb_liaison_grpc_query_latency_seconds</code> (labels <code>service</code> and <code>status</code>, one of <code>ok</code>, <code>err</code>, <code>canceled</code> or <code>deadline_exceeded</code>) is observed once for each query RPC a client sends, however many groups it spans, and a BydbQL request is observed only under <code>bydbql</code>. <code>canceled</code> is a query the client canceled and <code>deadline_exceeded</code> one whose deadline expired. <code>status!=&quot;canceled&quot;</code> leaves out the client cancellations but keeps the timeouts, so the p99 includes a slow query that times out.</p>
 <h3 id="grpc-error-rate">gRPC Error Rate</h3>
-<p>Liaison error rate, broken down by <code>service</code>/<code>method</code>, plus registry and stream-receive errors. All terms are lazily registered, so they are simply absent on a healthy cluster.</p>
-<p><strong>Expression1 (grpc, by service/method)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (service, method)</code>
-<strong>Expression2 (registry)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_registry_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval]))</code>
-<strong>Expression3 (stream recv)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_stream_msg_received_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval]))</code></p>
+<p>Liaison error rate per <code>group</code>, plus registry (excluding <code>NotFound</code>), stream-receive and write-stream errors (the write-stream term is per <code>service</code>: <code>total_stream_err</code> has no <code>group</code> label). Series without a group label (for example property queries and BydbQL) are matched by <code>group=~&quot;$group|&quot;</code>. All terms but <code>total_stream_err</code> (created at <code>0</code>) are lazily registered, so they are simply absent on a healthy cluster.</p>
+<p><strong>Expression1 (grpc)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group|&quot;}[$__rate_interval])) by (group)</code>
+<strong>Expression2 (registry)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_registry_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group|&quot;}[$__rate_interval])) by (group)</code>
+<strong>Expression3 (stream recv)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_stream_msg_received_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group|&quot;}[$__rate_interval])) by (group)</code>
+<strong>Expression4 (write stream)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_stream_err{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (service)</code></p>
+<p><code>total_stream_msg_received_err</code> counts failures of a single message on a stream; <code>total_stream_err</code> (<code>method=&quot;write&quot;</code>) counts a whole measure / stream / trace write stream that ends with an error, except <code>Canceled</code> and <code>DeadlineExceeded</code>. A stream whose client deadline expires while the data node is still busy is counted, because the liaison fails it with <code>ResourceExhausted</code>.</p>
 <h3 id="registry-operation-rate">Registry Operation Rate</h3>
 <p>The rate of schema-registry operations and non-query gRPC calls.</p>
 <p><strong>Expression1 (registry)</strong>: <code>sum(rate(banyandb_liaison_grpc_total_registry_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval]))</code>
@@ -2557,18 +2606,18 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <p>A failure after the rows were stored, such as an index write, is logged but not counted here: the rows themselves are kept. In the native self-observability mode these counters are stored in the <code>_monitoring</code> group under the same names without the <code>banyandb_</code> prefix; a row of BanyanDB&rsquo;s own logs that a stream write listener skips is counted in <code>stream_write_dropped_total</code>, not in <code>native_log_dropped_total</code>, which counts what the log sink lost before the write.</p>
 <p><strong>Expression (dropped rows per second by model, group and reason)</strong>: <code>(sum(rate(banyandb_stream_write_dropped_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, reason)) or (sum(rate(banyandb_measure_write_dropped_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, reason)) or (sum(rate(banyandb_trace_write_dropped_total{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group, reason))</code></p>
 <h3 id="publish-throughput--success">Publish Throughput &amp; Success</h3>
-<p>The tier-2 publisher&rsquo;s success throughput by <code>operation</code>, alongside file-sync bytes sent by <code>group</code>. See the <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">queue reference</a> for the full model.</p>
+<p>The tier-2 publisher&rsquo;s success throughput by <code>operation</code> (for <code>batch-write</code> with <code>remote_role=&quot;liaison&quot;</code>, <code>total_finished</code> means sent, not succeeded), alongside file-sync bytes sent by <code>group</code>. See the <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">queue reference</a> for the full model.</p>
 <p><strong>Expression1 (success)</strong>: <code>sum(rate(banyandb_queue_pub_total_finished{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (operation)</code>
 <strong>Expression2 (bytes)</strong>: <code>sum(rate(banyandb_queue_pub_sent_bytes{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
 <h3 id="write-queue-length-wqueue">Write Queue Length (wqueue)</h3>
-<p>The liaison buffers writes in an <strong>on-disk write queue (wqueue)</strong> before syncing each part to the data nodes. These gauges (scoped with the literal <code>container_name=&quot;liaison&quot;</code>) expose the queue depth per <code>pod_name</code>/<code>group</code>. The wqueue accumulates on disk — it does not drop data after a fixed window — so a sustained rise in any of these, especially <code>pending</code>, signals a slow or unavailable downstream data node and can eventually fill the liaison disk (<code>STATUS_DISK_FULL</code>). The matching <code>*_total_sync_loop_*</code> counters (<code>started</code>/<code>finished</code>/<code>latency</code>/<code>bytes</code>, and the lazily-registered <code>*_total_sync_loop_err</code>) describe the loop that drains it.</p>
+<p>The liaison buffers writes in an <strong>on-disk write queue (wqueue)</strong> before syncing each part to the data nodes. These gauges (scoped with the literal <code>container_name=&quot;liaison&quot;</code>) expose the queue per <code>pod_name</code>, <code>group</code>, <code>seg</code> and <code>shard</code> (after a liaison restart, a shard&rsquo;s series appears with its first write): <code>unsynced_parts</code> (including in-memory parts) and <code>oldest_unsynced_part_age_seconds</code> (<code>0</code> when no part has an enqueue time); for trace both count core parts only. If the shard has no data node to sync to, or the sync is stuck, parts stay in the queue, the age keeps rising and the queue can eventually fill the liaison disk (<code>STATUS_DISK_FULL</code>). A part that fails to sync is retried for about 7 seconds (1s + 2s + 4s; one failed part after another), then dropped from the queue and copied to <code>failed-parts/</code> on a best-effort basis; <code>total_sync_failed_parts</code> (created at <code>0</code>, use <code>increase()</code>) counts it, so an increase means data may be at risk. Read the liaison backlog from <code>unsynced_parts</code> and <code>oldest_unsynced_part_age_seconds</code>, not from <code>total_file_parts</code>, <code>total_mem_part</code> or <code>pending_data_count</code>: those three are registered on a liaison but never set, so they have no series there. A liaison has no segments, so these gauges carry <code>seg=&quot;&quot;</code> (alongside <code>group</code> and <code>shard</code>); do not filter them by <code>seg</code>. The matching <code>*_total_sync_loop_*</code> counters (<code>started</code>/<code>finished</code>/<code>latency</code>/<code>bytes</code>, and the lazily-registered <code>*_total_sync_loop_err</code>) describe the loop that drains it; <code>*_total_sync_loop_err</code> counts a failed loop (for measure and stream, no data node), not parts that fail to sync.</p>
 <p>The <code>banyandb_{measure,stream_tst,trace_tst}_file_sync_queue_latency_seconds</code> histograms measure a different boundary: from a core part&rsquo;s commit into the liaison wqueue until that part receives a successful file-sync acknowledgement from each target data node. This includes queue residence, merge/flush scheduling, transfer, and retries. A merged part retains the oldest enqueue time of its inputs. Samples are labeled by <code>remote_node</code>; failed acknowledgements and legacy parts without an enqueue timestamp are not sampled.</p>
-<p><strong>Expression1 (file parts)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_total_file_parts{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code>
-<strong>Expression2 (mem parts)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_total_mem_part{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code>
-<strong>Expression3 (pending)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_pending_data_count{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}) by (pod_name, group)</code>
+<p><strong>Expression1 (unsynced parts)</strong>: <code>sum(banyandb_{measure,stream_tst,trace_tst}_unsynced_parts{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group&quot;}) by (pod_name, group)</code>
+<strong>Expression2 (oldest age)</strong>: <code>max by (pod_name, group) (banyandb_{measure,stream_tst,trace_tst}_oldest_unsynced_part_age_seconds{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group&quot;})</code>
+<strong>Expression3 (sync failed)</strong>: <code>round(sum(increase(banyandb_{measure,stream_tst,trace_tst}_total_sync_failed_parts{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group&quot;}[$__rate_interval])) by (pod_name, group))</code>
 <strong>Expression4 (queue-to-data p99)</strong>: <code>histogram_quantile(0.99, sum(rate(banyandb_{measure,stream_tst,trace_tst}_file_sync_queue_latency_seconds_bucket{job=~&quot;$job&quot;, container_name=&quot;liaison&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (le, pod_name, group, remote_node))</code></p>
 <blockquote>
-<p>The backlog panel charts all three gauge families for <code>measure</code>, <code>stream_tst</code> and <code>trace_tst</code> as separate series (nine queries). The neighboring latency panel adds the three queue-to-data histograms. The <code>{measure,stream_tst,trace_tst}</code> brace above is shorthand for the three concrete metric names.</p>
+<p>The backlog panel charts <code>unsynced_parts</code>, <code>total_sync_failed_parts</code> and <code>oldest_unsynced_part_age_seconds</code> for <code>measure</code>, <code>stream_tst</code> and <code>trace_tst</code> as separate series (nine queries; the age is on the right axis). The neighboring latency panel adds the three queue-to-data histograms. The <code>{measure,stream_tst,trace_tst}</code> brace above is shorthand for the three concrete metric names.</p>
 </blockquote>
 <h3 id="publish--wqueue-to-data-latency-p99">Publish &amp; Wqueue-to-data Latency p99</h3>
 <p>The 99th-percentile tier-2 publisher RPC latency is shown beside the full queue-to-data latency for measure, stream and trace core parts. The first series starts when an RPC is sent; the other three start when the part enters the liaison wqueue.</p>
@@ -2587,12 +2636,12 @@ $job — the Prometheus scrape job for the FODC proxy. $role — the node role, 
 <strong>Expression2</strong>: <code>sum(rate(banyandb_stream_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group) * 60</code>
 <strong>Expression3</strong>: <code>sum(rate(banyandb_trace_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group) * 60</code></p>
 <h3 id="merge-file-latency">Merge File Latency</h3>
-<p>Average merge-file latency in seconds, per <code>group</code> (total merge latency ÷ merge operations). A surge indicates slow merges, often from high disk I/O.</p>
+<p>Average merge-file latency in seconds, per <code>group</code> (total merge latency ÷ <code>total_merge_loop_started</code>). A surge indicates slow merges, often from high disk I/O. In measure and stream, <code>total_merge_loop_started</code> advances on every pass of the merge loop, including passes that find nothing to merge, whereas <code>total_merged{type=&quot;file&quot;}</code> counts merges that ran; divide by it for the exact per-merge average. The trace <code>total_merge_latency</code>, <code>total_merged</code> and <code>total_merged_parts</code> carry an extra <code>lane</code> label besides <code>type</code>, which the sums above aggregate away.</p>
 <p><strong>Expression1</strong>: <code>sum(rate(banyandb_measure_total_merge_latency{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_measure_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression2</strong>: <code>sum(rate(banyandb_stream_tst_total_merge_latency{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_stream_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression3</strong>: <code>sum(rate(banyandb_trace_tst_total_merge_latency{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_trace_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
 <h3 id="merge-file-partitions">Merge File Partitions</h3>
-<p>Average number of partitions merged per merge-file operation, per <code>group</code> (merged parts ÷ merge operations). A surge suggests the server is under heavy write load.</p>
+<p>Average number of partitions merged per merge-loop pass, per <code>group</code> (merged parts ÷ <code>total_merge_loop_started</code>). A surge suggests the server is under heavy write load.</p>
 <p><strong>Expression1</strong>: <code>sum(rate(banyandb_measure_total_merged_parts{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_measure_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression2</strong>: <code>sum(rate(banyandb_stream_tst_total_merged_parts{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_stream_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
 <strong>Expression3</strong>: <code>sum(rate(banyandb_trace_tst_total_merged_parts{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, type=&quot;file&quot;}[$__rate_interval])) by (group) / sum(rate(banyandb_trace_tst_total_merge_loop_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
@@ -2752,7 +2801,7 @@ metrics are group-scoped and deliberately omit segment, shard, and schema labels
           <td><code>banyandb_trace_tst_pipeline_plugin_errors</code></td>
           <td>Counter</td>
           <td><code>group</code>, <code>reason</code></td>
-          <td>Chain-level plugin errors that caused fail-open retention.</td>
+          <td>Chain-level plugin errors that caused fail-open retention. <code>reason</code> has a single value, <code>decide_failed_open</code>.</td>
       </tr>
       <tr>
           <td><code>banyandb_trace_tst_pipeline_ambiguous</code></td>
@@ -2764,7 +2813,7 @@ metrics are group-scoped and deliberately omit segment, shard, and schema labels
           <td><code>banyandb_trace_tst_pipeline_sidx_pruned</code></td>
           <td>Counter</td>
           <td><code>group</code></td>
-          <td>Secondary-index entries removed after confirmed trace drops.</td>
+          <td>Secondary-index element rows (one per indexed span per sidx) removed after confirmed trace drops.</td>
       </tr>
       <tr>
           <td><code>banyandb_trace_tst_pipeline_guard_bloom_probes</code></td>
@@ -2948,19 +2997,25 @@ proposed dropped-row ratio is:</p>
 Alert on any increase of <code>trace_sampler_row_count_unavailable_total</code> before treating the ratio as complete. Like the
 decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the committed storage deletion ratio after guards.</p>
 <h2 id="data-inverted-index">Data: Inverted Index</h2>
-<p><code>Inverted Index</code> metrics monitor the series index of measures and streams, grouped by the <code>group</code> tag. Rapid growth or churn signals a cardinality problem that bloats the index and slows queries.</p>
+<p><code>Inverted Index</code> metrics monitor the series index of measures, streams and traces, grouped by the <code>group</code> tag. Rapid growth or churn signals a cardinality problem that bloats the index and slows queries.</p>
 <h3 id="series-write-rate">Series Write Rate</h3>
-<p>Series index update operations per second, per <code>group</code>, for measures and streams.</p>
+<p>Series index update operations per second, per <code>group</code>, for measures, streams and traces.</p>
 <p><strong>Expression1 (measure)</strong>: <code>sum(rate(banyandb_measure_inverted_index_total_updates{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
-<strong>Expression2 (stream)</strong>: <code>sum(rate(banyandb_stream_storage_inverted_index_total_updates{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
+<strong>Expression2 (stream)</strong>: <code>sum(rate(banyandb_stream_storage_inverted_index_total_updates{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
+<strong>Expression3 (trace)</strong>: <code>sum(rate(banyandb_trace_storage_inverted_index_total_updates{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group&quot;}[$__rate_interval])) by (group)</code></p>
 <h3 id="series-term-search-rate">Series Term Search Rate</h3>
 <p>Series term-search operations per second, per <code>group</code>. A high value means reads are fetching many series — often a high-cardinality symptom.</p>
 <p><strong>Expression1 (measure)</strong>: <code>sum(rate(banyandb_measure_inverted_index_total_term_searchers_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
-<strong>Expression2 (stream)</strong>: <code>sum(rate(banyandb_stream_storage_inverted_index_total_term_searchers_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
+<strong>Expression2 (stream)</strong>: <code>sum(rate(banyandb_stream_storage_inverted_index_total_term_searchers_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code>
+<strong>Expression3 (trace)</strong>: <code>sum(rate(banyandb_trace_storage_inverted_index_total_term_searchers_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group&quot;}[$__rate_interval])) by (group)</code></p>
 <h3 id="total-series">Total Series</h3>
-<p>The total number of series (index documents) stored, per <code>group</code>, for measures and streams.</p>
+<p>The total number of series (index documents) stored, per <code>group</code>, for measures, streams and traces. <code>inverted_index_total_doc_count</code> has one series per segment (labels <code>group</code> and <code>seg</code>, the segment start formatted as <code>YYYYMMDD</code> for a day interval or <code>YYYYMMDDHH</code> for an hour interval) and counts the live documents of the segment&rsquo;s series index, one per series. A segment that is closed when idle or deleted by retention removes its series, so the sum covers the open segments only.</p>
 <p><strong>Expression1 (measure)</strong>: <code>sum(banyandb_measure_inverted_index_total_doc_count{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}) by (group)</code>
-<strong>Expression2 (stream)</strong>: <code>sum(banyandb_stream_storage_inverted_index_total_doc_count{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}) by (group)</code></p>
+<strong>Expression2 (stream)</strong>: <code>sum(banyandb_stream_storage_inverted_index_total_doc_count{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}) by (group)</code>
+<strong>Expression3 (trace)</strong>: <code>sum(banyandb_trace_storage_inverted_index_total_doc_count{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, group=~&quot;$group&quot;}) by (group)</code></p>
+<h3 id="current-series-count">Current Series Count</h3>
+<p><code>banyandb_measure_series_count</code>, <code>banyandb_stream_storage_series_count</code> and <code>banyandb_trace_storage_series_count</code> (label <code>group</code>) report the series count of the segment that covers the node&rsquo;s latest write time, on data and standalone nodes (a liaison does not report them). A segment created ahead of time is not counted. The value is 0 when no segment covers that time, when the node has not seen a write since it started, or when that segment is closed. A new segment starts empty and its series are indexed again as they are written, so the value restarts from 0 on every rotation. <code>banyandb_measure_series_count_previous</code>, <code>banyandb_stream_storage_series_count_previous</code> and <code>banyandb_trace_storage_series_count_previous</code> report the series count of the segment right before that one (the closest earlier segment, even if not adjacent in time), read from disk without reopening it when it is closed. They are 0 when there is no such segment. Series only accumulate within a segment, so <code>series_count_previous</code> is the final size of the last complete segment. To alert on abnormal growth, compare the two and require a minimum size so that small groups do not fire: <code>series_count / series_count_previous &gt; 1.2 and series_count_previous &gt; 1000</code>. The ratio does not depend on the segment interval, and the 0 values after a rotation do not trigger it.</p>
+<p><strong>Expression</strong>: <code>max by (group) (banyandb_measure_series_count{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;})</code> (and the stream and trace names above)</p>
 <h3 id="stream-tst-write-rate">Stream tst: Write Rate</h3>
 <p>Write rate into the stream <strong>time-series-table (tst) inverted index</strong> (the per-element index, distinct from the series index above), per <code>group</code>.</p>
 <p><strong>Expression</strong>: <code>sum(rate(banyandb_stream_tst_inverted_index_total_updates{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
@@ -2968,10 +3023,10 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
 <p>Term-search rate on the stream tst inverted index, per <code>group</code>.</p>
 <p><strong>Expression</strong>: <code>sum(rate(banyandb_stream_tst_inverted_index_total_term_searchers_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}[$__rate_interval])) by (group)</code></p>
 <h3 id="stream-tst-total-documents">Stream tst: Total Documents</h3>
-<p>Total documents in the stream tst inverted index, per <code>group</code>.</p>
+<p>Total documents in the stream tst inverted index, per <code>group</code>. Every shard of a segment writes the same <code>{group, seg}</code> series, so the value reflects the documents of a single shard rather than the sum of all shards.</p>
 <p><strong>Expression</strong>: <code>sum(banyandb_stream_tst_inverted_index_total_doc_count{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;}) by (group)</code></p>
 <h2 id="data-internal-queue">Data: Internal Queue</h2>
-<p>One panel per queue <strong>operation</strong>, each showing subscribe throughput (<code>started</code>/<code>finished</code>) and p99 latency, broken down by <code>group</code>. These are the data-node (subscribe) view of the internal queue; the full model is in the <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">queue reference</a>. The four operations are <code>query</code>, <code>file-sync</code>, <code>batch-write</code> and <code>control</code>.</p>
+<p>One panel per queue <strong>operation</strong>, each showing subscribe throughput (<code>started</code>/<code>finished</code>) and p99 latency, broken down by <code>group</code>. These are the subscribe view of the internal queue; the full model is in the <a href="#internal-queue-metrics-reference-queue_sub--queue_pub">queue reference</a>. The four operations are <code>query</code>, <code>file-sync</code>, <code>batch-write</code> and <code>control</code>.</p>
 <p>Each panel uses the same three expressions, with <code>operation</code> pinned to the panel&rsquo;s value (<code>&lt;op&gt;</code> ∈ <code>query</code> | <code>file-sync</code> | <code>batch-write</code> | <code>control</code>):</p>
 <p><strong>Started</strong>: <code>sum(rate(banyandb_queue_sub_total_started{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, operation=&quot;&lt;op&gt;&quot;}[$__rate_interval])) by (group)</code>
 <strong>Finished</strong>: <code>sum(rate(banyandb_queue_sub_total_finished{job=~&quot;$job&quot;, container_name=~&quot;$role&quot;, pod_name=~&quot;$pod&quot;, operation=&quot;&lt;op&gt;&quot;}[$__rate_interval])) by (group)</code>
@@ -2982,7 +3037,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
 <p>The batch-write section also exposes per-batch and per-message throughput. Its phase-latency panel keeps the legacy publisher/subscriber <code>total_batch_latency</code> p99 and adds the publisher&rsquo;s first-frame-to-seal <code>batch_open_duration_seconds</code> p99 and seal-to-terminal <code>batch_admission_duration_seconds</code> p99. The admission-timeout panel uses <code>rate(banyandb_queue_pub_batch_admission_timeout_total[$__rate_interval])</code> by <code>group</code> and <code>remote_node</code>; it is empty until the first deadline is reached.</p>
 <hr>
 <h1 id="internal-queue-metrics-reference-queue_sub--queue_pub">Internal queue metrics reference (<code>queue_sub</code> / <code>queue_pub</code>)</h1>
-<p>Liaison nodes run an internal gRPC <strong>queue server</strong> (<code>server-queue-sub</code>, wired via <code>sub.NewServerWithPorts</code> in <code>pkg/cmdsetup/liaison.go</code>) and <strong>queue clients</strong> (<code>server-queue-pub</code>) for the tier-1/tier-2 pipelines. Prometheus metrics use the namespaces <code>banyandb_queue_sub_*</code> and <code>banyandb_queue_pub_*</code> (built from <code>observability.RootScope</code> + <code>queue_sub</code> / <code>queue_pub</code> sub-scopes). Data nodes expose the same families where the corresponding services run.</p>
+<p>Liaison nodes run an internal gRPC <strong>queue server</strong> (<code>server-queue-sub</code>, wired via <code>sub.NewServerWithPorts</code> in <code>pkg/cmdsetup/liaison.go</code>) and <strong>queue clients</strong> (<code>server-queue-pub</code>) for the tier-1/tier-2 pipelines. Prometheus metrics use the namespaces <code>banyandb_queue_sub_*</code> and <code>banyandb_queue_pub_*</code> (built from <code>observability.RootScope</code> + <code>queue_sub</code> / <code>queue_pub</code> sub-scopes). Data nodes expose only the <code>queue_sub_*</code> families.</p>
 <p>Both namespaces share one model: the base metrics <code>total_started</code>, <code>total_finished</code>, <code>total_latency</code> (a histogram), and <code>total_err</code>, labeled by <code>operation</code> (<code>batch-write</code> / <code>file-sync</code> / <code>query</code> / <code>control</code>) and <code>group</code>, plus the <strong>remote endpoint</strong> of the flow — <code>remote_node</code> (the peer&rsquo;s BanyanDB node name, equal to its <code>/cluster/topology</code> <code>metadata.name</code>), <code>remote_role</code> (<code>liaison</code> / <code>data</code>), and <code>remote_tier</code> (<code>hot</code> / <code>warm</code> / <code>cold</code>, data only). <code>total_err</code> adds an <code>error_type</code> label. File-sync additionally exposes byte counters: <code>sent_bytes</code> (pub) and <code>received_bytes</code> (sub). The <strong>local</strong> end of each flow is the scrape target itself (<code>pod_name</code> / <code>node_role</code> / <code>node_type</code> from the FODC proxy), so joining the scrape labels with the <code>remote_*</code> labels reconstructs the liaison↔data(hot/warm/cold) call graph. For a worked recipe that fuses these metrics with the FODC <code>/cluster/topology</code> node inventory to render the topology, see <a href="../../fodc/topology">Cluster Topology Rendering</a>.</p>
 <h3 id="queue_sub--inbound-server"><code>queue_sub</code> — inbound server</h3>
 <table>
@@ -3011,7 +3066,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
           <td><code>total_err</code></td>
           <td>Counter</td>
           <td>…, <code>error_type</code></td>
-          <td>Errors by type. Lazily registered, so absent (not zero) on a healthy cluster.</td>
+          <td>Errors by type. <code>error_type</code> is one of <code>empty_topic</code>, <code>invalid_topic</code>, <code>unknown_topic</code>, <code>unmarshal_error</code>, <code>marshal_error</code>, <code>no_listener</code>, <code>handler_error</code>, <code>send_error</code> (message path) or <code>ctx_done</code>, <code>eof</code>, <code>stream_error</code>, <code>switch</code>, <code>finish_sync_err</code>, <code>gap_too_large</code>, <code>buffer_full</code>, <code>buffer_timeout</code>, <code>checksum_mismatch</code>, <code>part_failed</code> (file-sync). <code>empty_topic</code> and <code>invalid_topic</code> are recorded before the operation is known, so those samples have <code>operation=&quot;&quot;</code>. Lazily registered, so absent (not zero) on a healthy cluster.</td>
       </tr>
       <tr>
           <td><code>received_bytes</code></td>
@@ -3019,9 +3074,15 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
           <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
           <td>Bytes received, <strong>file-sync only</strong> (<code>operation=&quot;file-sync&quot;</code>).</td>
       </tr>
+      <tr>
+          <td><code>total_batch_started</code>, <code>total_batch_finished</code>, <code>total_batch_latency</code>, <code>total_message_started</code>, <code>total_message_finished</code></td>
+          <td>Counter (<code>total_batch_latency</code>: Histogram)</td>
+          <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
+          <td>Batch-mode requests started / finished with their handling latency, and messages started / finished (a batch request counts all the messages in it).</td>
+      </tr>
   </tbody>
 </table>
-<p><strong>Troubleshooting:</strong> a growing <code>total_started − total_finished</code> gap (or rising <code>total_latency</code> p99) for a <code>group</code>/<code>operation</code> points at slow or stuck consumers. <code>total_err</code> broken down by <code>error_type</code> distinguishes transport issues (<code>stream_error</code>, <code>recv_error</code>, <code>checksum_mismatch</code>, <code>out_of_order</code>) from completion issues (<code>finish_sync_err</code>, <code>part_failed</code>). For file-sync, <code>received_bytes</code> together with <code>total_latency</code> separates partial completion from healthy throughput.</p>
+<p><strong>Troubleshooting:</strong> a growing <code>total_started − total_finished</code> gap (or rising <code>total_latency</code> p99) for a <code>group</code>/<code>operation</code> points at slow or stuck consumers. <code>total_err</code> broken down by <code>error_type</code> distinguishes transport issues (<code>stream_error</code>, <code>checksum_mismatch</code>, <code>buffer_full</code>, <code>buffer_timeout</code>) from completion issues (<code>finish_sync_err</code>, <code>part_failed</code>) and handler failures (<code>handler_error</code>). For file-sync, <code>received_bytes</code> together with <code>total_latency</code> separates partial completion from healthy throughput.</p>
 <h3 id="queue_pub--outbound-batch-client"><code>queue_pub</code> — outbound batch client</h3>
 <table>
   <thead>
@@ -3037,7 +3098,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
           <td><code>total_started</code>, <code>total_finished</code></td>
           <td>Counter</td>
           <td><code>operation</code>, <code>group</code>, <code>remote_node</code>, <code>remote_role</code>, <code>remote_tier</code></td>
-          <td>Sends started / finished per operation and target node; <code>total_finished</code> is the success rate.</td>
+          <td>Sends started / finished per operation and target node. For <code>operation=&quot;batch-write&quot;</code> with <code>remote_role=&quot;liaison&quot;</code> both advance together right after each <code>Send</code>, so <code>total_finished</code> means &ldquo;sent&rdquo;, not &ldquo;succeeded&rdquo;, and the started − finished difference is not meaningful.</td>
       </tr>
       <tr>
           <td><code>total_latency</code></td>
@@ -3049,7 +3110,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
           <td><code>total_err</code></td>
           <td>Counter</td>
           <td>…, <code>error_type</code></td>
-          <td>Send errors by type. <code>error_type</code> is one of <code>non_transient</code>, <code>canceled</code>, <code>stream_canceled</code>, <code>retry_exhausted</code>, <code>recv_error</code>, <code>server_rejected</code> (Send path) or <code>stream_error</code>, <code>recv_error</code>, <code>checksum_mismatch</code>, <code>out_of_order</code>, <code>session_not_found</code>, <code>completion_error</code> (file-sync). Lazily registered.</td>
+          <td>Send errors by type. <code>error_type</code> is one of <code>non_transient</code>, <code>canceled</code>, <code>stream_canceled</code>, <code>retry_exhausted</code>, <code>recv_error</code>, <code>server_rejected</code>, <code>send_error</code>, <code>decode_error</code>, <code>invalid_topic</code> (Send path), <code>idle_timeout</code> (scan streams) or <code>stream_error</code>, <code>recv_error</code>, <code>checksum_mismatch</code>, <code>out_of_order</code>, <code>session_not_found</code>, <code>completion_error</code>, <code>server_busy</code> (file-sync). Lazily registered.</td>
       </tr>
       <tr>
           <td><code>sent_bytes</code></td>
@@ -3156,6 +3217,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
           <ul>
             <li><a href="#reporting-nodes">Reporting Nodes</a></li>
             <li><a href="#nodes-by-role">Nodes by Role</a></li>
+            <li><a href="#discovered-nodes">Discovered Nodes</a></li>
             <li><a href="#total-cpu-cores">Total CPU Cores</a></li>
             <li><a href="#total-memory-used">Total Memory Used</a></li>
             <li><a href="#total-disk-used">Total Disk Used</a></li>
@@ -3187,6 +3249,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
             <li><a href="#heap-next-gc--alloc-rate">Heap Next-GC / Alloc Rate</a></li>
           </ul>
         </li>
+        <li><a href="#process-health-reference">Process Health (reference)</a></li>
       </ul>
     </li>
     <li><a href="#workload-dashboard">Workload dashboard</a>
@@ -3225,6 +3288,7 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
             <li><a href="#series-write-rate">Series Write Rate</a></li>
             <li><a href="#series-term-search-rate">Series Term Search Rate</a></li>
             <li><a href="#total-series">Total Series</a></li>
+            <li><a href="#current-series-count">Current Series Count</a></li>
             <li><a href="#stream-tst-write-rate">Stream tst: Write Rate</a></li>
             <li><a href="#stream-tst-term-search-rate">Stream tst: Term Search Rate</a></li>
             <li><a href="#stream-tst-total-documents">Stream tst: Total Documents</a></li>
@@ -3356,6 +3420,20 @@ decision counter, this is the plugin&rsquo;s proposed row-drop ratio, not the co
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

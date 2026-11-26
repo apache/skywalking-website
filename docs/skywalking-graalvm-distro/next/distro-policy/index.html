@@ -33,7 +33,7 @@ Architecture Constraints Submodule: skywalking/ is a git submodule of apache/sky
   <meta itemprop="name" content="SkyWalking GraalVM Distro - Distribution Policy">
   <meta itemprop="description" content="SkyWalking GraalVM Distro - Distribution Policy Goal Build and package Apache SkyWalking OAP server as a GraalVM native image on JDK 25.
 Architecture Constraints Submodule: skywalking/ is a git submodule of apache/skywalking.git. All SkyWalking source changes go through upstream PRs. Minimize upstream changes. This repo: Maven &#43; Makefile to orchestrate building on top of the submodule. Pre-compilation, GraalVM config, native-image wiring, and the boot entry point live here. JDK 25: Already compiles and runs. Not an issue. Module Selection The image ships these modules and providers, and only these: they are the module SPI entries on its classpath. At boot, application.yml decides which of them run and picks each one’s provider, as upstream does.">
-  <meta itemprop="wordCount" content="3600">
+  <meta itemprop="wordCount" content="3607">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SkyWalking GraalVM Distro - Distribution Policy">
   <meta name="twitter:description" content="SkyWalking GraalVM Distro - Distribution Policy Goal Build and package Apache SkyWalking OAP server as a GraalVM native image on JDK 25.
@@ -1503,7 +1503,7 @@ Architecture Constraints Submodule: skywalking/ is a git submodule of apache/sky
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: c96a8a3</div>
+                  <div class="commit-id">Commit Id: a6205e7</div>
                 
 
 
@@ -1619,7 +1619,7 @@ Architecture Constraints Submodule: skywalking/ is a git submodule of apache/sky
       <tr>
           <td><strong>Analyzers</strong></td>
           <td>AnalyzerModule, LogAnalyzerModule, TraceAnalyzerModule, EventAnalyzerModule, GenAIAnalyzerModule, AIEvaluationModule, AIAgentConversationModule</td>
-          <td>default providers (AIEvaluationModule disabled by default; AIAgentConversationModule also offers <code>none</code>; TraceAnalyzerModule analyzes both OTLP spans and agent segments, and the native trace receiver and Kafka fetcher require it)</td>
+          <td>default providers (AIEvaluationModule disabled by default; AIAgentConversationModule also offers <code>none</code>; TraceAnalyzerModule analyzes both OTLP spans and agent segments, and the native trace receiver, the Kafka fetcher and TracePairingDebuggingModule require it)</td>
       </tr>
       <tr>
           <td><strong>Query</strong></td>
@@ -1628,7 +1628,7 @@ Architecture Constraints Submodule: skywalking/ is a git submodule of apache/sky
       </tr>
       <tr>
           <td><strong>Admin</strong></td>
-          <td>AdminServerModule, StatusModule, InspectModule, UIManagementModule, DSLDebuggingModule, UnsupportedAdminFeatureModule (distro only)</td>
+          <td>AdminServerModule, StatusModule, InspectModule, UIManagementModule, DSLDebuggingModule, TracePairingDebuggingModule, UnsupportedAdminFeatureModule (distro only)</td>
           <td>default; runtime-rule excluded (<code>graalvm-unsupported-admin</code> answers its mutations with 501)</td>
       </tr>
       <tr>
@@ -1656,10 +1656,10 @@ status plus the <code>/debugging/*</code> debug-query trace endpoints — was re
 are unchanged. <code>InspectModule</code> (SWIP-14 metric catalog + entity enumeration, <code>/inspect/*</code>)
 and <code>UIManagementModule</code> (dashboard-template REST consumed by the Horizon UI,
 <code>/ui-management/*</code>) are hosted there as well, and so is <code>DSLDebuggingModule</code> (SWIP-13 DSL live
-debugger, <code>/dsl-debugging/*</code> + <code>/runtime/oal/*</code>): the precompiler flips upstream&rsquo;s
-<code>DSLDebugCodegenSwitch</code> before generating, so every pre-compiled OAL/MAL/LAL rule class carries
-the debug probes and the module only flips gates at runtime (upstream&rsquo;s TAL compiler emits no
-probes yet, so TAL rules are not debuggable on either distro). <code>RuntimeRuleModule</code> (MAL/LAL hot-update) is
+debugger, <code>/dsl-debugging/*</code> + <code>/runtime/oal/*</code> + <code>/runtime/tal/*</code>): the precompiler flips upstream&rsquo;s
+<code>DSLDebugCodegenSwitch</code> before generating, so every pre-compiled OAL/MAL/LAL/TAL rule class carries
+the debug probes and the module only flips gates at runtime. <code>TracePairingDebuggingModule</code> (an on-demand
+capture of the OTLP network-alias pairing, <code>/trace-pairing-debugging/*</code>) runs as-is. <code>RuntimeRuleModule</code> (MAL/LAL hot-update) is
 <strong>not supported</strong>: it needs runtime Javassist code generation, which a closed-world native
 image cannot do. Its mutating endpoints return a friendly HTTP 501 via a stub module provider,
 while the read-only rule catalog (<code>/runtime/rule/list|bundled|status</code>, <code>GET /runtime/rule</code>) is served,
@@ -1668,7 +1668,7 @@ it), from upstream&rsquo;s <code>StaticRuleRegistry</code>, which records the fi
 read routes do: the replacement loaders pass the files they load, the raw rule files the precompiler exports under
 <code>META-INF/rule-source/</code>, through upstream&rsquo;s <code>RuleSetMerger</code>, as upstream&rsquo;s loaders do, so Horizon can list and
 review every rule of upstream&rsquo;s runtime-rule catalogs the boot loaded (MAL and LAL; a module turned off loads no
-rule; upstream has no TAL catalog, so TAL rules are not listed there either). A <code>RuntimeRuleOverrideResolver</code> that
+rule; no runtime-rule engine claims the <code>oal</code> or <code>tal</code> catalog, so upstream refuses them there, and so does the distro). A <code>RuntimeRuleOverrideResolver</code> that
 would change or drop a compiled file fails the boot: the image runs the classes compiled from those bytes.</p>
 </blockquote>
 <hr>
@@ -2124,7 +2124,7 @@ filesystem YAML.</p>
 <li><code>reflect-config.json</code> auto-generated by precompiler from the build manifests (OAL, MAL, LAL, TAL, meter, HTTP handlers, GraphQL types)</li>
 <li><code>log4j2-reflect-config.json</code> for Log4j2 plugin classes; console-only <code>log4j2.xml</code> with <code>SW_LOG_LEVEL</code> env var</li>
 <li>gRPC/Netty/Protobuf/Armeria via GraalVM reachability metadata repository</li>
-<li>Auto-scanned reflection metadata: Armeria HTTP handlers (~27, incl. admin-server/status/inspect/ui-management), GraphQL resolvers (~32), GraphQL types (~182), config POJOs (8)</li>
+<li>Auto-scanned reflection metadata: Armeria HTTP handlers (~36, incl. admin-server/status/inspect/ui-management/dsl-debugging/trace-pairing-debugging), GraphQL resolvers (~33), GraphQL types (~219), config POJOs (~12)</li>
 <li>Native binary: ~203MB, boots to full module init with all HTTP endpoints functional</li>
 </ul>
 <h3 id="native-distro-packaging">Native Distro Packaging</h3>
@@ -2356,6 +2356,20 @@ filesystem YAML.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

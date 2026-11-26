@@ -105,7 +105,7 @@ Plugin
 ResourceOpts
 SamplerPlugin
 StageRule">
-  <meta itemprop="wordCount" content="18724">
+  <meta itemprop="wordCount" content="19119">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Protocol Documentation">
   <meta name="twitter:description" content="Protocol Documentation Table of Contents banyandb/common/v1/trace.proto
@@ -2431,7 +2431,7 @@ StageRule">
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 62254e4</div>
+                  <div class="commit-id">Commit Id: 558f754</div>
                 
 
 
@@ -3959,6 +3959,9 @@ StageRule">
 </li>
 <li>
 <p><a href="#banyandb-transfer-v1-importpartsrequest-kind">ImportPartsRequest.Kind</a></p>
+</li>
+<li>
+<p><a href="#banyandb-transfer-v1-importpartsresponse-failurecause">ImportPartsResponse.FailureCause</a></p>
 </li>
 <li>
 <p><a href="#banyandb-transfer-v1-importservice">ImportService</a></p>
@@ -17170,7 +17173,7 @@ removed.</p>
           <td>unreachable_nodes</td>
           <td><a href="#string">string</a></td>
           <td>repeated</td>
-          <td>Data nodes the liaison could not plan (live directories and ReadSession only; CreateSession treats any of these as a failure instead): a transport failure, no next frame within the liaison's maximum wait for a node's Plan, NotFound (the node no longer holds the requested session), or a data node without ExportService (UNIMPLEMENTED, an older version during a rolling upgrade). Unit frames already stamped with such a node_id are partial and must be dropped.</td>
+          <td>Data nodes the liaison could not plan (live directories and ReadSession only; CreateSession treats any of these as a failure instead): a transport failure, no next frame within the liaison's maximum wait for a node's Plan, NotFound (the node no longer holds the requested session), FAILED_PRECONDITION on a node outside a non-empty ReadSession.required_nodes (its lease expired or is unreadable), or a data node without ExportService (UNIMPLEMENTED, an older version during a rolling upgrade). Unit frames already stamped with such a node_id are partial and must be dropped.</td>
       </tr>
       <tr>
           <td>answered_nodes</td>
@@ -17289,6 +17292,12 @@ so the result is the same frozen view CreateSession returned.</p>
           <td><a href="#string">string</a></td>
           <td></td>
           <td></td>
+      </tr>
+      <tr>
+          <td>required_nodes</td>
+          <td><a href="#string">string</a></td>
+          <td>repeated</td>
+          <td>The data nodes that must still hold a readable lease of the session: the nodes the client has units left to export from. Empty: every node. A node outside the list whose lease expired or is unreadable (FAILED_PRECONDITION) is reported in unreachable_nodes like one that no longer holds the session, as the client needs nothing more from it; on a listed node, or with the list empty, it fails the whole call. A liaison that predates the field ignores it and fails the call for any node.</td>
       </tr>
   </tbody>
 </table>
@@ -17503,6 +17512,12 @@ streams back one SessionsResponse per node.</p>
           <td></td>
           <td>Required by ACTION_HEARTBEAT and ACTION_RELEASE, ignored by ACTION_LIST.</td>
       </tr>
+      <tr>
+          <td>required_nodes</td>
+          <td><a href="#string">string</a></td>
+          <td>repeated</td>
+          <td>ACTION_HEARTBEAT only, ignored by the other actions: the data nodes that must still hold a readable lease of the session, the nodes the client has units left to export from. Empty: every node. A node outside the list whose lease expired or is unreadable (FAILED_PRECONDITION) answers an <code>error</code> frame instead of failing the call, as the client needs nothing more from it; on a listed node, or with the list empty, it fails the whole call. A liaison that predates the field ignores it and fails the call for any node.</td>
+      </tr>
   </tbody>
 </table>
 <p><a name="banyandb-transfer-v1-SessionsResponse"></a></p>
@@ -17546,7 +17561,7 @@ streams back one SessionsResponse per node.</p>
           <td>error</td>
           <td><a href="#string">string</a></td>
           <td></td>
-          <td>ACTION_HEARTBEAT and ACTION_RELEASE: the node did not complete the action; the frame is still sent so the client can tell which nodes failed. ACTION_HEARTBEAT: the node was unreachable, does not hold the session, or is a data node without ExportService. An expired or unreadable lease, or any other node error, fails the whole call instead (FAILED_PRECONDITION for the lease). ACTION_RELEASE: the node was unreachable, removing the session failed, or it is a data node without ExportService. A node that does not hold the session answers <code>none</code>.</td>
+          <td>ACTION_HEARTBEAT and ACTION_RELEASE: the node did not complete the action; the frame is still sent so the client can tell which nodes failed. ACTION_HEARTBEAT: the node was unreachable, does not hold the session, or is a data node without ExportService, or (only for a node outside a non-empty required_nodes) its lease expired or is unreadable. An expired or unreadable lease on any other node, or any other node error, fails the whole call instead (FAILED_PRECONDITION for the lease). ACTION_RELEASE: the node was unreachable, removing the session failed, or it is a data node without ExportService. A node that does not hold the session answers <code>none</code>.</td>
       </tr>
   </tbody>
 </table>
@@ -18228,7 +18243,13 @@ sent; a payload carries at least one chunk.</p>
           <td>completion_sent</td>
           <td><a href="#bool">bool</a></td>
           <td></td>
-          <td>completion_sent tells that the completion reached this target and its failure came after it (the stream broke before the answer), so the target may have committed the payload. A client must not push such a payload again when storing it twice duplicates data.</td>
+          <td>completion_sent tells that the completion reached this target and the target failed without answering it, so it may have committed the payload. A client must not push such a payload again when storing it twice duplicates data. It is false with FAILURE_CAUSE_REFUSED: an answer, even a refusal, is a definite outcome.</td>
+      </tr>
+      <tr>
+          <td>failure_cause</td>
+          <td><a href="#banyandb-transfer-v1-importpartsresponse-failurecause">ImportPartsResponse.FailureCause</a></td>
+          <td></td>
+          <td>failure_cause tells why the target failed; it is FAILURE_CAUSE_UNSPECIFIED on a success. A client takes a value it does not know as FAILURE_CAUSE_UNSPECIFIED.</td>
       </tr>
   </tbody>
 </table>
@@ -18787,6 +18808,46 @@ listed below with INVALID_ARGUMENT.</p>
           <td>KIND_PROPERTY</td>
           <td>4</td>
           <td>KIND_PROPERTY is the native index files of one property shard (property only).</td>
+      </tr>
+  </tbody>
+</table>
+<p><a name="banyandb-transfer-v1-ImportPartsResponse-FailureCause"></a></p>
+<h3 id="importpartsresponsefailurecause">ImportPartsResponse.FailureCause</h3>
+<p>FailureCause tells why a target failed; TargetResult.completion_sent tells when. A client
+takes a value it does not know as FAILURE_CAUSE_UNSPECIFIED.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Name</th>
+          <th>Number</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>FAILURE_CAUSE_UNSPECIFIED</td>
+          <td>0</td>
+          <td>FAILURE_CAUSE_UNSPECIFIED is a success, or a failure from a liaison that reports no cause.</td>
+      </tr>
+      <tr>
+          <td>FAILURE_CAUSE_UNREACHABLE</td>
+          <td>1</td>
+          <td>FAILURE_CAUSE_UNREACHABLE is a target whose stream could not be opened: nothing was sent.</td>
+      </tr>
+      <tr>
+          <td>FAILURE_CAUSE_REFUSED</td>
+          <td>2</td>
+          <td>FAILURE_CAUSE_REFUSED is a target that answered a frame with a SyncStatus other than the expected one: a definite outcome. A stream the target ended with a gRPC error status is FAILURE_CAUSE_STREAM_BROKEN.</td>
+      </tr>
+      <tr>
+          <td>FAILURE_CAUSE_STREAM_BROKEN</td>
+          <td>3</td>
+          <td>FAILURE_CAUSE_STREAM_BROKEN is a target whose stream broke: sending or receiving failed.</td>
+      </tr>
+      <tr>
+          <td>FAILURE_CAUSE_NO_ANSWER</td>
+          <td>4</td>
+          <td>FAILURE_CAUSE_NO_ANSWER is a target the liaison stopped waiting for: it answered nothing to one frame within the liaison's wait. With completion_sent it may still be committing the payload, so a count read soon after cannot tell that it did not land.</td>
       </tr>
   </tbody>
 </table>
@@ -19653,6 +19714,7 @@ liaison refuses to start.</p>
             <li><a href="#targetsresponse">TargetsResponse</a></li>
             <li><a href="#targetsresponseshard">TargetsResponse.Shard</a></li>
             <li><a href="#importpartsrequestkind">ImportPartsRequest.Kind</a></li>
+            <li><a href="#importpartsresponsefailurecause">ImportPartsResponse.FailureCause</a></li>
             <li><a href="#importservice">ImportService</a></li>
           </ul>
         </li>
@@ -19770,6 +19832,20 @@ liaison refuses to start.</p>
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

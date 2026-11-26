@@ -35,7 +35,7 @@ These are several ways to install:">
   <meta itemprop="description" content="bydbctl bydbctl is the command line tool for interacting with BanyanDB. It is a powerful tool that can be used to create, update, read, and delete schemas. It can also be used to query data stored in streams, measures, traces, and properties.
 bydbctl agent opens an interactive BYDBQL agent TUI. It helps users generate, edit, validate, approve, and execute BYDBQL queries. See BYDBQL Agent TUI for details.
 These are several ways to install:">
-  <meta itemprop="wordCount" content="4616">
+  <meta itemprop="wordCount" content="16979">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="bydbctl">
   <meta name="twitter:description" content="bydbctl bydbctl is the command line tool for interacting with BanyanDB. It is a powerful tool that can be used to create, update, read, and delete schemas. It can also be used to query data stored in streams, measures, traces, and properties.
@@ -2326,7 +2326,7 @@ These are several ways to install:">
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 62254e4</div>
+                  <div class="commit-id">Commit Id: 558f754</div>
                 
 
 
@@ -2418,27 +2418,38 @@ instant; part-based snapshots (stream, measure and trace) contain flushed data o
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --nodes liaison-1:17912 --output ./backup-20261010 --selector <span style="color:#0a3069">&#39;catalog=measure,groups=sw_metricsMinute&#39;</span>
 </span></span><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --plan plan.yaml --output ./backup-20261010 --node-rate-limit 50MiB/s --node-row-rate-limit 50000/s
 </span></span><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --plan plan.yaml --output ./schema-20261010 --schema-only
-</span></span></code></pre></div><p>The command:</p>
+</span></span></code></pre></div><p>The command checks <code>--output</code> as in step 2 before it connects to anything, so a directory it would refuse is exit <code>1</code> without
+contacting the cluster; then it:</p>
 <ol>
-<li>checks that <code>--output</code> does not exist or is empty (anything else is exit <code>1</code>);</li>
 <li>connects to the liaisons, lists the groups and validates the selectors;</li>
+<li>takes the <a href="#progress-file-lock">lock</a> of the progress file (<code>&lt;progress file&gt;.lock</code>; another <code>bydbctl</code> holding it is exit <code>1</code>,
+<code>another bydbctl is using &lt;file&gt;</code>) and keeps it for the whole run; checks that <code>--output</code> does not exist or is empty (anything else is exit <code>1</code>,
+naming what the directory holds), unless it holds the progress file of an interrupted export, which is then
+<a href="#resume">resumed</a>, or only what an export killed before its first progress write left (<code>schema/</code> and temporary files of a
+progress file kept in the output directory, the default one or a <code>--checkpoint</code> there), which is removed first; it creates the directory of the progress file (<code>--checkpoint</code>) and checks
+that a file can be written there, so an unusable <code>--checkpoint</code> is exit <code>1</code> before anything is written;</li>
 <li>writes the schema of the selected groups to <code>schema/</code>; with <code>--schema-only</code> it writes <code>manifest.json</code> and stops here, without a
 session or any data. With <code>--include-schema=false</code> it writes no schema at all and skips the schema revision check below;</li>
 <li>creates the export session and prints <code>export session &lt;id&gt; created</code> as soon as the id is known. If another session holds
 the cluster, it prints every occupant with its start time, last heartbeat, catalogs and nodes and exits <code>2</code>: check the last heartbeat
-(a running export sends one every 5 minutes) and give <code>--preempt</code> to take the session over. When stdin and stdout are both
-terminals and <code>--preempt</code> is not given, it asks <code>Take over the session(s) above? ... [y/N]</code> instead: <code>y</code> or <code>yes</code> takes them over
+(a running export sends one every 5 minutes) and give <code>--preempt</code> to take the session over. When stdin is a terminal and <code>--preempt</code> is not given, it asks <code>Take over the session(s) above? ... [y/N]</code> instead (on stdout when that is a terminal too; otherwise on stderr when stderr is a terminal, with what the run printed before shown there first): <code>y</code> or <code>yes</code> takes them over
 as <code>--preempt</code> does, anything else (Enter included) leaves them as they are, prints the <code>release-session</code> command for each and
 exits <code>2</code>;</li>
 <li>exports every node over its own stream, <code>--parallelism</code> nodes at a time, heartbeating the session every 5 minutes. Node <code>i</code>
 (nodes sorted by id) streams through liaison <code>i mod L</code>; a stream
 refused as unavailable, busy or not found moves on to the next liaison (see <code>--send-retry-timeout</code>). Each file is written as <code>&lt;file&gt;.tmp</code>, checked against the size and CRC32 the node announces
 (CSV files also against the schema revision), then renamed;</li>
-<li>writes <code>manifest.json</code>, releases the session and prints what was written — a <code>NODE CATALOG GROUP STAGE UNITS FILES ROWS SIZE TIME</code>
+<li>writes <code>manifest.json</code>, releases the session, deletes the progress file and its plan, and prints what was written — a <code>NODE CATALOG GROUP STAGE UNITS FILES ROWS SIZE TIME</code>
 table, <code>TIME</code> adding up the time the row&rsquo;s units took — followed by
 <code>export written to &lt;dir&gt;: &lt;units&gt; unit(s), &lt;files&gt; file(s), &lt;size&gt;, &lt;n&gt; warning(s) in &lt;time&gt;</code>.</li>
 </ol>
-<p>The progress goes to stdout; warnings and the hints to retry or release go to stderr. Every finished file and unit, and every node
+<p>Everything the export prints goes to stdout: the information, the progress, the warnings and the result. Only a failure goes to
+stderr: its error and, before it, the hints to resume or release (<code>export session &lt;id&gt; and the progress file &lt;file&gt; are kept</code>,
+<code>to resume: …</code>, <code>to give up: …</code>, which names what to delete, the progress file included). A <code>--dry-run</code> or an import rendered with <code>-o json|yaml</code> keeps stdout to that rendering:
+the lines about the connection and the settings (<code>liaisons:</code>, <code>liaison:</code>, the <code>info:</code> of where the schema comes from, <code>parallelism:</code>, <code>rate limits:</code>) are left
+out, and the other information (warnings, notes, the resume summary, the progress and the result) goes to stderr: the warning
+about a rate limit the artifact&rsquo;s format ignores (<code>WARN --node-rate-limit … apply to CSV rows only</code>) and the <code>info:</code> lines the
+target&rsquo;s state gives (<code>schema barrier probe skipped: …</code>) are among them, not dropped with the settings. Every finished file and unit, and every node
 that exported all its units, gets a line with its time (<code>[i/n]</code> numbers the units of a node); a node that fails gets none, and the
 error is printed when the run exits:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>  data-hot1:17912  measure/sw_metricsDay/seg-20261004/shard-0-00001.csv.gz  180 rows  4.3 KiB  0.3s
@@ -2463,11 +2474,13 @@ outside the int64 nanosecond range, tags a multi-tag index rule may hold, rows l
 <code>--include-schema=false</code>) are printed as <code>WARN</code> lines and kept in <code>manifest.warnings</code>; they do not fail the export. A normal export of a
 healthy cluster has none. Most of them mean the artifact lacks rows or values the source holds, so exit <code>0</code> alone does not prove a
 complete copy: inspect <code>manifest.warnings</code> before relying on the artifact for a migration. Once the session exists, any failure keeps it and prints
-<code>bydbctl data release-session --id &lt;id&gt;</code>; the partial directory has no <code>manifest.json</code>, and must be emptied (or another
-<code>--output</code> given) before the next run. A run refused before its session exists removes the <code>schema/</code> it wrote, so the same
-command can be run again. Ctrl-C or <code>SIGTERM</code> stops the export the same
-way: the node streams are canceled, the session is kept, and the same <code>bydbctl data release-session --id &lt;id&gt;</code> line is printed before
-the run exits <code>3</code>. After a successful export, a release that fails (as a whole or on some node) is only a <code>WARN</code> (the artifact is already
+<code>bydbctl data release-session --id &lt;id&gt;</code>; the partial directory has no <code>manifest.json</code> and keeps its progress file, so the same
+command <a href="#resume">resumes</a> it (or empty it, or give another <code>--output</code>, to start over). A run refused before its session exists removes the <code>schema/</code> it wrote, so the same
+command can be run again; Ctrl-C while the session is being created, after its id was announced, releases that session before the
+run exits <code>3</code>, printing <code>stopping: releasing export session &lt;id&gt;, waiting up to 30s; press Ctrl-C again to stop now</code>. Ctrl-C or <code>SIGTERM</code> stops the export the same
+way: the node streams are canceled, the session and the progress file are kept, and the same <code>bydbctl data release-session --id &lt;id&gt;</code>
+line is printed before the run exits <code>3</code> with <code>export interrupted: &lt;cause&gt;</code> (such as <code>interrupt signal received</code>). A second Ctrl-C or <code>SIGTERM</code> (of <code>data export</code> or <code>data import</code>) is no longer caught: it
+stops <code>bydbctl</code> at once, like <code>kill -9</code>, without waiting for what the first one is winding down. After a successful export, a release that fails (as a whole or on some node) is only a <code>WARN</code> (the artifact is already
 complete and the run exits <code>0</code>), and the same <code>bydbctl data release-session --id &lt;id&gt;</code> line is printed so the session can be released
 by hand instead of waiting for its lease to expire.</p>
 <p>The artifact:</p>
@@ -2545,32 +2558,264 @@ the stored data exactly, but <code>bydbctl data import</code> accepts it only in
 segment file format and index rule ids match the source&rsquo;s. A native artifact is never compressed (<code>--compress</code> defaults to <code>none</code>, <code>gzip</code> is exit <code>1</code>);
 <code>--max-file-size</code> splits a container into volumes and must be <code>0</code> or at least <code>64KiB</code>. The format, including the manifest fields, is
 described in <a href="../../../design/0.12.0/data-export-import/readme">Data export and import</a>.</p>
-<p>Importing a native artifact refuses the whole import (exit <code>2</code>, the gate and its reason listed under <code>PROBLEMS</code>) when one of these
-differs: <code>TOPOLOGY</code> (the shard number or segment interval of the target stage or group), <code>TZ</code> (a target data node&rsquo;s time zone),
-<code>VERSION</code> (a segment file format a target data node cannot read) or <code>INDEX_RULE</code> (an index rule that exists on the target with another
-id; index rules the import creates keep the artifact&rsquo;s ids, so let the import create the schema rather than creating it beforehand).
-Two options apply to the native import only. A native import copies whole segments into a cluster that usually serves live
-traffic, and the liaison writes every byte to each replica; set <code>--part-rate-limit</code> so the copy does not saturate the target&rsquo;s
-network and disks. Raise <code>--part-chunk-size</code> over a high-latency link to cut acknowledgement round trips, or lower it to reduce the
-memory the liaison and receivers hold per in-flight frame:</p>
+<p>Importing a native artifact has gates and options of its own, see <a href="#native-artifacts">Native artifacts</a>.</p>
+<h3 id="resume">Resume</h3>
 <table>
   <thead>
       <tr>
-          <th>Flag</th>
-          <th>Default</th>
-          <th>Meaning</th>
+          <th>Situation</th>
+          <th>What to do</th>
       </tr>
   </thead>
   <tbody>
       <tr>
-          <td><code>--part-rate-limit</code></td>
-          <td><code>import.partRateLimit</code>, else <code>BYDBCTL_IMPORT_PART_RATE_LIMIT</code>, else <code>0</code></td>
-          <td>total byte rate of the part files the import sends, e.g. <code>50MiB/s</code>; <code>0</code> = unlimited. <code>--write-rate-limit</code>, <code>--liaison-rate-limit</code>, <code>--node-rate-limit</code> and <code>--node-row-rate-limit</code> do not apply to native</td>
+          <td>the export was interrupted (a failure, Ctrl-C, SIGTERM, a crash, <code>kill -9</code>)</td>
+          <td>run the same command again while its session is held: it shows what is done and left and continues; add <code>--resume</code> when not at a terminal (otherwise exit <code>1</code>)</td>
       </tr>
       <tr>
-          <td><code>--part-chunk-size</code></td>
-          <td><code>import.partChunkSize</code>, else <code>BYDBCTL_IMPORT_PART_CHUNK_SIZE</code>, else <code>1MiB</code></td>
-          <td>bytes of part files sent in one frame, <code>64KiB</code> to <code>4MiB</code>; out of range is exit <code>1</code></td>
+          <td><code>another bydbctl is using &lt;file&gt;</code> (exit <code>1</code>)</td>
+          <td>another export of this directory runs: wait until it ends, or stop it</td>
+      </tr>
+      <tr>
+          <td>a lock file a killed run left behind</td>
+          <td>nothing: the lock went with the process, and the next run takes the file with <code>WARN taking over a stale lock ...</code></td>
+      </tr>
+      <tr>
+          <td>the resume exits <code>6</code></td>
+          <td>see <a href="#what-to-do-when-an-export-resume-exits-6">What to do when a resume exits 6</a></td>
+      </tr>
+      <tr>
+          <td>a node of the session is restarting</td>
+          <td>run the same command again once it is back, while the session&rsquo;s lease lasts</td>
+      </tr>
+      <tr>
+          <td>give up</td>
+          <td><code>bydbctl data release-session --id &lt;id&gt;</code>, then delete what is in the output directory (<em>Giving up and starting over</em> below)</td>
+      </tr>
+      <tr>
+          <td>preview what is left</td>
+          <td><code>--dry-run</code> with the same <code>--output</code> (or <code>--checkpoint</code>)</td>
+      </tr>
+      <tr>
+          <td>the progress file belongs outside the output directory</td>
+          <td><code>--checkpoint &lt;path&gt;</code> (<code>export.checkpoint</code>, <code>BYDBCTL_CHECKPOINT</code>), given again on every run of this export; it names the file: a directory, the output directory itself, or a name that ends in <code>-plan.json</code> or <code>-cursor.json</code> (the names of the side files) is exit <code>1</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>While it runs, an export keeps a progress file, <code>&lt;output&gt;/.export-progress.json</code> (or <code>--checkpoint</code>, mode <code>0600</code>): the session id
+(written as soon as the session is created), the unit each node is exporting and every finished unit with its files; the
+session&rsquo;s plan goes to the side file <code>&lt;progress file without .json&gt;-plan.json</code>, written once before any node stream opens. Every write replaces
+the file atomically. Finished units are recorded at most once a second, so a crash makes the resume export the units of the
+last second again, never more. A run that cannot write the progress file fails with exit <code>3</code>. Once <code>manifest.json</code> is written
+the session is released, then the progress file and its plan are deleted (a crash in between leaves the progress file, and the
+same command finishes the export again without the session). A <code>--checkpoint</code> in a subdirectory of <code>--output</code> is refused (exit
+<code>1</code>): put it directly in the output directory or outside it. The progress file has format version <code>3</code>, and a file of another version is refused (<a href="#a-progress-file-of-another-bydbctl-version">A progress file of another bydbctl version</a>); a path that ends in <code>-plan.json</code>
+or <code>-cursor.json</code> is refused (exit <code>1</code>), as it would be the side file of another progress file. The progress file is JSON with
+two-space indentation; each finished file is listed with its size and CRC-32, and the bindings a resume is checked against (the
+selectors, the options that change the bytes of a file, the source nodes) are in clear.</p>
+<h4 id="a-progress-file-of-another-bydbctl-version">A progress file of another bydbctl version</h4>
+<p>A progress file and its side files can be resumed only by a bydbctl that reads the same progress file version (this bydbctl reads version <code>3</code> for an export,
+version <code>2</code> for an import). When the version differs, because bydbctl was upgraded or downgraded between two runs of one export or import, the
+command exits <code>6</code> before it reads the file any further. Nothing is written or deleted, no summary is printed, and it is the same
+under <code>--dry-run</code>, without <code>--resume</code> and with <code>-o json|yaml</code>: the refusal goes to stderr and stdout stays free of it. It names
+the file, the version in it and the version this bydbctl reads, and says how to go on. An import:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>an earlier import left the progress file /data/backup-20260914/.import-progress.json, but another version of bydbctl wrote it (progress file version 1, this bydbctl reads version 2), so it cannot be resumed; nothing was written. Resume it with the bydbctl version that wrote it; or give --restart to import from scratch (the progress file and its side files are kept as .bak files, and the stream and trace data already imported into this target is then stored twice); or give --checkpoint &lt;another path&gt; to run this import separately
+</span></span></code></pre></div><p>An export:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>an earlier export left the progress file /data/backup-20260914/.export-progress.json, but another version of bydbctl wrote it (progress file version 1, this bydbctl reads version 3), so it cannot be resumed; nothing was deleted. Resume it with the bydbctl version that wrote it; or to start over: bydbctl data release-session --id 85f65ac92eafa06eec2ab5e6f53c1b67, then delete what is in /data/backup-20260914 and export again, or export into a new output directory once the session is released
+</span></span></code></pre></div><ul>
+<li>To go on, run the same command with the bydbctl version that wrote the file, and finish the export or import with it.</li>
+<li>To start an import over, give <code>--restart</code>: the progress file and its side files are set aside as <code>.bak</code> files, and the stream and trace data
+the earlier run already imported into the target is stored once more. <code>--checkpoint &lt;another path&gt;</code> runs the import apart from
+the file.</li>
+<li>To start an export over, release its session with the command the message gives, delete what is in the output directory (or give
+another <code>--output</code>) and export again. The message names the session id when the file records one, and gives
+<code>bydbctl data release-session --id &lt;id&gt;</code> otherwise; a session that is not released is reclaimed when its lease runs out.</li>
+</ul>
+<h4 id="progress-file-lock">Progress file lock</h4>
+<p>Every run of <code>data export</code> and of <code>data import</code> over a progress file holds the lock file <code>&lt;progress file&gt;.lock</code> for the whole
+run and removes it on every way out: success, failure, Ctrl-C or SIGTERM. The lock is a file lock (<code>flock</code>, <code>LockFileEx</code> on
+Windows), which the operating system releases when the process ends, however it ends. The lock file holds one line of JSON
+naming its holder (pid, host, start time and the command up to its first flag), which messages render as <code>pid &lt;n&gt; on &lt;host&gt; since &lt;time&gt; (&lt;command&gt;)</code>. A second <code>bydbctl</code> on the same progress file is exit <code>1</code>:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>another bydbctl is using &lt;file&gt; (locked by another process; lock file &lt;file&gt;.lock, held by pid &lt;n&gt; on &lt;host&gt; since &lt;time&gt; (bydbctl data export)): wait until it ends, or stop it
+</span></span></code></pre></div><p>A lock file that a killed run (<code>kill -9</code>, a crash) left behind does not block the next run: it prints <code>WARN taking over a stale lock of pid &lt;n&gt; on &lt;host&gt; ...: &lt;file&gt;.lock; the process that held it is gone</code> and goes on. On NFS the lock excludes other hosts
+only when the mount passes locks to the server (not with <code>nolock</code> or <code>local_lock</code>); on a file system without file locks every
+run is exit <code>1</code>: put the progress file on a local disk with <code>--checkpoint</code>. A lock file that cannot be locked for another reason
+than a holder (a read-only file system, an I/O error, no locks available) is exit <code>1</code> with <code>progress file &lt;file&gt; cannot be locked: &lt;cause&gt;</code>, not <code>another bydbctl is using</code>.</p>
+<p>A lock file that is not a regular file (a symlink) is never followed: the run fails with <code>... &lt;file&gt;.lock is not a regular file (...); remove it if no bydbctl uses &lt;file&gt;</code>.</p>
+<h4 id="resuming-an-export">Resuming an export</h4>
+<p>Running the same command again over a directory that holds a progress file — after a failure, Ctrl-C, a crash or <code>kill -9</code> —
+continues that export against the same frozen session snapshot and ends with the artifact an uninterrupted export started at the
+first run would have written. Only <code>exportedAt</code> tells them apart, by design: it is when the first run started (in UTC, <code>…Z</code>), the time the
+session&rsquo;s snapshot was taken, not when the run that writes the manifest started. <code>--preempt</code> (or <code>BYDBCTL_PREEMPT</code>) does
+nothing on a resume, which creates no session: a <code>NOTE</code> says it is ignored.</p>
+<ol>
+<li>
+<p>The progress file and its plan must be readable and match this invocation: the same <code>--output</code> directory, selectors and the
+options that change the bytes of a file (<code>--format</code>, <code>--compress</code>, <code>--csv-annotations</code>, <code>--include-schema</code>).
+Rate limits, parallelism, timeouts and liaisons may change. A mismatch names every difference, field by field (a value equal
+to the option&rsquo;s default is marked <code>(default)</code>), and exits <code>6</code>; nothing is deleted:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>  options differs (format, compress, csv-annotations, include-schema):
+</span></span><span style="display:flex;"><span>    compress: recorded gzip (default), now none
+</span></span></code></pre></div><p><code>--max-file-size</code> may change too: it only decides where the files of a unit roll over, and an interrupted unit is exported
+again from its start. The units already exported keep their files, the units left get the new limit, and a <code>WARN</code> says so:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>WARN --max-file-size differs from the earlier run(s) (maxFileSize: recorded 512.0 MiB (default), now 64.0 MiB): the files of the 3 unit(s) already exported keep their sizes; the 5 unit(s) left are written with the new limit
+</span></span></code></pre></div></li>
+<li>
+<p>A summary goes to stdout:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>RESUME   ./backup-20260914/.export-progress.json  (last updated 2026-11-12T17:14:03+09:00, 41m ago)
+</span></span><span style="display:flex;"><span>         session 9f2a0c… (export)
+</span></span><span style="display:flex;"><span>DONE     2 group(s), 863 unit(s), 5212 file(s), 504.0 GiB
+</span></span><span style="display:flex;"><span>CATALOG  GROUP      STAGE  UNITS  FILES  SIZE
+</span></span><span style="display:flex;"><span>measure  sw_metric  hot    120    1212   18.3 GiB
+</span></span><span style="display:flex;"><span>stream   sw_record  warm   743    4000   485.7 GiB
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>LEFT     2 group(s), 577 unit(s), 625 shard(s), est. 337.6 GiB
+</span></span><span style="display:flex;"><span>NODE          CATALOG  GROUP      STAGE  SEGMENTS  SHARDS  PARTS  EST-ROWS  EST-SIZE   TIME-RANGE
+</span></span><span style="display:flex;"><span>data-1:17912  measure  sw_metric  hot    48        96      288    12.4M     7.1 GiB    09-01 ~ 09-07
+</span></span><span style="display:flex;"><span>data-2:17912  stream   sw_record  warm   529       529     1587   31.0M     330.5 GiB  09-01 ~ 09-07
+</span></span></code></pre></div><p>The first table lists what is done, per catalog, group and stage. The second is the plan of <strong>every unit not done</strong> —
+also those that were in flight when the run stopped, which are exported again from their start — read from the plan side
+file, so the cluster is not contacted; it is the table <code>--dry-run</code> prints, without its <code>NODES</code> line unless a node is missing.
+<code>shard(s)</code> counts each shard of a group once, however many nodes hold a replica of it, and a resumed export prints no
+<code>SNAPSHOT</code> line: the snapshot is the one the first run pinned.
+Run times (when a file was written or an import finished), here and in the progress files, carry the offset of the local time zone of the machine running <code>bydbctl</code>; the data times (<code>TIME-RANGE</code>) and the <code>exportedAt</code> of <code>manifest.json</code> are UTC.</p>
+<p>Without a recorded plan (the first run stopped between the session create and the plan write) <code>LEFT</code> reads
+<code>unknown: no plan is recorded yet; it is read from the export session when the export resumes</code>.</p>
+</li>
+<li>
+<p>Every file of a finished unit must still be there with the size it was written with, and neither it nor a directory on its
+way below <code>nodes/</code> (<code>nodes/</code> included) may be a symlink, which the cleanup would not follow, nor may anything else below <code>nodes/</code>
+be other than a regular file or directory; once a unit is done, the files under
+<code>schema/</code> must be those the first run wrote (the finished units were exported with that schema). Unless every unit is done, every
+data node that still has units to export must still be registered in the cluster (a node added since, or one whose units are all
+done, does not matter). Otherwise exit <code>6</code>; nothing is deleted. These checks only read, so they come before the question.</p>
+</li>
+<li>
+<p>With <code>--resume</code> (or <code>BYDBCTL_RESUME=true</code>) the export continues. Otherwise, when stdin is a terminal, it asks
+<code>Resume? [y/N]</code> below the summary: on stdout when that is a terminal too; when stdout is redirected (<code>| tee log</code>, <code>&gt; log</code>) and stderr is a
+terminal, on stderr, after the summary (<code>RESUME</code>, <code>DONE</code>, the tables, <code>LEFT</code>) is written there as well, while stdout keeps its usual content. Anything but <code>y</code>/<code>yes</code> exits <code>1</code> with
+<code>not resumed; &lt;file&gt; and the files it records are left in place; to start over: release the session with: bydbctl data release-session --id &lt;id&gt;; then delete what is in &lt;output&gt; and export again</code>
+(a progress file outside the output directory adds itself and its plan side file: <code>then delete &lt;file&gt;, &lt;file without .json&gt;-plan.json and what is in &lt;output&gt; and export again</code>); Ctrl-C at the question exits <code>3</code> and leaves everything in place too. With no terminal to ask on (stdin is not one, or neither stdout nor stderr is) the run gets
+<code>a previous run left &lt;file&gt;; add --resume to continue it (needed when not at a terminal); to start over: ...</code> (the same start-over
+text) and exit <code>1</code>.</p>
+</li>
+<li>
+<p>When every unit is done (the first run stopped before or while writing <code>manifest.json</code>), the session is not needed: the leftovers
+of step 7 are deleted, <code>manifest.json</code> is written from the progress file, the session is released if it is still held (a failed
+release is only a <code>WARN</code>), and the progress file is deleted.</p>
+</li>
+<li>
+<p>Otherwise an export with finished units (and the schema) compares the live schema with the <code>schema/</code> files by mod revision,
+before the session is read and before anything is deleted. A native export compares every group, stream, measure, trace,
+property, index rule, index rule binding and TopN aggregation of its groups, since a native file carries no schema revision of
+its own: a resource changed or removed since exits <code>6</code>, naming each; one added since does not, since the units left come from the
+session snapshot of the first run (a <code>NOTE</code> names it, it is not in the export). A CSV export compares the streams, measures,
+traces and properties of the groups that still have units left — the resources a CSV file binds its columns to; index rules,
+bindings, TopN aggregations and finished groups do not count: any of those changed, added or removed exits <code>6</code>, naming each,
+with the start-over hint, where the first unit left would otherwise fail on its revision check. Then the session is read again (<code>Plan</code> with <code>read{id}</code>, which also renews its lease). A session
+that is gone or expired, or an inventory that differs from the recorded plan (a group deleted since, say) exits <code>6</code>: an export
+against a new point in time cannot be mixed with this one; the message names the start-over command. A data node that held the
+session and does not answer (it no longer holds it, or cannot be reached) is exit <code>6</code> too, with <code>If a node is restarting or unreachable, run the same command again later; only if the session is lost, to start over: ...</code>: nothing is deleted at this
+step, so a node that is only restarting can be waited for while the session&rsquo;s lease lasts. A data node the cluster gained since,
+which never held the session, does not count, here or for the heartbeat, and neither does a node whose units are all done, even
+when its lease has expired (a long network partition, say): only the nodes with units left must still hold the session. This
+needs a liaison of the same version, which supports <code>required_nodes</code> in the session read: an older liaison fails the resume on
+any node whose lease has expired, one with all units done included. Any other failure of the read (<code>UNAVAILABLE</code>, say) is
+exit <code>3</code>, and so is a refusal of the server on the resume path (<code>PERMISSION_DENIED</code>, say), which a fresh export reports as exit
+<code>2</code>: earlier runs exported units, so the same command can run again.</p>
+</li>
+<li>
+<p>Every file below <code>nodes/</code> that no finished unit lists — <code>.tmp</code> files and the volumes of unfinished units — is deleted, then the
+empty directories, a manifest temporary file and temporary files of the progress file a crash left behind.</p>
+</li>
+<li>
+<p>The schema written by the first run is reused once a unit is done. While none is, <code>schema/</code> is written again from the live schema,
+for the groups the first run selected only (a group created since is not added), so the units are checked against the current
+schema. The units left are exported, each unit always whole; <code>manifest.json</code> is written from the finished units and the new
+ones, the session is released and the progress file deleted. The final summary adds <code>RESUMED &lt;n&gt; unit(s) from the previous run(s)</code>,
+its total line ends <code>(this run)</code>, and a last line gives the time all runs took: <code>cumulative time &lt;time&gt; over every run, the first started at &lt;time&gt;</code>.</p>
+</li>
+</ol>
+<p>Every exit <code>6</code> of a resume comes before anything in the output directory is deleted.</p>
+<p>A run that fails once its session exists, resumed or not, keeps the session and the progress file and prints both ways on:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>export session &lt;id&gt; and the progress file &lt;file&gt; are kept
+</span></span><span style="display:flex;"><span>  to resume: run the same command again (add --resume when not at a terminal)
+</span></span><span style="display:flex;"><span>  to give up: release the session with: bydbctl data release-session --id &lt;id&gt;; then delete what is in &lt;output&gt;; a released session cannot be resumed
+</span></span></code></pre></div><p>Two failures cannot be resumed and print only the second way, with the progress file among what to delete: a session the heartbeat
+found lost, and a CSV file encoded with another schema than the exported one after some units are done (a resume checks against that
+same schema, so it cannot get past the change).</p>
+<p><code>--dry-run</code> over such a directory (<code>--output</code>, or <code>--checkpoint</code>, given as a flag or in <code>plan.yaml</code>) prints the summary and then the
+plan of what is left, and changes nothing; with <code>-o json</code> or <code>-o yaml</code> that plan has <code>resumed: {path, done, total}</code>. It makes the
+checks of steps 1 and 3 that need no session (bindings, plan, the files of the finished units, <code>schema/</code>, the data nodes with units
+left) and exits <code>6</code> as the resume would; it does not contact the session, which a <code>NOTE</code> line says, so whether the session is still
+held and its inventory and schema unchanged is found only by the real resume. It does not take the lock, so it also reads an export
+that is running. With <code>--checkpoint</code> and no <code>--output</code> it reads the output directory the progress file records, and says so under
+the summary. <code>BYDBCTL_OUTPUT</code> and <code>BYDBCTL_CHECKPOINT</code> are defaults for real exports: alone they never turn a dry run into a resume
+preview, but with <code>--output</code> given as a flag or in <code>plan.yaml</code> a progress file from <code>BYDBCTL_CHECKPOINT</code> is kept and previewed, since
+that is where that export records its progress. A schema-only export refuses a directory with a progress file. A progress file outside the output directory
+(<code>--checkpoint</code>) must be given again on every resume: without it the directory reads as <code>not empty and holds no export to resume</code>
+(exit <code>1</code>). The progress file records the absolute path of <code>--output</code>, so an export directory that was moved or is mounted under
+another path cannot be resumed (exit <code>6</code>).</p>
+<p><strong>How long a resume stays possible, and what it costs.</strong> An interrupted export can be resumed while its session is held: until it
+is released, taken over with <code>--preempt</code>, or five days after its last heartbeat (<a href="#sessions">Sessions</a>). All that time the session
+pins its snapshots on every data node, disk that retention cannot reclaim, and every other export on the cluster is refused (exit
+<code>2</code>).</p>
+<p><strong>Giving up and starting over.</strong> Release the session, <code>bydbctl data release-session --id &lt;id&gt;</code> (the id is in the failure message
+and in the progress file, <code>session.id</code>), then delete what is in the output directory (and a progress file outside it, with its
+plan side file) and export again, or export into an empty directory. An export into another directory
+while the old session is held is refused with exit <code>2</code>.</p>
+<h4 id="what-to-do-when-an-export-resume-exits-6">What to do when an export resume exits 6</h4>
+<table>
+  <thead>
+      <tr>
+          <th>The message names</th>
+          <th>What to do</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>a binding that differs (<code>outputDir</code>, <code>selectorsDigest</code>, <code>options</code>)</td>
+          <td>run the first run&rsquo;s command again: the same <code>--output</code> path, selectors and file options. Otherwise start over</td>
+      </tr>
+      <tr>
+          <td>data node(s) that still have units of this export to export but are not registered in the cluster now</td>
+          <td>a node that is only restarting: run the same command again once it is back. Only if it is gone for good, start over</td>
+      </tr>
+      <tr>
+          <td>an export session that is gone or expired</td>
+          <td>start over (release the session if some node still holds it)</td>
+      </tr>
+      <tr>
+          <td>data node(s) that could not be read: they no longer hold the session or cannot be reached</td>
+          <td>a node that is only restarting: run the same command again once it is back. Otherwise start over</td>
+      </tr>
+      <tr>
+          <td>an inventory that differs from the recorded plan</td>
+          <td>start over: the data the session pinned no longer matches the first run&rsquo;s</td>
+      </tr>
+      <tr>
+          <td>a file of a finished unit that is missing or short</td>
+          <td>start over</td>
+      </tr>
+      <tr>
+          <td><code>schema/</code> files that no longer match the progress file, or are unusable, while units are done</td>
+          <td>restore them, or start over</td>
+      </tr>
+      <tr>
+          <td>a schema that changed after units were done (native: a resource changed or removed; CSV: a stream, measure, trace or property of a group with units left changed, added or removed)</td>
+          <td>start over: the finished units were exported with the old schema</td>
+      </tr>
+      <tr>
+          <td>a plan side file that is missing or not the one the progress file was written with</td>
+          <td>start over</td>
+      </tr>
+      <tr>
+          <td><code>another version of bydbctl wrote it</code></td>
+          <td>run the same command with the bydbctl that wrote the progress file, or start over (<a href="#a-progress-file-of-another-bydbctl-version">A progress file of another bydbctl version</a>)</td>
+      </tr>
+      <tr>
+          <td>a progress file that cannot be read or parsed</td>
+          <td>start over; release the session whose id the first run printed, or let its lease run out</td>
       </tr>
   </tbody>
 </table>
@@ -2608,7 +2853,17 @@ memory the liaison and receivers hold per in-flight frame:</p>
       <tr>
           <td><code>--output</code></td>
           <td><code>export.output</code>, else <code>BYDBCTL_OUTPUT</code></td>
-          <td>export directory; required for a real export; must not exist or be empty</td>
+          <td>export directory; required for a real export; must not exist or be empty, or hold the progress file of an export to <a href="#resume">resume</a></td>
+      </tr>
+      <tr>
+          <td><code>--checkpoint</code></td>
+          <td><code>export.checkpoint</code>, else <code>BYDBCTL_CHECKPOINT</code>, else <code>&lt;output&gt;/.export-progress.json</code></td>
+          <td>the progress file of the export, see <a href="#resume">Resume</a>; a directory, the output directory itself, or a name that ends in <code>-plan.json</code> or <code>-cursor.json</code> is exit <code>1</code></td>
+      </tr>
+      <tr>
+          <td><code>--resume</code></td>
+          <td><code>BYDBCTL_RESUME</code>, else <code>false</code></td>
+          <td>continue the interrupted export recorded in the progress file (<code>--checkpoint</code>, default <code>&lt;output&gt;/.export-progress.json</code>) without asking; without a progress file the export starts afresh</td>
       </tr>
       <tr>
           <td><code>--format</code></td>
@@ -2643,7 +2898,7 @@ memory the liaison and receivers hold per in-flight frame:</p>
       <tr>
           <td><code>--preempt</code></td>
           <td><code>BYDBCTL_PREEMPT</code>, else <code>false</code></td>
-          <td>remove the export session the data nodes hold and take over; the export running on it fails on its next read</td>
+          <td>remove the export session the data nodes hold and take over; the export running on it fails on its next read; ignored, with a <code>NOTE</code>, by a resume</td>
       </tr>
       <tr>
           <td><code>--node-rate-limit</code></td>
@@ -2673,12 +2928,12 @@ memory the liaison and receivers hold per in-flight frame:</p>
       <tr>
           <td><code>--dry-run</code></td>
           <td><code>BYDBCTL_DRY_RUN</code>, else <code>false</code></td>
-          <td>inventory only, see <a href="#dry-run">Dry run</a>; cannot be combined with <code>--output</code>, <code>--preempt</code> or <code>--schema-only</code></td>
+          <td>inventory only, see <a href="#dry-run">Dry run</a>; cannot be combined with <code>--output</code>, <code>--checkpoint</code>, <code>--preempt</code> or <code>--schema-only</code>, except that <code>--output</code> / <code>--checkpoint</code> naming the progress file of an interrupted export prints what is left of it (<a href="#resume">Resume</a>)</td>
       </tr>
       <tr>
           <td><code>-o</code>, <code>--output-format</code></td>
           <td><code>BYDBCTL_OUTPUT_FORMAT</code>, else <code>table</code></td>
-          <td>dry-run rendering: <code>table</code>, <code>yaml</code> or <code>json</code> (stdout; progress and warnings go to stderr)</td>
+          <td>dry-run rendering: <code>table</code>, <code>yaml</code> or <code>json</code>. With <code>yaml</code> or <code>json</code> stdout holds the rendering only: the lines about the connection and the settings (<code>liaison: …</code>, <code>parallelism: …</code>) are left out and the warnings go to stderr</td>
       </tr>
       <tr>
           <td><code>--strict-coverage</code></td>
@@ -2706,10 +2961,10 @@ once before the streams start.</p>
 stream may go without a single frame, however long the whole export takes. Connecting to the liaisons, listing the groups and checking the selectors run
 under a 3-minute deadline, a dry run under 10 minutes and <code>release-session</code> under 3 minutes. Under any rate limit a node stream
 delivers a frame about every second (see above), so only a node that stalls hits the idle timeout.</p>
-<p><code>plan.yaml</code> accepts only the keys below plus the <code>import.*</code> keys of <code>data import</code> (such as <code>import.partRateLimit</code> and <code>import.partChunkSize</code>); any other key
+<p><code>plan.yaml</code> accepts only the keys below plus the <code>import.*</code> keys of <code>data import</code> (<a href="#import-flags">Import flags</a>); any other key
 is rejected so a typo never falls back to a default silently. Its selectors get the same checks as <code>--selector</code> (a group
 name must not be empty or repeated), and <code>--selector</code> replaces them entirely. Explicit flags override the file, which overrides the
-<code>BYDBCTL_*</code> environment. <code>--dry-run</code>, <code>--preempt</code>, <code>--strict-coverage</code> and <code>--output-format</code> are one-shot switches with no plan field.</p>
+<code>BYDBCTL_*</code> environment. <code>--dry-run</code>, <code>--preempt</code>, <code>--resume</code>, <code>--strict-coverage</code> and <code>--output-format</code> are one-shot switches with no plan field.</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">connection</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">nodes</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">[</span><span style="color:#0a3069">&#34;liaison-1:17912&#34;</span><span style="color:#1f2328">,</span><span style="color:#fff"> </span><span style="color:#0a3069">&#34;liaison-2:17912&#34;</span><span style="color:#1f2328">]</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">nodesTLS</span><span style="color:#1f2328">:</span><span style="color:#fff">              </span><span style="color:#57606a"># optional</span><span style="color:#fff">
@@ -2719,6 +2974,7 @@ name must not be empty or repeated), and <code>--selector</code> replaces them e
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">rateLimit</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>800MiB/s   <span style="color:#fff"> </span><span style="color:#57606a"># --liaison-rate-limit; 0 = unlimited</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#0550ae">export</span><span style="color:#1f2328">:</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">output</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>./backup-20261010<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">checkpoint</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>./backup-20261010/.export-progress.json <span style="color:#fff"> </span><span style="color:#57606a"># the default</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">format</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>csv           <span style="color:#fff"> </span><span style="color:#57606a"># csv | native</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">compress</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>gzip        <span style="color:#fff"> </span><span style="color:#57606a"># none | gzip</span><span style="color:#fff">
 </span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">maxFileSize</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>512MiB   <span style="color:#fff"> </span><span style="color:#57606a"># 0 = never roll</span><span style="color:#fff">
@@ -2749,7 +3005,7 @@ name must not be empty or repeated), and <code>--selector</code> replaces them e
       </tr>
       <tr>
           <td><code>1</code></td>
-          <td>usage error: a bad flag or <code>plan.yaml</code>, an unknown selector group, a non-empty <code>--output</code>, or with <code>--format native</code> any of <code>--compress gzip</code>, a non-zero <code>--max-file-size</code> below 64KiB, a <code>--node-row-rate-limit</code> above 0 or <code>--csv-annotations</code> (set as a flag or in <code>plan.yaml</code>)</td>
+          <td>usage error: a bad flag or <code>plan.yaml</code>, an unknown selector group (of a fresh export; a resume leaves a group deleted since to its own checks, exit <code>6</code>), a non-empty <code>--output</code> without a progress file, another <code>bydbctl</code> holding the lock of the progress file, a <code>--checkpoint</code> that is a directory (or the output directory itself), whose directory cannot be created or written or that is in a subdirectory of <code>--output</code>, a resume that was not confirmed (no <code>--resume</code> and no terminal, or not answered <code>y</code>), or with <code>--format native</code> any of <code>--compress gzip</code>, a non-zero <code>--max-file-size</code> below 64KiB, a <code>--node-row-rate-limit</code> above 0 or <code>--csv-annotations</code> (set as a flag or in <code>plan.yaml</code>)</td>
       </tr>
       <tr>
           <td><code>2</code></td>
@@ -2757,7 +3013,11 @@ name must not be empty or repeated), and <code>--selector</code> replaces them e
       </tr>
       <tr>
           <td><code>3</code></td>
-          <td>failure at run time: a node stream failed or stalled, a file failed its size/CRC32 check, the schema changed during the export, the session was lost (its heartbeat answered <code>FAILED_PRECONDITION</code>), or a release failed on some node (<code>release-session</code>)</td>
+          <td>failure at run time: a node stream failed or stalled, a file failed its size/CRC32 check, the schema changed during the export, the session was lost (its heartbeat answered <code>FAILED_PRECONDITION</code>), or a release failed on some node (<code>release-session</code>), or the progress file could not be written; on a resume also a refusal of the server (exit <code>2</code> on a fresh export) and any failure of the session read but its loss; also Ctrl-C at the <code>Resume?</code> question</td>
+      </tr>
+      <tr>
+          <td><code>6</code></td>
+          <td>resume impossible: the progress file is unusable, one of its bindings differs, a data node with units left is not registered in the cluster, the export session is gone, a data node does not answer for it (it no longer holds it or cannot be reached: run the same command again later if a node is restarting), the session&rsquo;s inventory differs from the recorded plan, a file of a finished unit is missing or short (or it, or a directory on its way below <code>nodes/</code>, is a symlink, or anything below <code>nodes/</code> is neither a regular file nor a directory), a group the first run recorded is gone while no unit is done, or the <code>schema/</code> files of the first run changed or are unusable while units are done, or the live schema changed while units are done (see <a href="#resume">Resume</a> step 6). Every such exit comes before anything is deleted: the progress file, the session and every file in the output directory are kept. See <a href="#resume">Resume</a> for what to do</td>
       </tr>
   </tbody>
 </table>
@@ -2767,8 +3027,9 @@ name must not be empty or repeated), and <code>--selector</code> replaces them e
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --dry-run --nodes liaison-1:17912 --selector <span style="color:#0a3069">&#39;catalog=stream,groups=sw_record&#39;</span> --selector <span style="color:#0a3069">&#39;catalog=measure,groups=sw_metricsMinute;sw_metricsHour&#39;</span>
 </span></span><span style="display:flex;"><span>bydbctl data <span style="color:#6639ba">export</span> --dry-run --plan plan.yaml -o json
 </span></span></code></pre></div><p>It takes the connection, scope and parallelism flags above plus <code>-o</code> and <code>--strict-coverage</code>; it only reports the effective parallelism on
-stderr. The other real-export options are not used, though they must still be valid; <code>export.output</code> and <code>export.schemaOnly: true</code> contradict a
-dry run and are refused (exit <code>1</code>): leave them out of a plan used for dry runs.</p>
+stdout. The other real-export options are not used, though they must still be valid; <code>export.output</code> and <code>export.schemaOnly: true</code> contradict a
+dry run and are refused (exit <code>1</code>), except an <code>export.output</code> (or <code>export.checkpoint</code>) that names the progress file of an interrupted
+export, whose resume the dry run then previews (<a href="#resume">Resume</a>): leave them out of a plan used for dry runs.</p>
 <h4 id="reading-the-report">Reading the report</h4>
 <p>The table output starts with summary lines, then one row per <code>(node, catalog, group)</code>, then the <code>SNAPSHOT</code> line:</p>
 <table>
@@ -2825,7 +3086,7 @@ dry run and are refused (exit <code>1</code>): leave them out of a plan used for
       </tr>
   </tbody>
 </table>
-<p>On stderr the command also prints the effective parallelism and <code>WARN</code> lines for a node that reports a stage the group schema does not
+<p>On stdout the command also prints the effective parallelism and <code>WARN</code> lines for a node that reports a stage the group schema does not
 declare (or a group the schema no longer has): that node holds data the current lifecycle configuration does not describe.</p>
 <p>A dry run reads the live directories, so its numbers are estimates: rows still in a memtable are not counted, and only the parts a
 shard&rsquo;s latest snapshot names are, so a flush or merge in flight can make the numbers briefly low.</p>
@@ -2848,10 +3109,15 @@ directory, and the disk monitor&rsquo;s forced retention cleanup cannot reclaim 
 disk comes under pressure.</p>
 <p><code>data export</code> creates the session, renders the occupant it was refused by, keeps the heartbeat and releases the session once
 <code>manifest.json</code> is written; <code>--preempt</code> takes over a session the cluster already holds. A heartbeat answered with <code>FAILED_PRECONDITION</code>
-(the session expired or its lease is unreadable) aborts the export with exit <code>3</code>. To release a session an aborted export left behind:</p>
+(the session expired or its lease is unreadable on a node of the export; on a resume only a node that still has units to export
+counts) aborts the export with exit <code>3</code>, and so does a node stream refused with it once a heartbeat to that node finds the session gone (it
+was released or taken over meanwhile); the hint says the session is lost and how to start over, not to run the command again.
+A node answers <code>FAILED_PRECONDITION</code> for other reasons too (a catalog CSV cannot encode, a trace group whose traces share a tag set,
+which <code>--format native</code> exports): when the heartbeat finds the session still held, the stream&rsquo;s own error stands, with the hints to run the
+command again or to release the session. To release a session an aborted export left behind:</p>
 <div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl data release-session --id &lt;session-id&gt; --nodes liaison-1:17912
 </span></span></code></pre></div><p><code>release-session</code> drops the session snapshot on every data node and prints <code>export session &lt;id&gt; released</code>. A node that does not
-hold the session has nothing to delete and is listed on stderr (<code>export session &lt;id&gt; was not held on [...]</code>); when no data node holds
+hold the session has nothing to delete and is listed on stdout (<code>export session &lt;id&gt; was not held on [...]</code>); when no data node holds
 it, the command fails with <code>export session &lt;id&gt; is not held on any data node</code> and exits <code>2</code>. <code>--id</code> is validated locally (32 lowercase hex characters, exit <code>1</code> otherwise) and the command takes no positional
 arguments. When some nodes fail to release, the command prints one line per failed node with its reason (unreachable, removal failed,
 or a data node without <code>ExportService</code>), then <code>export session &lt;id&gt; released except on [...] (via &lt;liaison&gt;); retry later</code> — or
@@ -2872,6 +3138,739 @@ credentials are not sent in clear text. The liaison forwards these calls to the 
 no authentication of its own and must stay unreachable from outside the cluster. An end-to-end example with one hot and one warm data
 node behind a liaison, covering the dry run, <code>release-session</code>, the export and the import, lives in <code>test/e2e-v2/cases/transfer/csv/</code>
 (CSV) and <code>test/e2e-v2/cases/transfer/native/</code> (native).</p>
+<h2 id="data-import">Data import</h2>
+<p><code>bydbctl data import</code> writes an artifact that <code>bydbctl data export</code> wrote (CSV or native) into a cluster: the artifact&rsquo;s schema,
+then its data, and checks afterwards that the target holds what was sent. Use it to migrate data between clusters, to restore an
+export, or to copy a subset of groups. <code>--dry-run</code> prints what the import would do and writes nothing. The command talks to a liaison
+<strong>gRPC</strong> endpoint exactly as <code>data export</code> does (see <a href="#data-export">Data export</a>: <code>--nodes</code>, every usable liaison takes part, settings
+resolve flag → <code>plan.yaml</code> → <code>BYDBCTL_*</code> variable → default, no <code>$HOME/.bydbctl.yaml</code>). Import into a cluster that runs one version on every node, not during a rolling upgrade.</p>
+<h3 id="import">Import</h3>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>bydbctl data import --nodes liaison-1:17912 --input ./backup-20261010 --dry-run
+</span></span><span style="display:flex;"><span>bydbctl data import --nodes liaison-1:17912 --input ./backup-20261010
+</span></span><span style="display:flex;"><span>bydbctl data import --plan plan.yaml --input ./backup-20261010 --on-schema-conflict ignore --force-ttl
+</span></span><span style="display:flex;"><span>bydbctl data import --nodes liaison-1:17912 --input ./schema-20261010 --schema-only
+</span></span></code></pre></div><p>The import:</p>
+<ol>
+<li>connects to the liaisons and checks the artifact: <code>manifest.json</code>, and every schema and data file with its size and CRC32 (with
+<code>--schema-only</code>, data files by size only); a file that is missing or damaged refuses the import;</li>
+<li>takes the <a href="#progress-file-lock">lock</a> of its progress file (<code>&lt;progress file&gt;.lock</code>, not under <code>--dry-run</code> or <code>--schema-only</code>) and
+reads the progress file an earlier run of this import left, if there is one (<a href="#import-resume">Import resume</a>);</li>
+<li>compares the artifact&rsquo;s schema with the target&rsquo;s, read-only, and resolves every difference with the schema conflict policy
+(<code>--on-schema-conflict error|ignore|overwrite</code>, or rules per resource in <code>import.schemaConflictPolicy</code> of <code>plan.yaml</code>);</li>
+<li>asks the liaison where every (group, stage) is routed and decides the plan: one work item per shard of a segment (one per segment
+for index-mode measure rows, one per source shard for a property group), its sources (the minimal set that covers the shard, or
+every source with <code>--all-sources</code>) and its target nodes, and runs the gates: the schema, the TTL of the target stage (a unit whose
+data the target would already have expired is <code>expired</code> and left out unless <code>--force-ttl</code>), for CSV a check of every row, for
+native the <a href="#native-artifacts">native gates</a>;</li>
+<li>prints the plan, the same bytes for <code>--dry-run</code> and the real run: one row per (catalog, group, stage) with
+<code>CATALOG GROUP STAGE UNITS SOURCES ROWS SCHEMA CHANNEL TARGET-NODES STATUS TIME-RANGE(UTC)</code>, then <code>SCHEMA</code> (per group, the resources
+to create, overwrite, keep or ignore), <code>PROBLEMS</code> (only when there are some: conflicts with the <code>match:</code> rule that would accept
+them, refused work items, warnings) and <code>RESULT</code>, the conclusion in one line (<code>import &lt;n&gt; work item(s), &lt;rows&gt; rows</code>,
+<code>refused, nothing written (exit 2)</code>, &hellip;). A group the import creates has no route yet, so its <code>TARGET-NODES</code> reads <code>after-schema</code>.
+A dry run ends here: <code>0</code> when the import would proceed, <code>2</code> when it would be refused;</li>
+<li>writes the schema (<code>schema: &lt;n&gt; resource(s) written and applied on every node</code>), waits until every node applied it and decides
+the plan again: a plan that changed is printed and the import goes on, or exits <code>5</code> with <code>--abort-on-plan-change</code>;</li>
+<li>creates its progress file and prints <code>progress: &lt;file&gt; (kept after the import; the same command resumes an interrupted one)</code>, then
+counts the target&rsquo;s rows before anything is pushed (the baseline of <a href="#verify">Verify</a>);</li>
+<li>pushes the work items, <code>--parallelism</code> at a time: CSV rows in batches through <code>ImportRows</code>, native parts and indexes as they are
+through <code>ImportParts</code>, relayed by the liaison to every target node of their shard. A line is printed for every finished work item
+and every finished (catalog, group, stage); on a terminal, live lines show the groups in flight. The push ends with
+<code>IMPORTED  &lt;n&gt; rows of &lt;m&gt; work item(s) in &lt;time&gt;</code> (native: <code>IMPORTED  &lt;m&gt; work item(s) of native files, &lt;n&gt; rows in the imported parts, in &lt;time&gt;</code>);</li>
+<li>verifies, unless <code>--verify=false</code> (<a href="#verify">Verify</a>): <code>VERIFY    ok in &lt;time&gt;</code>, or <code>VERIFY    FAILED in &lt;time&gt; (exit 4)</code> followed by
+one line per problem.</li>
+</ol>
+<p>Nothing is written before step 6: a refusal up to there (exit <code>1</code> or <code>2</code>) leaves the target as it was. Importing the schema only
+(<code>--schema-only</code>) stops after step 6, keeps no progress file and pushes no data; <code>--include-schema=false</code> neither compares nor writes
+the schema, so every resource the artifact needs must exist on the target already.</p>
+<p><strong>Schema conflicts.</strong> A resource that differs from the target&rsquo;s is a <code>CONFLICT</code> and refuses the import (exit <code>2</code>) under the default
+policy <code>error</code>; every conflict prints a ready-to-paste <code>match:</code> line. <code>ignore</code> keeps the target&rsquo;s resource (columns only one side has
+are dropped or sent as null), <code>overwrite</code> replaces it, and an <code>overwrite</code> of a group that holds data needs <code>--force</code>. Some differences
+(an identity, an entity, a measure&rsquo;s index mode or interval) are always conflicts. Rules are matched in order, <code>match: &lt;kind&gt;/&lt;group&gt;[/&lt;name&gt;]</code>, and win over the flag:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">import</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">schemaConflictPolicy</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>error           <span style="color:#fff"> </span><span style="color:#57606a"># error | ignore | overwrite</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">rules</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span>- <span style="color:#0550ae">match</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>stream/sw_record<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">      </span><span style="color:#0550ae">policy</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>overwrite<span style="color:#fff">
+</span></span></span></code></pre></div><p>The internal <code>_top_n_result</code> measure is imported verbatim, never recomputed; its schema is created by the target with every measure
+group and must match the artifact&rsquo;s columns.</p>
+<p><strong>Several sources.</strong> An artifact holds every source node&rsquo;s copy of a replicated shard. The import pushes the minimal set of sources
+that covers each shard; <code>--all-sources</code> pushes every one (stream and trace rows are then stored once per source), and
+<code>--strict-coverage</code> refuses (exit <code>2</code>) a shard work item, or a CSV stream or trace segment-level item, that would still need more
+than one source.</p>
+<h4 id="native-artifacts">Native artifacts</h4>
+<p>Importing a native artifact refuses the whole import (exit <code>2</code>, the gate and its reason listed under <code>PROBLEMS</code>) when one of these
+differs: <code>TOPOLOGY</code> (the shard number or segment interval of the target stage or group), <code>TZ</code> (a target data node&rsquo;s time zone),
+<code>VERSION</code> (a segment file format a target data node cannot read) or <code>INDEX_RULE</code> (an index rule that exists on the target with another
+id; index rules the import creates keep the artifact&rsquo;s ids, so let the import create the schema rather than creating it beforehand).
+A payload a target node failed is pushed again to that node only, up to three attempts. A stream or trace part that failed on a node
+after its completion reached it may be stored there already: the import reads the node&rsquo;s counts and takes the part as landed when they
+grew by its rows; otherwise the import fails (exit <code>3</code>) and the <a href="#import-resume">resume</a> decides it, see
+<a href="#reconciliation">Reconciliation</a>. <code>--part-rate-limit</code> and <code>--part-chunk-size</code> apply to the native import only; the row and byte rate
+limits of the CSV import do not. A native import copies whole segments into a cluster that usually serves live traffic, and the
+liaison writes every byte to each replica; set <code>--part-rate-limit</code> so the copy does not saturate the target&rsquo;s network and disks. Raise
+<code>--part-chunk-size</code> over a high-latency link to cut acknowledgement round trips, or lower it to reduce the memory the liaison and
+receivers hold per in-flight frame.</p>
+<h3 id="verify">Verify</h3>
+<p><code>--verify</code> is on by default (<code>--verify=false</code> turns it off) and polls the target for up to <code>--verify-timeout</code> (<code>2m</code>) after the push,
+every 5 s, since only flushed data is counted; a failure exits <code>4</code>.</p>
+<p>The target&rsquo;s row counts per (catalog, group, stage, node, shard), taken with a session-less <code>Plan</code> before the
+first push (the baseline) and after the last, must have grown as the rows sent say: a stream or trace shard on exactly its target
+nodes, by the same rows on each, the shards together by the rows pushed; a measure on every target node of a shard, by at most the
+rows pushed × copies (a merge may fold versions). An index-mode measure is only warned about when a node gained nothing; properties are
+not counted. Rows a resume pushed again under <code>warn</code> or <code>push</code> are a known tolerance, a warning rather than a failure
+(<a href="#duplication-policy">Duplication policy</a>). A segment retention removed meanwhile is left out with a warning; a stream or trace
+(group, stage) that then grew by fewer rows than were sent is not checked (<code>... a segment of it disappeared meanwhile (retention?) and may have held the rest</code>), which fails verify. The check assumes
+that nothing else writes into the imported groups meanwhile.</p>
+<h3 id="import-resume">Import resume</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Situation</th>
+          <th>What to do</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>the import was interrupted (a failure, Ctrl-C, SIGTERM, a crash, <code>kill -9</code>)</td>
+          <td>run the same command again: it shows what is done, left and ambiguous and continues; add <code>--resume</code> when not at a terminal (otherwise exit <code>1</code>)</td>
+      </tr>
+      <tr>
+          <td>the import finished</td>
+          <td>nothing to do: the same command prints <code>already imported into this cluster ...</code>, pushes nothing and exits <code>0</code> (<a href="#a-finished-import">A finished import</a>)</td>
+      </tr>
+      <tr>
+          <td>the same artifact goes into <strong>another cluster</strong></td>
+          <td>give that import its own <code>--checkpoint &lt;another path&gt;</code>: the default progress file belongs to the first target, and another cluster exits <code>6</code></td>
+      </tr>
+      <tr>
+          <td>the target was wiped or redeployed, so the import exits <code>6</code> with <code>the target looks reset or is another cluster</code></td>
+          <td><code>--restart</code> imports the artifact again into this cluster; another cluster needs another <code>--checkpoint</code></td>
+      </tr>
+      <tr>
+          <td><code>another bydbctl is using &lt;file&gt;</code> (exit <code>1</code>)</td>
+          <td>another import of this artifact runs: wait until it ends, or stop it (<a href="#progress-file-lock">Progress file lock</a>)</td>
+      </tr>
+      <tr>
+          <td>a lock file a killed run left behind</td>
+          <td>nothing: the lock went with the process, and the next run takes the file with <code>WARN taking over a stale lock ...</code></td>
+      </tr>
+      <tr>
+          <td>the import exits <code>3</code> saying a node did not answer the check of what it imported</td>
+          <td>run the same command again once the node is reachable; nothing was written</td>
+      </tr>
+      <tr>
+          <td>the import exits <code>6</code> for another reason</td>
+          <td>see <a href="#what-to-do-when-a-resume-exits-6">What to do when a resume exits 6</a></td>
+      </tr>
+      <tr>
+          <td>the import exits <code>7</code></td>
+          <td>the duplication policy is <code>block</code> for payloads that may have landed already: give <code>--resume-duplication-policy warn</code>, <code>push</code> or <code>skip</code> (skip stays refused where a payload line says so), and run the same command again (<a href="#duplication-policy">Duplication policy</a>)</td>
+      </tr>
+      <tr>
+          <td>start over on purpose</td>
+          <td><code>--restart</code> (<a href="#starting-over">Starting over</a>)</td>
+      </tr>
+      <tr>
+          <td>the artifact directory is read-only, or the progress file belongs elsewhere</td>
+          <td><code>--checkpoint &lt;path&gt;</code> (<code>import.checkpoint</code>, <code>BYDBCTL_IMPORT_CHECKPOINT</code>), given again on every run of this import</td>
+      </tr>
+  </tbody>
+</table>
+<h4 id="the-progress-file">The progress file</h4>
+<p><code>bydbctl data import</code> records what it puts into the target in a progress file, <code>&lt;input&gt;/.import-progress.json</code>, or the file
+<code>--checkpoint</code> names (mode <code>0600</code>; a directory, the <code>--input</code> directory itself, a file of the artifact (<code>manifest.json</code> or a file it lists, which <code>--restart</code> would set aside) or a name that ends in <code>-plan.json</code> or <code>-cursor.json</code>, the names of the side files, is exit <code>1</code>). It records the bindings of the
+run (the artifact&rsquo;s <code>manifest.json</code>, the target&rsquo;s liaisons and data nodes, <code>--all-sources</code> and <code>--include-schema</code>), the plan the
+first run decided, the baseline (the target&rsquo;s counts before the first push), and per work item which native parts and indexes
+landed on which target node, or how far a CSV item is acknowledged and sent; also the rows pushed so far, the payloads <code>skip</code>
+left out, when a run pushed the last work item, and whether the verify of that run has not passed yet. The plan and the baseline
+are in one side file next to it (<code>&lt;file without .json&gt;-plan.json</code>), and while a CSV import runs, its positions in another (<code>-cursor.json</code>).</p>
+<ul>
+<li><strong>When it is written.</strong> Before the schema is written (also under <code>--dry-run</code>) the import checks that a file can be created
+next to the progress file: a read-only artifact directory, or a <code>--checkpoint</code> whose directory does not exist, is exit <code>1</code>
+with nothing written. A fresh import creates the progress file once the schema is written and the plan re-checked, and prints
+<code>progress: &lt;file&gt; (kept after the import; the same command resumes an interrupted one)</code>; a resumed import prints the same line
+before it writes the schema. A run that cannot write it exits <code>3</code>, and every failure after it exists names it: <code>the progress file &lt;file&gt; is kept: run the same command again to resume (add --resume when not at a terminal)</code>.</li>
+<li><strong>It is kept after a successful import</strong>: it records what this artifact put into this cluster, so that a rerun knows what not
+to store again and that the import is finished. Its name does not depend on the target: importing the same artifact into
+another cluster needs its own <code>--checkpoint</code>.</li>
+<li><strong>The lock.</strong> For the whole run (fresh, resumed or <code>--restart</code>; not <code>--dry-run</code> or <code>--schema-only</code>) the import holds the
+<a href="#progress-file-lock">lock</a> of the progress file; a refusal adds <code>; to import this artifact into another cluster give --checkpoint &lt;another path&gt;</code>, and the <code>WARN</code> of a lock file a killed run left behind goes to the import&rsquo;s log.</li>
+<li><strong><code>--schema-only</code></strong> uses no progress file at all: it reads none, takes no lock and writes none, and with <code>--resume</code> or
+<code>--restart</code> it prints <code>NOTE a schema-only import uses no progress file: --resume and --restart are ignored, &lt;file&gt; is left as it is</code>.</li>
+<li><strong>What a crash can cost.</strong> A native import records a payload as in flight, synced, before it sends it, so at most one payload
+per worker is in doubt after a crash; the resume reconciles or pushes it again. A CSV import records how far it sent an item
+before each batch and the position of every acknowledged batch, unsynced, and folds them into the progress file, synced, every
+<code>--checkpoint-every-batches</code> acknowledged batches across the import (default <code>64</code>) and when a work item completes. After a
+<code>kill -9</code> the resume knows every position; after a power loss or an OS crash it may know only those of the last fold, and the
+rows acknowledged or sent since are pushed again as rows that were never sent, without the duplication policy and without being
+counted as possible duplicates (stream and trace rows among them are then stored twice). A lower value narrows that window at
+the cost of one more synced write each time; the default suits most imports.</li>
+<li><strong>Stopping cleanly.</strong> When a worker fails, or on Ctrl-C or SIGTERM, the CSV workers stop sending and wait up to 30 s for the
+acknowledgements of the batches they have in flight (<code>waiting up to 30s for the acknowledgements of &lt;n&gt; batch(es) in flight, so that they are recorded; press Ctrl-C again to stop now</code>). A native worker cancels a payload still being sent at once, but waits
+up to 30 s for the answer of one whose completion was sent (<code>waiting up to 30s for the answer of the &lt;KIND&gt; &lt;group&gt;/&lt;stage&gt; shard &lt;n&gt; in flight, so that it is recorded; press Ctrl-C again to stop now</code>). So what landed is recorded rather than left
+ambiguous; a payload whose answer does not come within the 30 s is recorded as possibly still being committed on its nodes
+(<code>no_answer</code>), which a resume does not read as not landed. When a worker&rsquo;s failure, not a Ctrl-C, started the wait, the line
+ends with <code>press Ctrl-C twice to stop now</code>. A second Ctrl-C or SIGTERM stops <code>bydbctl</code> at once instead; the batches and
+payloads in flight are then ambiguous, as after a <code>kill -9</code>.</li>
+</ul>
+<p><strong>The baseline.</strong> The target&rsquo;s counts before the first push, for <code>--verify</code> and the reconciliation, are taken once, by the first
+run that pushes anything, and kept for every later run. Counting is retried for up to a minute (first after 1 s, then doubling)
+while it fails or misses a target node. When <code>--verify</code> or a reconciliation (native stream or trace parts) needs the baseline,
+one that still did not count a target node is exit <code>3</code> before anything is pushed, with <code>no data was sent: run the same command again once the target answers</code>. When neither needs it, the import goes on with <code>WARN &lt;reason&gt;; neither --verify nor a reconciliation needs it, so the import goes on, and a verify forced later has no baseline to compare against</code>; a verify a later
+run needs (forced by <code>skip</code>, or <code>--verify</code> on a resumed or finished import) is then exit <code>4</code>, saying that the first run of this
+import could not count the target before its push. A resume first counts what the baseline lacks, before anything of it is
+pushed, and records it with the baseline: a target data node added since (<code>baseline: target node(s) &lt;nodes&gt;, which the baseline did not count, were counted before the push and recorded with it</code>; only a node the progress file records nothing pushed to, since
+another may already hold rows of the import), and the groups of work items appended to the plan that the first run imported
+nothing into (<code>baseline: &lt;n&gt; group(s) the appended items add were counted before the push and recorded with the baseline: &lt;groups&gt;</code>).</p>
+<h4 id="target-check">Target check</h4>
+<p>Every run over a progress file (unfinished or finished, <code>--dry-run</code> too) checks that the target is the cluster the file was
+written for, in two layers:</p>
+<ul>
+<li><strong>Who the target is.</strong> Some liaison the file records must still be a liaison of the target, and some recorded data node a data
+node of it: liaisons and data nodes may be added, removed or restarted, and an import may go through any liaison of the
+cluster, but a cluster that shares no liaison or no data node with the recorded one is another cluster. Over an unfinished
+import every target node of a work item not complete yet must also still be a data node of the target. A progress file
+without the liaison list (written before it was recorded) cannot be checked and is refused.</li>
+<li><strong>What the target holds.</strong> Node names alone do not tell a cluster apart from one deployed from the same Helm values,
+StatefulSet or compose file, or from the recorded cluster wiped and deployed again. So when the progress file records data as
+imported, before a resumed push and before saying <code>already imported</code>, the schema comparison must not have to create any group
+or resource the import wrote rows into (<code>the progress file &lt;file&gt; records data this import wrote, but the target lacks &lt;resources&gt;; the target looks reset or is another cluster</code>, naming the first five resources and counting the rest), and one count of those groups must find rows wherever the
+progress file records rows as landed (<code>the progress file &lt;file&gt; records data this import wrote that the target does not hold (&lt;n&gt; place(s)):</code> with up to five places). Where the check can, it looks per data node, shard and segment (a native stream or
+trace item), or per shard and segment (any other shard item whose target stage has the source&rsquo;s shard number); otherwise per
+group and stage, with <code>NOTE the data check of &lt;catalog&gt; &lt;group&gt; stage &lt;stage&gt; is per (group, stage), not per shard: ...</code>. A
+property group must hold documents. Segments past the TTL of their target stage are not checked, and a trace group that
+samples spans in merges, which may have dropped them, only gets a <code>NOTE</code>. A target segment whose suffix is not a time of the
+stage&rsquo;s segment interval is exit <code>6</code>: <code>the target reports segment &quot;&lt;suffix&gt;&quot; of &lt;catalog&gt; group &lt;group&gt; stage &lt;stage&gt; on node &lt;node&gt;, whose suffix is not a time of the stage's &lt;interval&gt; segment interval</code>.</li>
+</ul>
+<p>A refusal of either layer exits <code>6</code>, writes nothing and ends with <code>to import this artifact into another cluster give --checkpoint &lt;another path&gt;; to import it again into this cluster give --restart</code>. When rows are missing where a node that
+may hold them did not answer the count, the check cannot tell: it exits <code>3</code> (<code>... did not answer the count, and no node that answered holds it ...; nothing was written; run again once the node(s) are reachable</code>).</p>
+<h4 id="resuming-an-interrupted-import">Resuming an interrupted import</h4>
+<p>Running the same command again over an input that holds a progress file — after a failure, Ctrl-C, a crash or <code>kill -9</code> —
+continues that import. The <code>--resume</code> flag given while there is no progress file at the path is exit <code>1</code> with <code>--resume given but no progress file at &lt;path&gt;; without --resume a fresh import starts</code>, never a fresh import (not checked under <code>--dry-run</code> or
+<code>--schema-only</code>); <code>BYDBCTL_IMPORT_RESUME=true</code> without one starts a fresh import with <code>NOTE BYDBCTL_IMPORT_RESUME is set, but there is no progress file at &lt;path&gt;: a fresh import starts</code>. Without a terminal and without <code>--resume</code>, an unfinished progress
+file is refused after the resume summary (<code>RESUME</code>, <code>DONE</code>, <code>LEFT</code>, the tables and the <code>AMBIGUOUS</code> section, the same text a terminal
+shows before <code>Resume? [y/N]</code>) is printed, which reads the target (not the rows of the artifact) but writes nothing and changes no file: exit <code>1</code> with <code>a previous run left &lt;file&gt;; add --resume to continue it (needed when not at a terminal); give --restart to import from scratch (&lt;file&gt; is kept as a .bak file); stream and trace data already imported is then stored twice</code>. A dry run is not refused.</p>
+<ol>
+<li>
+<p>The checks, the schema comparison and the plan run as usual (the TTL gate against now).</p>
+</li>
+<li>
+<p>The progress file must match this invocation: the same <code>manifest.json</code> bytes, the same target (<a href="#target-check">Target check</a>,
+first layer) and the same <code>--all-sources</code> and <code>--include-schema</code> (a <code>schemaOnly</code> option an earlier version recorded is
+ignored). A mismatch names every difference and exits <code>6</code>; nothing is written:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>  manifestDigest differs: recorded sha256:…, now sha256:… (the artifact&#39;s manifest.json)
+</span></span><span style="display:flex;"><span>  liaisons differs (the liaisons of the target cluster):
+</span></span><span style="display:flex;"><span>    recorded [liaison-0 liaison-1], now [liaison-9]: none of the recorded liaisons is a liaison of the target
+</span></span><span style="display:flex;"><span>  targetNodes differs (the data nodes of the target cluster):
+</span></span><span style="display:flex;"><span>    target node data-a of the recorded import is no longer a data node of the target
+</span></span><span style="display:flex;"><span>  options differs (--all-sources, --include-schema):
+</span></span><span style="display:flex;"><span>    allSources: recorded false, now true
+</span></span></code></pre></div><p>A <code>manifestDigest</code> or <code>options</code> difference ends with <code>give --checkpoint &lt;another path&gt; to run this import separately, or --restart to start this one over; the stream and trace data an earlier run already imported into this target is then stored twice</code>; a target difference with <code>the target is not the cluster this progress file was written for: to import this artifact into another cluster give --checkpoint &lt;another path&gt;; to import it again into this cluster give --restart</code>. Then the second
+layer of the target check runs.</p>
+</li>
+<li>
+<p>A summary goes to stdout, with the payloads whose landing is not known (<a href="#ambiguous-payloads">Ambiguous payloads</a>) and what
+the resume does with each. Each payload line reads <code>  &lt;payload&gt;: &lt;action&gt; [(&lt;source&gt;)]</code>, where the action is <code>reconcile</code>
+(followed by <code>, else &lt;policy&gt; (&lt;source&gt;)</code>, the policy of what reconciliation cannot decide), <code>re-push</code> or the policy, and the
+source says where the policy comes from: <code>--resume-duplication-policy</code> when it is set (by the flag,
+<code>import.resumeDuplicationPolicy</code> or <code>BYDBCTL_IMPORT_RESUME_DUPLICATION_POLICY</code>), else <code>default</code>:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>RESUME   ./backup-20260914/.import-progress.json  (last updated 2026-11-12T18:02:41+09:00, 7m ago)
+</span></span><span style="display:flex;"><span>DONE     2 group(s), 118 work item(s), 236 file(s), 81.2 GiB
+</span></span><span style="display:flex;"><span>CATALOG  GROUP      STAGE  ITEMS  FILES  SIZE
+</span></span><span style="display:flex;"><span>measure  sw_metric  hot    40     80     18.3 GiB
+</span></span><span style="display:flex;"><span>stream   sw_record  hot    78     156    62.9 GiB
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>LEFT     2 group(s), 46 work item(s), 61.3M rows, est. 30.4 GiB
+</span></span><span style="display:flex;"><span>AMBIGUOUS 3 payload(s) may have landed already:
+</span></span><span style="display:flex;"><span>  stream/sw_record/hot/20260907/shard-0 part 7 of data-1:17912 on data-b: reconcile, else warn (default)
+</span></span><span style="display:flex;"><span>  stream/sw_record/hot/20260907/shard-1 ELEMENT_INDEX of data-1:17912 on data-a,data-b: warn (default)
+</span></span><span style="display:flex;"><span>  trace/sw_trace/hot/20260907/shard-0 rows after nodes/…/shard-0-00003.csv.gz record 192000 up to record 196000 (4000 row(s) sent): warn (default)
+</span></span></code></pre></div><p>The <code>rows</code> of <code>LEFT</code> are the rows left: of a CSV item a cursor has already acknowledged part of, only the rows after it.
+The table lists what is done; what is left follows it (step 4) as one table, not the whole plan of a fresh import:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>CATALOG  GROUP      STAGE  ITEMS  ROWS   EST-SIZE  TARGET-NODES   TIME-RANGE(UTC)
+</span></span><span style="display:flex;"><span>measure  sw_metric  hot    12     11.2M  5.8 GiB   data-a         09-07 ~ 09-07
+</span></span><span style="display:flex;"><span>stream   sw_record  hot    34     50.1M  24.6 GiB  data-a,data-b  09-07 ~ 09-07
+</span></span></code></pre></div><p>A <code>STATUS</code> column (<code>expired</code>, <code>refused</code>) comes only when a row is not <code>ok</code>, the <code>SCHEMA</code> table only with the groups whose
+schema is not <code>ok</code>, and <code>PROBLEMS</code> and the <code>after-schema</code> note only when there are; a finished import prints no table.
+A <code>--dry-run</code> over the progress file prints the same; a dry run of a fresh import (no progress file, or <code>--restart</code>) prints
+the whole plan. <code>-o json|yaml</code> prints the plan with the work items left in <code>entries</code> and <code>resumed: {path, done, total, finishedAt}</code> over a progress file, and the whole plan without one.</p>
+</li>
+<li>
+<p>The plan must select the same sources for every recorded work item, and an item with progress must keep its target stage and
+nodes; otherwise exit <code>6</code>, no data sent (under <code>--dry-run</code> too). This is checked again after the schema is written, so a plan
+that changes in between exits <code>6</code> with the schema written. An item the TTL gate now refuses is listed as refused and keeps its
+progress. An item that is not in the recorded plan because a gate refused it then and accepts now (say with <code>--force-ttl</code>) has
+no progress, so nothing of it can be stored twice: the summary lists it under <code>NEW &lt;n&gt; work item(s) a gate refused when the plan was recorded are accepted now; they are added to the recorded plan and imported:</code>, and the real run appends it to the plan
+before pushing (<code>plan: &lt;n&gt; work item(s) a gate refused when the plan was recorded are added to it</code>). Only an item not in the
+recorded plan whose progress the file records exits <code>6</code>. What is left is printed next.</p>
+</li>
+<li>
+<p>With <code>--resume</code> (or <code>BYDBCTL_IMPORT_RESUME=true</code>) the import continues, printing <code>resume: &lt;file&gt; is continued without asking (--resume|BYDBCTL_IMPORT_RESUME)</code>; otherwise, when stdin is a terminal, it asks <code>Resume? [y/N]</code> on stdout, or on stderr when stdout is redirected and stderr is a terminal, after the summary is written there as well (with <code>-o json|yaml</code> it asks on stderr, which must then be a terminal, below the summary that went there). An answer other than
+<code>y</code>/<code>yes</code> exits <code>1</code> with <code>not resumed; &lt;file&gt; and the files it records are left in place</code> and the same way to start over as
+above; Ctrl-C at the question exits <code>3</code>. A finished import (including one with newly accepted items, which are imported
+without asking), a refused plan and a dry run stop before the question.</p>
+</li>
+<li>
+<p>The schema is not written again when it compares <code>OK</code>; the plan is still re-checked.</p>
+</li>
+<li>
+<p>The ambiguous payloads are resolved once, before anything is pushed, and <code>RESUMED   &lt;n&gt; of &lt;m&gt; work item(s) done by the previous run(s); &lt;k&gt; left</code> is printed; then what is left is pushed: finished work items, native parts and indexes that landed
+everywhere and CSV rows up to the acknowledged position are skipped, a native payload that missed some nodes is pushed to
+those nodes only, and CSV rows after the sent position are pushed as usual.</p>
+</li>
+<li>
+<p><code>--verify</code> compares against the baseline and the rows of every run together (<a href="#verify">Verify</a>).</p>
+</li>
+</ol>
+<h4 id="a-finished-import">A finished import</h4>
+<p>An import counts as finished once a run pushed its last work item and no work item of the plan is left. Started again, it asks no
+<code>Resume?</code> question and prints the <code>FINISHED</code> summary — the <code>DONE</code> line and the table of what is done, with no <code>LEFT</code> or
+<code>AMBIGUOUS</code> lines and, as nothing is left, no plan table:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>FINISHED ./backup-20260914/.import-progress.json  (finished at 2026-11-12T19:41:07+09:00, 2h3m ago)
+</span></span><span style="display:flex;"><span>DONE     2 group(s), 164 work item(s), 328 file(s), 111.6 GiB
+</span></span><span style="display:flex;"><span>CATALOG  GROUP      STAGE  ITEMS  FILES  SIZE
+</span></span><span style="display:flex;"><span>measure  sw_metric  hot    48     96     25.4 GiB
+</span></span><span style="display:flex;"><span>stream   sw_record  hot    116    232    86.2 GiB
+</span></span></code></pre></div><p>Once both layers of the <a href="#target-check">target check</a> passed, it prints <code>already imported into this cluster at &lt;RFC3339 time&gt; (liaisons &lt;names&gt;, data nodes &lt;names&gt;); nothing is pushed (--restart imports it again)</code> and exits <code>0</code> without pushing, unless it
+verifies. One with work items a gate refused then and accepts now, say with <code>--force-ttl</code>, is not <code>already imported</code>: it prints
+<code>the import was finished at &lt;time&gt;; the &lt;n&gt; work item(s) a gate refused then and accepts now are imported</code>, appends them to the
+plan (the progress file no longer records the import as finished until they are pushed) and pushes only them, without asking,
+like a resume. When a work item of the recorded plan is left instead (a gate refused it on the run that finished the import), it
+may have payloads in flight: the run is a resume like any other, which asks first, or needs <code>--resume</code> when not at a terminal.</p>
+<p>A finished import verifies again only:</p>
+<ul>
+<li>when the <code>--verify</code> flag is given on the command line (<code>import.verify</code> and <code>BYDBCTL_IMPORT_VERIFY</code> set a default for every
+run, not a request to verify a finished import again);</li>
+<li>when the run that finished the push was to verify and no verify has passed since (it failed with exit <code>4</code> or was
+interrupted): it prints <code>verify: on, since no verify of this import has passed yet</code>; <code>--verify=false</code> turns that off;</li>
+<li>when payloads that <code>skip</code> left out have not been verified yet, <code>--verify=false</code> notwithstanding.</li>
+</ul>
+<p>Such a verify prints <code>verify: against the baseline the first run recorded (the baseline was taken at &lt;time&gt;); rows written into these groups since by anything else count as mismatches</code> and re-checks the per-node counts; when they pass it clears the pending
+verify and the skipped payloads. A failure exits <code>4</code> again. Otherwise, with <code>--verify</code> on only by default, it prints <code>NOTE verify skipped: the baseline was taken at &lt;time&gt;, and whatever was written into these groups since would count as a mismatch; give --verify explicitly to check against it anyway</code>, querying nothing. A first run that recorded no baseline makes such a verify exit <code>4</code>.</p>
+<h4 id="dry-run-over-a-progress-file">Dry run over a progress file</h4>
+<p><code>--dry-run</code> with a progress file prints the summary, checks the target and compares the plan (exit <code>6</code> when either refuses),
+prints the plan of what is left and writes nothing; over a finished import it prints the <code>already imported</code> line and exits <code>0</code>.
+With <code>-o json</code> or <code>-o yaml</code> the plan of a dry run or of a real run over a progress file lists the work items left in <code>entries</code>
+and has <code>resumed: {path, done, total, finishedAt}</code> (<code>finishedAt</code> only when the progress file records one). The table output is
+only the table of what is left, after the summary: it has no <code>TARGET</code>, <code>SOURCE</code> or <code>RESULT</code> line, and no table when nothing
+is left. <code>--resume-duplication-policy</code> is used by a dry run: the summary names the policy of every ambiguous
+payload. A dry run ignores <code>--resume</code>, so <code>--dry-run --resume --restart</code> is accepted.</p>
+<h4 id="starting-over">Starting over</h4>
+<p><code>--restart</code> (the flag only: no variable, like <code>--force</code>, and no plan field) imports from scratch although a progress file
+exists, which it does not read. The <code>--restart</code> flag with the <code>--resume</code> flag is exit <code>1</code> (they exclude each other), unless
+<code>--dry-run</code> or <code>--schema-only</code> ignores <code>--resume</code>; a resume from <code>BYDBCTL_IMPORT_RESUME</code> yields to <code>--restart</code>.</p>
+<p>The old progress file is set aside only when the new one is about to be created, after the schema write and the re-check of the
+plan, so a run refused or failing before keeps it in place. Its side files are renamed first, to
+their own names plus <code>.&lt;stamp&gt;.bak</code> (<code>&lt;file without .json&gt;-cursor.json.&lt;stamp&gt;.bak</code> and <code>-plan.json.&lt;stamp&gt;.bak</code>; the side files of a version 1 file, <code>&lt;file&gt;.plan</code>,
+<code>.cursor</code>, <code>.baseline</code> and <code>&lt;file without .json&gt;-baseline.json</code>, with them), then the progress file to <code>&lt;file&gt;.&lt;stamp&gt;.bak</code>, with one stamp <code>&lt;YYYYMMDDTHHMMSSZ&gt;</code>
+(UTC), <code>-&lt;n&gt;</code> appended when a <code>.bak</code> of that stamp exists already; the progress file stays in place until its side files are kept. The fresh import runs after <code>WARN --restart: &lt;file&gt; is kept as &lt;bak&gt; and the import starts over; &lt;what&gt;</code>, where <code>&lt;what&gt;</code> describes the old progress file, read best-effort: <code>the stream and trace rows an earlier run already imported are stored twice, in stream sw_stream, trace sw_trace</code> for the stream and trace groups it
+records rows or payloads of (a native artifact says <code>parts and element indexes</code> instead of <code>rows</code>; none of them says <code>nothing of this plan is stored twice: measures and properties overwrite what is there</code>); <code>it records nothing pushed yet, so nothing is stored twice</code>; <code>it records the import of another artifact, target or options, so nothing it records is stored twice by this one (it differs in: ...)</code>; or, for a file that cannot be read, <code>it cannot be read (...), so what it records is unknown: if an earlier run imported this artifact into this cluster, ... may be stored twice ...</code>. Emptying or recreating the target first avoids storing
+anything twice; measures and properties converge anyway.</p>
+<p><code>--dry-run --restart</code> reads no progress file: it previews the plan of a fresh import, with <code>NOTE --restart: the plan below is that of a fresh import, &lt;file&gt; is not read; the real run keeps it as &lt;file&gt;.&lt;timestamp&gt;.bak</code> when one exists (whatever import it
+records), and writes nothing.</p>
+<p>Another <code>--checkpoint</code> path also starts from scratch, keeping the old progress file as it is; it stores the stream and trace data
+already imported twice the same way. Use it to import the artifact into another cluster, or with other <code>--all-sources</code> /
+<code>--include-schema</code> (which exit <code>6</code> against the old file).</p>
+<h4 id="ambiguous-payloads">Ambiguous payloads</h4>
+<p>What happens to a payload whose answer was lost (it was in flight, or a target failed it after its completion was sent):</p>
+<table>
+  <thead>
+      <tr>
+          <th>Payload</th>
+          <th>At resume</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>native stream / trace part</td>
+          <td>reconciled from the target&rsquo;s counts: landed → done; not landed → pushed to that node; undecidable → <code>resumeDuplicationPolicy</code></td>
+      </tr>
+      <tr>
+          <td>native measure part, series index, property shard</td>
+          <td>pushed again: they converge</td>
+      </tr>
+      <tr>
+          <td>native element index</td>
+          <td><code>resumeDuplicationPolicy</code>, except that <code>skip</code> becomes <code>block</code>: <code>--verify</code> does not count element index documents</td>
+      </tr>
+      <tr>
+          <td>native trace part of a group sampling spans in merges</td>
+          <td><code>resumeDuplicationPolicy</code>, except that <code>skip</code> becomes <code>block</code>: <code>--verify</code> cannot count what it would leave out</td>
+      </tr>
+      <tr>
+          <td>CSV measure, index-mode measure, property rows after the position</td>
+          <td>pushed again</td>
+      </tr>
+      <tr>
+          <td>CSV stream / trace rows after the position up to the sent one</td>
+          <td><code>resumeDuplicationPolicy</code> (<code>skip</code> becomes <code>block</code> for a trace group sampling spans in merges)</td>
+      </tr>
+      <tr>
+          <td>CSV rows after the sent position</td>
+          <td>pushed: they were never sent; an item with nothing sent after its position is not ambiguous</td>
+      </tr>
+      <tr>
+          <td>CSV stream / trace rows after the position up to the item&rsquo;s recorded send limit, when the cursor file (<code>-cursor.json</code>) was lost or left older by a power loss or an OS crash</td>
+          <td><code>resumeDuplicationPolicy</code>, as for the sent ones; the summary adds <code>NOTE the cursor side file is missing, empty or older than the progress file; the rows up to the recorded send limit are treated as possibly landed</code></td>
+      </tr>
+  </tbody>
+</table>
+<p>When the first run recorded no baseline, <code>skip</code> becomes <code>block</code> for every payload: <code>--verify</code> has nothing to compare against. A
+payload whose <code>skip</code> was refused names why after its source (<code>&lt;source&gt;; skip is refused: &lt;why&gt;</code>), and the exit <code>7</code> then asks for
+<code>--resume-duplication-policy warn|push (skip stays refused where a line says so)</code>.</p>
+<h4 id="reconciliation">Reconciliation</h4>
+<p>A native stream or trace part whose answer was lost is decided from the target&rsquo;s counts: the rows the node counts in the part&rsquo;s
+(segment, shard), compared with the baseline plus the parts recorded as landed there. No growth means not landed (pushed to that
+node), growth by the part&rsquo;s rows means landed (done), anything else is undecidable and follows the
+<a href="#duplication-policy">duplication policy</a>. The counts are read up to five times, 5 s apart, until they stop moving. A node the
+baseline did not count, a (segment, shard, node) where an earlier part was pushed again or left out, and a node the liaison
+stopped waiting for (<code>failure_cause</code> <code>NO_ANSWER</code>, recorded in the progress file&rsquo;s <code>causes</code> as <code>no_answer</code>) whose count did not grow are undecidable too (a cause this client does not know, such as one a newer client wrote in the file, is taken as none: the counts decide); so is every part of a trace group whose sampling
+pipeline may drop spans in merges (an enabled sampler with the <code>MERGE</code> or <code>FINALIZE</code> event). Each decision is logged as
+<code>reconcile &lt;item&gt; part &lt;part id&gt; of &lt;source node&gt; on &lt;node&gt;: landed|not landed|undecidable (&lt;expected&gt;→&lt;actual&gt;, part &lt;n&gt; rows)</code>,
+an undecidable one followed by <code>: &lt;reason&gt;</code>.</p>
+<p><strong>Keep the target quiet.</strong> Reconciliation compares row counts, so from the first count until the import ends, resumes included, nothing else may write to or delete from the imported groups on the target: no other import, no application writes, no data removed by hand. Most violations are noticed: the counts grow by neither 0 nor the part&rsquo;s rows, or a segment the count expected is gone, so the part is undecidable and follows the duplication policy. Two cases are not noticed, and <code>--resume-duplication-policy block</code> does not stop them either, since the part counts as decided:</p>
+<ul>
+<li>Others&rsquo; net change at the part&rsquo;s (segment, shard, node) equals the part&rsquo;s rows: a part that did not land is taken as landed and not pushed, so its rows are missing. A net change of zero, such as others&rsquo; writes and deletes cancelling, takes a part that landed as not landed: it is pushed again and stored twice.</li>
+<li>Rows disappear from a segment that is still there (retention or lifecycle migration) between the first count and a later one. A segment that vanished entirely is undecidable, but fewer rows in a surviving segment is judged like any other change: normally undecidable, yet when the loss equals the rows of a part that landed, the part is taken as not landed and pushed again.</li>
+</ul>
+<p>When the data lies close to the retention boundary of the target stage, avoid leaving the import interrupted for long, and resume with <code>--resume-duplication-policy block</code>, so that the parts the counts cannot decide stop the import (exit <code>7</code>) for you to decide instead of being pushed again.</p>
+<p>The import also reconciles during a run: a stream or trace part that a target node failed after its completion reached it is done
+when the node&rsquo;s count grew by its rows; otherwise the import fails (exit <code>3</code>) and a resume decides it, since the node may still be
+committing the part. An element index that failed that way fails the import at once. A run that stops in the middle of such a
+reconciliation leaves the part in flight, and the next resume lists it under <code>AMBIGUOUS</code>.</p>
+<h4 id="duplication-policy">Duplication policy</h4>
+<p><code>resumeDuplicationPolicy</code> decides what resume does with a <strong>stream or trace</strong> payload that reconciliation cannot decide (and with
+the CSV stream and trace rows after the position up to the sent one, and native element indexes, which are never reconciled). Measure and property
+payloads are always pushed again, whatever the policy says: a second copy converges to the first. <code>--resume-duplication-policy</code>
+(or <code>import.resumeDuplicationPolicy</code> in <code>plan.yaml</code>) sets one policy for every stream and trace payload.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Value</th>
+          <th>At resume</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>block</code></td>
+          <td>push nothing, list the payloads, exit <code>7</code>; what was imported before is valid</td>
+      </tr>
+      <tr>
+          <td><code>warn</code></td>
+          <td>push again with a <code>WARN</code> line naming what it may store twice</td>
+      </tr>
+      <tr>
+          <td><code>push</code></td>
+          <td>push again silently</td>
+      </tr>
+      <tr>
+          <td><code>skip</code></td>
+          <td>leave the payload out (for CSV, the rows after the position up to the sent one; the push goes on after them), count it as landed and turn <code>--verify</code> on: a gap fails verify (exit <code>4</code>) and the error lists the skipped payloads. The progress file records them, and every later run turns <code>--verify</code> on until one passes</td>
+      </tr>
+  </tbody>
+</table>
+<p>The default is <code>warn</code>. <code>warn</code> and <code>push</code> push a CSV item again from its position; the <code>WARN</code> line and the verify tolerance use the
+rows between the position and the sent one. <code>--verify</code> treats the rows pushed again by <code>warn</code> or <code>push</code>, and the measure points a
+resume pushes again (<code>re-push</code>, counted twice until a merge), as a known tolerance: a (group, stage) that grew by up to those rows
+more is a verify warning naming the payloads, not exit <code>4</code>. A trace group that samples spans in merges is checked partially
+(<code>VERIFY    ok (N group(s) not fully checked)</code>), since it cannot be compared row for row.</p>
+<p>Choosing a policy:</p>
+<ul>
+<li><code>warn</code> (the default) or <code>push</code>: nothing is lost; what may have landed is stored twice. Stream and trace keep both copies (a query
+returns the element or span twice), so pick these when an occasional duplicate is acceptable.</li>
+<li><code>block</code>: when no duplicate is acceptable. Resume stops before pushing anything (exit <code>7</code>) and lists the payloads with the source of
+their policy. To continue, give <code>--resume-duplication-policy warn|push|skip</code> and run the same command again.</li>
+<li><code>skip</code>: when you know the payloads landed. For CSV it leaves out only the rows that were sent after the position (recorded before
+each batch is sent), counts them as pushed and pushes the rest of the item. Only <code>--verify</code> (turned on by skip) can tell: a
+gap fails it with exit <code>4</code> and lists the skipped payloads. The progress file keeps them, so running the same command again shows
+the <code>FINISHED</code> summary and verifies again, but cannot push them; the way back is <a href="#starting-over">starting over</a>. Since a
+skipped payload turns <code>--verify</code> on, also in a later run whose policy is no longer <code>skip</code>, <code>--verify-timeout</code> is accepted with
+<code>--verify=false</code> (only <code>--schema-only</code> refuses it, <code>has no effect</code>) and must be positive whenever data is written.</li>
+</ul>
+<h4 id="what-to-do-when-a-resume-exits-6">What to do when a resume exits 6</h4>
+<table>
+  <thead>
+      <tr>
+          <th>The message names</th>
+          <th>What to do</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>manifestDigest</code></td>
+          <td>the artifact&rsquo;s <code>manifest.json</code> changed: import the original artifact, or start over</td>
+      </tr>
+      <tr>
+          <td><code>liaisons</code> or <code>targetNodes</code></td>
+          <td>the target shares no liaison or no data node with the recorded one, or a target node of an unfinished work item is no longer a data node of it: import into the first target, give another <code>--checkpoint</code> for another cluster, or <code>--restart</code></td>
+      </tr>
+      <tr>
+          <td><code>the target lacks …</code> or <code>… that the target does not hold</code></td>
+          <td>the target was reset, or is another cluster with the same node names: give another <code>--checkpoint</code> for another cluster, or <code>--restart</code> to import into this one again</td>
+      </tr>
+      <tr>
+          <td><code>records no liaisons</code></td>
+          <td>the progress file was written before the liaisons were recorded: give another <code>--checkpoint</code>, or <code>--restart</code></td>
+      </tr>
+      <tr>
+          <td><code>options</code></td>
+          <td>run with the first run&rsquo;s <code>--all-sources</code> and <code>--include-schema</code>, or start over</td>
+      </tr>
+      <tr>
+          <td>a plan that differs from the recorded one</td>
+          <td>restore what changed it (the first run&rsquo;s options, the target&rsquo;s stages and nodes), or start over</td>
+      </tr>
+      <tr>
+          <td><code>another version of bydbctl wrote it</code></td>
+          <td>run the same command with the bydbctl that wrote the progress file, or give <code>--restart</code> (<a href="#a-progress-file-of-another-bydbctl-version">A progress file of another bydbctl version</a>)</td>
+      </tr>
+      <tr>
+          <td>a progress file or a cursor side file that cannot be read or parsed, or a plan side file that is missing or has another digest, or a progress file that records a baseline or pushed rows but names no plan side file</td>
+          <td>start over</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="import-flags">Import flags</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Flag</th>
+          <th>Default</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>--nodes</code></td>
+          <td><code>connection.nodes</code> in <code>plan.yaml</code>, else <code>BYDBCTL_NODES</code></td>
+          <td>liaison gRPC addresses; every usable one shares the import streams</td>
+      </tr>
+      <tr>
+          <td><code>--plan</code></td>
+          <td></td>
+          <td><code>plan.yaml</code> with the connection and the import options</td>
+      </tr>
+      <tr>
+          <td><code>--input</code></td>
+          <td><code>import.input</code>, else <code>BYDBCTL_IMPORT_INPUT</code></td>
+          <td>the artifact directory <code>data export</code> wrote; required</td>
+      </tr>
+      <tr>
+          <td><code>--dry-run</code></td>
+          <td><code>BYDBCTL_DRY_RUN</code>, else <code>false</code></td>
+          <td>print the plan and write nothing: <code>0</code> = it would proceed (or the progress file records it as already imported), <code>2</code> = it would be refused, <code>1</code> = the progress file cannot be written where it would go, <code>6</code> = the progress file records another import, is unusable, or the target or the plan no longer matches what it records (<a href="#what-to-do-when-a-resume-exits-6">What to do when a resume exits 6</a>)</td>
+      </tr>
+      <tr>
+          <td><code>-o</code>, <code>--output-format</code></td>
+          <td><code>BYDBCTL_OUTPUT_FORMAT</code>, else <code>table</code></td>
+          <td>rendering of the plan: <code>table</code>, <code>yaml</code> or <code>json</code></td>
+      </tr>
+      <tr>
+          <td><code>--schema-only</code></td>
+          <td><code>import.schemaOnly</code>, else <code>BYDBCTL_IMPORT_SCHEMA_ONLY</code>, else <code>false</code></td>
+          <td>write the schema only, without data and without a progress file</td>
+      </tr>
+      <tr>
+          <td><code>--include-schema</code></td>
+          <td><code>import.includeSchema</code>, else <code>BYDBCTL_IMPORT_INCLUDE_SCHEMA</code>, else <code>true</code></td>
+          <td><code>false</code> neither compares nor writes the artifact&rsquo;s schema</td>
+      </tr>
+      <tr>
+          <td><code>--on-schema-conflict</code></td>
+          <td><code>import.schemaConflictPolicy.default</code>, else <code>BYDBCTL_IMPORT_ON_SCHEMA_CONFLICT</code>, else <code>error</code></td>
+          <td>default handling of a schema that differs from the target: <code>error</code>, <code>ignore</code> or <code>overwrite</code>; rules in <code>plan.yaml</code> win over it</td>
+      </tr>
+      <tr>
+          <td><code>--force</code></td>
+          <td><code>false</code></td>
+          <td>confirm an <code>overwrite</code> of a group that holds data</td>
+      </tr>
+      <tr>
+          <td><code>--force-ttl</code></td>
+          <td><code>false</code></td>
+          <td>import units whose data the target&rsquo;s TTL has already expired</td>
+      </tr>
+      <tr>
+          <td><code>--all-sources</code></td>
+          <td><code>false</code></td>
+          <td>push every source of a shard instead of the minimal covering set</td>
+      </tr>
+      <tr>
+          <td><code>--strict-coverage</code></td>
+          <td><code>BYDBCTL_IMPORT_STRICT_COVERAGE</code>, else <code>false</code></td>
+          <td>refuse (exit <code>2</code>) a work item that would be imported from more than one source</td>
+      </tr>
+      <tr>
+          <td><code>--abort-on-plan-change</code></td>
+          <td><code>false</code></td>
+          <td>exit <code>5</code> when the plan re-checked after the schema write differs (the schema is written, no data sent)</td>
+      </tr>
+      <tr>
+          <td><code>--verify</code></td>
+          <td><code>import.verify</code>, else <code>BYDBCTL_IMPORT_VERIFY</code>, else <code>true</code></td>
+          <td>check the target after the push (<a href="#verify">Verify</a>); over a finished import only the flag on the command line verifies again</td>
+      </tr>
+      <tr>
+          <td><code>--verify-timeout</code></td>
+          <td><code>import.verifyTimeout</code>, else <code>BYDBCTL_IMPORT_VERIFY_TIMEOUT</code>, else <code>2m</code></td>
+          <td>how long <code>--verify</code> polls for the written rows to show up; must be positive whenever data is written</td>
+      </tr>
+      <tr>
+          <td><code>--parallelism</code></td>
+          <td><code>import.parallelism</code>, else <code>BYDBCTL_IMPORT_PARALLELISM</code>, else <code>max</code></td>
+          <td>work items imported concurrently: <code>max</code> (the target data nodes) or an integer &gt;= 1</td>
+      </tr>
+      <tr>
+          <td><code>--send-retry-timeout</code></td>
+          <td><code>import.sendRetryTimeout</code>, else <code>BYDBCTL_IMPORT_SEND_RETRY_TIMEOUT</code>, else <code>15m</code></td>
+          <td>how long to keep reopening a stream the liaison refused as unavailable or busy (next liaison) or for a schema not live yet (same liaison)</td>
+      </tr>
+      <tr>
+          <td><code>--write-batch-size</code></td>
+          <td><code>import.writeBatchSize</code>, else <code>BYDBCTL_IMPORT_WRITE_BATCH_SIZE</code>, else <code>1000</code></td>
+          <td>CSV rows sent in one batch, <code>1</code> to <code>10000</code></td>
+      </tr>
+      <tr>
+          <td><code>--write-batch-bytes</code></td>
+          <td><code>import.writeBatchBytes</code>, else <code>BYDBCTL_IMPORT_WRITE_BATCH_BYTES</code>, else <code>4MiB</code></td>
+          <td>bytes of rows sent in one batch, <code>64KiB</code> to <code>64MiB</code></td>
+      </tr>
+      <tr>
+          <td><code>--write-inflight-batches</code></td>
+          <td><code>import.writeInflightBatches</code>, else <code>BYDBCTL_IMPORT_WRITE_INFLIGHT_BATCHES</code>, else <code>2</code></td>
+          <td>batches a worker keeps sent and not yet acknowledged per stream, <code>1</code> to <code>8</code></td>
+      </tr>
+      <tr>
+          <td><code>--write-rate-limit</code></td>
+          <td><code>import.writeRateLimit</code>, else <code>BYDBCTL_IMPORT_WRITE_RATE_LIMIT</code>, else <code>0</code></td>
+          <td>CSV only: rows per period across the import, e.g. <code>50000/s</code>; <code>0</code> = unlimited</td>
+      </tr>
+      <tr>
+          <td><code>--liaison-rate-limit</code></td>
+          <td><code>connection.rateLimit</code>, else <code>BYDBCTL_LIAISON_RATE_LIMIT</code>, else <code>0</code></td>
+          <td>CSV only: bytes per period each liaison receives from this import</td>
+      </tr>
+      <tr>
+          <td><code>--node-rate-limit</code></td>
+          <td><code>import.nodeRateLimit</code>, else <code>BYDBCTL_IMPORT_NODE_RATE_LIMIT</code>, else <code>0</code></td>
+          <td>CSV only: bytes per period each target data node admits from the imports, however many liaisons write to it</td>
+      </tr>
+      <tr>
+          <td><code>--node-row-rate-limit</code></td>
+          <td><code>import.nodeRowRateLimit</code>, else <code>BYDBCTL_IMPORT_NODE_ROW_RATE_LIMIT</code>, else <code>0</code></td>
+          <td>CSV only: rows per period each target data node admits from the imports</td>
+      </tr>
+      <tr>
+          <td><code>--part-rate-limit</code></td>
+          <td><code>import.partRateLimit</code>, else <code>BYDBCTL_IMPORT_PART_RATE_LIMIT</code>, else <code>0</code></td>
+          <td>native only: total byte rate of the part files the import sends, e.g. <code>50MiB/s</code>; <code>0</code> = unlimited</td>
+      </tr>
+      <tr>
+          <td><code>--part-chunk-size</code></td>
+          <td><code>import.partChunkSize</code>, else <code>BYDBCTL_IMPORT_PART_CHUNK_SIZE</code>, else <code>1MiB</code></td>
+          <td>native only: bytes of part files sent in one frame, <code>64KiB</code> to <code>4MiB</code>; out of range is exit <code>1</code></td>
+      </tr>
+      <tr>
+          <td><code>--checkpoint</code></td>
+          <td><code>import.checkpoint</code>, else <code>BYDBCTL_IMPORT_CHECKPOINT</code>, else <code>&lt;input&gt;/.import-progress.json</code></td>
+          <td>the progress file (<a href="#import-resume">Import resume</a>); one outside the input directory must be given again on every run; a directory, the <code>--input</code> directory itself, a file of the artifact (<code>manifest.json</code> or a file it lists) or a name that ends in <code>-plan.json</code> or <code>-cursor.json</code> is exit <code>1</code></td>
+      </tr>
+      <tr>
+          <td><code>--checkpoint-every-batches</code></td>
+          <td><code>import.checkpointEveryBatches</code>, else <code>BYDBCTL_IMPORT_CHECKPOINT_EVERY_BATCHES</code>, else <code>64</code></td>
+          <td>CSV only: acknowledged batches between two synced progress-file writes, <code>1</code> to <code>10000</code></td>
+      </tr>
+      <tr>
+          <td><code>--resume</code></td>
+          <td><code>BYDBCTL_IMPORT_RESUME</code>, else <code>false</code></td>
+          <td>continue an interrupted import without asking; the flag without a progress file at the path exits <code>1</code>, the variable without one starts a fresh import; ignored by <code>--dry-run</code> and <code>--schema-only</code>, which therefore accept it together with <code>--restart</code></td>
+      </tr>
+      <tr>
+          <td><code>--restart</code></td>
+          <td><code>false</code> (no variable, no plan field)</td>
+          <td>keep the progress file and its side files as <code>.bak</code> files and import from scratch (<a href="#starting-over">Starting over</a>); excludes the <code>--resume</code> flag except under <code>--dry-run</code> or <code>--schema-only</code> (a resume from the variable yields to it); with <code>--dry-run</code>, preview the fresh import without reading the progress file; ignored by <code>--schema-only</code></td>
+      </tr>
+      <tr>
+          <td><code>--resume-duplication-policy</code></td>
+          <td><code>import.resumeDuplicationPolicy</code>, else <code>BYDBCTL_IMPORT_RESUME_DUPLICATION_POLICY</code>, else <code>warn</code> (the help says <code>(default &quot;warn&quot;)</code>)</td>
+          <td>the policy of the stream and trace payloads: <code>block</code>, <code>warn</code>, <code>push</code> or <code>skip</code> (<a href="#duplication-policy">Duplication policy</a>)</td>
+      </tr>
+      <tr>
+          <td><code>--enable-tls</code>, <code>--insecure</code>, <code>--cert</code></td>
+          <td><code>connection.nodesTLS</code> in <code>plan.yaml</code>, else <code>BYDBCTL_ENABLE_TLS</code> / <code>BYDBCTL_INSECURE</code> / <code>BYDBCTL_CERT</code></td>
+          <td>TLS towards the liaisons</td>
+      </tr>
+      <tr>
+          <td><code>--logging-level</code>, <code>--logging-env</code></td>
+          <td><code>BYDBCTL_LOGGING_LEVEL</code> / <code>BYDBCTL_LOGGING_ENV</code>, else <code>info</code>, <code>prod</code></td>
+          <td>client-side logging</td>
+      </tr>
+  </tbody>
+</table>
+<p>Rates take the same <code>&lt;quantity&gt;[/&lt;period&gt;]</code> forms as the export&rsquo;s. <code>--dry-run</code> ignores the settings that only shape the writes and
+names those given explicitly in a <code>NOTE</code> line. <code>plan.yaml</code> accepts the <code>connection</code> keys and the <code>import.*</code> keys above (<code>import.workDir</code>
+is rejected), with the export keys in the same file:</p>
+<div class="highlight"><pre tabindex="0" style="background-color:#f7f7f7;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#0550ae">connection</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">nodes</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#1f2328">[</span><span style="color:#0a3069">&#34;liaison-1:17912&#34;</span><span style="color:#1f2328">]</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#0550ae">import</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">input</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>./backup-20261010<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">checkpoint</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>/var/lib/bydbctl/import-progress.json <span style="color:#fff"> </span><span style="color:#57606a"># default &lt;input&gt;/.import-progress.json</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">checkpointEveryBatches</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#0550ae">64</span><span style="color:#fff">                         </span><span style="color:#57606a"># CSV, 1 to 10000</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">verify</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span><span style="color:#cf222e">true</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">verifyTimeout</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>2m<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">parallelism</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>max<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">schemaConflictPolicy</span><span style="color:#1f2328">:</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#0550ae">default</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>error<span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">  </span><span style="color:#0550ae">resumeDuplicationPolicy</span><span style="color:#1f2328">:</span><span style="color:#fff"> </span>warn                     <span style="color:#fff"> </span><span style="color:#57606a"># block | warn | push | skip</span><span style="color:#fff">
+</span></span></span></code></pre></div><h3 id="import-exit-codes">Import exit codes</h3>
+<table>
+  <thead>
+      <tr>
+          <th>Code</th>
+          <th>Meaning</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>0</code></td>
+          <td>success, <code>--verify</code> included when on; warnings, and work items refused by the TTL gate, do not change it. A finished import run again exits <code>0</code> too (<code>already imported</code>)</td>
+      </tr>
+      <tr>
+          <td><code>1</code></td>
+          <td>usage error (also <code>--resume</code> with <code>--restart</code>, or <code>--resume</code> without a progress file), a progress file that cannot be written (checked before anything is written), another <code>bydbctl</code> holding its lock, or a resume that was not confirmed (no <code>--resume</code> and no terminal, or not answered <code>y</code>)</td>
+      </tr>
+      <tr>
+          <td><code>2</code></td>
+          <td>refused before anything was written: the preflight, the schema gate, a gate listed under <code>PROBLEMS</code> (the row check, a corrupt artifact, the native gates), every work item refused, or <code>--strict-coverage</code></td>
+      </tr>
+      <tr>
+          <td><code>3</code></td>
+          <td>failure after writing started (the schema write, the push, Ctrl-C or SIGTERM, a progress file that cannot be written, a baseline needed by <code>--verify</code> or a reconciliation that did not count every target node); the progress file is kept, so the same command resumes; also Ctrl-C at the <code>Resume?</code> question, and a <a href="#target-check">target check</a> that a node did not answer (nothing written)</td>
+      </tr>
+      <tr>
+          <td><code>4</code></td>
+          <td><code>--verify</code> failed: the per-node counts do not match the rows sent, the check could not finish, or there is no baseline because the first run recorded none. A verify that failed stays pending: the next run of the same command, also over a finished import, verifies again until one passes (<code>--verify=false</code> turns that off, except while payloads that <code>skip</code> left out are unverified)</td>
+      </tr>
+      <tr>
+          <td><code>5</code></td>
+          <td><code>--abort-on-plan-change</code>: the plan re-checked after the schema write differed; the schema is written, no data was sent</td>
+      </tr>
+      <tr>
+          <td><code>6</code></td>
+          <td>resume impossible (<a href="#what-to-do-when-a-resume-exits-6">What to do when a resume exits 6</a>): the progress file belongs to another artifact, target or options, the target looks reset, the plan differs from the recorded one, or a progress or side file is unusable. No data was sent and nothing was deleted; the schema may be written only when the plan changed after the schema write</td>
+      </tr>
+      <tr>
+          <td><code>7</code></td>
+          <td>halted by <code>resumeDuplicationPolicy: block</code> before anything was pushed; what was imported before is valid. The message asks for <code>--resume-duplication-policy warn|push|skip</code>, or <code>warn|push (skip stays refused where a line says so)</code></td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="import-permissions">Import permissions</h3>
+<p>With RBAC enabled <code>data import</code> needs <code>cluster:read</code> (preflight), schema read and write on the imported groups, <code>cluster:admin</code> for the
+liaison&rsquo;s <code>ImportService</code> and for the session-less <code>ExportService.Plan</code> that the baseline, the reconciliation and <code>--verify</code> count
+with. <code>--dry-run</code> writes nothing. See
+<a href="#permissions">Permissions</a> for the credentials and TLS.</p>
 
 </div>
 
@@ -2912,10 +3911,21 @@ node behind a liaison, covering the dry run, <code>release-session</code>, the e
           <ul>
             <li><a href="#export">Export</a></li>
             <li><a href="#formats">Formats</a></li>
+            <li><a href="#resume">Resume</a></li>
             <li><a href="#flags">Flags</a></li>
             <li><a href="#dry-run">Dry run</a></li>
             <li><a href="#sessions">Sessions</a></li>
             <li><a href="#permissions">Permissions</a></li>
+          </ul>
+        </li>
+        <li><a href="#data-import">Data import</a>
+          <ul>
+            <li><a href="#import">Import</a></li>
+            <li><a href="#verify">Verify</a></li>
+            <li><a href="#import-resume">Import resume</a></li>
+            <li><a href="#import-flags">Import flags</a></li>
+            <li><a href="#import-exit-codes">Import exit codes</a></li>
+            <li><a href="#import-permissions">Import permissions</a></li>
           </ul>
         </li>
       </ul>
@@ -3031,6 +4041,20 @@ node behind a liaison, covering the dry run, <code>release-session</code>, the e
 
     </div>
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
