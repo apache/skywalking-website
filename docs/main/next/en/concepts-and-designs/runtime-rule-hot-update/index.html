@@ -33,7 +33,7 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
   <meta itemprop="name" content="Runtime Rule Hot-Update — Architecture">
   <meta itemprop="description" content="Runtime Rule Hot-Update — Architecture Operators change MAL and LAL rule files at runtime without restarting OAP. Changes persist in management storage, survive reboots, and propagate across every node in an OAP cluster within a bounded window. This page explains the contract: what the feature guarantees, how the cluster stays consistent, and what to expect when something goes wrong. The HTTP surface is documented separately in Runtime Rule Hot-Update API.
 Vocabulary Runtime rule entry — the unit of operator state: one entry per (catalog, name), carrying the full rule-file content plus a status of ACTIVE or INACTIVE. Entries live in management storage (the same persistence layer used for UI templates, UI menus, and other cluster-wide operator state). Catalog — the rule group named in the API, currently otel-rules, log-mal-rules, telegraf-rules, meter-analyzer-config, or lal. It mirrors the on-disk directory layout so a rule’s (catalog, name) identity is portable between disk and the runtime-rule entry store. Main — the single OAP node designated to run the on-demand workflow. Every node can compute it locally from the sorted cluster peer list; no election. Peer — every node other than the main. Periodic scan — every OAP node re-reads management storage every 30 s (default, configurable) and brings its in-memory state into line with what storage holds. This is the convergence loop the consistency contract is built on. Scope: MAL and LAL, not OAL Runtime hot-update covers only the MAL (otel-rules, log-mal-rules, telegraf-rules, meter-analyzer-config) and LAL (lal) catalogs. OAL rules are deliberately out of scope. Three reasons, in order of weight:">
-  <meta itemprop="wordCount" content="4798">
+  <meta itemprop="wordCount" content="5174">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Runtime Rule Hot-Update — Architecture">
   <meta name="twitter:description" content="Runtime Rule Hot-Update — Architecture Operators change MAL and LAL rule files at runtime without restarting OAP. Changes persist in management storage, survive reboots, and propagate across every node in an OAP cluster within a bounded window. This page explains the contract: what the feature guarantees, how the cluster stays consistent, and what to expect when something goes wrong. The HTTP surface is documented separately in Runtime Rule Hot-Update API.
@@ -4304,7 +4304,7 @@ Vocabulary Runtime rule entry — the unit of operator state: one entry per (cat
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: cb63210</div>
+                  <div class="commit-id">Commit Id: 3eeaf89</div>
                 
 
 
@@ -4499,11 +4499,13 @@ disagree a periodic scan is in flight or the node is mid-apply.</p>
 <p>The feature is three cooperating workflows:</p>
 <ol>
 <li><strong>Boot</strong> — OAP starts; static rule files on disk are loaded, with persisted
-runtime-rule entries substituted in or skipped at load time. Backend schema is
-read-only at boot — never reshaped, never dropped.</li>
+runtime-rule entries substituted in or skipped at load time. Boot runs in
+production with no operator watching, so it only extends backend schema: it
+creates missing resources and applies additive changes, and never drops or
+breaks one.</li>
 <li><strong>On-demand</strong> — an operator calls <code>POST /addOrUpdate</code>, <code>/inactivate</code>, or
-<code>/delete</code>. This is the <strong>only</strong> workflow that may change backend schema, because
-the operator explicitly asked for it.</li>
+<code>/delete</code>. This is the <strong>only</strong> workflow that may make a breaking schema change
+(with <code>allowStorageChange=true</code>), because the operator explicitly asked for it.</li>
 <li><strong>Periodic scan</strong> — every OAP node re-reads every runtime-rule entry every 30 s
 and converges its local state to match. This is what closes the convergence
 bounds above; nothing else does.</li>
@@ -4536,61 +4538,91 @@ plugin intercepts each file before compilation and decides per-<code>(catalog, n
 <li>Persisted <code>ACTIVE</code> entry → compile the entry&rsquo;s content in place of the disk file.</li>
 <li>Persisted <code>INACTIVE</code> entry → skip the file; the operator has tombstoned the rule.</li>
 </ul>
-<p>Compilation registers each rule under <strong>create-if-absent</strong> semantics: missing backend
-resources are created; resources that already exist with a different shape are
-<strong>skipped with an ERROR log</strong>, the affected metric is disabled until the operator
-reconciles via <code>/addOrUpdate</code>. Boot is <strong>never</strong> allowed to silently reshape the
-backend — that would mask edits made while OAP was offline.</p>
+<p>Compilation registers each rule with the boot policy: missing backend resources
+are created, and a resource that lacks declared columns, tags or fields is
+<strong>extended</strong> (an additive change). Boot never applies a <strong>breaking</strong> difference — a
+removed or retyped column, tag or field, or a different entity: that would lose data
+or mask edits made while OAP was offline. On BanyanDB it is <strong>refused with an ERROR
+log</strong>, and the resource keeps its shape until an operator drops it with the storage&rsquo;s
+own tools or gives the metric a new name. (A rule edit that changes a metric&rsquo;s
+storage goes through <code>/addOrUpdate</code> with <code>allowStorageChange=true</code>.)</p>
 <p>After every analyzer has loaded, the runtime-rule plugin runs <strong>one synchronous
 scan</strong> so any runtime-only entries (no static disk file) are applied before
 receivers open ingress. From that point on, the periodic-scan workflow takes over.</p>
-<h3 id="why-boot-cannot-reshape-the-backend">Why boot cannot reshape the backend</h3>
-<p>If boot were allowed to update backend storage, a shape mismatch could silently
-rewrite the BanyanDB measure or the Elasticsearch mapping. Before this feature, the
-backends behaved inconsistently:</p>
+<h3 id="why-boot-applies-additive-changes-only">Why boot applies additive changes only</h3>
+<p>An additive change leaves the stored data in place and keeps every writer working
+(OAP writes name their columns, tags and fields, in a layout each OAP keeps stable),
+so it is safe to apply unattended; the one cost, older rows of a BanyanDB tag moved
+between families, is described below. A breaking
+change can lose data or break readers, so it needs an operator decision. Before this
+policy, the backends behaved inconsistently:</p>
 <ul>
 <li>BanyanDB and JDBC silently accepted the mismatch — samples were written against
 the old schema and quietly truncated or rejected later.</li>
 <li>Elasticsearch hard-failed boot on a strict-mapping type conflict.</li>
 </ul>
-<p>Create-if-absent unifies the contract: schema mismatches are always surfaced as an
-explicit ERROR, boot always continues, the affected metric is disabled, and the
-operator reconciles explicitly through the on-demand workflow. The same shape is
-visible across every backend.</p>
-<h3 id="code-defined-stream-opt-in-narrow-exception">Code-defined stream opt-in (narrow exception)</h3>
-<p>The &ldquo;boot never reshapes&rdquo; rule above applies to <strong>runtime-rule (MAL / LAL)</strong>
-registration — those rules ride the <code>/addOrUpdate</code> REST workflow when their
-backing schema needs to change.</p>
-<p>Streams whose schema lives in OAP source code (e.g. <code>AlarmRecord</code>) can opt in
-to <strong>additive</strong> boot-time reshape via
-<code>@Stream(allowBootReshape = true)</code>. When the flag is on and the diff is
-purely additive, the installer calls <code>client.update</code> at boot to extend the
-live measure / stream; non-additive divergences still record
-<code>SKIPPED_SHAPE_MISMATCH</code> and require an operator drop+recreate. Only the
-init / standalone OAP performs the reshape; non-init peers continue through
-the existing poll-and-wait loop so a single node drives DDL during a rolling
-restart.</p>
-<p>&ldquo;Additive&rdquo; includes two cases:</p>
+<p>The boot policy unifies the contract: additive changes are applied on every backend;
+a breaking change to a table, an index, a measure, a stream or a trace is left as it is
+(BanyanDB reports each as an ERROR); and boot always continues. A BanyanDB property is
+schemaless and takes any change. An Elasticsearch template is re-put when its mapping,
+shard / replica settings or order differ, and the new definition reaches only the
+indices created after it.</p>
+<h3 id="what-boot-does-on-each-storage">What boot does on each storage</h3>
+<p>Only an init or default-mode OAP changes the schema at boot; a <code>no-init</code> OAP waits
+until the init OAP has created the resources.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Storage / resource</th>
+          <th>Additive change at boot</th>
+          <th>Breaking change at boot</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>JDBC table</td>
+          <td><code>ALTER TABLE ... ADD COLUMN</code></td>
+          <td>left as it is (JDBC only checks that columns exist)</td>
+      </tr>
+      <tr>
+          <td>Elasticsearch index / template</td>
+          <td>mapping fields appended</td>
+          <td>the current index keeps its fields and settings (a settings difference on the <code>management</code> index, which is never re-created, is logged as a WARN); a re-put template applies to indices created later</td>
+      </tr>
+      <tr>
+          <td>BanyanDB measure, stream, trace</td>
+          <td>updated in place</td>
+          <td>refused, with an ERROR log</td>
+      </tr>
+      <tr>
+          <td>BanyanDB property</td>
+          <td>updated in place (schemaless: any change)</td>
+          <td>—</td>
+      </tr>
+      <tr>
+          <td>BanyanDB index rule, binding, TopN</td>
+          <td>reconciled to the declared rule</td>
+          <td>reconciled to the declared rule</td>
+      </tr>
+  </tbody>
+</table>
+<p>&ldquo;Additive&rdquo; for a BanyanDB measure, stream or trace covers two cases:</p>
 <ol>
-<li><strong>New tag / new field</strong> — a brand-new <code>@Column</code> is appended to the live
-tag family (or fields list, for measures).</li>
+<li><strong>New tag or field</strong> — a brand-new <code>@Column</code> is added to the live schema.</li>
 <li><strong>Tag relocation between families</strong> — a <code>@Column</code>&rsquo;s <code>storageOnly</code> flag
 flips, moving the tag between the <code>storage-only</code> and <code>searchable</code>
 families. The tag identity and type are preserved; only its on-disk
-family location changes.</li>
+family location changes. An entity tag cannot move: BanyanDB refuses it.</li>
 </ol>
-<p>Drops, tag-type changes, kind flips (tag↔field), and entity / interval /
-sharding-key changes are still rejected with <code>SKIPPED_SHAPE_MISMATCH</code>.</p>
-<p>When the primary <code>check*</code> records <code>SKIPPED_SHAPE_MISMATCH</code>, the dependent
-<code>IndexRule</code> and <code>IndexRuleBinding</code> reconciliation is <strong>also skipped</strong>. This
-preserves coherence between the stream / measure tag layout and the binding
-that points into it — without the gate, the binding would silently update to
-reference the new declared tag list while the live tag families still carry
-the old shape, leaving operators with a binding routing to tags that don&rsquo;t
-exist in the live family layout.</p>
-<p>This opt-in is <strong>BanyanDB-only</strong>. JDBC and Elasticsearch are append-only on
-the data path and already accept additive column / mapping additions at boot
-without operator intervention, so the flag is unread on those backends.</p>
+<p>A dropped or retyped tag or field, and a change to the entity, the sharding key,
+the interval, or a trace&rsquo;s trace-id / span-id / timestamp tag, are breaking and
+refused with <code>BOOT_REFUSED_BREAKING_CHANGE</code>.</p>
+<p>When a measure, stream or trace is refused, its <code>IndexRule</code> and <code>IndexRuleBinding</code>
+are <strong>also left as they are</strong> (the refusal&rsquo;s log line says so). This preserves
+coherence between the tag layout and the binding that points into it — without
+the gate, the binding would silently update to reference the new declared tag list
+while the live tag families still carry the old shape, leaving operators with a
+binding routing to tags that don&rsquo;t exist in the live family layout.</p>
 <blockquote>
 <p><strong>Operator caveat:</strong> BanyanDB does not physically migrate existing rows
 when a tag&rsquo;s family changes. Pre-existing data for the relocated tag stays
@@ -4598,6 +4630,22 @@ in its original on-disk family location; new writes go to the declared
 family. Queries that route through a new IndexRule on the relocated tag
 will only see post-reshape rows until historical data ages out via TTL.</p>
 </blockquote>
+<h3 id="the-schema-log">The schema log</h3>
+<p>Every OAP logs what it found and did for each storage resource — a table, an index
+or template, a BanyanDB group, measure, stream, trace, property, index rule, binding
+or TopN aggregation — one line for each outcome the installer records, with the mode it ran in: DEBUG when
+nothing changed, INFO when it was created, updated or dropped, ERROR when an
+incompatible difference was left unapplied. The storage plugins log the DDL they
+execute at DEBUG.
+For example:</p>
+<pre tabindex="0"><code>storage schema [BOOT_INSTALL] model [service_cpm]: measure(sw_metricsMinute/service_cpm_minute)=UPDATED[adds tags [layer searchable:TAG_TYPE_STRING]]
+storage schema [BOOT_INSTALL] model [service_resp_time]: measure(sw_metricsMinute/service_resp_time_minute)=BOOT_REFUSED_BREAKING_CHANGE[changes fields [value FIELD_TYPE_INT/... → FIELD_TYPE_FLOAT/...]; its index rules and binding are left as they are. To store the declared shape, delete the measure with BanyanDB&#39;s own tools before the next start (its data is lost), or give the metric a new name] — left as it is: boot applies additive changes only.
+</code></pre><p>The modes are <code>BOOT_INSTALL</code> (an OAP registering models at startup),
+<code>RUNTIME_APPLY</code> (the main OAP applying a runtime-rule change),
+<code>RUNTIME_PEER_VERIFY</code> (a not-main OAP checking at startup that the main OAP has
+applied the persisted rules; a rule that fails the check is loaded by a later scan)
+and <code>RUNTIME_LOCAL_ONLY</code> (no backend call: a not-main OAP&rsquo;s periodic scan, or the
+main OAP&rsquo;s <code>/inactivate</code>).</p>
 <h2 id="on-demand-workflow">On-demand workflow</h2>
 <p>Triggered by an HTTP call to one of the admin endpoints. A request arriving at any
 node is forwarded to the <strong>main</strong> (the node selected from the cluster view); the main
@@ -4682,7 +4730,7 @@ recompile, not a backfill or a metric-identity change.</li>
 row (returns <code>HTTP 409 requires_inactivate_first</code>), so destruction always goes
 through the explicit two-step <code>/inactivate → /delete</code> workflow. On an absent
 row it is an idempotent <code>200 not_found</code>. The <code>/inactivate</code> step has already
-torn down OAP-internal state under <code>withoutSchemaChange</code> (handlers, prototypes,
+torn down OAP-internal state under <code>RUNTIME_LOCAL_ONLY</code> (handlers, prototypes,
 Models cleared; backend measure preserved). What <code>/delete</code> does next depends on
 whether a bundled YAML twin exists on disk:
 <ul>
@@ -4697,9 +4745,9 @@ requires an explicit operator decision.</li>
 <li><strong>Bundled twin exists, <code>?mode=revertToBundled</code></strong> — schema-change path.
 Bundled may have a different shape than runtime, so the apply pipeline runs
 a unified flow: re-install the prior runtime DSL locally under
-<code>withoutSchemaChange</code> (no backend touch), apply the bundled YAML through
+<code>RUNTIME_LOCAL_ONLY</code> (no backend touch), apply the bundled YAML through
 the standard <code>compile → fireSchemaChanges → verify → commit</code> pipeline with
-<code>withSchemaChange</code>. The commit&rsquo;s delta drops runtime-only metrics through
+<code>RUNTIME_APPLY</code>. The commit&rsquo;s delta drops runtime-only metrics through
 the listener chain, registers bundled-only metrics, and reuses bundled-shared
 metrics at matching shape. The runtime row is then removed and the bundled
 rule is the active loader on this node. Peers converge via the periodic
@@ -5004,8 +5052,9 @@ rules diverge along the version split. Use deployment discipline.</li>
         <li><a href="#three-workflows">Three workflows</a></li>
         <li><a href="#boot-workflow">Boot workflow</a>
           <ul>
-            <li><a href="#why-boot-cannot-reshape-the-backend">Why boot cannot reshape the backend</a></li>
-            <li><a href="#code-defined-stream-opt-in-narrow-exception">Code-defined stream opt-in (narrow exception)</a></li>
+            <li><a href="#why-boot-applies-additive-changes-only">Why boot applies additive changes only</a></li>
+            <li><a href="#what-boot-does-on-each-storage">What boot does on each storage</a></li>
+            <li><a href="#the-schema-log">The schema log</a></li>
           </ul>
         </li>
         <li><a href="#on-demand-workflow">On-demand workflow</a>
