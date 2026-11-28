@@ -35,7 +35,7 @@ Data Sources Virtual GenAI metrics are derived from distributed tracing data. Sk
   <meta itemprop="description" content="Virtual GenAI Virtual GenAI represents the Generative AI service nodes detected by server agents’ plugins. The performance metrics of the GenAI operations are from the GenAI client-side perspective.
 For example, a Spring AI plugin in the Java agent could detect the latency of a chat completion request. As a result, SkyWalking would show traffic, latency, success rate, token usage (input/output), and estimated cost in the GenAI dashboard.
 Data Sources Virtual GenAI metrics are derived from distributed tracing data. SkyWalking OAP can ingest and analyze trace data adhering to GenAI semantic conventions from the following sources:">
-  <meta itemprop="wordCount" content="693">
+  <meta itemprop="wordCount" content="1026">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Virtual GenAI">
   <meta name="twitter:description" content="Virtual GenAI Virtual GenAI represents the Generative AI service nodes detected by server agents’ plugins. The performance metrics of the GenAI operations are from the GenAI client-side perspective.
@@ -4307,7 +4307,7 @@ Data Sources Virtual GenAI metrics are derived from distributed tracing data. Sk
   })()
 </script>
 
-                  <div class="commit-id">Commit Id: 3eeaf89</div>
+                  <div class="commit-id">Commit Id: 8bec128</div>
                 
 
 
@@ -4405,7 +4405,7 @@ As a result, SkyWalking would show traffic, latency, success rate, token usage (
 <li>Tag key = <code>gen_ai.response.model</code>, value = The name of the GenAI model, e.g. gpt-4o, claude-3-5-sonnet</li>
 <li>Tag key = <code>gen_ai.usage.input_tokens</code>, value = The number of tokens used in the GenAI input (prompt)</li>
 <li>Tag key = <code>gen_ai.usage.output_tokens</code>, value = The number of tokens used in the GenAI response (completion)</li>
-<li>Tag key = <code>gen_ai.server.time_to_first_token</code>, value = The duration in milliseconds until the first token is received (streaming requests only)</li>
+<li>Tag key = <code>gen_ai.response.time_to_first_chunk</code>, value = The duration in seconds, such as <code>0.457</code>, until the first chunk of the response is received (streaming requests only). SkyWalking Java Agent 9.7 and 9.8 report <code>gen_ai.server.time_to_first_token</code> instead, in milliseconds, which is still read, see the note on time to first token under <a href="#semantic-conventions-and-compatibility">Semantic Conventions and Compatibility</a></li>
 <li>If the GenAI service is a remote API (e.g. OpenAI), the span&rsquo;s peer should be the network address (IP or domain) of the GenAI server.</li>
 </ul>
 <h2 id="provider-configuration">Provider Configuration</h2>
@@ -4449,8 +4449,16 @@ against <code>prefix-match</code> rules to identify the provider. For example, a
 <p>The tag keys used in Virtual GenAI follow the <strong>OpenTelemetry GenAI Semantic Conventions</strong>. SkyWalking OAP identifies GenAI-related spans based on the following criteria depending on the data source:</p>
 <ul>
 <li><strong>SkyWalking Native Agent</strong>: Requires an <strong>Exit</strong> span with <code>SpanLayer == GENAI</code> and relevant <code>gen_ai.*</code> tags.</li>
-<li><strong>OTLP / Zipkin Traces</strong>: Any span containing the <code>gen_ai.response.model</code> tag will be identified as a GenAI operation, whatever <code>service.layer</code> its resource sets, if any.</li>
+<li><strong>OTLP / Zipkin Traces</strong>: A span is identified as a GenAI operation when it names a model and is a model call, whatever <code>service.layer</code> its resource sets, if any.</li>
 </ul>
+<p><strong>Note on OTLP / Zipkin Span Identification</strong>:</p>
+<ol>
+<li><strong>The model</strong>: <code>gen_ai.response.model</code>, or <code>gen_ai.request.model</code> when the span has no response model. A call that failed before the provider answered carries only the requested model, and is counted as a failed call of that model. The requested name can differ from the name the provider answers with, such as an alias and the dated version behind it, so the failed calls of a model can be listed under another model name than its successful ones.</li>
+<li><strong>The operation</strong>: a span whose <code>gen_ai.operation.name</code> describes no model call of its own is not counted: <code>fetch_response</code>, <code>create_agent</code>, <code>execute_tool</code>, <code>plan</code>, <code>retrieval</code>, <code>user_speech</code>, the memory operations (<code>search_memory</code>, <code>create_memory</code>, <code>update_memory</code>, <code>upsert_memory</code>, <code>delete_memory</code>, <code>create_memory_store</code>, <code>delete_memory_store</code>), and every name that starts with <code>invoke_</code>, such as <code>invoke_agent</code> and <code>invoke_workflow</code>. These spans can repeat the model and the token usage of the model calls made under them, or of a call made earlier, so counting them would count the same tokens twice. A span with any other operation name, or with none, is counted.</li>
+</ol>
+<p><strong>Note on Time to First Token</strong>:
+The time to first token is read from <code>gen_ai.response.time_to_first_chunk</code>, the span attribute the OpenTelemetry GenAI semantic conventions define for it, a number of seconds, and reported in milliseconds. It is read the same way from the spans of a SkyWalking agent and from OTLP and Zipkin spans.</p>
+<p>A span without <code>gen_ai.response.time_to_first_chunk</code> is read for <code>gen_ai.server.time_to_first_token</code>, in milliseconds. SkyWalking Java Agent 9.7 and 9.8 report the time to first token under that tag, and so do OTLP and Zipkin producers that followed the earlier version of this page. The OpenTelemetry GenAI semantic conventions give that name to a metric, not to a span attribute, so a new producer should report <code>gen_ai.response.time_to_first_chunk</code>. When a span carries both, <code>gen_ai.response.time_to_first_chunk</code> is used.</p>
 <p><strong>Note on OTLP / Zipkin Provider Identification</strong>:
 To ensure broad compatibility with different OpenTelemetry instrumentation versions, SkyWalking OAP identifies the GenAI provider using the following prioritized logic:</p>
 <ol>
